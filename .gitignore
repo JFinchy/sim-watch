@@ -1,0 +1,18 @@
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Runtime logs and state files
+simwatch.log
+*.log
+PAUSE
+
+# OS / editor artifacts
+Thumbs.db
+.DS_Store

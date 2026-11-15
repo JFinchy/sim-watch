@@ -1,0 +1,157 @@
+{
+  "interval_sec": 5,
+  "fail_threshold": 3,
+  "settle_sec": 15,
+  "giveup_backoff_sec": 300,
+  "only_when_running": "GSPro.exe",
+  "device": {
+    "_note": "Launch Pro. GameChanger auto-discovers and holds this connection itself during play - no clicking needed, it just needs the port free. FSX Pro is for setup/testing only: in its own Settings > Devices, turn OFF 'Auto connect with solo device' (one-time) so it never grabs the port on its own. `reconnect` drives FSX Pro's own connection by hand (wired first, then Wi-Fi) for that testing - it is NOT used by automatic recovery.",
+    "ip": "169.254.6.44",
+    "port": 9970,
+    "retry_sec": 60,
+    "max_attempts": 5,
+    "allow_wifi": true,
+    "close_settings": false
+  },
+  "projector": {
+    "_note": "Projector on = Windows reports a 2nd display. GSPro then goes to the leftmost one, otherwise Display 1. Set match_regex (matched against the monitor's PnP id/name, e.g. \"BNQ|EPS|OPT\") if a second real monitor is ever attached.",
+    "match_regex": null,
+    "side": "left"
+  },
+  "gspro_display": {
+    "windowed": false
+  },
+  "apps": [
+    {
+      "key": "fs_connector",
+      "process": "FSX Pro.exe",
+      "exe": "C:\\Program Files (x86)\\FSX Pro\\FSX Pro.exe",
+      "window_title_re": "^FSX Pro$",
+      "start_wait_sec": 5,
+      "post_start": []
+    },
+    {
+      "key": "integrator",
+      "process": "GameChanger.exe",
+      "exe": "C:\\Users\\finch\\Downloads\\GameChanger_v2.1\\GameChanger.exe",
+      "window_title_re": "^Game ?Changer",
+      "start_wait_sec": 8,
+      "post_start": []
+    },
+    {
+      "key": "gspro_connect",
+      "process": "GSPconnect.exe",
+      "exe": "C:\\GSProV1\\Core\\GSPC\\GSPconnect.exe",
+      "window_title_re": "^APIv1 Connect$",
+      "start_wait_sec": 3,
+      "post_start": []
+    },
+    {
+      "key": "gspro",
+      "process": "GSPro.exe",
+      "exe": "C:\\GSProV1\\Core\\GSP\\GSPro.exe",
+      "window_title_re": "^GSPro Configuration$",
+      "start_timeout_sec": 60,
+      "start_wait_sec": 1,
+      "post_start": [
+        {
+          "gspro_configure": true
+        },
+        {
+          "wait_port": 9050,
+          "timeout": 150
+        },
+        {
+          "wait": 20
+        }
+      ]
+    }
+  ],
+  "checks": [
+    {
+      "name": "Integrator running",
+      "type": "process",
+      "app": "integrator",
+      "recovery_level": 0
+    },
+    {
+      "name": "Launch Pro reachable",
+      "type": "device_ping",
+      "ip": "169.254.6.44",
+      "device": true,
+      "recovery_level": 0
+    },
+    {
+      "name": "GameChanger device session",
+      "type": "device_tcp",
+      "app": "integrator",
+      "port": 9970,
+      "device": true,
+      "recovery_level": 0
+    },
+    {
+      "name": "GSPro OpenConnect",
+      "type": "gspro_link",
+      "port": 921,
+      "recovery_level": 0
+    },
+    {
+      "name": "GSPconnect to GSPro",
+      "type": "bridge_link",
+      "port": 9050,
+      "recovery_level": 1
+    },
+    {
+      "name": "GSPconnect responding",
+      "type": "responsive",
+      "window_title_re": "^APIv1 Connect$",
+      "recovery_level": 0
+    },
+    {
+      "name": "GameChanger responding",
+      "type": "responsive",
+      "window_title_re": "^Game ?Changer",
+      "recovery_level": 0
+    }
+  ],
+  "recovery": [
+    {
+      "name": "restart GSPro Connect + GameChanger",
+      "restart": [
+        "gspro_connect",
+        "integrator"
+      ]
+    },
+    {
+      "name": "restart GSPro and the chain behind it",
+      "restart": [
+        "gspro",
+        "gspro_connect",
+        "integrator"
+      ]
+    },
+    {
+      "name": "restart everything",
+      "restart": [
+        "fs_connector",
+        "gspro",
+        "gspro_connect",
+        "integrator"
+      ]
+    }
+  ],
+  "startup": {
+    "_note": "Order after a reboot. GSPro spawns GSPconnect itself when it starts; gspro_connect is only launched if that didn't happen. GameChanger goes last so GSPro/GSPconnect are already up for its OpenAPI side, and so it (not FSX Pro) claims the Launch Pro connection.",
+    "boot_delay_sec": 20,
+    "wait_for": [
+      "Launch Pro reachable"
+    ],
+    "wait_timeout_sec": 90,
+    "order": [
+      "fs_connector",
+      "gspro",
+      "gspro_connect",
+      "integrator"
+    ]
+  }
+}
