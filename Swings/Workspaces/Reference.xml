@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='utf-8'?>
+<KinoveaWorkspace>
+  <FormatVersion>1.0</FormatVersion>
+  <ScreenDescriptionPlayback>
+    <FullPath>C:\Users\finch\OneDrive\Desktop\sim watch\Swings\Sessions\2026-11-16\DTL\*</FullPath>
+    <Autoplay>true</Autoplay>
+    <SpeedPercentage>50</SpeedPercentage>
+    <Stretch>true</Stretch>
+    <IsReplayWatcher>true</IsReplayWatcher>
+  </ScreenDescriptionPlayback>
+  <ScreenDescriptionPlayback>
+    <FullPath>C:\Users\finch\OneDrive\Desktop\sim watch\Swings\Sessions\2026-11-16\FO\*</FullPath>
+    <Autoplay>true</Autoplay>
+    <SpeedPercentage>50</SpeedPercentage>
+    <Stretch>true</Stretch>
+    <IsReplayWatcher>true</IsReplayWatcher>
+  </ScreenDescriptionPlayback>
+</KinoveaWorkspace>

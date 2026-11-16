@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<KinoveaPostureTool>
+  <FormatVersion>1.1</FormatVersion>
+  <Id>8b4a6f20-4c91-4d7c-9e2a-110203040502</Id>
+  <Name>Golf FO Sway Walls</Name>
+  <DisplayName>Golf FO Head &amp; Hip Walls</DisplayName>
+  <Points>
+    <Point name="Head Center" value="260;180" color="#facc15" />
+    <Point name="Lead Hip Top" value="200;260" color="#10b981" />
+    <Point name="Lead Hip Bottom" value="200;470" color="#10b981" />
+    <Point name="Trail Hip Top" value="320;260" color="#ef4444" />
+    <Point name="Trail Hip Bottom" value="320;470" color="#ef4444" />
+  </Points>
+  <Segments>
+    <Segment name="Lead Hip Wall" point1="1" point2="2" style="Solid" width="3" color="#10b981" />
+    <Segment name="Trail Hip Wall" point1="3" point2="4" style="Dash" width="3" color="#ef4444" />
+  </Segments>
+  <Circles>
+    <Circle center="0" radius="28" style="Solid" width="3" color="#facc15" />
+  </Circles>
+  <Handles>
+    <Handle type="Point" reference="0" trackable="true" />
+    <Handle type="Point" reference="1"><Constraint type="VerticalSlide" /></Handle>
+    <Handle type="Point" reference="2"><Constraint type="VerticalSlide" /></Handle>
+    <Handle type="Point" reference="3"><Constraint type="VerticalSlide" /></Handle>
+    <Handle type="Point" reference="4"><Constraint type="VerticalSlide" /></Handle>
+    <Handle type="Segment" reference="0"><Constraint type="HorizontalSlide" /></Handle>
+    <Handle type="Segment" reference="1"><Constraint type="HorizontalSlide" /></Handle>
+    <Handle type="Ellipse" reference="0" />
+  </Handles>
+  <HitZone>
+    <Polygon points="1;3;4;2" />
+  </HitZone>
+</KinoveaPostureTool>

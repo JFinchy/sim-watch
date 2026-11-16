@@ -1,9 +1,10 @@
 @echo off
 :: Manual/diagnostic only - GameChanger connects to the Launch Pro by itself and doesn't need this.
 :: Connects FSX PRO'S OWN view to the Launch Pro (wired first, then Wi-Fi) for setup/testing. This
-:: takes the device away from GameChanger - run release_device.bat when you're done so GameChanger
-:: can reconnect.
+:: creates a PAUSE file so the watchdog doesn't disconnect FSX Pro - run release_device.bat when done.
 cd /d "%~dp0"
 title SimWatch: connect FSX Pro (manual)
-python simwatch.py reconnect
+set "PYEXE=python"
+if exist "%LOCALAPPDATA%\Programs\Python\Python314\python.exe" set "PYEXE=%LOCALAPPDATA%\Programs\Python\Python314\python.exe"
+"%PYEXE%" simwatch.py reconnect
 pause

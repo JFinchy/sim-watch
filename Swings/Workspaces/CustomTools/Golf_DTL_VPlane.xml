@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<KinoveaPostureTool>
+  <FormatVersion>1.1</FormatVersion>
+  <Id>8b4a6f20-4c91-4d7c-9e2a-110203040501</Id>
+  <Name>Golf DTL V-Plane</Name>
+  <DisplayName>Golf DTL V-Plane (Ball-Anchored)</DisplayName>
+  <Points>
+    <Point name="Ball Anchor" value="350;460" color="#38bdf8" />
+    <Point name="Shaft Plane Top" value="170;150" color="#38bdf8" />
+    <Point name="Shoulder Plane Top" value="230;120" color="#f97316" />
+  </Points>
+  <Segments>
+    <Segment name="Shaft Plane" point1="0" point2="1" style="Solid" width="3" color="#38bdf8" />
+    <Segment name="Shoulder Plane" point1="0" point2="2" style="Dash" width="2" color="#f97316" />
+  </Segments>
+  <Handles>
+    <Handle type="Point" reference="0" trackable="true" />
+    <Handle type="Point" reference="1" trackable="true" />
+    <Handle type="Point" reference="2" trackable="true" />
+  </Handles>
+  <HitZone>
+    <Polygon points="0;1;2" />
+  </HitZone>
+  <Capabilities flipHorizontal="true" />
+</KinoveaPostureTool>

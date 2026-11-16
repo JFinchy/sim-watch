@@ -1,0 +1,16 @@
+<?xml version='1.0' encoding='utf-8'?>
+<KinoveaWorkspace>
+  <FormatVersion>1.0</FormatVersion>
+  <ScreenDescriptionCapture>
+    <CameraName>DTL</CameraName>
+    <Autostream>true</Autostream>
+    <Delay>1.5</Delay>
+    <DelayedDisplay>true</DelayedDisplay>
+  </ScreenDescriptionCapture>
+  <ScreenDescriptionCapture>
+    <CameraName>FO</CameraName>
+    <Autostream>true</Autostream>
+    <Delay>1.5</Delay>
+    <DelayedDisplay>true</DelayedDisplay>
+  </ScreenDescriptionCapture>
+</KinoveaWorkspace>

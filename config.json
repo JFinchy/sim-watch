@@ -2,12 +2,14 @@
   "interval_sec": 5,
   "fail_threshold": 3,
   "settle_sec": 15,
+  "post_recover_grace_sec": 35,
   "giveup_backoff_sec": 300,
   "only_when_running": "GSPro.exe",
   "device": {
     "_note": "Launch Pro. GameChanger auto-discovers and holds this connection itself during play - no clicking needed, it just needs the port free. FSX Pro is for setup/testing only: in its own Settings > Devices, turn OFF 'Auto connect with solo device' (one-time) so it never grabs the port on its own. `reconnect` drives FSX Pro's own connection by hand (wired first, then Wi-Fi) for that testing - it is NOT used by automatic recovery.",
     "ip": "169.254.6.44",
     "port": 9970,
+    "ports": [9970, 9971],
     "retry_sec": 60,
     "max_attempts": 5,
     "allow_wifi": true,
@@ -19,7 +21,60 @@
     "side": "left"
   },
   "gspro_display": {
-    "windowed": false
+    "_note": "Set windowed=false for fullscreen; borderless_when_pip=true helps keep the Always-on-Top OBS Projector PiP cleanly layered over GSPro when Projector PiP is enabled.",
+    "windowed": false,
+    "borderless_when_pip": true,
+    "windowed_when_projector_off": true,
+    "suppress_focus_when_green": true
+  },
+  "video": {
+    "_note": "Kinovea 2x2 TV grid (Top: Live DTL+FO auto-replay, Bottom: Pro or My-Go-To reference) + OBS Projector PiP overlay + OpenConnect (:921) shot trigger & file naming.",
+    "enabled": true,
+    "swings_dir": "Swings",
+    "kinovea_exe": "C:\\Program Files\\Kinovea\\Kinovea.exe",
+    "obs_exe": "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe",
+    "dtl_camera": "DTL",
+    "fo_camera": "FO",
+    "replay_speed_pct": 50,
+    "pre_trigger_sec": 1.5,
+    "post_trigger_sec": 1.5,
+    "default_reference": "My-Go-To",
+    "pros": [
+      "Rory_McIlroy",
+      "Tiger_Woods",
+      "Tommy_Fleetwood"
+    ],
+    "projector_pip": {
+      "enabled": true,
+      "window_title_re": "^Windowed Projector",
+      "corner": "top-right",
+      "width_pct": 38,
+      "height_pct": 32,
+      "margin_px": 24,
+      "popup_seconds": 12
+    },
+    "swing_lines": {
+      "enabled": true,
+      "auto_detect_ball": true,
+      "auto_trace_path": true,
+      "dtl_plane_angles_deg": {
+        "Driver": 48,
+        "Iron": 60,
+        "Wedge": 64
+      },
+      "shoulder_plane_offset_deg": 8
+    },
+    "hotkeys": {
+      "cheatsheet": "Alt+H",
+      "toggle_pip": "Alt+P",
+      "bookmark_goto": "Alt+G",
+      "cycle_reference": "Alt+R",
+      "trigger_shot": "Alt+C",
+      "open_folder": "Alt+O",
+      "open_drills": "Alt+D",
+      "toggle_lines": "Alt+L",
+      "save_lines": "Alt+Shift+L"
+    }
   },
   "apps": [
     {
@@ -28,6 +83,7 @@
       "exe": "C:\\Program Files (x86)\\FSX Pro\\FSX Pro.exe",
       "window_title_re": "^FSX Pro$",
       "start_wait_sec": 5,
+      "start_no_activate": true,
       "post_start": []
     },
     {
@@ -35,7 +91,8 @@
       "process": "GameChanger.exe",
       "exe": "C:\\Users\\finch\\Downloads\\GameChanger_v2.1\\GameChanger.exe",
       "window_title_re": "^Game ?Changer",
-      "start_wait_sec": 8,
+      "start_wait_sec": 15,
+      "start_no_activate": true,
       "post_start": []
     },
     {
@@ -44,6 +101,7 @@
       "exe": "C:\\GSProV1\\Core\\GSPC\\GSPconnect.exe",
       "window_title_re": "^APIv1 Connect$",
       "start_wait_sec": 3,
+      "start_no_activate": true,
       "post_start": []
     },
     {
@@ -85,7 +143,12 @@
       "name": "GameChanger device session",
       "type": "device_tcp",
       "app": "integrator",
+      "ip": "169.254.6.44",
       "port": 9970,
+      "ports": [
+        9970,
+        9971
+      ],
       "device": true,
       "recovery_level": 0
     },
@@ -104,12 +167,14 @@
     {
       "name": "GSPconnect responding",
       "type": "responsive",
+      "app": "gspro_connect",
       "window_title_re": "^APIv1 Connect$",
       "recovery_level": 0
     },
     {
       "name": "GameChanger responding",
       "type": "responsive",
+      "app": "integrator",
       "window_title_re": "^Game ?Changer",
       "recovery_level": 0
     }
@@ -133,7 +198,6 @@
     {
       "name": "restart everything",
       "restart": [
-        "fs_connector",
         "gspro",
         "gspro_connect",
         "integrator"
@@ -148,7 +212,6 @@
     ],
     "wait_timeout_sec": 90,
     "order": [
-      "fs_connector",
       "gspro",
       "gspro_connect",
       "integrator"

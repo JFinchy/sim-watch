@@ -1,0 +1,120 @@
+{
+  "current_scene": "SimWatch DTL + FO PiP",
+  "current_program_scene": "SimWatch DTL + FO PiP",
+  "scene_order": [
+    {
+      "name": "SimWatch DTL + FO PiP"
+    }
+  ],
+  "name": "SimWatch PiP",
+  "sources": [
+    {
+      "prev_ver": 536936450,
+      "name": "Kinovea LiveReplay Capture",
+      "uuid": "53c7ae31-fb21-411d-a617-ec76277e4429",
+      "id": "window_capture",
+      "versioned_id": "window_capture",
+      "settings": {
+        "window": "Kinovea [LiveReplay]:WindowsForms10.Window.8.app.0:Kinovea.exe",
+        "method": 2,
+        "priority": 0
+      },
+      "mixers": 255,
+      "sync": 0,
+      "flags": 0,
+      "volume": 1.0,
+      "balance": 0.5,
+      "enabled": true,
+      "muted": true,
+      "push-to-mute": false,
+      "push-to-mute-delay": 0,
+      "push-to-talk": false,
+      "push-to-talk-delay": 0,
+      "hotkeys": {},
+      "deinterlace_mode": 0,
+      "deinterlace_field_order": 0,
+      "monitoring_type": 0,
+      "private_settings": {}
+    },
+    {
+      "prev_ver": 536936450,
+      "name": "SimWatch DTL + FO PiP",
+      "uuid": "a3366e5c-ab09-4993-8bac-656d0fb6a2ab",
+      "id": "scene",
+      "versioned_id": "scene",
+      "settings": {
+        "id_counter": 1,
+        "custom_size": false,
+        "items": [
+          {
+            "name": "Kinovea LiveReplay Capture",
+            "source_uuid": "53c7ae31-fb21-411d-a617-ec76277e4429",
+            "visible": true,
+            "locked": false,
+            "rot": 0.0,
+            "scale_ref": {
+              "x": 1920.0,
+              "y": 1080.0
+            },
+            "align": 5,
+            "bounds_type": 2,
+            "bounds_align": 0,
+            "bounds_crop": false,
+            "crop_left": 0,
+            "crop_top": 70,
+            "crop_right": 0,
+            "crop_bottom": 55,
+            "id": 1,
+            "group_item_backup": false,
+            "pos": {
+              "x": 0.0,
+              "y": 0.0
+            },
+            "scale": {
+              "x": 1.0,
+              "y": 1.0
+            },
+            "bounds": {
+              "x": 1920.0,
+              "y": 1080.0
+            },
+            "scale_filter": "disable",
+            "blend_method": "default",
+            "blend_type": "normal",
+            "show_transition": {
+              "duration": 0
+            },
+            "hide_transition": {
+              "duration": 0
+            },
+            "private_settings": {}
+          }
+        ]
+      },
+      "mixers": 0,
+      "sync": 0,
+      "flags": 0,
+      "volume": 1.0,
+      "balance": 0.5,
+      "enabled": true,
+      "muted": false,
+      "hotkeys": {},
+      "private_settings": {}
+    }
+  ],
+  "transitions": [],
+  "saved_projectors": [
+    {
+      "monitor": -1,
+      "name": "SimWatch DTL + FO PiP",
+      "type": 2
+    }
+  ],
+  "preview_locked": false,
+  "scaling_enabled": false,
+  "resolution": {
+    "x": 1920,
+    "y": 1080
+  },
+  "version": 2
+}

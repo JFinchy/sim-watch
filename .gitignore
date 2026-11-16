@@ -10,8 +10,10 @@ env/
 
 # Runtime logs and state files
 simwatch.log
+simwatch.log.*
 *.log
 PAUSE
+Swings/Sessions/
 
 # OS / editor artifacts
 Thumbs.db
