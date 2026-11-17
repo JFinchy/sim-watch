@@ -995,7 +995,238 @@
     .score-chip.low { background: var(--accent-soft); color: #7dd3fc; border: 1px solid rgba(56, 189, 248, 0.45); }
     .score-chip.mid { background: var(--amber-soft); color: #fde68a; border: 1px solid rgba(245, 158, 11, 0.45); }
     .score-chip.high { background: var(--red-soft); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.45); }
+
+    /* HACKMOTION & ARTILLERY STYLES */
+    .hackmotion-card {
+      background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(17, 24, 39, 0.95) 100%);
+      border: 1px solid rgba(16, 185, 129, 0.35);
+      border-radius: var(--radius);
+      position: relative;
+      overflow: hidden;
+    }
+    .hackmotion-card::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, #10b981, #38bdf8, #818cf8);
+    }
+    .wrist-gauge-bar {
+      height: 8px;
+      border-radius: 999px;
+      background: linear-gradient(90deg, #38bdf8 0%, #10b981 35%, #10b981 65%, #f59e0b 80%, #ef4444 100%);
+      margin: 8px 0;
+      position: relative;
+    }
+    .hud-badge-cadence {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(56, 189, 248, 0.14);
+      color: #7dd3fc;
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .hud-badge-cadence:hover {
+      background: rgba(56, 189, 248, 0.24);
+      border-color: rgba(56, 189, 248, 0.55);
+    }
+    .hud-badge-cadence.playing {
+      background: rgba(16, 185, 129, 0.2);
+      color: #6ee7b7;
+      border-color: rgba(16, 185, 129, 0.5);
+      box-shadow: 0 0 12px rgba(16, 185, 129, 0.3);
+    }
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #7dd3fc;
+      display: inline-block;
+    }
+    .hud-badge-cadence.playing .pulse-dot {
+      background: #10b981;
+      animation: pulseAnim 1s infinite alternate;
+    }
+    @keyframes pulseAnim {
+      from { transform: scale(0.8); opacity: 0.7; }
+      to { transform: scale(1.3); opacity: 1; }
+    }
+
+    /* CADENCE STUDIO STYLES */
+    .cadence-studio-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .cadence-hero {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 20px;
+      background: rgba(17, 24, 39, 0.95);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+      box-shadow: var(--shadow);
+    }
+    @media (max-width: 860px) {
+      .cadence-hero { grid-template-columns: 1fr; }
+    }
+    .tempo-orb-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: radial-gradient(circle at center, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 20px;
+      padding: 28px 20px;
+      text-align: center;
+      position: relative;
+    }
+    .tempo-orb {
+      width: 140px;
+      height: 140px;
+      border-radius: 50%;
+      background: rgba(15, 23, 42, 0.8);
+      border: 3px solid rgba(56, 189, 248, 0.4);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 16px;
+      transition: all 0.15s ease;
+      cursor: pointer;
+      position: relative;
+      box-shadow: 0 0 25px rgba(0,0,0,0.5);
+    }
+    .tempo-orb.phase-takeaway {
+      border-color: #10b981;
+      box-shadow: 0 0 35px rgba(16, 185, 129, 0.6);
+      transform: scale(1.05);
+      background: rgba(16, 185, 129, 0.15);
+    }
+    .tempo-orb.phase-top {
+      border-color: #f59e0b;
+      box-shadow: 0 0 40px rgba(245, 158, 11, 0.7);
+      transform: scale(1.1);
+      background: rgba(245, 158, 11, 0.2);
+    }
+    .tempo-orb.phase-impact {
+      border-color: #38bdf8;
+      box-shadow: 0 0 50px rgba(56, 189, 248, 0.85);
+      transform: scale(1.15);
+      background: rgba(56, 189, 248, 0.3);
+    }
+    .tempo-orb-icon { font-size: 2.4rem; }
+    .tempo-orb-phase { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; margin-top: 4px; }
+    
+    .cadence-presets-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .cadence-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .cadence-card:hover {
+      border-color: var(--accent);
+      background: var(--bg-hover);
+      transform: translateY(-2px);
+    }
+    .cadence-card.active {
+      border-color: #10b981;
+      background: rgba(16, 185, 129, 0.1);
+      box-shadow: 0 4px 16px rgba(16, 185, 129, 0.2);
+    }
+
+    /* BAG & DISTANCES MATRIX STYLES */
+    .bag-matrix-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .bag-table-card {
+      background: rgba(17, 24, 39, 0.95);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+    }
+    .bag-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    .bag-table th {
+      background: #0f172a;
+      padding: 10px 12px;
+      text-align: left;
+      font-size: 0.76rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+    .bag-table td {
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(44, 59, 85, 0.65);
+      vertical-align: middle;
+    }
+    .bag-table tr:hover td {
+      background: rgba(30, 41, 59, 0.45);
+    }
+    .editable-num {
+      background: rgba(15, 23, 42, 0.7);
+      border: 1px solid var(--border);
+      color: #fff;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 6px;
+      width: 68px;
+      text-align: center;
+      font-family: inherit;
+    }
+    .editable-num:focus {
+      border-color: var(--accent);
+      outline: none;
+      background: #1e293b;
+    }
+
+    /* SIM COMBINES BENTO GRID */
+    .combines-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .combine-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .combine-card:hover {
+      border-color: rgba(56, 189, 248, 0.45);
+      background: var(--bg-hover);
+    }
   </style>
+
 </head>
 <body>
   <div class="app-shell">
@@ -1022,6 +1253,8 @@
         <button class="btn-pill" data-view="browse">🗂️ Routines &amp; Sections</button>
         <button class="btn-pill" data-view="tracker">📊 Goals &amp; Delivery Chart</button>
         <button class="btn-pill" data-view="courses">⛳ GSPro Courses &amp; Rounds</button>
+        <button class="btn-pill" data-view="cadence">⏱️ Cadence &amp; Tempo</button>
+        <button class="btn-pill" data-view="bag">🎒 Club Bag &amp; Gapping</button>
         <button class="btn-pill" data-view="editor">➕ Add / Edit Drill</button>
       </div>
     </div>
@@ -1055,6 +1288,7 @@
         <span><kbd>&larr;</kbd> <kbd>&rarr;</kbd> Prev / Next Drill</span>
         <span><kbd>&uarr;</kbd> <kbd>&darr;</kbd> Prev / Next Section</span>
         <span><kbd>Space</kbd> Play / Pause Video Short</span>
+        <span><kbd>T</kbd> Toggle Cadence Metronome</span>
         <span><kbd>M</kbd> Mark Drill Completed Today</span>
       </div>
     </main>
@@ -1070,6 +1304,12 @@
 
     <!-- VIEW 5: ADD / EDIT DRILL + BACKUP -->
     <section id="view-editor" class="hidden"></section>
+
+    <!-- VIEW 6: CADENCE & TOUR TEMPO STUDIO -->
+    <section id="view-cadence" class="hidden"></section>
+
+    <!-- VIEW 7: CLUB BAG & GAPPING MATRIX + WEATHER / ALTITUDE NORMALIZER -->
+    <section id="view-bag" class="hidden"></section>
   </div>
 
   <div class="toast" id="toastEl"></div>
@@ -1114,6 +1354,40 @@
       }
 
       const DEFAULTS = window.DEFAULT_DRILLS_DATA || { modes: [], routines: [], drills: [], goals: [] };
+
+      
+      function mergeDrills(savedDrills) {
+        const defaults = JSON.parse(JSON.stringify(DEFAULTS.drills || []));
+        if (!Array.isArray(savedDrills) || !savedDrills.length) return defaults;
+        const savedMap = new Map(savedDrills.map((d) => [d.id, d]));
+        const seen = new Set();
+        const merged = defaults.map((d) => {
+          seen.add(d.id);
+          const s = savedMap.get(d.id);
+          if (!s) return d;
+          return Object.assign({}, d, s, {
+            hackmotion: d.hackmotion || s.hackmotion,
+            days: d.days || s.days,
+            modes: d.modes || s.modes
+          });
+        });
+        for (const s of savedDrills) {
+          if (s && s.id && !seen.has(s.id)) {
+            merged.push(Object.assign({ custom: true }, s));
+          }
+        }
+        return merged;
+      }
+
+      function mergeBagMatrix(savedBag) {
+        const defaults = JSON.parse(JSON.stringify(DEFAULTS.bagMatrix || []));
+        if (!Array.isArray(savedBag) || !savedBag.length) return defaults;
+        const savedMap = new Map(savedBag.map((b) => [b.id || b.club, b]));
+        return defaults.map((d) => {
+          const s = savedMap.get(d.id || d.club);
+          return s ? Object.assign({}, d, s) : d;
+        });
+      }
 
       function mergeCourses(savedCourses) {
         const defaults = JSON.parse(JSON.stringify(DEFAULTS.courses || []));
@@ -1179,7 +1453,20 @@
             if (saved.activeRoutine) base.activeRoutine = saved.activeRoutine;
             if (saved.activeSection) base.activeSection = saved.activeSection;
             if (saved.selectedDrillId) base.selectedDrillId = saved.selectedDrillId;
+            if (Array.isArray(saved.bagMatrix)) base.bagMatrix = mergeBagMatrix(saved.bagMatrix);
+            if (saved.cadencePresetId) base.cadencePresetId = saved.cadencePresetId;
+            if (typeof saved.cadenceDelaySec === "number") base.cadenceDelaySec = saved.cadenceDelaySec;
+            if (typeof saved.cadenceVolume === "number") base.cadenceVolume = saved.cadenceVolume;
+            if (typeof saved.simTemp === "number") base.simTemp = saved.simTemp;
+            if (typeof saved.simAltitude === "number") base.simAltitude = saved.simAltitude;
           }
+          base.drills = mergeDrills(base.drills);
+          if (!base.bagMatrix) base.bagMatrix = mergeBagMatrix(null);
+          if (!base.cadencePresetId) base.cadencePresetId = "24-8";
+          if (typeof base.cadenceDelaySec !== "number") base.cadenceDelaySec = 2.5;
+          if (typeof base.cadenceVolume !== "number") base.cadenceVolume = 0.7;
+          if (typeof base.simTemp !== "number") base.simTemp = 70;
+          if (typeof base.simAltitude !== "number") base.simAltitude = 0;
         } catch (err) {
           console.warn("Could not read saved localStorage state:", err);
         }
@@ -1188,6 +1475,146 @@
 
       const state = loadState();
       const sessionObjectUrls = {}; // Ephemeral blob URLs picked during this browser tab session
+
+      
+      // --- WEB AUDIO API ENGINE (TOUR TEMPO CADENCE & HACKMOTION BIOFEEDBACK) ---
+      let audioCtx = null;
+      function getAudioContext() {
+        if (!audioCtx) {
+          const AudioContext = window.AudioContext || window.webkitAudioContext;
+          if (AudioContext) audioCtx = new AudioContext();
+        }
+        if (audioCtx && audioCtx.state === "suspended") {
+          audioCtx.resume();
+        }
+        return audioCtx;
+      }
+
+      function playTone(freq, durationSec, type = "sine", gainVal = 0.3) {
+        try {
+          const ctx = getAudioContext();
+          if (!ctx) return;
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          const now = ctx.currentTime;
+          osc.type = type;
+          osc.frequency.setValueAtTime(freq, now);
+          gain.gain.setValueAtTime(gainVal * (state.cadenceVolume || 0.7), now);
+          gain.gain.exponentialRampToValueAtTime(0.0001, now + durationSec);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now);
+          osc.stop(now + durationSec);
+        } catch (err) {
+          console.warn("Audio error:", err);
+        }
+      }
+
+      function playHackMotionTone(isInZone = true) {
+        if (isInZone) {
+          playTone(660, 0.22, "triangle", 0.35);
+          setTimeout(() => playTone(880, 0.30, "sine", 0.40), 90);
+        } else {
+          playTone(220, 0.25, "sawtooth", 0.25);
+        }
+      }
+
+      const cadenceState = {
+        isPlaying: false,
+        timerId: null,
+        currentPhase: "ready",
+        repCount: 0,
+        cycleId: 0
+      };
+
+      function updateCadenceUI(phase) {
+        cadenceState.currentPhase = phase;
+        const orb = document.getElementById("tempoOrb");
+        const phaseLabel = document.getElementById("tempoOrbPhase");
+        if (orb && phaseLabel) {
+          orb.className = `tempo-orb phase-${phase}`;
+          const labels = {
+            ready: "WAITING...",
+            takeaway: "1. TAKEAWAY",
+            top: "2. TOP PAUSE",
+            impact: "3. IMPACT!"
+          };
+          phaseLabel.textContent = labels[phase] || "READY";
+        }
+        const btnTopbar = document.getElementById("btnTopbarCadence");
+        if (btnTopbar) {
+          btnTopbar.classList.toggle("playing", cadenceState.isPlaying);
+        }
+      }
+
+      function scheduleCadenceBeat() {
+        if (!cadenceState.isPlaying) return;
+        const currentCycle = ++cadenceState.cycleId;
+        const presets = DEFAULTS.cadencePresets || [];
+        const preset = presets.find((p) => p.id === state.cadencePresetId) || presets[1] || { backSec: 0.8, downSec: 0.27 };
+        const backSec = preset.backSec || 0.8;
+        const downSec = preset.downSec || 0.27;
+        const delaySec = state.cadenceDelaySec || 2.5;
+
+        // Tone 1: Start Takeaway
+        updateCadenceUI("takeaway");
+        playTone(520, 0.12, "sine", 0.4);
+
+        // Tone 2: Top / Transition
+        setTimeout(() => {
+          if (!cadenceState.isPlaying || cadenceState.cycleId !== currentCycle) return;
+          updateCadenceUI("top");
+          playTone(680, 0.12, "sine", 0.45);
+        }, backSec * 1000);
+
+        // Tone 3: Impact Strike
+        setTimeout(() => {
+          if (!cadenceState.isPlaying || cadenceState.cycleId !== currentCycle) return;
+          updateCadenceUI("impact");
+          playTone(880, 0.18, "triangle", 0.55);
+          cadenceState.repCount++;
+          const repEl = document.getElementById("cadenceRepCounter");
+          if (repEl) repEl.textContent = cadenceState.repCount;
+        }, (backSec + downSec) * 1000);
+
+        // Reset to Ready
+        setTimeout(() => {
+          if (!cadenceState.isPlaying || cadenceState.cycleId !== currentCycle) return;
+          updateCadenceUI("ready");
+        }, (backSec + downSec + 0.35) * 1000);
+
+        // Loop next swing
+        const totalCycleMs = (backSec + downSec + delaySec) * 1000;
+        cadenceState.timerId = setTimeout(() => {
+          if (cadenceState.isPlaying && cadenceState.cycleId === currentCycle) scheduleCadenceBeat();
+        }, totalCycleMs);
+      }
+
+      function startCadenceMetronome() {
+        cadenceState.isPlaying = true;
+        getAudioContext();
+        updateCadenceUI("ready");
+        scheduleCadenceBeat();
+        showToast(`⏱️ Cadence Metronome Started (${state.cadencePresetId})`);
+        renderHeader();
+        if (state.activeView === "cadence") renderCadence();
+      }
+
+      function stopCadenceMetronome() {
+        cadenceState.isPlaying = false;
+        cadenceState.cycleId++;
+        if (cadenceState.timerId) clearTimeout(cadenceState.timerId);
+        cadenceState.timerId = null;
+        updateCadenceUI("ready");
+        showToast("⏱️ Cadence Metronome Stopped");
+        renderHeader();
+        if (state.activeView === "cadence") renderCadence();
+      }
+
+      function toggleCadenceMetronome() {
+        if (cadenceState.isPlaying) stopCadenceMetronome();
+        else startCadenceMetronome();
+      }
 
       function saveState() {
         try {
@@ -1201,7 +1628,13 @@
             deliveryLogs: state.deliveryLogs,
             drillNotes: state.drillNotes,
             courses: state.courses,
-            roundLogs: state.roundLogs
+            roundLogs: state.roundLogs,
+            bagMatrix: state.bagMatrix,
+            cadencePresetId: state.cadencePresetId,
+            cadenceDelaySec: state.cadenceDelaySec,
+            cadenceVolume: state.cadenceVolume,
+            simTemp: state.simTemp,
+            simAltitude: state.simAltitude
           };
           localStorage.setItem(STORAGE_KEY, JSON.stringify(persist));
         } catch (err) {
@@ -1321,6 +1754,7 @@
                 <line x1="195" y1="125" x2="205" y2="168" stroke="#94a3b8" stroke-width="3"/>
               </svg>`;
           case "shallow":
+        case "motorcycle":
             return `
               <svg viewBox="0 0 360 190" aria-label="P4 to P5 Shallowing Slot Diagram">
                 <line x1="20" y1="168" x2="340" y2="168" stroke="#334155" stroke-width="3"/>
@@ -1346,6 +1780,7 @@
                 <text x="165" y="76" fill="#7dd3fc" font-size="11" font-weight="700" text-anchor="middle">Forward Shaft Lean + Lead Wrist Bowed</text>
               </svg>`;
           case "wedge":
+        case "clock":
             return `
               <svg viewBox="0 0 360 190" aria-label="Wedge Distance Clock & Start Line Gate">
                 <circle cx="115" cy="100" r="62" fill="none" stroke="#334155" stroke-width="2.5" stroke-dasharray="4 4"/>
@@ -1459,11 +1894,26 @@
           "": { text: "⏳ Today Not Logged Yet", cls: "warn" }
         };
         const st = statusMap[today.status || ""] || statusMap[""];
+        const presets = DEFAULTS.cadencePresets || [];
+        const curPreset = presets.find((p) => p.id === state.cadencePresetId) || presets[1] || { name: "24/8" };
+        const shortCadenceName = curPreset.name.split(" ")[0];
         document.getElementById("headerStats").innerHTML = `
+          <span class="stat-pill good" id="btnTopbarHackMotion" style="cursor:pointer;" title="HackMotion Biofeedback Sensor Active">🎯 HackMotion Ready</span>
+          <button type="button" class="hud-badge-cadence ${cadenceState.isPlaying ? "playing" : ""}" id="btnTopbarCadence" title="Click to toggle Cadence Metronome or press 'T'">
+            <span class="pulse-dot"></span>
+            <span>⏱️ Cadence: ${shortCadenceName} ${cadenceState.isPlaying ? "❚❚" : "▶"}</span>
+          </button>
           <span class="stat-pill ${metrics.streak > 0 ? "good" : ""}">🔥 Streak: ${metrics.streak}d</span>
           <span class="stat-pill ${st.cls}">${st.text}</span>
           <span class="stat-pill info">🎯 Today: ${doneCount} drill${doneCount === 1 ? "" : "s"} done</span>
         `;
+        const cadBtn = document.getElementById("btnTopbarCadence");
+        if (cadBtn) cadBtn.onclick = toggleCadenceMetronome;
+        const hmBtn = document.getElementById("btnTopbarHackMotion");
+        if (hmBtn) hmBtn.onclick = () => {
+          state.activeView = "deck";
+          renderAll();
+        };
       }
 
       function renderModeBar() {
@@ -1711,6 +2161,62 @@
                   </div>
                 </div>
               </div>
+              <!-- HACKMOTION WRIST TARGETS & BIOFEEDBACK -->
+              <div class="info-block hackmotion-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:6px;">
+                  <h3 style="margin:0; display:flex; align-items:center; gap:6px; color:#6ee7b7;">
+                    <span>🎯</span> HackMotion Wrist Biofeedback &amp; Checkpoints
+                  </h3>
+                  <button type="button" class="btn-sm" id="btnTestHackMotionTone" style="background:rgba(16,185,129,0.2); border-color:#10b981; color:#6ee7b7; font-weight:700;">
+                    🔊 Test Biofeedback Tone
+                  </button>
+                </div>
+
+                <div style="font-size:0.8rem; color:var(--muted); margin-bottom:8px;">
+                  Active Mode: <strong style="color:#6ee7b7;">${esc((drill.hackmotion && drill.hackmotion.targetMode) || "Lead Wrist Flexion/Extension")}</strong>
+                </div>
+
+                <div class="checkpoint-grid" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));">
+                  <div class="cp-card" style="border-left: 3px solid #38bdf8;">
+                    <strong>P1 Address</strong>
+                    <span>${esc((drill.hackmotion && drill.hackmotion.addressAngle) || "+14° Extension")}</span>
+                  </div>
+                  <div class="cp-card" style="border-left: 3px solid #818cf8;">
+                    <strong>P4 Top</strong>
+                    <span>${esc((drill.hackmotion && drill.hackmotion.topAngle) || "0° to -4° Flexion (Flat)")}</span>
+                  </div>
+                  <div class="cp-card" style="border-left: 3px solid #f59e0b;">
+                    <strong>P6 Delivery</strong>
+                    <span>${esc((drill.hackmotion && drill.hackmotion.p6Angle) || "-10° to -14° Flexion")}</span>
+                  </div>
+                  <div class="cp-card" style="border-left: 3px solid #10b981;">
+                    <strong>P7 Impact</strong>
+                    <span>${esc((drill.hackmotion && drill.hackmotion.impactAngle) || "-14° to -18° (Shaft Lean)")}</span>
+                  </div>
+                </div>
+
+                <div class="hackmotion-cue-box" style="margin-top:10px; padding:10px 12px; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:8px; font-size:0.82rem;">
+                  <div style="font-weight:700; color:#6ee7b7; margin-bottom:3px;">🎧 Audio Biofeedback Cue:</div>
+                  <div style="color:var(--text);">${esc((drill.hackmotion && drill.hackmotion.biofeedbackTone) || "Green continuous audio tone sounds when lead wrist is within target flexion window.")}</div>
+                </div>
+
+                <!-- Interactive Wrist Gauge Simulator -->
+                <div style="margin-top:12px; padding:10px 12px; background:rgba(0,0,0,0.35); border-radius:8px; border:1px solid var(--border);">
+                  <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.78rem; margin-bottom:6px;">
+                    <span style="font-weight:600;">Simulated Lead Wrist Flexion Angle:</span>
+                    <span id="wristSimAngleDisplay" style="font-weight:700; color:#10b981; font-family:monospace; font-size:0.88rem;">-15° (Target Green Zone)</span>
+                  </div>
+                  <input type="range" id="wristSimSlider" min="-30" max="30" value="-15" style="width:100%; accent-color:#10b981; cursor:pointer;" />
+                  <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--muted); margin-top:4px;">
+                    <span style="color:#38bdf8;">-30° (Extreme Bow)</span>
+                    <span style="color:#10b981; font-weight:700;">🟢 TARGET (-12° to -18°)</span>
+                    <span style="color:#ef4444;">+30° (Cupping / Scoop)</span>
+                  </div>
+                  <div id="wristSimFeedback" style="margin-top:6px; font-size:0.78rem; font-weight:600; color:#6ee7b7; text-align:center;">
+                    ✅ Tour Forward Shaft Lean — Ball Compressed with Zero Scoop
+                  </div>
+                </div>
+              </div>
 
               <!-- BEST GSPRO COURSES FOR THIS DRILL -->
               ${(() => {
@@ -1742,6 +2248,7 @@
                   <span class="badge">⏱️ ${esc(drill.duration || "8 min")}</span>
                   <span class="badge">🔁 ${esc(drill.reps || "15 reps")}</span>
                   <span class="badge">🏌️ ${esc((drill.clubs || []).join(", "))}</span>
+                  ${drill.hackmotion ? `<span class="badge" style="background:rgba(16,185,129,0.2); color:#6ee7b7; border-color:rgba(16,185,129,0.45);">🎯 HackMotion Biofeedback</span>` : ""}
                 </div>
                 <div class="tag-row">
                   ${(drill.modes || []).includes("real") ? `<span class="badge real">🏌️ Real Balls</span>` : ""}
@@ -1785,6 +2292,41 @@
           vid.onerror = () => {
             vid.classList.add("hidden");
             fallback.classList.remove("hidden");
+          };
+        }
+
+        
+        const btnTestTone = document.getElementById("btnTestHackMotionTone");
+        if (btnTestTone) {
+          btnTestTone.onclick = () => {
+            playHackMotionTone(true);
+            showToast("🔊 HackMotion Green Zone Biofeedback Tone");
+          };
+        }
+
+        const wristSlider = document.getElementById("wristSimSlider");
+        const wristDisplay = document.getElementById("wristSimAngleDisplay");
+        const wristFb = document.getElementById("wristSimFeedback");
+        if (wristSlider && wristDisplay && wristFb) {
+          wristSlider.oninput = () => {
+            const angle = parseInt(wristSlider.value, 10);
+            const sign = angle > 0 ? "+" : "";
+            if (angle <= -12 && angle >= -18) {
+              wristDisplay.textContent = `${sign}${angle}° (Target Green Zone)`;
+              wristDisplay.style.color = "#10b981";
+              wristFb.style.color = "#6ee7b7";
+              wristFb.textContent = "✅ Tour Forward Shaft Lean — Ball Compressed with Zero Scoop";
+            } else if (angle > 0) {
+              wristDisplay.textContent = `${sign}${angle}° (Cupping / Scoop Alert)`;
+              wristDisplay.style.color = "#ef4444";
+              wristFb.style.color = "#fca5a5";
+              wristFb.textContent = "🔴 Cupping Alert (>0°) — Clubface fans open, lose compression, scooping";
+            } else {
+              wristDisplay.textContent = `${sign}${angle}° (Marginal Flexion)`;
+              wristDisplay.style.color = "#38bdf8";
+              wristFb.style.color = "#7dd3fc";
+              wristFb.textContent = "⚡ Acceptable Delivery — Ensure shaft lean holds through low point";
+            }
           };
         }
 
@@ -1894,6 +2436,8 @@
                       </div>
                       <h4>${esc(r.fullTitle)}</h4>
                       <p style="margin-top:6px;">${esc(r.summary)}</p>
+                      ${r.hackmotionPrescription ? `<div style="margin-top:6px; font-size:0.78rem; color:#6ee7b7; background:rgba(16,185,129,0.1); padding:4px 8px; border-radius:6px; border:1px solid rgba(16,185,129,0.25);">🎯 <strong>HackMotion:</strong> ${esc(r.hackmotionPrescription)}</div>` : ""}
+                      ${r.cadenceTarget ? `<div style="margin-top:4px; font-size:0.78rem; color:#7dd3fc; background:rgba(56,189,248,0.1); padding:4px 8px; border-radius:6px; border:1px solid rgba(56,189,248,0.25);">⏱️ <strong>Cadence:</strong> ${esc(r.cadenceTarget)}</div>` : ""}
                     </div>
                     <div style="font-size:0.82rem; color:var(--accent); font-weight:700;">Open Routine in Deck &rarr;</div>
                   </div>
@@ -3571,6 +4115,393 @@
 
       let editingDrillId = null;
 
+      
+      function renderCadence() {
+        const el = document.getElementById("view-cadence");
+        const presets = DEFAULTS.cadencePresets || [];
+        const current = presets.find((p) => p.id === state.cadencePresetId) || presets[1] || presets[0];
+
+        el.innerHTML = `
+          <div class="cadence-studio-wrap">
+            <!-- TOP HERO BENTO: ORB + CONTROLLER -->
+            <div class="cadence-hero">
+              <div class="tempo-orb-container">
+                <div class="tempo-orb phase-${cadenceState.currentPhase}" id="tempoOrb" title="Click to start/stop or press 'T'">
+                  <div class="tempo-orb-icon">${cadenceState.isPlaying ? "🏌️" : "⏱️"}</div>
+                  <div class="tempo-orb-phase" id="tempoOrbPhase">${cadenceState.isPlaying ? cadenceState.currentPhase.toUpperCase() : "STANDBY"}</div>
+                </div>
+                <div style="font-size:0.8rem; color:var(--muted); margin-bottom:12px;">
+                  Shortcut: press <kbd style="background:#1e293b; padding:2px 6px; border-radius:4px; border:1px solid #334155;">T</kbd> to toggle anywhere
+                </div>
+                <button type="button" class="nav-btn ${cadenceState.isPlaying ? "danger" : "success"}" id="btnCadencePlayToggle" style="width:100%; font-size:1rem; padding:10px;">
+                  ${cadenceState.isPlaying ? "❚❚ Stop Metronome" : "▶ Start Tour Cadence"}
+                </button>
+              </div>
+
+              <div style="display:flex; flex-direction:column; justify-content:space-between;">
+                <div>
+                  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+                    <div>
+                      <span class="badge" style="background:rgba(56,189,248,0.15); color:#7dd3fc; border-color:rgba(56,189,248,0.4);">
+                        🎯 ${esc(current.ratio)} Swing Ratio • ${esc(current.bpm)} BPM
+                      </span>
+                      <h2 style="margin:8px 0 4px; font-size:1.6rem;">${esc(current.name)}</h2>
+                      <p style="color:var(--muted); margin:0; font-size:0.9rem;">${esc(current.desc)}</p>
+                    </div>
+                    <div style="background:rgba(15,23,42,0.8); border:1px solid var(--border); border-radius:12px; padding:10px 16px; text-align:center;">
+                      <div style="font-size:0.75rem; color:var(--muted); text-transform:uppercase;">Session Reps</div>
+                      <div style="font-size:1.8rem; font-weight:800; color:#10b981;" id="cadenceRepCounter">${cadenceState.repCount}</div>
+                    </div>
+                  </div>
+
+                  <!-- TIMING METRICS BAR -->
+                  <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap:10px; margin-top:16px;">
+                    <div class="cp-card" style="border-left: 3px solid #10b981;">
+                      <strong>1. Backswing</strong>
+                      <span style="font-size:1.1rem; font-weight:700; color:#6ee7b7;">${current.backSec.toFixed(2)}s <span style="font-size:0.75rem; color:var(--muted);">(${current.backFrames}f)</span></span>
+                    </div>
+                    <div class="cp-card" style="border-left: 3px solid #38bdf8;">
+                      <strong>2. Downswing</strong>
+                      <span style="font-size:1.1rem; font-weight:700; color:#7dd3fc;">${current.downSec.toFixed(2)}s <span style="font-size:0.75rem; color:var(--muted);">(${current.downFrames}f)</span></span>
+                    </div>
+                    <div class="cp-card" style="border-left: 3px solid #818cf8;">
+                      <strong>Total Motion</strong>
+                      <span style="font-size:1.1rem; font-weight:700; color:#a5b4fc;">${current.totalSec.toFixed(2)}s</span>
+                    </div>
+                    <div class="cp-card" style="border-left: 3px solid #f59e0b;">
+                      <strong>Tour Pros</strong>
+                      <span style="font-size:0.78rem; color:var(--text);">${esc(current.proExamples)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- SLIDERS: DELAY & VOLUME -->
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:16px; padding-top:16px; border-top:1px solid rgba(44,59,85,0.65);">
+                  <div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
+                      <span>Reset Pause Between Swings:</span>
+                      <strong id="delayValDisplay">${(state.cadenceDelaySec || 2.5).toFixed(1)}s</strong>
+                    </div>
+                    <input type="range" id="cadenceDelaySlider" min="1.5" max="5.0" step="0.5" value="${state.cadenceDelaySec || 2.5}" style="width:100%; accent-color:#38bdf8;" />
+                  </div>
+                  <div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
+                      <span>Metronome Volume:</span>
+                      <strong id="volumeValDisplay">${Math.round((state.cadenceVolume || 0.7) * 100)}%</strong>
+                    </div>
+                    <input type="range" id="cadenceVolumeSlider" min="0.1" max="1.0" step="0.1" value="${state.cadenceVolume || 0.7}" style="width:100%; accent-color:#10b981;" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- PRESETS SELECTOR BENTO -->
+            <div class="panel">
+              <h3 style="margin-top:0; margin-bottom:12px;">🎵 Select Cadence Rhythm Preset</h3>
+              <div class="cadence-presets-grid">
+                ${presets.map((p) => {
+                  const isAct = p.id === state.cadencePresetId;
+                  return `
+                    <div class="cadence-card ${isAct ? "active" : ""}" data-pick-cadence="${esc(p.id)}">
+                      <div>
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                          <span class="badge ${p.type === "full-swing" ? "real" : "almost"}">${esc(p.ratio)} Ratio</span>
+                          <span style="font-size:0.78rem; font-weight:700; color:var(--muted);">${p.bpm} BPM</span>
+                        </div>
+                        <h4 style="margin:4px 0 6px;">${esc(p.name)}</h4>
+                        <p style="font-size:0.8rem; color:var(--muted); margin:0;">${esc(p.desc)}</p>
+                      </div>
+                      <div style="margin-top:12px; font-size:0.75rem; color:#7dd3fc; border-top:1px solid rgba(255,255,255,0.06); padding-top:6px;">
+                        ⭐ ${esc(p.proExamples.split(",")[0])}
+                      </div>
+                    </div>
+                  `;
+                }).join("")}
+              </div>
+            </div>
+
+            <!-- HACKMOTION & CADENCE BIOMECHANICS SYNC GUIDE -->
+            <div class="panel" style="background:linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(17,24,39,0.95) 100%); border-color:rgba(16,185,129,0.3);">
+              <h3 style="margin-top:0; color:#6ee7b7; display:flex; align-items:center; gap:8px;">
+                <span>🎯</span> Syncing HackMotion Wrist Angles to Cadence Tones
+              </h3>
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:14px; margin-top:12px;">
+                <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:12px;">
+                  <div style="color:#10b981; font-weight:700; margin-bottom:4px;">🟢 TONE 1: Takeaway Start</div>
+                  <p style="font-size:0.82rem; color:var(--muted); margin:0;">
+                    Lead wrist holds neutral address extension (+14°). Do not snatch or roll hands open. Chest rotates away in one piece.
+                  </p>
+                </div>
+                <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:12px;">
+                  <div style="color:#f59e0b; font-weight:700; margin-bottom:4px;">🟡 TONE 2: Top of Swing (P4)</div>
+                  <p style="font-size:0.82rem; color:var(--muted); margin:0;">
+                    Reach top with a <strong>flat lead wrist (0° to -4°)</strong>. The brief interval before Tone 3 is where the <strong>motorcycle shallowing flex (-12°)</strong> occurs!
+                  </p>
+                </div>
+                <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:12px;">
+                  <div style="color:#38bdf8; font-weight:700; margin-bottom:4px;">🔵 TONE 3: Impact Strike (P7)</div>
+                  <p style="font-size:0.82rem; color:var(--muted); margin:0;">
+                    Strike occurs with <strong>lead wrist bowed (-14° to -18°)</strong>. Forward shaft lean compresses the ball against the turf without scooping.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+
+        // Attach event handlers
+        document.getElementById("tempoOrb").onclick = toggleCadenceMetronome;
+        document.getElementById("btnCadencePlayToggle").onclick = toggleCadenceMetronome;
+
+        el.querySelectorAll("[data-pick-cadence]").forEach((card) => {
+          card.onclick = () => {
+            const pid = card.getAttribute("data-pick-cadence");
+            state.cadencePresetId = pid;
+            saveState();
+            if (cadenceState.isPlaying) {
+              stopCadenceMetronome();
+              startCadenceMetronome();
+            } else {
+              renderCadence();
+              renderHeader();
+            }
+          };
+        });
+
+        const delaySlider = document.getElementById("cadenceDelaySlider");
+        if (delaySlider) {
+          delaySlider.oninput = (e) => {
+            state.cadenceDelaySec = parseFloat(e.target.value);
+            document.getElementById("delayValDisplay").textContent = `${state.cadenceDelaySec.toFixed(1)}s`;
+            saveState();
+          };
+        }
+
+        const volSlider = document.getElementById("cadenceVolumeSlider");
+        if (volSlider) {
+          volSlider.oninput = (e) => {
+            state.cadenceVolume = parseFloat(e.target.value);
+            document.getElementById("volumeValDisplay").textContent = `${Math.round(state.cadenceVolume * 100)}%`;
+            saveState();
+          };
+        }
+      }
+
+      function renderBag() {
+        const el = document.getElementById("view-bag");
+        const bag = state.bagMatrix || DEFAULTS.bagMatrix || [];
+        const temp = typeof state.simTemp === "number" ? state.simTemp : 70;
+        const alt = typeof state.simAltitude === "number" ? state.simAltitude : 0;
+
+        const tempDeltaPct = (temp - 70) * 0.1;
+        const altPct = (alt / 1000) * 2.0;
+        const totalMult = 1 + (tempDeltaPct + altPct) / 100;
+
+        el.innerHTML = `
+          <div class="bag-matrix-wrap">
+            <!-- HEADER WITH WEATHER & ALTITUDE NORMALIZER -->
+            <div class="panel" style="background:linear-gradient(135deg, rgba(30,41,59,0.8) 0%, rgba(17,24,39,0.95) 100%);">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:14px; margin-bottom:16px;">
+                <div>
+                  <div class="badge" style="background:rgba(16,185,129,0.18); color:#6ee7b7; border-color:rgba(16,185,129,0.4); margin-bottom:6px;">
+                    🎒 Yardage Calibration &amp; HackMotion Flex Profile
+                  </div>
+                  <h2 style="margin:4px 0 6px;">Club Bag &amp; Distance Gapping Matrix</h2>
+                  <p style="color:var(--muted); margin:0; font-size:0.88rem;">
+                    Personalized carry &amp; launch windows (inspired by agentic-caddy). Click any carry/ball speed number below to edit!
+                  </p>
+                </div>
+                <button type="button" class="btn-sm" id="btnResetBagDefaults" style="color:var(--muted);">
+                  ↺ Reset Stock Yardages
+                </button>
+              </div>
+
+              <!-- SIM ENVIRONMENT NORMALIZER CONTROLS -->
+              <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:18px; padding:14px; background:rgba(15,23,42,0.6); border-radius:10px; border:1px solid var(--border);">
+                <div>
+                  <div style="display:flex; justify-content:space-between; font-size:0.82rem; margin-bottom:4px;">
+                    <span>🌡️ Sim / Garage Temperature:</span>
+                    <strong id="tempDisplay" style="color:#38bdf8;">${temp}°F</strong>
+                  </div>
+                  <input type="range" id="tempSlider" min="40" max="95" step="1" value="${temp}" style="width:100%; accent-color:#38bdf8;" />
+                  <div style="font-size:0.72rem; color:var(--muted); margin-top:2px;">Cold garage air is denser (reduces carry ~1% per 10°F).</div>
+                </div>
+
+                <div>
+                  <div style="display:flex; justify-content:space-between; font-size:0.82rem; margin-bottom:4px;">
+                    <span>⛰️ Course Altitude (Elevation):</span>
+                    <strong id="altDisplay" style="color:#10b981;">${alt.toLocaleString()} ft</strong>
+                  </div>
+                  <input type="range" id="altSlider" min="0" max="5000" step="250" value="${alt}" style="width:100%; accent-color:#10b981;" />
+                  <div style="font-size:0.72rem; color:var(--muted); margin-top:2px;">Thin mountain air adds carry (~2% per 1,000 ft elevation).</div>
+                </div>
+
+                <div style="display:flex; flex-direction:column; justify-content:center; align-items:center; background:rgba(0,0,0,0.3); border-radius:8px; padding:10px; border:1px solid rgba(255,255,255,0.06);">
+                  <div style="font-size:0.72rem; text-transform:uppercase; color:var(--muted);">Flight Multiplier</div>
+                  <div style="font-size:1.4rem; font-weight:800; color:${totalMult >= 1 ? '#6ee7b7' : '#fca5a5'};">
+                    ${(totalMult * 100).toFixed(1)}% <span style="font-size:0.8rem; font-weight:normal;">(${totalMult >= 1 ? '+' : ''}${((totalMult - 1) * 100).toFixed(1)}%)</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- BAG TABLE -->
+            <div class="bag-table-card">
+              <div class="rounds-table-wrap" style="margin-top:0;">
+                <table class="bag-table">
+                  <thead>
+                    <tr>
+                      <th>Club</th>
+                      <th>Loft</th>
+                      <th>Stock Carry</th>
+                      <th>Adjusted Carry (${temp}°F, ${alt}ft)</th>
+                      <th>Total Yds</th>
+                      <th>Ball Speed</th>
+                      <th>Launch</th>
+                      <th>HackMotion Impact</th>
+                      <th>Primary Role</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${bag.map((c, i) => {
+                      const adjCarry = Math.round(c.carry * totalMult);
+                      return `
+                        <tr data-club-index="${i}">
+                          <td><strong>${esc(c.club)}</strong></td>
+                          <td style="color:var(--muted);">${esc(c.loft)}</td>
+                          <td>
+                            <input type="number" class="editable-num" data-field="carry" data-index="${i}" value="${c.carry}" /> yds
+                          </td>
+                          <td style="font-weight:700; color:#38bdf8;">
+                            ${adjCarry} yds
+                          </td>
+                          <td>
+                            <input type="number" class="editable-num" data-field="total" data-index="${i}" value="${c.total}" />
+                          </td>
+                          <td>
+                            <input type="number" class="editable-num" data-field="ballSpeed" data-index="${i}" value="${c.ballSpeed}" /> mph
+                          </td>
+                          <td>
+                            <input type="number" step="0.5" class="editable-num" data-field="launch" data-index="${i}" value="${c.launch}" />°
+                          </td>
+                          <td>
+                            <span class="badge" style="background:rgba(16,185,129,0.15); color:#6ee7b7; border-color:rgba(16,185,129,0.35);">
+                              ${esc(c.hmFlex || "-14°")}
+                            </span>
+                          </td>
+                          <td style="font-size:0.8rem; color:var(--muted);">${esc(c.role || "")}</td>
+                        </tr>
+                      `;
+                    }).join("")}
+                  </tbody>
+                </table>
+              </div>
+              <div style="font-size:0.75rem; color:var(--muted); margin-top:10px;">
+                💡 Tip: Changes auto-save immediately to your local SimWatch profile.
+              </div>
+            </div>
+
+            <!-- SIMULATOR ROUTINES & COMBINES (FROM AGENTIC-CADDY) -->
+            <div class="panel">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <div>
+                  <h3 style="margin:0;">🎯 Simulator Practice Combines (from agentic-caddy)</h3>
+                  <p style="color:var(--muted); font-size:0.82rem; margin:2px 0 0;">
+                    Structured skill challenges for GSPro driving range &amp; on-course sessions.
+                  </p>
+                </div>
+              </div>
+
+              <div class="combines-grid">
+                ${Object.keys(DEFAULTS.simulatorRoutines || {}).map((k) => {
+                  const comb = DEFAULTS.simulatorRoutines[k];
+                  return `
+                    <div class="combine-card">
+                      <div>
+                        <div class="tag-row" style="margin-bottom:6px;">
+                          <span class="badge real">${esc(comb.focusArea)}</span>
+                          <span class="badge almost">🏌️ ${esc(comb.recommendedClub)}</span>
+                        </div>
+                        <h4 style="margin:4px 0 6px;">${esc(comb.title)}</h4>
+                        <p style="font-size:0.8rem; color:var(--muted); margin-bottom:10px;">${esc(comb.tagline)}</p>
+                        
+                        <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:6px; padding:6px 10px; font-size:0.78rem; margin-bottom:10px;">
+                          🎯 <strong>HackMotion:</strong> ${esc(comb.hackmotionCue)}
+                        </div>
+
+                        <ol style="margin:0; padding-left:18px; font-size:0.8rem; color:var(--text); line-height:1.4;">
+                          ${(comb.steps || []).map((s) => `<li style="margin-bottom:4px;">${esc(s)}</li>`).join("")}
+                        </ol>
+                      </div>
+                      <div style="margin-top:14px; padding-top:8px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                        <span style="font-size:0.75rem; color:var(--accent);">⏱️ ${esc(comb.cadence || "24/8")}</span>
+                        <button type="button" class="btn-sm" data-log-combine="${esc(comb.id)}">✅ Log Completed</button>
+                      </div>
+                    </div>
+                  `;
+                }).join("")}
+              </div>
+            </div>
+          </div>
+        `;
+
+        const tempSlider = document.getElementById("tempSlider");
+        if (tempSlider) {
+          tempSlider.oninput = (e) => {
+            state.simTemp = parseInt(e.target.value, 10);
+            document.getElementById("tempDisplay").textContent = `${state.simTemp}°F`;
+            saveState();
+            renderBag();
+          };
+        }
+
+        const altSlider = document.getElementById("altSlider");
+        if (altSlider) {
+          altSlider.oninput = (e) => {
+            state.simAltitude = parseInt(e.target.value, 10);
+            document.getElementById("altDisplay").textContent = `${state.simAltitude.toLocaleString()} ft`;
+            saveState();
+            renderBag();
+          };
+        }
+
+        el.querySelectorAll(".editable-num").forEach((inp) => {
+          inp.onchange = () => {
+            const idx = parseInt(inp.getAttribute("data-index"), 10);
+            const field = inp.getAttribute("data-field");
+            const val = parseFloat(inp.value) || 0;
+            if (state.bagMatrix && state.bagMatrix[idx]) {
+              state.bagMatrix[idx][field] = val;
+              saveState();
+              showToast(`Updated ${state.bagMatrix[idx].club} ${field} to ${val}`);
+              if (field === "carry") {
+                renderBag();
+              }
+            }
+          };
+        });
+
+        const btnReset = document.getElementById("btnResetBagDefaults");
+        if (btnReset) {
+          btnReset.onclick = () => {
+            if (confirm("Reset club bag yardages back to factory defaults?")) {
+              state.bagMatrix = JSON.parse(JSON.stringify(DEFAULTS.bagMatrix || []));
+              saveState();
+              showToast("Club bag reset to defaults.");
+              renderBag();
+            }
+          };
+        }
+
+        el.querySelectorAll("[data-log-combine]").forEach((btn) => {
+          btn.onclick = () => {
+            const cid = btn.getAttribute("data-log-combine");
+            const comb = (DEFAULTS.simulatorRoutines || {})[cid];
+            showToast(`Logged combine: ${comb ? comb.title : cid}`);
+          };
+        });
+      }
+
       function openEditorForDrill(drillId) {
         editingDrillId = drillId;
         state.activeView = "editor";
@@ -3847,6 +4778,10 @@
               if (parsed.deliveryLogs) state.deliveryLogs = parsed.deliveryLogs;
               if (parsed.drillNotes) state.drillNotes = parsed.drillNotes;
               if (Array.isArray(parsed.courses)) state.courses = mergeCourses(parsed.courses);
+            if (Array.isArray(parsed.bagMatrix)) state.bagMatrix = mergeBagMatrix(parsed.bagMatrix);
+            if (parsed.cadencePresetId) state.cadencePresetId = parsed.cadencePresetId;
+            if (typeof parsed.simTemp === "number") state.simTemp = parsed.simTemp;
+            if (typeof parsed.simAltitude === "number") state.simAltitude = parsed.simAltitude;
               if (Array.isArray(parsed.roundLogs)) state.roundLogs = parsed.roundLogs;
               saveState();
               showToast("Imported backup successfully!");
@@ -3876,8 +4811,9 @@
         renderViewTabs();
         renderFilterBar();
 
-        ["deck", "browse", "tracker", "courses", "editor"].forEach((v) => {
-          document.getElementById(`view-${v}`).classList.toggle("hidden", state.activeView !== v);
+        ["deck", "browse", "tracker", "courses", "editor", "cadence", "bag"].forEach((v) => {
+          const viewEl = document.getElementById(`view-${v}`);
+          if (viewEl) viewEl.classList.toggle("hidden", state.activeView !== v);
         });
 
         if (state.activeView === "deck") renderDeck();
@@ -3885,6 +4821,8 @@
         else if (state.activeView === "tracker") renderTracker();
         else if (state.activeView === "courses") renderCourses();
         else if (state.activeView === "editor") renderEditor();
+        else if (state.activeView === "cadence") renderCadence();
+        else if (state.activeView === "bag") renderBag();
       }
 
       // Deck navigation listeners
@@ -3898,6 +4836,15 @@
         if (e.altKey || e.ctrlKey || e.metaKey) return;
         const tag = (e.target && e.target.tagName) || "";
         if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+
+        // Global Cadence Metronome toggle
+        if (e.key === "t" || e.key === "T") {
+          e.preventDefault();
+          toggleCadenceMetronome();
+          return;
+        }
+
+        // Drill deck navigation only on Deck view
         if (state.activeView !== "deck") return;
 
         if (e.key === "ArrowLeft") {
