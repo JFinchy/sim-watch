@@ -1,0 +1,145 @@
+#!/usr/bin/env node
+/* Validates drills/drills_data.js (window.DEFAULT_DRILLS_DATA). No dependencies.
+   Usage: node drills/tools/validate_data.js [path/to/drills_data.js]
+   Exits 1 on errors; warnings do not fail the run. */
+const fs = require("fs");
+const path = require("path");
+const vm = require("vm");
+
+const file = process.argv[2] || path.join(__dirname, "..", "drills_data.js");
+const win = {};
+vm.runInNewContext(fs.readFileSync(file, "utf8"), { window: win }, { filename: file });
+const D = win.DEFAULT_DRILLS_DATA;
+const errors = [];
+const warnings = [];
+const err = (m) => errors.push(m);
+const warn = (m) => warnings.push(m);
+const isStr = (v) => typeof v === "string" && v.trim().length > 0;
+const isNum = (v) => typeof v === "number" && isFinite(v);
+
+if (!D || typeof D !== "object") { console.error("ERROR: window.DEFAULT_DRILLS_DATA missing"); process.exit(1); }
+for (const k of ["modes", "routines", "drills", "goals", "courseCategories", "courses", "cadencePresets", "bagMatrix"]) {
+  if (!Array.isArray(D[k])) err(`${k} must be an array`);
+}
+
+function uniqueIds(list, label) {
+  const seen = new Set();
+  (list || []).forEach((x, i) => {
+    if (!x || !isStr(x.id)) { err(`${label}[${i}] has no string id`); return; }
+    if (seen.has(x.id)) err(`${label}: duplicate id "${x.id}"`);
+    seen.add(x.id);
+  });
+  return seen;
+}
+
+const modeIds = uniqueIds(D.modes, "modes");
+const routineIds = uniqueIds(D.routines, "routines");
+const drillIds = uniqueIds(D.drills, "drills");
+const catIds = uniqueIds(D.courseCategories, "courseCategories");
+const courseIds = uniqueIds(D.courses, "courses");
+uniqueIds(D.goals, "goals");
+uniqueIds(D.cadencePresets, "cadencePresets");
+uniqueIds(D.bagMatrix, "bagMatrix");
+uniqueIds(D.customPracticeRounds, "customPracticeRounds");
+
+(D.modes || []).forEach((m) => { if (!isStr(m.label)) err(`mode ${m.id}: missing label`); });
+(D.routines || []).forEach((r) => {
+  for (const f of ["title", "fullTitle", "focus", "summary"]) if (!isStr(r[f])) err(`routine ${r.id}: missing ${f}`);
+  (r.recommendedModes || []).forEach((m) => { if (!modeIds.has(m)) err(`routine ${r.id}: unknown mode "${m}"`); });
+});
+
+const sectionsSeen = new Set();
+(D.drills || []).forEach((d) => {
+  const t = `drill ${d.id}`;
+  for (const f of ["title", "section", "focus", "duration", "reps", "why"]) if (!isStr(d[f])) err(`${t}: missing ${f}`);
+  if (!Array.isArray(d.days) || !d.days.length) err(`${t}: days must be a non-empty array`);
+  else d.days.forEach((x) => { if (!routineIds.has(x)) err(`${t}: days -> unknown routine "${x}"`); });
+  if (!Array.isArray(d.modes) || !d.modes.length) err(`${t}: modes must be a non-empty array`);
+  else d.modes.forEach((x) => { if (!modeIds.has(x)) err(`${t}: unknown mode "${x}"`); });
+  if (!Array.isArray(d.clubs)) err(`${t}: clubs must be an array`);
+  if (!Array.isArray(d.instructions) || !d.instructions.length) err(`${t}: instructions must be a non-empty array`);
+  if (!d.video || typeof d.video !== "object") err(`${t}: missing video object`);
+  else {
+    if (typeof d.video.localPath !== "string") err(`${t}: video.localPath must be a string`);
+    else if (d.video.localPath && !/\.(mp4|mov|webm|m4v)$/i.test(d.video.localPath)) warn(`${t}: localPath "${d.video.localPath}" has no video extension`);
+    if (!isStr(d.video.diagram)) warn(`${t}: video.diagram missing`);
+  }
+  if (!d.checkpoints || !isStr(d.checkpoints.dtl) || !isStr(d.checkpoints.fo)) warn(`${t}: checkpoints.dtl/fo incomplete`);
+  if (d.target !== undefined) {
+    const g = d.target, metrics = ["hla", "carry", "ball_speed", "face", "path", "spin_axis", "aoa", "manual"];
+    if (!g || typeof g !== "object") err(`${t}: target must be an object`);
+    else {
+      if (!metrics.includes(g.metric)) err(`${t}: target.metric "${g.metric}" must be one of ${metrics.join("/")}`);
+      if (g.metric !== "manual" && (!isNum(g.goal) || !isNum(g.tol) || g.tol < 0)) err(`${t}: target needs numeric goal and tol >= 0`);
+      if (g.reps !== undefined && (!isNum(g.reps) || g.reps <= 0)) err(`${t}: target.reps must be a positive number`);
+      if (g.pass !== undefined && (!isNum(g.pass) || g.pass <= 0 || (isNum(g.reps) && g.pass > g.reps))) err(`${t}: target.pass must be 1..reps`);
+      if (["carry", "ball_speed", "spin_axis"].includes(g.metric) && (d.modes || []).includes("almost")) warn(`${t}: ${g.metric} target is not scorable with Almost (foam) balls - mat mode falls back to tap-to-score`);
+    }
+  }
+  if (!d.modePlans) warn(`${t}: no modePlans`);
+  else (d.modes || []).forEach((m) => { if (!isStr(d.modePlans[m])) warn(`${t}: modePlans.${m} empty but mode is enabled`); });
+  sectionsSeen.add(d.section);
+});
+// Routines with no drills
+(D.routines || []).forEach((r) => {
+  if (!(D.drills || []).some((d) => (d.days || []).includes(r.id))) warn(`routine ${r.id}: no drills reference it`);
+});
+
+(D.courses || []).forEach((c) => {
+  const t = `course ${c.id}`;
+  if (!isStr(c.name)) err(`${t}: missing name`);
+  if (!isNum(c.par) || c.par <= 0) err(`${t}: par must be a positive number`);
+  if (!isNum(c.holes) || ![9, 18, 27, 36].includes(c.holes)) warn(`${t}: unusual holes value ${c.holes}`);
+  if (isNum(c.par) && isNum(c.holes)) {
+    const lo = c.holes * 3, hi = c.holes * 5;
+    if (c.par < lo || c.par > hi) warn(`${t}: par ${c.par} outside ${lo}-${hi} for ${c.holes} holes`);
+  }
+  if (c.tees && typeof c.tees !== "object") err(`${t}: tees must be an object`);
+  else if (c.tees) for (const [k, v] of Object.entries(c.tees)) if (!isNum(v) || v < 0) err(`${t}: tee "${k}" must be a non-negative number`);
+  if (!Array.isArray(c.categories)) err(`${t}: categories must be an array`);
+  else c.categories.forEach((x) => { if (!catIds.has(x)) err(`${t}: categories -> unknown "${x}"`); });
+  if (c.recommendedDrills !== undefined) {
+    if (!Array.isArray(c.recommendedDrills)) err(`${t}: recommendedDrills must be an array`);
+    else c.recommendedDrills.forEach((x) => { if (!drillIds.has(x)) err(`${t}: recommendedDrills -> unknown drill "${x}"`); });
+  }
+  if (c.rating !== undefined && (!isNum(c.rating) || c.rating < 0 || c.rating > 5)) warn(`${t}: rating ${c.rating} outside 0-5`);
+});
+
+(D.customPracticeRounds || []).forEach((r) => {
+  const t = `customPracticeRound ${r.id}`;
+  if (!isStr(r.name)) err(`${t}: missing name`);
+  if (r.courseKey && !courseIds.has(r.courseKey)) warn(`${t}: courseKey "${r.courseKey}" is not a course id`);
+});
+
+(D.bagMatrix || []).forEach((b) => {
+  const t = `bag club ${b.id}`;
+  if (!isStr(b.club)) err(`${t}: missing club`);
+  for (const f of ["carry", "total", "ballSpeed"]) if (!isNum(b[f])) err(`${t}: ${f} must be a number`);
+  if (isNum(b.carry) && isNum(b.total) && b.total < b.carry) err(`${t}: total ${b.total} < carry ${b.carry}`);
+});
+const bagByCarry = (D.bagMatrix || []).filter((b) => isNum(b.carry) && b.carry > 0 && b.club !== "Putter");
+for (let i = 1; i < bagByCarry.length; i++) {
+  if (bagByCarry[i].carry > bagByCarry[i - 1].carry) warn(`bag: ${bagByCarry[i].club} carries farther than ${bagByCarry[i - 1].club} (gapping order)`);
+}
+
+(D.cadencePresets || []).forEach((p) => {
+  const t = `cadence preset ${p.id}`;
+  for (const f of ["backSec", "downSec", "totalSec", "bpm"]) if (!isNum(p[f]) || p[f] <= 0) err(`${t}: ${f} must be a positive number`);
+  if (p.fps !== undefined && (!isNum(p.fps) || p.fps <= 0)) err(`${t}: fps must be a positive number`);
+  const fps = isNum(p.fps) ? p.fps : 30; // Tour Tempo frame counts are at 30fps
+  if (isNum(p.backFrames) && isNum(p.backSec) && Math.abs(p.backFrames / fps - p.backSec) > 0.02) warn(`${t}: backSec != backFrames / ${fps}`);
+  if (isNum(p.downFrames) && isNum(p.downSec) && Math.abs(p.downFrames / fps - p.downSec) > 0.02) warn(`${t}: downSec != downFrames / ${fps}`);
+  if (isNum(p.backSec) && isNum(p.downSec) && isNum(p.totalSec) && Math.abs(p.backSec + p.downSec - p.totalSec) > 0.02) warn(`${t}: totalSec != backSec + downSec`);
+});
+
+(D.goals || []).forEach((g) => {
+  if (!isStr(g.title)) err(`goal ${g.id}: missing title`);
+  if (g.progress !== undefined && (!isNum(g.progress) || g.progress < 0 || g.progress > 100)) warn(`goal ${g.id}: progress outside 0-100`);
+});
+
+console.log(`Checked ${file}`);
+console.log(`  drills=${(D.drills || []).length} routines=${(D.routines || []).length} courses=${(D.courses || []).length} bag=${(D.bagMatrix || []).length}`);
+warnings.forEach((w) => console.log("WARN  " + w));
+errors.forEach((e) => console.log("ERROR " + e));
+console.log(`${errors.length} error(s), ${warnings.length} warning(s)`);
+process.exit(errors.length ? 1 : 0);

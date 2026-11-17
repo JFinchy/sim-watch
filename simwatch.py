@@ -22,18 +22,22 @@ Commands:
   python simwatch.py lines [on|off|apply]  apply or toggle Kinovea DTL/FO swing plane lines (.kva)
   python simwatch.py save-lines [club]     save manually dragged Kinovea lines as your default template
   python simwatch.py drills                open the local Golf Drills, Routines & Daily Delivery Hub
+  python simwatch.py doctor                validate config + environment; PASS/WARN/FAIL table, exit 1 on FAIL
+  python simwatch.py bridge [--demo]       run only the shot-data bridge (http://127.0.0.1:8765) + :921 sniffer
 
 Run from an ADMIN terminal if any sim app runs as admin (Windows blocks clicks & raw sockets otherwise).
 """
 import argparse
 import ctypes
-import ctypes.wintypes
+import functools
+import http.server
 import json
 import logging
 from logging.handlers import RotatingFileHandler
 import math
 import os
 import queue
+import random
 import re
 import shutil
 import socket
@@ -42,30 +46,301 @@ import subprocess
 import sys
 import threading
 import time
+import urllib.parse
 import uuid
-import winsound
 import xml.etree.ElementTree as ET
+from datetime import datetime
 from pathlib import Path
 
 import psutil
 
+IS_WINDOWS = sys.platform == "win32"
+
+# Windows-only pieces are guarded so `import simwatch` works on macOS/Linux (tests, `doctor`).
 try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(2)  # real pixel coords on scaled displays
-except Exception:
+    import ctypes.wintypes
+except (ImportError, ValueError):  # pragma: no cover - only on exotic platforms
     pass
+
+try:
+    import winsound
+except ImportError:
+    class winsound:  # type: ignore[no-redef]
+        """No-op stand-in so alert()/beeps never crash off Windows."""
+        MB_ICONHAND = 0x10
+
+        @staticmethod
+        def MessageBeep(*_a, **_k):
+            return None
+
+        @staticmethod
+        def Beep(*_a, **_k):
+            return None
+
+if IS_WINDOWS:
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # real pixel coords on scaled displays
+    except Exception:
+        pass
 
 HERE = Path(__file__).resolve().parent
 LOG = logging.getLogger("simwatch")
 GSPRO_PORT = 921
 VIDEO_EXTS = (".mp4", ".mkv", ".avi", ".mov")
+STATUS_PATH = HERE / "simwatch_status.json"
 _SINGLETON_MUTEX = None
+
+_THROTTLE: dict[str, float] = {}
+_THROTTLE_LOCK = threading.Lock()
+
+
+def log_throttled(key: str, msg: str, every_sec: float = 60.0, level: int = logging.WARNING,
+                  exc_info: bool = False) -> bool:
+    """Log `msg` at most once per `every_sec` for `key`. Returns True if it was actually emitted.
+
+    Used where a failure used to be swallowed (or buried at DEBUG): visible at INFO, but a failure that
+    repeats every watch cycle can't flood the log.
+    """
+    now = time.monotonic()
+    with _THROTTLE_LOCK:
+        last = _THROTTLE.get(key)
+        if last is not None and (now - last) < every_sec:
+            return False
+        _THROTTLE[key] = now
+    LOG.log(level, msg, exc_info=exc_info)
+    return True
+
+
+def write_text_if_changed(path: Path, data: str | bytes, backup: bool = True) -> bool:
+    """Atomically write `data` to `path`. Skip if identical; keep ONE rolling `<name>.bak` of old content.
+
+    Returns True if the file was (re)written.
+    """
+    raw = data.encode("utf-8") if isinstance(data, str) else data
+    try:
+        if path.exists():
+            old = path.read_bytes()
+            if old == raw:
+                return False
+            if backup:
+                shutil.copy2(path, path.with_name(path.name + ".bak"))
+    except OSError as e:
+        log_throttled(f"bak:{path}", f"could not back up {path}: {e}")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_bytes(raw)
+        os.replace(tmp, path)
+    finally:
+        try:
+            tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+    return True
+
+
+def unique_path(dest: Path) -> Path:
+    """Return `dest`, or `dest` with `_2`, `_3`... before the suffix if it already exists (never overwrite)."""
+    if not dest.exists():
+        return dest
+    n = 2
+    while True:
+        cand = dest.with_name(f"{dest.stem}_{n}{dest.suffix}")
+        if not cand.exists():
+            return cand
+        n += 1
+
+
+def write_status(state: str, **fields) -> None:
+    """Heartbeat for external monitoring: simwatch_status.json next to the script, atomic (tmp + replace)."""
+    doc = {"timestamp": datetime.now().isoformat(timespec="seconds"), "pid": os.getpid(), "state": state}
+    doc.update(fields)
+    try:
+        tmp = STATUS_PATH.with_name(STATUS_PATH.name + ".tmp")
+        tmp.write_text(json.dumps(doc, indent=2, default=str), encoding="utf-8")
+        os.replace(tmp, STATUS_PATH)
+    except OSError as e:
+        log_throttled("status-write", f"could not write status file {STATUS_PATH}: {e}")
 
 
 # --------------------------------------------------------------------------- config & singleton
 
-def load_config(path: Path) -> dict:
-    cfg = json.loads(path.read_text(encoding="utf-8"))
-    cfg["apps_by_key"] = {a["key"]: a for a in cfg["apps"]}
+# Required fields per check type (checked by validate_config). A tuple means "any one of".
+CHECK_REQUIRED = {
+    "process": ("app",),
+    "gspro_link": (),
+    "device_ping": ("ip",),
+    "device_tcp": ("app",),
+    "bridge_link": (),
+    "responsive": (("window_title_re", "app"),),
+    "usb": ("name_like",),
+    "indicator": ("window_title_re", "dx", "dy"),
+    "text": ("window_title_re", "healthy_text_re"),
+}
+# App keys the code itself looks up by name, so they count as "referenced" even if no config entry names them.
+SPECIAL_APP_KEYS = {"fs_connector", "integrator", "gspro_connect", "gspro"}
+REQUIRED_TOP_LEVEL = ("apps", "checks", "recovery")
+DAEMON_COMMANDS = ("watch", "startup")
+
+
+def validate_config(cfg: dict, check_paths: bool | None = None) -> list[tuple[str, str]]:
+    """Static sanity checks. Returns [(severity, message)] where severity is "error" or "warning".
+
+    check_paths: verify app exe paths exist. Default: only when running on Windows (the paths are Windows paths).
+    """
+    out: list[tuple[str, str]] = []
+
+    def err(m):
+        out.append(("error", m))
+
+    def warn(m):
+        out.append(("warning", m))
+
+    if not isinstance(cfg, dict):
+        return [("error", "config root must be a JSON object")]
+    for k in REQUIRED_TOP_LEVEL:
+        if k not in cfg:
+            err(f"missing required top-level key {k!r}")
+    if "startup" not in cfg:
+        warn("missing 'startup' section (the `startup` command needs it)")
+
+    apps_raw = cfg.get("apps")
+    apps: dict[str, dict] = {}
+    if apps_raw is not None:
+        if not isinstance(apps_raw, list) or not apps_raw:
+            err("'apps' must be a non-empty list")
+        else:
+            for i, a in enumerate(apps_raw):
+                if not isinstance(a, dict) or not a.get("key"):
+                    err(f"apps[{i}] has no 'key'")
+                    continue
+                if a["key"] in apps:
+                    err(f"duplicate app key {a['key']!r}")
+                apps[a["key"]] = a
+                for f in ("process", "exe"):
+                    if not a.get(f):
+                        err(f"app {a['key']!r} is missing {f!r}")
+                if check_paths is None:
+                    do_paths = IS_WINDOWS
+                else:
+                    do_paths = check_paths
+                if do_paths and a.get("exe") and not Path(a["exe"]).exists():
+                    warn(f"app {a['key']!r}: exe not found at {a['exe']}")
+
+    for num in ("interval_sec", "fail_threshold", "settle_sec", "post_recover_grace_sec", "giveup_backoff_sec"):
+        if num in cfg and not (isinstance(cfg[num], (int, float)) and not isinstance(cfg[num], bool) and cfg[num] >= 0):
+            err(f"{num} must be a non-negative number (got {cfg[num]!r})")
+    if isinstance(cfg.get("interval_sec"), (int, float)) and cfg["interval_sec"] <= 0:
+        err("interval_sec must be > 0 (0 would busy-loop)")
+
+    referenced: set[str] = set(SPECIAL_APP_KEYS)
+
+    checks = cfg.get("checks")
+    check_names: set[str] = set()
+    recovery = cfg.get("recovery")
+    n_levels = len(recovery) if isinstance(recovery, list) else 0
+    if checks is not None:
+        if not isinstance(checks, list):
+            err("'checks' must be a list")
+        else:
+            for i, chk in enumerate(checks):
+                if not isinstance(chk, dict):
+                    err(f"checks[{i}] must be an object")
+                    continue
+                name = chk.get("name") or f"checks[{i}]"
+                if not chk.get("name"):
+                    err(f"checks[{i}] has no 'name'")
+                check_names.add(name)
+                ctype = chk.get("type")
+                if ctype not in CHECKS:
+                    err(f"check {name!r}: unknown type {ctype!r} (valid: {', '.join(sorted(CHECKS))})")
+                else:
+                    for req in CHECK_REQUIRED.get(ctype, ()):
+                        opts = req if isinstance(req, tuple) else (req,)
+                        if not any(o in chk for o in opts):
+                            err(f"check {name!r} (type {ctype}): missing {' or '.join(map(repr, opts))}")
+                if "app" in chk:
+                    referenced.add(chk["app"])
+                    if chk["app"] not in apps:
+                        err(f"check {name!r}: app {chk['app']!r} is not defined in 'apps'")
+                lvl = chk.get("recovery_level", 0)
+                if not isinstance(lvl, int) or isinstance(lvl, bool) or lvl < 0:
+                    err(f"check {name!r}: recovery_level must be a non-negative integer (got {lvl!r})")
+                elif n_levels and lvl >= n_levels:
+                    warn(f"check {name!r}: recovery_level {lvl} is beyond the recovery ladder "
+                         f"(0..{n_levels - 1}); it will go straight to 'give up'")
+
+    if recovery is not None:
+        if not isinstance(recovery, list) or not recovery:
+            err("'recovery' must be a non-empty list")
+        else:
+            seen_lists: list[tuple[int, list]] = []
+            for i, step in enumerate(recovery):
+                if not isinstance(step, dict) or not isinstance(step.get("restart"), list):
+                    err(f"recovery[{i}] needs a 'restart' list")
+                    continue
+                for key in step["restart"]:
+                    referenced.add(key)
+                    if key not in apps:
+                        err(f"recovery[{i}] ({step.get('name', '?')}): restart key {key!r} is not in 'apps'")
+                for j, prev in seen_lists:
+                    if prev == step["restart"]:
+                        warn(f"recovery levels {j} and {i} restart the identical list {prev}; the extra level adds nothing")
+                seen_lists.append((i, step["restart"]))
+
+    startup_cfg = cfg.get("startup")
+    if isinstance(startup_cfg, dict):
+        for key in startup_cfg.get("order", []):
+            referenced.add(key)
+            if key not in apps:
+                err(f"startup.order: key {key!r} is not in 'apps'")
+        for nm in startup_cfg.get("wait_for", []):
+            if check_names and nm not in check_names:
+                warn(f"startup.wait_for: no check named {nm!r} (it will be ignored)")
+
+    if apps:
+        for key in sorted(set(apps) - referenced):
+            warn(f"app {key!r} is never referenced by a check, recovery level or startup.order")
+
+    sl = cfg.get("video", {}).get("swing_lines", {}) if isinstance(cfg.get("video"), dict) else {}
+    if isinstance(sl, dict) and sl.get("handedness") and str(sl["handedness"]).lower() not in ("left", "right"):
+        warn(f"video.swing_lines.handedness {sl['handedness']!r} is not 'left' or 'right' (treated as right)")
+    return out
+
+
+def apply_config_defaults(cfg: dict) -> None:
+    """Fill sane defaults for optional top-level keys (does not touch swing_lines.handedness; see load_swing_lines_template)."""
+    for k, v in (("interval_sec", 5), ("fail_threshold", 3), ("settle_sec", 15),
+                 ("post_recover_grace_sec", 35), ("giveup_backoff_sec", 300)):
+        cfg.setdefault(k, v)
+    if isinstance(cfg.get("bridge", {}), dict):
+        bridge = cfg.setdefault("bridge", {})
+        for k, v in BRIDGE_DEFAULTS.items():
+            bridge.setdefault(k, v)
+
+
+def load_config(path: Path, command: str | None = None) -> dict:
+    """Load + validate config.json. For `watch`/`startup`, config errors abort with a clear message."""
+    try:
+        cfg = json.loads(Path(path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        raise SystemExit(f"Config file not found: {path}")
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        raise SystemExit(f"Config file {path} is not valid JSON: {e}")
+    issues = validate_config(cfg)
+    for sev, msg in issues:
+        (LOG.error if sev == "error" else LOG.warning)("config %s: %s", sev, msg)
+    errors = [m for sev, m in issues if sev == "error"]
+    if errors and command in DAEMON_COMMANDS:
+        raise SystemExit(
+            f"Refusing to run `{command}`: {len(errors)} config error(s) in {path}:\n  - " + "\n  - ".join(errors)
+        )
+    if not isinstance(cfg, dict):
+        raise SystemExit(f"Config {path} must be a JSON object")
+    apply_config_defaults(cfg)
+    cfg["apps_by_key"] = {a["key"]: a for a in cfg.get("apps", []) if isinstance(a, dict) and "key" in a}
+    cfg.setdefault("checks", [])
+    cfg.setdefault("recovery", [])
     return cfg
 
 
@@ -540,7 +815,7 @@ def enforce_gspro_window_state(cfg) -> None:
                     win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW | win32con.SWP_FRAMECHANGED,
                 )
     except Exception as e:
-        LOG.debug("enforce_gspro_window_state: %s", e)
+        log_throttled("enforce_gspro_window_state", f"enforce_gspro_window_state failed: {e}")
 
 
 def suppress_background_focus(cfg) -> None:
@@ -567,8 +842,8 @@ def suppress_background_focus(cfg) -> None:
                     hwnd, win32con.HWND_BOTTOM, 0, 0, 0, 0,
                     win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE | win32con.SWP_NOSIZE,
                 )
-        except Exception:
-            pass
+        except Exception as e:
+            log_throttled(f"suppress_focus:{key}", f"suppress_background_focus({key}) failed: {e}")
 
 
 def wait_port(port: int, timeout: float) -> bool:
@@ -889,12 +1164,25 @@ def check_gspro_link(chk, cfg):
     return False, f"no established connection on :{port}"
 
 
+def _ping_ok(returncode: int, stdout: str) -> bool:
+    """Locale-independent: the exit code decides. Windows `ping` also exits 0 for a gateway's
+    'Destination host unreachable' reply, so English unreachable/timeout text WITHOUT a TTL field is
+    used only as a negative hint (on other locales we degrade to exit-code-only rather than false-fail)."""
+    if returncode != 0:
+        return False
+    out = stdout or ""
+    has_ttl = re.search(r"TTL\s*[=:]\s*\d+", out, re.I) is not None
+    if not has_ttl and re.search(r"unreachable|timed out", out, re.I):
+        return False
+    return True
+
+
 def check_device_ping(chk, cfg):
     r = subprocess.run(
         ["ping", "-n", "1", "-w", "1000", chk["ip"]],
-        capture_output=True, text=True, creationflags=subprocess.CREATE_NO_WINDOW,
+        capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
-    ok = r.returncode == 0 and "TTL=" in r.stdout.upper()
+    ok = _ping_ok(r.returncode, r.stdout)
     return ok, f"ping {chk['ip']} {'ok' if ok else 'failed'}"
 
 
@@ -945,13 +1233,6 @@ def check_responsive(chk, cfg):
             if ctypes.windll.user32.IsHungAppWindow(hwnd):
                 return False, "window is not responding (hung)"
             return True, "responding"
-    for p in procs:
-        if not hasattr(p, "create_time"):
-            try:
-                if p.is_running() and p.status() != psutil.STATUS_STOPPED:
-                    return True, "responding"
-            except psutil.Error:
-                pass
     return False, "process not responding"
 
 
@@ -1016,18 +1297,34 @@ def evaluate_checks(cfg, verbose=True) -> dict:
     device_ping_failed = False
     saw_non_device_fail = False
     level = None
+    failing: list[str] = []
+    skipped: list[str] = []
 
     for chk in cfg["checks"]:
+        name = chk.get("name", "?")
+        fn = CHECKS.get(chk.get("type"))
+        if fn is None:
+            # Misconfigured check: never let it silently pass AND never let it block recovery forever.
+            # Skip it from the verdict, but shout (once per minute) so it is visible.
+            skipped.append(name)
+            log_throttled(f"unknown-check:{name}",
+                          f"check {name!r} has unknown type {chk.get('type')!r}; SKIPPED (fix config.json)",
+                          every_sec=60.0, level=logging.ERROR)
+            continue
         try:
-            ok, msg = CHECKS[chk["type"]](chk, cfg)
+            ok, msg = fn(chk, cfg)
         except Exception as e:  # a broken check shouldn't kill the watchdog
             ok, msg = None, f"check error: {e}"
+            log_throttled(f"check-exc:{name}", f"check {name!r} raised {type(e).__name__}: {e}",
+                          every_sec=60.0, exc_info=True)
         mark = {True: "OK ", False: "BAD", None: "?? "}[ok]
         if verbose or ok is not True:
-            LOG.info("[%s] %-22s %s", mark, chk["name"], msg)
+            LOG.info("[%s] %-22s %s", mark, name, msg)
         if ok is None:
             any_unknown = True
+            failing.append(f"{name} (error)")
         elif ok is False:
+            failing.append(name)
             all_ok = False
             if chk.get("type") == "device_ping":
                 device_ping_failed = True
@@ -1042,6 +1339,8 @@ def evaluate_checks(cfg, verbose=True) -> dict:
         "device_ping_failed": device_ping_failed,
         "only_device_failed": (not all_ok) and (not saw_non_device_fail),
         "level": level,
+        "failing": failing,
+        "skipped": skipped,
     }
 
 
@@ -1055,13 +1354,17 @@ def run_checks(cfg, verbose=True):
 
 def run_actions(app: dict, cfg: dict, actions=None) -> None:
     for act in (app.get("post_start", []) if actions is None else actions):
+        win_re = act.get("window_title_re", app.get("window_title_re"))
+        if ("click_button_re" in act or "click_at" in act) and not win_re:
+            LOG.warning("  %s: action %s needs window_title_re (none configured); skipped", app.get("key"), act)
+            continue
         if "wait" in act:
             time.sleep(act["wait"])
         elif "click_button_re" in act:
-            click_button(act.get("window_title_re", app["window_title_re"]), act["click_button_re"])
+            click_button(win_re, act["click_button_re"])
         elif "click_at" in act:
             dx, dy = act["click_at"]
-            click_at(act.get("window_title_re", app["window_title_re"]), dx, dy)
+            click_at(win_re, dx, dy)
         elif act.get("gspro_configure"):
             if not gspro_configure(cfg, app) and WindowSpec(r"^GSPro Configuration$").exists(timeout=0):
                 LOG.warning("  GSPro Configuration still open; aborting remaining post_start actions")
@@ -1118,8 +1421,15 @@ def _is_gspro_healthy(cfg) -> bool:
 
 
 def recover(cfg, level: int) -> None:
+    if not (0 <= level < len(cfg["recovery"])):
+        LOG.error("recover: no recovery level %d (have %d)", level, len(cfg["recovery"]))
+        return
     step = cfg["recovery"][level]
     keys = list(step.get("restart", []))
+    unknown = [k for k in keys if k not in cfg["apps_by_key"]]
+    if unknown:
+        LOG.error("recovery level %d references unknown app key(s) %s; skipping them", level, unknown)
+        keys = [k for k in keys if k in cfg["apps_by_key"]]
     if "gspro" in keys and _is_gspro_healthy(cfg):
         LOG.info("  gspro already healthy and listening on :9050 - skipping GSPro restart")
         keys = [k for k in keys if k != "gspro"]
@@ -1270,9 +1580,9 @@ def sync_kinovea_instance_prefs(cfg, layout: dict) -> None:
                         fading = ET.SubElement(player, "InfoFading")
                     _set_xml_text(fading, "AlwaysVisible", "true")
                     _set_xml_text(fading, "Enabled", "true")
-                itree.write(dst, encoding="utf-8", xml_declaration=True)
+                write_text_if_changed(dst, ET.tostring(iroot, encoding="utf-8", xml_declaration=True))
             except Exception as e:
-                LOG.debug("sync_kinovea_instance_prefs (%s): %s", inst, e)
+                log_throttled(f"kprefs:{inst}", f"sync_kinovea_instance_prefs ({inst}) failed: {e}")
     cap_prefs = kdir / "Preferences.Capture.xml"
     try:
         tree = ET.parse(base_prefs)
@@ -1300,9 +1610,9 @@ def sync_kinovea_instance_prefs(cfg, layout: dict) -> None:
         _set_xml_text(auto_cfg, "AudioTriggerThreshold", "0.15")
         _set_xml_text(auto_cfg, "RecordingSeconds", f"{rec_sec:.1f}")
         _set_xml_text(auto_cfg, "AudioQuietPeriod", "2.0")
-        tree.write(cap_prefs, encoding="utf-8", xml_declaration=True)
+        write_text_if_changed(cap_prefs, ET.tostring(root, encoding="utf-8", xml_declaration=True))
     except Exception as e:
-        LOG.debug("sync_kinovea_instance_prefs: %s", e)
+        log_throttled("kprefs:capture", f"sync_kinovea_instance_prefs (capture) failed: {e}")
 
 
 def _read_kinovea_capture_dirs() -> list[Path]:
@@ -1330,8 +1640,8 @@ def _read_kinovea_capture_dirs() -> list[Path]:
                     candidate = Path(r_node.text) / sub if sub else Path(r_node.text)
                     if candidate.exists() and candidate not in dirs:
                         dirs.append(candidate)
-        except Exception:
-            pass
+        except Exception as e:
+            log_throttled(f"kcapdirs:{fname}", f"could not read Kinovea prefs {p}: {e}")
     return dirs
 
 
@@ -1522,30 +1832,18 @@ def _close_kinovea_pid(pid: int) -> None:
             return
         except Exception:
             pass
-    forced = False
     try:
         p.terminate()
         p.wait(timeout=3.0)
-        forced = True
+        LOG.info("Kinovea pid %d did not close gracefully; terminated", pid)
     except Exception:
-        forced = True
+        LOG.warning("Kinovea pid %d did not terminate; killing", pid)
         try:
             p.kill()
-        except Exception:
-            pass
-    if forced:
-        kdir = _kinovea_appdata_dir()
-        if kdir:
-            temp_dir = kdir / "Temp"
-            if temp_dir.exists():
-                for item in list(temp_dir.iterdir()):
-                    try:
-                        if item.is_dir():
-                            shutil.rmtree(item, ignore_errors=False)
-                        else:
-                            item.unlink()
-                    except OSError:
-                        pass
+        except Exception as e:
+            LOG.warning("Could not kill Kinovea pid %d: %s", pid, e)
+    # NOTE: the shared %APPDATA%\Kinovea\Temp directory is deliberately NOT wiped here: it is shared by
+    # every live Kinovea instance (Capture / LiveReplay / Reference) and wiping it can break the others.
 
 
 def launch_kinovea_instance(cfg, name: str, workspace_xml: Path, force_reload: bool = False) -> int | None:
@@ -1684,7 +1982,7 @@ def load_swing_lines_template(cfg: dict) -> dict:
                 if isinstance(saved.get(side), dict):
                     tpl[side].update(saved[side])
         except Exception as e:
-            LOG.debug("load_swing_lines_template: %s", e)
+            log_throttled("swing-template", f"could not load swing line template {p}: {e}")
     sl_cfg = cfg.get("video", {}).get("swing_lines", {})
     if isinstance(sl_cfg.get("dtl_plane_angles_deg"), dict):
         for k, v in sl_cfg["dtl_plane_angles_deg"].items():
@@ -2264,7 +2562,7 @@ def install_kinovea_custom_golf_tools(cfg: dict) -> list[Path]:
                 out.write_text(xml_src, encoding="utf-8")
                 written.append(out)
         except OSError as e:
-            LOG.debug("install_kinovea_custom_golf_tools (%s): %s", folder, e)
+            log_throttled(f"ktools:{folder}", f"install_kinovea_custom_golf_tools ({folder}) failed: {e}")
     k_exe = Path(cfg.get("video", {}).get("kinovea_exe", r"C:\Program Files\Kinovea\Kinovea.exe"))
     install_custom = k_exe.parent / "DrawingTools" / "Custom"
     if install_custom.parent.exists():
@@ -2273,7 +2571,7 @@ def install_kinovea_custom_golf_tools(cfg: dict) -> list[Path]:
             for fname, xml_src in (("Golf_DTL_VPlane.xml", dtl_tool_xml), ("Golf_FO_Box.xml", fo_tool_xml)):
                 (install_custom / fname).write_text(xml_src, encoding="utf-8")
         except OSError as e:
-            LOG.debug("install_kinovea_custom_golf_tools (install_dir): %s", e)
+            log_throttled("ktools-install", f"install_kinovea_custom_golf_tools (install dir) failed: {e}")
     return written
 
 
@@ -2443,8 +2741,9 @@ def generate_obs_scene_collection(cfg) -> Path:
     """Write Swings/OBS_SimWatch_SceneCollection.json ready for OBS Scene Collection -> Import."""
     layout = ensure_swings_layout(cfg)
     out = layout["root"] / "OBS_SimWatch_SceneCollection.json"
-    src_uuid = str(uuid.uuid4())
-    scene_uuid = str(uuid.uuid4())
+    # Stable UUIDs so regenerating the collection yields byte-identical JSON (lets us skip no-op rewrites).
+    src_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, "simwatch/obs/source/kinovea-liveReplay"))
+    scene_uuid = str(uuid.uuid5(uuid.NAMESPACE_URL, "simwatch/obs/scene/dtl-fo-pip"))
 
     doc = {
         "current_scene": "SimWatch DTL + FO PiP",
@@ -2544,14 +2843,14 @@ def generate_obs_scene_collection(cfg) -> Path:
         "version": 2,
     }
     raw_json = json.dumps(doc, indent=2)
-    out.write_text(raw_json, encoding="utf-8")
+    write_text_if_changed(out, raw_json)
     obs_dst = _obs_scenes_target_path()
     if obs_dst:
         try:
-            obs_dst.parent.mkdir(parents=True, exist_ok=True)
-            obs_dst.write_text(raw_json, encoding="utf-8")
+            if write_text_if_changed(obs_dst, raw_json):
+                LOG.info("Wrote OBS scene collection %s (previous kept as %s.bak)", obs_dst, obs_dst.name)
         except OSError as e:
-            LOG.debug("OBS scenes copy skipped: %s", e)
+            log_throttled("obs-scene-copy", f"OBS scene collection copy skipped: {e}")
     return out
 
 
@@ -2582,7 +2881,7 @@ def ensure_obs_running(cfg) -> bool:
         LOG.info("Launched OBS Studio for Projector PiP (%s)", obs_exe.name)
         return True
     except OSError as e:
-        LOG.debug("ensure_obs_running: %s", e)
+        log_throttled("obs-start", f"could not start OBS: {e}")
         return False
 
 
@@ -2645,7 +2944,7 @@ class ProjectorPiPController:
             self.visible = True
             return True
         except Exception as e:
-            LOG.debug("ProjectorPiPController._apply_overlay(%s): %s", show, e)
+            log_throttled(f"pip-overlay:{show}", f"PiP overlay (show={show}) failed: {e}")
             return False
 
     def show_for_shot(self) -> None:
@@ -2704,16 +3003,28 @@ class OpenConnectMonitor:
         self._last_club = None
         self._buf = ""
         self._last_seg_key = None
+        self.active = False  # True while the raw :921 sniffer socket is open (reported by /api/status)
 
     def start(self) -> None:
-        if self._thread and self._thread.is_alive():
-            return
+        old = self._thread
+        if old and old.is_alive():
+            if not self._stop.is_set():
+                return  # genuinely running
+            # A stop() is still in flight: wait for the old thread to exit BEFORE clearing _stop,
+            # otherwise the old thread would never see the stop flag and we'd leak/duplicate it.
+            old.join(timeout=3.0)
+            if old.is_alive():
+                LOG.warning("OpenConnect monitor is still shutting down; not restarting yet")
+                return
         self._stop.clear()
         self._thread = threading.Thread(target=self._run, name="OpenConnectMonitor", daemon=True)
         self._thread.start()
 
     def stop(self) -> None:
         self._stop.set()
+        t = self._thread
+        if t and t.is_alive() and t is not threading.current_thread():
+            t.join(timeout=2.0)  # raw-socket loop polls every 0.5s
 
     def _handle_json(self, obj: dict) -> None:
         if not isinstance(obj, dict):
@@ -2738,12 +3049,18 @@ class OpenConnectMonitor:
                     self._last_shot_key = key
                     self._last_shot_ts = now
                     carry = ball.get("CarryDistance") or ball.get("TotalDistance")
+                    try:
+                        shot = openconnect_to_shot(obj, club=self._last_club)
+                    except Exception:
+                        log_throttled("oc-shot-map", "could not map OpenConnect shot JSON", exc_info=True)
+                        shot = None
                     self.on_shot({
                         "shot_num": shot_num,
                         "club": self._last_club,
                         "ball_speed": speed,
                         "carry": float(carry) if carry is not None else None,
                         "timestamp": now,
+                        "shot": shot,  # full bridge shot record (see openconnect_to_shot), or None
                     })
 
     def _feed_text(self, text: str) -> None:
@@ -2793,6 +3110,7 @@ class OpenConnectMonitor:
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_HDRINCL, 1)
             sock.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
             sock.settimeout(0.5)
+            self.active = True
             LOG.info("OpenConnect (:921) passive shot monitor active")
         except Exception as e:
             LOG.info("OpenConnect raw monitor unavailable (%s); using Kinovea folder/audio fallback", e)
@@ -2834,6 +3152,7 @@ class OpenConnectMonitor:
                     self._last_seg_key = seg_key
                     self._feed_text(payload.decode("utf-8", errors="ignore"))
         finally:
+            self.active = False
             try:
                 sock.ioctl(socket.SIO_RCVALL, socket.RCVALL_OFF)
             except Exception:
@@ -2842,6 +3161,498 @@ class OpenConnectMonitor:
                 sock.close()
             except Exception:
                 pass
+
+
+# --------------------------------------------------------------------------- shot-data bridge
+#
+# Every OpenConnect shot becomes one record (contract below), appended to
+# <sessions_dir>/YYYY-MM-DD/shots.jsonl and pushed to the drills hub page over a local HTTP/SSE API.
+#
+# Shot record (version 1):
+#   {"ts": ISO8601 local with offset, "shot_num": int, "club": str|null,
+#    "ball": {"speed": mph, "carry": yd, "total": yd|null, "hla": deg, "vla": deg, "spin": rpm, "spin_axis": deg},
+#    "club_data": {"speed": mph, "path": deg, "face": deg, "aoa": deg}|null,
+#    "clip": str|null, "drill_id": str|null}
+# Any value the launch monitor did not send is null.
+
+BRIDGE_VERSION = 1
+BRIDGE_DEFAULTS = {"enabled": True, "port": 8765, "sessions_dir": "Swings/Sessions"}
+DRILL_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+BRIDGE_HUB = None  # the running ShotHub (if any); the watch loop drops its health summary here
+
+
+def bridge_config(cfg: dict | None) -> dict:
+    """The `bridge` config block with defaults filled in."""
+    out = dict(BRIDGE_DEFAULTS)
+    b = (cfg or {}).get("bridge")
+    if isinstance(b, dict):
+        out.update({k: v for k, v in b.items() if not k.startswith("_")})
+    return out
+
+
+def valid_drill_id(value) -> bool:
+    """A drill id is None (no active drill) or 1-80 chars of [A-Za-z0-9_-]."""
+    return value is None or (isinstance(value, str) and bool(DRILL_ID_RE.match(value)))
+
+
+def drill_filename_tag(drill_id: str | None) -> str:
+    """'_D-<id>' for clip filenames ('' if none). Letters/digits only, so it can never look like an angle token."""
+    if not drill_id:
+        return ""
+    safe = re.sub(r"[^A-Za-z0-9]", "", str(drill_id))[:40]
+    if not safe or safe.lower() in ("dtl", "fo"):  # `_D-fo_` would confuse the FO/DTL angle regexes
+        return ""
+    return f"_D-{safe}"
+
+
+def _num(v) -> float | None:
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return None
+    return round(f, 2) if math.isfinite(f) else None
+
+
+def local_iso_now() -> str:
+    return datetime.now().astimezone().isoformat(timespec="milliseconds")
+
+
+def openconnect_to_shot(obj: dict, club: str | None = None, ts: str | None = None) -> dict:
+    """Map a GSPro OpenConnect v1 shot message to a bridge shot record (clip/drill_id left null)."""
+    ball = obj.get("BallData") if isinstance(obj.get("BallData"), dict) else {}
+    opts = obj.get("ShotDataOptions") if isinstance(obj.get("ShotDataOptions"), dict) else {}
+
+    spin = _num(ball.get("TotalSpin"))
+    axis = _num(ball.get("SpinAxis"))
+    back, side = _num(ball.get("BackSpin")), _num(ball.get("SideSpin"))
+    if spin is None and (back is not None or side is not None):
+        spin = round(math.hypot(back or 0.0, side or 0.0), 2)
+    if axis is None and back is not None and side is not None and (back or side):
+        axis = round(math.degrees(math.atan2(side, back)), 2)
+
+    club_data = None
+    cd = obj.get("ClubData")
+    if isinstance(cd, dict) and opts.get("ContainsClubData", True) is not False:
+        club_data = {
+            "speed": _num(cd.get("Speed")),
+            "path": _num(cd.get("Path")),
+            "face": _num(cd.get("FaceToTarget")),
+            "aoa": _num(cd.get("AngleOfAttack")),
+        }
+        if all(v is None for v in club_data.values()):
+            club_data = None
+
+    shot_num = obj.get("ShotNumber")
+    try:
+        shot_num = int(shot_num) if shot_num is not None and not isinstance(shot_num, bool) else None
+    except (TypeError, ValueError):
+        shot_num = None
+
+    return {
+        "ts": ts or local_iso_now(),
+        "shot_num": shot_num,
+        "club": (str(club).strip() or None) if club else None,
+        "ball": {
+            "speed": _num(ball.get("Speed")),
+            "carry": _num(ball.get("CarryDistance")),
+            "total": _num(ball.get("TotalDistance")),
+            "hla": _num(ball.get("HLA")),
+            "vla": _num(ball.get("VLA")),
+            "spin": spin,
+            "spin_axis": axis,
+        },
+        "club_data": club_data,
+        "clip": None,
+        "drill_id": None,
+    }
+
+
+class ShotStore:
+    """Append-only daily shots.jsonl files: <sessions_dir>/YYYY-MM-DD/shots.jsonl.
+
+    One JSON object per line. Setting a shot's clip later rewrites that day's file atomically
+    (tmp + os.replace) - fine for a few hundred shots/day, and readers never see a half-written file.
+    Shots are identified by their unique `ts`.
+    """
+
+    def __init__(self, sessions_dir: Path):
+        self.sessions_dir = Path(sessions_dir)
+        self._lock = threading.Lock()
+
+    def path_for(self, date_str: str) -> Path:
+        return self.sessions_dir / date_str / "shots.jsonl"
+
+    def _read_unlocked(self, date_str: str) -> list[dict]:
+        path = self.path_for(date_str)
+        out: list[dict] = []
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        rec = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue  # a torn last line after a crash must not hide the rest
+                    if isinstance(rec, dict):
+                        out.append(rec)
+        except FileNotFoundError:
+            pass
+        return out
+
+    def read(self, date_str: str) -> list[dict]:
+        with self._lock:
+            return self._read_unlocked(date_str)
+
+    def append(self, shot: dict) -> dict:
+        shot.setdefault("ts", local_iso_now())
+        date_str = str(shot["ts"])[:10]
+        with self._lock:
+            if shot.get("shot_num") is None:
+                shot["shot_num"] = len(self._read_unlocked(date_str)) + 1
+            path = self.path_for(date_str)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8") as fh:
+                fh.write(json.dumps(shot, separators=(",", ":")) + "\n")
+        return shot
+
+    def set_clip(self, ts: str, clip: str) -> bool:
+        """Set `clip` on the shot whose ts matches. Returns True if a record was updated."""
+        date_str = str(ts)[:10]
+        with self._lock:
+            recs = self._read_unlocked(date_str)
+            hit = False
+            for rec in recs:
+                if rec.get("ts") == ts:
+                    rec["clip"] = clip
+                    hit = True
+            if hit:
+                data = "".join(json.dumps(r, separators=(",", ":")) + "\n" for r in recs)
+                write_text_if_changed(self.path_for(date_str), data, backup=False)
+            return hit
+
+
+class ShotHub:
+    """Shared bridge state: the store, the active drill, and SSE subscriber fan-out."""
+
+    def __init__(self, store: ShotStore):
+        self.store = store
+        self.active_drill: str | None = None
+        self.last_shot_ts: str | None = None
+        self.health: dict | None = None
+        self.sniffer = None  # an OpenConnectMonitor (its .active flag is reported as sniffer_ok)
+        self.heartbeat_sec = 15.0
+        self.stopping = threading.Event()
+        self._subs: set[queue.Queue] = set()
+        self._lock = threading.Lock()
+
+    def status(self) -> dict:
+        doc = {
+            "ok": True,
+            "version": BRIDGE_VERSION,
+            "sniffer_ok": bool(getattr(self.sniffer, "active", False)),
+            "last_shot_ts": self.last_shot_ts,
+            "active_drill": self.active_drill,
+        }
+        if self.health is not None:
+            doc["health"] = self.health
+        return doc
+
+    def set_drill(self, drill_id: str | None) -> str | None:
+        if not valid_drill_id(drill_id):
+            raise ValueError("drill_id must be null or 1-80 chars of [A-Za-z0-9_-]")
+        self.active_drill = drill_id
+        LOG.info("Active drill -> %s", drill_id or "(none)")
+        self.broadcast("status", self.status())
+        return drill_id
+
+    def record_shot(self, shot: dict) -> dict:
+        """Tag with the active drill, persist, and push to SSE clients. Never raises."""
+        if shot.get("drill_id") is None:
+            shot["drill_id"] = self.active_drill
+        try:
+            self.store.append(shot)
+        except OSError as e:
+            log_throttled("shot-store", f"could not append shot to {self.store.sessions_dir}: {e}")
+        self.last_shot_ts = shot.get("ts")
+        self.broadcast("shot", shot)
+        return shot
+
+    def subscribe(self) -> queue.Queue:
+        q: queue.Queue = queue.Queue(maxsize=200)
+        with self._lock:
+            self._subs.add(q)
+        return q
+
+    def unsubscribe(self, q: queue.Queue) -> None:
+        with self._lock:
+            self._subs.discard(q)
+
+    def broadcast(self, event: str, data: dict) -> None:
+        with self._lock:
+            subs = list(self._subs)
+        for q in subs:
+            try:
+                q.put_nowait((event, data))
+            except queue.Full:
+                pass  # a stalled client just misses events; it can re-sync via /api/shots
+
+
+class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
+    """/api/* JSON + SSE endpoints; everything else is a static file from drills/ (never outside it)."""
+
+    server_version = "SimWatchBridge/1"
+
+    def log_message(self, fmt, *args):  # route access logs to DEBUG, not stderr
+        LOG.debug("bridge %s - %s", self.address_string(), fmt % args)
+
+    def end_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+        super().end_headers()
+
+    @property
+    def hub(self) -> ShotHub:
+        return self.server.hub  # type: ignore[attr-defined]
+
+    def _json(self, code: int, doc) -> None:
+        body = json.dumps(doc).encode("utf-8")
+        self.send_response(code)
+        self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+        self.wfile.write(body)
+
+    def do_OPTIONS(self):
+        self.send_response(204)
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        self.send_header("Access-Control-Max-Age", "600")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    def do_GET(self):
+        url = urllib.parse.urlsplit(self.path)
+        if url.path == "/api/status":
+            return self._json(200, self.hub.status())
+        if url.path == "/api/shots":
+            q = urllib.parse.parse_qs(url.query)
+            date_str = (q.get("date") or [time.strftime("%Y-%m-%d")])[0]
+            try:
+                if not _DATE_RE.match(date_str):
+                    raise ValueError
+                datetime.strptime(date_str, "%Y-%m-%d")
+            except ValueError:
+                return self._json(400, {"error": "date must be YYYY-MM-DD"})
+            return self._json(200, {"shots": self.hub.store.read(date_str)})
+        if url.path == "/api/events":
+            return self._serve_events()
+        if url.path.startswith("/api/"):
+            return self._json(404, {"error": "unknown endpoint"})
+        return super().do_GET()
+
+    def do_HEAD(self):
+        if urllib.parse.urlsplit(self.path).path.startswith("/api/"):
+            return self._json(405, {"error": "use GET"})
+        return super().do_HEAD()
+
+    def do_POST(self):
+        url = urllib.parse.urlsplit(self.path)
+        if url.path != "/api/drill":
+            return self._json(404, {"error": "unknown endpoint"})
+        try:
+            length = int(self.headers.get("Content-Length") or 0)
+        except ValueError:
+            length = -1
+        if length < 0 or length > 4096:
+            return self._json(400, {"error": "bad Content-Length"})
+        try:
+            doc = json.loads(self.rfile.read(length).decode("utf-8") or "null")
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            return self._json(400, {"error": "body must be JSON"})
+        if not isinstance(doc, dict) or "drill_id" not in doc or not valid_drill_id(doc["drill_id"]):
+            return self._json(400, {"error": "expected {\"drill_id\": null | 1-80 chars of [A-Za-z0-9_-]}"})
+        return self._json(200, {"active_drill": self.hub.set_drill(doc["drill_id"])})
+
+    def _serve_events(self) -> None:
+        hub = self.hub
+        q = hub.subscribe()
+        try:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.end_headers()
+            self._sse("status", hub.status())
+            last_beat = time.monotonic()
+            while not hub.stopping.is_set():
+                try:
+                    event, data = q.get(timeout=min(1.0, hub.heartbeat_sec))
+                except queue.Empty:
+                    if time.monotonic() - last_beat >= hub.heartbeat_sec:
+                        self.wfile.write(b": heartbeat\n\n")
+                        self.wfile.flush()
+                        last_beat = time.monotonic()
+                    continue
+                self._sse(event, data)
+                last_beat = time.monotonic()
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError, OSError):
+            pass  # client went away
+        finally:
+            hub.unsubscribe(q)
+            self.close_connection = True
+
+    def _sse(self, event: str, data: dict) -> None:
+        self.wfile.write(f"event: {event}\ndata: {json.dumps(data)}\n\n".encode("utf-8"))
+        self.wfile.flush()
+
+    def list_directory(self, path):
+        self.send_error(404, "No directory listing")
+        return None
+
+    def translate_path(self, path):
+        # SimpleHTTPRequestHandler already drops '..' segments; additionally refuse anything that resolves
+        # (e.g. via a symlink) outside the static root.
+        full = super().translate_path(path)
+        root = os.path.realpath(self.directory)
+        real = os.path.realpath(full)
+        if real != root and not real.startswith(root + os.sep):
+            return os.path.join(root, "__forbidden__", uuid.uuid4().hex)  # nonexistent -> 404
+        return full
+
+
+class BridgeServer:
+    """ThreadingHTTPServer on 127.0.0.1 in a daemon thread. start() never raises (busy port -> logged)."""
+
+    def __init__(self, hub: ShotHub, port: int = 8765, host: str = "127.0.0.1", static_dir: Path | None = None):
+        self.hub = hub
+        self.host = host
+        self.requested_port = int(port)
+        self.static_dir = Path(static_dir) if static_dir else (HERE / "drills")
+        self.httpd: http.server.ThreadingHTTPServer | None = None
+        self._thread: threading.Thread | None = None
+
+    @property
+    def port(self) -> int | None:
+        return self.httpd.server_address[1] if self.httpd else None
+
+    def start(self) -> bool:
+        if self.httpd:
+            return True
+        handler = functools.partial(BridgeRequestHandler, directory=str(self.static_dir))
+        try:
+            httpd = http.server.ThreadingHTTPServer((self.host, self.requested_port), handler)
+        except OSError as e:
+            LOG.warning("Shot bridge could not listen on %s:%s (%s); continuing without it",
+                        self.host, self.requested_port, e)
+            return False
+        httpd.daemon_threads = True
+        httpd.hub = self.hub  # type: ignore[attr-defined]
+        self.hub.stopping.clear()
+        self.httpd = httpd
+        self._thread = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.5},
+                                        name="BridgeServer", daemon=True)
+        self._thread.start()
+        LOG.info("Shot bridge listening on http://%s:%s/ (drills hub + /api/status)", self.host, self.port)
+        return True
+
+    def stop(self) -> None:
+        self.hub.stopping.set()
+        if self.httpd:
+            try:
+                self.httpd.shutdown()
+                self.httpd.server_close()
+            except Exception:
+                pass
+            self.httpd = None
+
+
+def start_bridge(cfg: dict, force: bool = False, port: int | None = None) -> tuple[ShotHub | None, BridgeServer | None]:
+    """Create the hub + server from config. Returns (None, None) when disabled. Never raises."""
+    global BRIDGE_HUB
+    bcfg = bridge_config(cfg)
+    if not force and not bcfg.get("enabled", True):
+        return None, None
+    try:
+        raw = Path(str(bcfg.get("sessions_dir") or BRIDGE_DEFAULTS["sessions_dir"]))
+        hub = ShotHub(ShotStore(raw if raw.is_absolute() else HERE / raw))
+        server = BridgeServer(hub, port=int(port if port is not None else bcfg.get("port", 8765)))
+    except Exception as e:
+        LOG.warning("Shot bridge disabled: bad bridge config (%s)", e)
+        return None, None
+    server.start()
+    BRIDGE_HUB = hub
+    return hub, server
+
+
+def _bridge_note_health(state: str, res: dict) -> None:
+    """Cache the latest watch-loop verdict for /api/status (cheap; no extra checks are run)."""
+    hub = BRIDGE_HUB
+    if hub is not None:
+        hub.health = {"state": state, "all_ok": bool(res.get("all_ok")), "failing": list(res.get("failing") or []),
+                      "ts": local_iso_now()}
+
+
+def demo_openconnect_message(n: int) -> dict:
+    """A plausible synthetic OpenConnect v1 shot (for `bridge --demo`)."""
+    club, speed, vla, spin = random.choice([
+        ("Driver", 148, 12.5, 2600), ("7Iron", 118, 17.5, 6500), ("PW", 98, 26.0, 8800), ("5Iron", 128, 14.0, 5200),
+    ])
+    msg = {
+        "DeviceID": "SimWatch Demo", "Units": "Yards", "ShotNumber": n, "APIversion": "1",
+        "Player": {"Handed": "RH", "Club": club},
+        "BallData": {
+            "Speed": round(speed + random.uniform(-6, 6), 1),
+            "SpinAxis": round(random.uniform(-8, 8), 1),
+            "TotalSpin": round(spin + random.uniform(-500, 500)),
+            "HLA": round(random.uniform(-4, 4), 1),
+            "VLA": round(vla + random.uniform(-2, 2), 1),
+            "CarryDistance": round(speed * 1.55 + random.uniform(-8, 8), 1),
+        },
+        "ShotDataOptions": {"ContainsBallData": True, "ContainsClubData": True},
+    }
+    msg["ClubData"] = {
+        "Speed": round(msg["BallData"]["Speed"] / random.uniform(1.3, 1.48), 1),
+        "AngleOfAttack": round(random.uniform(-5, 3), 1),
+        "FaceToTarget": round(random.uniform(-3, 3), 1),
+        "Path": round(random.uniform(-4, 4), 1),
+    }
+    return msg
+
+
+def cmd_bridge(cfg: dict, demo: bool = False, demo_interval: float = 4.0, port: int | None = None) -> None:
+    """Run only the shot bridge + OpenConnect sniffer (works off Windows; the sniffer just reports unavailable)."""
+    hub, server = start_bridge(cfg, force=True, port=port)
+    if not hub or not server or not server.httpd:
+        sys.exit("Shot bridge could not start (see log above).")
+
+    def on_shot(info: dict) -> None:
+        if info.get("shot"):
+            rec = hub.record_shot(info["shot"])
+            LOG.info("Shot %s recorded (club=%s, speed=%s, drill=%s)", rec.get("shot_num"), rec.get("club"),
+                     rec["ball"].get("speed"), rec.get("drill_id"))
+
+    sniffer = OpenConnectMonitor(on_shot, lambda club: LOG.info("Active club -> %s", club))
+    hub.sniffer = sniffer
+    sniffer.start()
+    LOG.info("Bridge-only mode running%s (Ctrl+C to stop). Status: http://127.0.0.1:%s/api/status",
+             " with synthetic demo shots" if demo else "", server.port)
+    n = 0
+    try:
+        while True:
+            time.sleep(max(0.5, demo_interval) if demo else 1.0)
+            if demo:
+                n += 1
+                sniffer._handle_json(demo_openconnect_message(n))
+    except KeyboardInterrupt:
+        LOG.info("Stopping bridge.")
+    finally:
+        sniffer.stop()
+        server.stop()
 
 
 def parse_hotkey(spec: str) -> tuple[int, int] | None:
@@ -2887,6 +3698,16 @@ class HotkeyOverlayManager:
         self._hk_thread_id = None
 
     def start(self) -> None:
+        if self._stop.is_set():
+            # finish any in-flight stop() before clearing the flag (see OpenConnectMonitor.start)
+            for t in (self._hk_thread, self._hud_thread):
+                if t and t.is_alive() and t is not threading.current_thread():
+                    t.join(timeout=3.0)
+            try:
+                while True:
+                    self._hud_queue.get_nowait()  # drop stale QUIT/TOGGLE commands
+            except queue.Empty:
+                pass
         self._stop.clear()
         if not self._hk_thread or not self._hk_thread.is_alive():
             self._hk_thread = threading.Thread(target=self._run_hotkeys, name="SimWatchHotkeys", daemon=True)
@@ -2903,6 +3724,9 @@ class HotkeyOverlayManager:
             except Exception:
                 pass
         self._hud_queue.put("QUIT")
+        for t in (self._hk_thread, self._hud_thread):
+            if t and t.is_alive() and t is not threading.current_thread():
+                t.join(timeout=2.0)
 
     def toggle_hud(self) -> None:
         self._hud_queue.put("TOGGLE")
@@ -2955,6 +3779,7 @@ class HotkeyOverlayManager:
                 user32.UnregisterHotKey(None, idx)
             except Exception:
                 pass
+        self._hk_thread_id = None
 
     def _run_hud(self) -> None:
         try:
@@ -3067,12 +3892,14 @@ class SwingSessionManager:
         self.last_saved_dtl: Path | None = None
         self.last_saved_fo: Path | None = None
         self._stop_capture_at: float = 0.0
+        self._stop_capture_failures: int = 0
         self._known_files: dict[Path, tuple[int, float]] = {}
         self._processed_files: set[Path] = set()
         self._last_batch_ts: float = 0.0
         self._last_batch_angles: set[str] = set()
         self._retiled_on_first_clip = False
         self._lock = threading.RLock()
+        self.hub: ShotHub | None = None  # shot-data bridge (set by watch()/cmd_video() when enabled)
 
         self.pip = ProjectorPiPController(cfg)
         self.oc_monitor = OpenConnectMonitor(self._on_openconnect_shot, self._on_club_change)
@@ -3115,6 +3942,8 @@ class SwingSessionManager:
             install_kinovea_custom_golf_tools(self.cfg)
             apply_swing_lines_to_active_clips(self.cfg, club=self.current_club, overwrite=False)
         self._snapshot_existing_files()
+        if self.hub is not None:
+            self.hub.sniffer = self.oc_monitor
         self.oc_monitor.start()
         self.hotkeys.start()
         self._started = True
@@ -3156,6 +3985,12 @@ class SwingSessionManager:
                 tile_video_windows(self.cfg, wait_sec=4.0)
 
     def _on_openconnect_shot(self, info: dict) -> None:
+        hub = self.hub
+        if hub is not None and info.get("shot"):
+            try:
+                info["shot"] = hub.record_shot(info["shot"])
+            except Exception:
+                log_throttled("bridge-record", "shot bridge failed to record shot", exc_info=True)
         with self._lock:
             self.last_shot_info = info
         LOG.info(
@@ -3244,12 +4079,16 @@ class SwingSessionManager:
             club = (info.get("club") or self.current_club or "Swing").replace(" ", "")
             carry_part = f"_{int(round(info['carry']))}y" if info.get("carry") else ""
             speed_part = f"_{int(round(info['ball_speed']))}mph" if info.get("ball_speed") else ""
+            shot_rec = info.get("shot") if isinstance(info.get("shot"), dict) else None
+            drill_part = drill_filename_tag(
+                shot_rec.get("drill_id") if shot_rec else (self.hub.active_drill if self.hub else None))
             lines_on = bool(self.cfg.get("video", {}).get("swing_lines", {}).get("enabled", True))
 
             for src in ready:
                 angle = self._infer_angle(src)
-                dest_name = f"{self.shot_counter:03d}_{club}{carry_part}{speed_part}_{angle}{src.suffix.lower()}"
-                session_copy = layout["today"] / dest_name
+                dest_name = f"{self.shot_counter:03d}_{club}{carry_part}{speed_part}{drill_part}_{angle}{src.suffix.lower()}"
+                # Never overwrite: two clips can infer the same angle (e.g. both unlabeled -> DTL).
+                session_copy = unique_path(layout["today"] / dest_name)
                 try:
                     kva_xml = build_swing_kva_xml(angle, club, self.cfg, video_path=src) if lines_on else None
                     if kva_xml and not src.with_suffix(".kva").exists():
@@ -3259,7 +4098,7 @@ class SwingSessionManager:
                     shutil.copy2(src, session_copy)
                     angle_dir = layout["today_dtl"] if angle == "DTL" else layout["today_fo"]
                     if src.parent.resolve() != angle_dir.resolve():
-                        angle_copy = angle_dir / src.name
+                        angle_copy = unique_path(angle_dir / src.name)
                         if kva_xml and not angle_copy.with_suffix(".kva").exists():
                             angle_copy.with_suffix(".kva").write_text(kva_xml, encoding="utf-8")
                         shutil.copy2(src, angle_copy)
@@ -3268,6 +4107,13 @@ class SwingSessionManager:
                     else:
                         self.last_saved_fo = session_copy
                     LOG.info("Saved swing clip: %s", session_copy)
+                    # Link the clip to its shot record (DTL preferred; FO only if no clip yet).
+                    if self.hub and shot_rec and shot_rec.get("ts") and (angle == "DTL" or not shot_rec.get("clip")):
+                        shot_rec["clip"] = session_copy.name
+                        try:
+                            self.hub.store.set_clip(shot_rec["ts"], session_copy.name)
+                        except OSError as e:
+                            log_throttled("bridge-clip", f"could not link clip to shot: {e}")
                 except OSError as e:
                     LOG.warning("Failed organizing swing clip %s: %s", src, e)
                 self._processed_files.add(src)
@@ -3297,22 +4143,23 @@ class SwingSessionManager:
             saved_dtl = saved_fo = None
 
             def _copy_bookmark(src_clip: Path, dest_clip: Path, angle: str) -> Path | None:
-                for attempt in range(2):
+                try:
+                    if src_clip.resolve() != dest_clip.resolve():
+                        shutil.copy2(src_clip, dest_clip)
+                except PermissionError:
+                    # Destination is held open (Kinovea Reference has it loaded). Don't kill Reference:
+                    # save under a fresh name instead; the newest GoTo_* clip wins when resolving references.
+                    alt = unique_path(dest_clip)
                     try:
-                        if src_clip.resolve() != dest_clip.resolve():
-                            shutil.copy2(src_clip, dest_clip)
-                        break
-                    except PermissionError:
-                        ref_pid = find_kinovea_instance_pid("Reference")
-                        if attempt == 0 and ref_pid:
-                            _close_kinovea_pid(ref_pid)
-                            time.sleep(0.3)
-                            continue
-                        LOG.warning("Destination %s is locked; could not overwrite Go-To clip", dest_clip)
-                        return None
+                        shutil.copy2(src_clip, alt)
                     except OSError as e:
-                        LOG.warning("Failed bookmarking %s: %s", src_clip, e)
+                        LOG.warning("Destination %s is locked and fallback copy failed: %s", dest_clip, e)
                         return None
+                    LOG.warning("Go-To clip %s is locked; saved as %s instead", dest_clip.name, alt.name)
+                    dest_clip = alt
+                except OSError as e:
+                    LOG.warning("Failed bookmarking %s: %s", src_clip, e)
+                    return None
                 src_kva = src_clip.with_suffix(".kva")
                 dest_kva = dest_clip.with_suffix(".kva")
                 if src_kva.exists() and src_kva.resolve() != dest_kva.resolve():
@@ -3406,28 +4253,168 @@ class SwingSessionManager:
                 LOG.warning("No modified .kva swing lines found in Swings folders to save")
             return res
 
-    def tick(self) -> None:
+    def tick(self, allow_new_work: bool = True) -> None:
+        """Housekeeping, safe to call every ~0.5s.
+
+        Pending stop-capture and PiP auto-hide always run (so a pause/gate-down can't leave a recording on
+        or the PiP stuck on screen). New clip organising / rig work only runs when allow_new_work is True.
+        """
         with self._lock:
             try:
                 if self._stop_capture_at and time.time() >= self._stop_capture_at:
-                    self._stop_capture_at = 0.0
-                    kinovea_send_command("Capture", "CaptureScreen.ToggleRecording")
-                self._poll_new_recordings()
+                    if kinovea_send_command("Capture", "CaptureScreen.ToggleRecording"):
+                        self._stop_capture_at = 0.0
+                        self._stop_capture_failures = 0
+                    else:
+                        # Keep _stop_capture_at set so the next tick retries; give up eventually.
+                        self._stop_capture_failures += 1
+                        log_throttled("stop-capture", "Kinovea stop-recording command failed; will retry")
+                        if self._stop_capture_failures >= 20:
+                            LOG.error("Giving up stopping Kinovea capture after %d attempts; "
+                                      "check the Capture window manually", self._stop_capture_failures)
+                            self._stop_capture_at = 0.0
+                            self._stop_capture_failures = 0
+                if allow_new_work:
+                    self._poll_new_recordings()
                 self.pip.tick()
-            except Exception as e:
-                LOG.debug("SwingSessionManager.tick error: %s", e)
+            except Exception:
+                log_throttled("video-tick", "SwingSessionManager.tick error", exc_info=True)
 
 
 # --------------------------------------------------------------------------- watch / startup
 
-def _sleep_with_video(seconds: float, video_mgr: SwingSessionManager | None) -> None:
+def _sleep_with_video(seconds: float, video_mgr: SwingSessionManager | None, allow_new_work: bool = True) -> None:
     if not video_mgr:
         time.sleep(seconds)
         return
     end = time.time() + seconds
     while time.time() < end:
-        video_mgr.tick()
+        try:
+            video_mgr.tick(allow_new_work=allow_new_work)
+        except Exception:
+            log_throttled("video-tick-outer", "video tick failed", exc_info=True)
         time.sleep(min(0.5, max(0.05, end - time.time())))
+
+
+class _WatchState:
+    """Mutable state of the watch loop, kept on an object so one iteration can be a plain function."""
+
+    def __init__(self, grace_until: float = 0.0):
+        self.fails = 0
+        self.level = 0
+        self.last_status = None
+        self.gate_running = False
+        self.grace_until = grace_until
+        self.last_cfg_attempt = 0.0
+
+    def reset(self) -> None:
+        self.fails, self.level, self.last_status, self.gate_running = 0, 0, None, False
+
+
+def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> None:
+    """One watchdog iteration (including its own sleep). Exceptions propagate to watch(), which survives them."""
+    interval = cfg.get("interval_sec", 5)
+    threshold = cfg.get("fail_threshold", 3)
+    grace_sec = float(cfg.get("post_recover_grace_sec", 35))
+    gate = cfg.get("only_when_running")
+
+    paused = (HERE / "PAUSE").exists()
+    gate_up = (not gate) or bool(find_procs(gate))
+    if paused or not gate_up:
+        if video_mgr and not gate_up:
+            video_mgr.stop()
+        st.reset()
+        write_status("paused" if paused else "waiting_for_gate", paused=paused, gate=gate, gate_up=gate_up,
+                     failing=[], level=0)
+        # Keep servicing pending stop-capture / PiP auto-hide, but start no new rig work.
+        _sleep_with_video(interval, video_mgr, allow_new_work=False)
+        return
+
+    if not st.gate_running:
+        st.gate_running = True
+        if "gspro" in cfg["apps_by_key"] and WindowSpec(r"^GSPro Configuration$").exists(timeout=2):
+            LOG.info("GSPro Configuration dialog detected; configuring display and waiting for startup...")
+            st.last_cfg_attempt = time.time()
+            run_actions(cfg["apps_by_key"]["gspro"], cfg)
+            time.sleep(cfg.get("settle_sec", 15))
+            st.grace_until = time.time() + grace_sec
+        if video_mgr:
+            video_mgr.start(launch_rig=True)
+
+    if "gspro" in cfg["apps_by_key"] and (time.time() - st.last_cfg_attempt) >= 15.0:
+        if WindowSpec(r"^GSPro Configuration$").exists(timeout=0):
+            LOG.info("GSPro Configuration dialog reappeared; configuring display...")
+            st.last_cfg_attempt = time.time()
+            run_actions(cfg["apps_by_key"]["gspro"], cfg)
+            st.grace_until = time.time() + grace_sec
+
+    res = evaluate_checks(cfg, verbose=False)
+    state = "unknown"
+    if res["all_ok"]:
+        if not res["any_unknown"] and st.last_status is not True:
+            LOG.info("All green.")
+        enforce_gspro_window_state(cfg)
+        suppress_background_focus(cfg)
+        st.fails, st.level, st.last_status = 0, 0, True
+        state = "healthy"
+    elif res["device_ping_failed"]:
+        if st.last_status != "device_offline":
+            LOG.warning("Launch Pro unreachable (off or asleep); waiting for hardware without restarting apps.")
+        st.fails, st.level, st.last_status = 0, 0, "device_offline"
+        state = "device_offline"
+    elif res["only_device_failed"] and time.time() < st.grace_until:
+        if st.last_status != "discovery_grace":
+            LOG.info("Waiting for GameChanger auto-discovery grace period (%ds remaining)...", int(max(0, st.grace_until - time.time())))
+        st.last_status = "discovery_grace"
+        state = "discovery_grace"
+    else:
+        st.fails += 1
+        st.last_status = False
+        state = "degraded"
+        if st.fails >= threshold:
+            max_needed_level = res["level"] or 0
+            state = "recovering"
+            write_status(state, failing=res["failing"], level=st.level, fails=st.fails, skipped_checks=res["skipped"])
+            if res["only_device_failed"]:
+                if st.level == 0:
+                    recover(cfg, 0)
+                    st.grace_until = time.time() + grace_sec
+                    st.level = 1
+                else:
+                    backoff = cfg.get("giveup_backoff_sec", 300)
+                    try:
+                        gspro_ok = _is_gspro_healthy(cfg)
+                    except Exception:
+                        gspro_ok = False
+                    LOG.warning(
+                        "Device-side check(s) still failing (%s) after recovery; GSPro :9050 %s; "
+                        "backing off %ss without restarting GSPro.",
+                        ", ".join(res["failing"]) or "?",
+                        "is healthy" if gspro_ok else "is NOT confirmed healthy", backoff,
+                    )
+                    write_status("backoff", failing=res["failing"], level=st.level, backoff_sec=backoff)
+                    _sleep_with_video(backoff, video_mgr)
+                    st.level = 0
+            else:
+                st.level = max(st.level, max_needed_level)
+                if st.level >= len(cfg["recovery"]):
+                    alert(
+                        "All recovery levels failed. Check the hardware (power, USB, Wi-Fi). "
+                        f"Backing off {cfg.get('giveup_backoff_sec', 300)}s."
+                    )
+                    write_status("gave_up", failing=res["failing"], level=st.level,
+                                 backoff_sec=cfg.get("giveup_backoff_sec", 300))
+                    _sleep_with_video(cfg.get("giveup_backoff_sec", 300), video_mgr)
+                    st.level = 0
+                else:
+                    recover(cfg, st.level)
+                    st.grace_until = time.time() + grace_sec
+                    st.level += 1
+            st.fails = 0
+    _bridge_note_health(state, res)
+    write_status(state, failing=res["failing"], level=st.level, fails=st.fails,
+                 skipped_checks=res["skipped"], paused=False, gate_up=True)
+    _sleep_with_video(interval, video_mgr)
 
 
 def watch(cfg, initial_grace: bool = False) -> None:
@@ -3436,96 +4423,35 @@ def watch(cfg, initial_grace: bool = False) -> None:
         return
 
     interval = cfg.get("interval_sec", 5)
-    threshold = cfg.get("fail_threshold", 3)
     grace_sec = float(cfg.get("post_recover_grace_sec", 35))
-    gate = cfg.get("only_when_running")
     video_enabled = bool(cfg.get("video", {}).get("enabled", False))
     video_mgr = SwingSessionManager(cfg) if video_enabled else None
+    hub, bridge = start_bridge(cfg)  # never raises; a busy port is logged and the watchdog carries on
+    if video_mgr and hub:
+        video_mgr.hub = hub
 
-    fails, level, last_status, gate_running = 0, 0, None, False
-    grace_until = (time.time() + grace_sec) if initial_grace else 0.0
-    last_cfg_attempt = 0.0
-    LOG.info("SimWatch running. Create a file named PAUSE next to this script to pause.")
+    st = _WatchState((time.time() + grace_sec) if initial_grace else 0.0)
+    LOG.info("SimWatch running. Create a file named PAUSE next to this script to pause. Status: %s", STATUS_PATH)
     try:
         while True:
-            paused = (HERE / "PAUSE").exists()
-            gate_up = (not gate) or bool(find_procs(gate))
-            if paused or not gate_up:
-                if video_mgr and not gate_up:
-                    video_mgr.stop()
-                fails, level, last_status, gate_running = 0, 0, None, False
-                time.sleep(interval)
-                continue
-
-            if not gate_running:
-                gate_running = True
-                if "gspro" in cfg["apps_by_key"] and WindowSpec(r"^GSPro Configuration$").exists(timeout=2):
-                    LOG.info("GSPro Configuration dialog detected; configuring display and waiting for startup...")
-                    last_cfg_attempt = time.time()
-                    run_actions(cfg["apps_by_key"]["gspro"], cfg)
-                    time.sleep(cfg.get("settle_sec", 15))
-                    grace_until = time.time() + grace_sec
-                if video_mgr:
-                    video_mgr.start(launch_rig=True)
-
-            if "gspro" in cfg["apps_by_key"] and (time.time() - last_cfg_attempt) >= 15.0:
-                if WindowSpec(r"^GSPro Configuration$").exists(timeout=0):
-                    LOG.info("GSPro Configuration dialog reappeared; configuring display...")
-                    last_cfg_attempt = time.time()
-                    run_actions(cfg["apps_by_key"]["gspro"], cfg)
-                    grace_until = time.time() + grace_sec
-
-            res = evaluate_checks(cfg, verbose=False)
-            if res["all_ok"]:
-                if not res["any_unknown"] and last_status is not True:
-                    LOG.info("All green.")
-                enforce_gspro_window_state(cfg)
-                suppress_background_focus(cfg)
-                fails, level, last_status = 0, 0, True
-            elif res["device_ping_failed"]:
-                if last_status != "device_offline":
-                    LOG.warning("Launch Pro unreachable (off or asleep); waiting for hardware without restarting apps.")
-                fails, level, last_status = 0, 0, "device_offline"
-            elif res["only_device_failed"] and time.time() < grace_until:
-                if last_status != "discovery_grace":
-                    LOG.info("Waiting for GameChanger auto-discovery grace period (%ds remaining)...", int(max(0, grace_until - time.time())))
-                last_status = "discovery_grace"
-            else:
-                fails += 1
-                last_status = False
-                if fails >= threshold:
-                    max_needed_level = res["level"] or 0
-                    if res["only_device_failed"]:
-                        if level == 0:
-                            recover(cfg, 0)
-                            grace_until = time.time() + grace_sec
-                            level = 1
-                        else:
-                            backoff = cfg.get("giveup_backoff_sec", 300)
-                            LOG.warning(
-                                "Bridge/GameChanger issue persists while GSPro :9050 is healthy; "
-                                f"backing off {backoff}s without restarting GSPro."
-                            )
-                            _sleep_with_video(backoff, video_mgr)
-                            level = 0
-                    else:
-                        level = max(level, max_needed_level)
-                        if level >= len(cfg["recovery"]):
-                            alert(
-                                "All recovery levels failed. Check the hardware (power, USB, Wi-Fi). "
-                                f"Backing off {cfg.get('giveup_backoff_sec', 300)}s."
-                            )
-                            _sleep_with_video(cfg.get("giveup_backoff_sec", 300), video_mgr)
-                            level = 0
-                        else:
-                            recover(cfg, level)
-                            grace_until = time.time() + grace_sec
-                            level += 1
-                    fails = 0
-            _sleep_with_video(interval, video_mgr)
+            try:
+                _watch_step(cfg, st, video_mgr)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except Exception as e:
+                # One bad iteration (bad config, a Win32 hiccup...) must never kill the watchdog.
+                LOG.exception("watch iteration failed (%s: %s); continuing in %ss", type(e).__name__, e, interval)
+                write_status("error", error=f"{type(e).__name__}: {e}")
+                try:
+                    time.sleep(interval)
+                except Exception:
+                    pass
     finally:
         if video_mgr:
             video_mgr.stop()
+        if bridge:
+            bridge.stop()
+        write_status("stopped")
 
 
 def wait_until(cfg, check_names, timeout: float) -> bool:
@@ -3555,13 +4481,19 @@ def startup(cfg) -> None:
     if not acquire_singleton_lock():
         LOG.warning("Another SimWatch instance is already running; exiting.")
         return
-    st = cfg["startup"]
+    st = cfg.get("startup")
+    if not st or not st.get("order"):
+        raise SystemExit("config.json has no 'startup.order'; cannot run `startup`")
     time.sleep(st.get("boot_delay_sec", 20))
     wait_until(cfg, st.get("wait_for", []), st.get("wait_timeout_sec", 180))
     for key in st["order"]:
+        app = cfg["apps_by_key"].get(key)
+        if app is None:
+            LOG.error("startup.order: unknown app key %r; skipping", key)
+            continue
         if key == "integrator":
             fsx_disconnect(cfg)
-        launch_app(cfg, cfg["apps_by_key"][key], 60)
+        launch_app(cfg, app, 60)
     time.sleep(cfg.get("settle_sec", 15))
     LOG.info("Startup done:")
     run_checks(cfg)
@@ -3644,6 +4576,7 @@ def cmd_video(cfg: dict) -> None:
         LOG.warning("Another SimWatch instance is already running; exiting.")
         return
     mgr = SwingSessionManager(cfg)
+    mgr.hub, bridge = start_bridge(cfg)
     mgr.start(launch_rig=True)
     print_hotkey_cheatsheet(cfg)
     LOG.info("Standalone video mode running (Ctrl+C to stop).")
@@ -3658,6 +4591,146 @@ def cmd_video(cfg: dict) -> None:
         LOG.info("Stopping standalone video mode.")
     finally:
         mgr.stop()
+        if bridge:
+            bridge.stop()
+
+
+# --------------------------------------------------------------------------- doctor
+
+PASS, WARN, FAIL = "PASS", "WARN", "FAIL"
+
+
+def _port_state(port: int) -> str:
+    """'listening' | 'connected' | 'none' | 'unknown' (psutil may need admin on some platforms)."""
+    try:
+        conns = psutil.net_connections(kind="tcp")
+    except (psutil.Error, OSError):
+        return "unknown"
+    state = "none"
+    for c in conns:
+        if c.status == psutil.CONN_LISTEN and c.laddr and c.laddr.port == port:
+            return "listening"
+        if c.status == psutil.CONN_ESTABLISHED and (
+            (c.laddr and c.laddr.port == port) or (c.raddr and c.raddr.port == port)
+        ):
+            state = "connected"
+    return state
+
+
+def doctor_report(config_path: Path) -> list[tuple[str, str, str]]:
+    """Build the doctor rows: [(PASS|WARN|FAIL, item, detail)]. Pure of printing/exiting so it is testable."""
+    rows: list[tuple[str, str, str]] = []
+
+    def add(status, item, detail=""):
+        rows.append((status, item, detail))
+
+    v = sys.version_info
+    add(PASS if v >= (3, 10) else FAIL, "Python version", f"{v.major}.{v.minor}.{v.micro} (needs >= 3.10)")
+    add(PASS if IS_WINDOWS else WARN, "Platform", sys.platform if IS_WINDOWS
+        else f"{sys.platform}: SimWatch only runs on Windows; app/port/task checks are informational")
+    if IS_WINDOWS:
+        try:
+            admin = bool(ctypes.windll.shell32.IsUserAnAdmin())
+        except Exception:
+            admin = False
+        add(PASS if admin else WARN, "Administrator", "elevated" if admin else
+            "not elevated - clicks/raw sockets to elevated sim apps will fail")
+
+    for mod, hard in (("psutil", True), ("pywinauto", IS_WINDOWS), ("win32gui", IS_WINDOWS),
+                      ("PIL", IS_WINDOWS), ("cv2", False)):
+        try:
+            __import__(mod)
+            add(PASS, f"module {mod}", "importable")
+        except ImportError:
+            add(FAIL if hard else WARN, f"module {mod}",
+                "missing" + ("" if hard else " (optional / Windows-only)"))
+
+    if os.access(HERE, os.W_OK):
+        add(PASS, "HERE writable (log/status)", str(HERE))
+    else:
+        add(FAIL, "HERE writable (log/status)", f"{HERE} is not writable")
+    if (HERE / "PAUSE").exists():
+        add(WARN, "PAUSE file", "present - watchdog is paused")
+
+    # config
+    try:
+        cfg_raw = json.loads(Path(config_path).read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        add(FAIL, "config", f"not found: {config_path}")
+        return rows
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        add(FAIL, "config", f"invalid JSON: {e}")
+        return rows
+    issues = validate_config(cfg_raw, check_paths=False)
+    if not issues:
+        add(PASS, "config validation", "no issues")
+    for sev, msg in issues:
+        add(FAIL if sev == "error" else WARN, "config validation", msg)
+    if not isinstance(cfg_raw, dict):
+        return rows
+
+    # app exes
+    for a in cfg_raw.get("apps", []) if isinstance(cfg_raw.get("apps"), list) else []:
+        if not isinstance(a, dict) or not a.get("exe"):
+            continue
+        item = f"app exe: {a.get('key')}"
+        if not IS_WINDOWS:
+            add(WARN, item, f"skipped (not Windows): {a['exe']}")
+        else:
+            add(PASS if Path(a["exe"]).exists() else FAIL, item, a["exe"])
+
+    vcfg = cfg_raw.get("video", {}) if isinstance(cfg_raw.get("video"), dict) else {}
+    if vcfg.get("enabled"):
+        pip_on = bool(vcfg.get("projector_pip", {}).get("enabled", True))
+        for key, needed in (("kinovea_exe", True), ("obs_exe", pip_on)):
+            path = vcfg.get(key)
+            item = f"video.{key}"
+            if not path:
+                add(FAIL if needed else WARN, item, "not configured")
+            elif not IS_WINDOWS:
+                add(WARN, item, f"skipped (not Windows): {path}")
+            elif Path(path).exists():
+                add(PASS, item, path)
+            else:
+                add(FAIL if needed else WARN, item, f"not found: {path}")
+
+    # ports
+    dev = cfg_raw.get("device", {}) if isinstance(cfg_raw.get("device"), dict) else {}
+    ports = [(GSPRO_PORT, "OpenConnect"), (9050, "GSPconnect<->GSPro")]
+    try:
+        ports += [(p, "launch monitor") for p in sorted(_device_ports(dev))]
+    except (TypeError, ValueError):
+        add(WARN, "device ports", "could not parse device.port/ports")
+    for port, what in ports:
+        st = _port_state(port)
+        add(PASS if st in ("listening", "connected") else WARN, f"port {port} ({what})",
+            {"none": "not listening / no session (fine if the sim is not running)",
+             "unknown": "could not enumerate sockets (try an admin shell)"}.get(st, st))
+
+    # scheduled task
+    if IS_WINDOWS:
+        try:
+            r = subprocess.run(["schtasks", "/Query", "/TN", "SimWatch"], capture_output=True, text=True,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), timeout=15)
+            add(PASS if r.returncode == 0 else WARN, "scheduled task 'SimWatch'",
+                "registered" if r.returncode == 0 else "not found (run install_autostart.bat for start-at-sign-in)")
+        except (OSError, subprocess.SubprocessError) as e:
+            add(WARN, "scheduled task 'SimWatch'", f"could not query: {e}")
+    else:
+        add(WARN, "scheduled task 'SimWatch'", "skipped (not Windows)")
+    return rows
+
+
+def run_doctor(config_path: Path) -> int:
+    rows = doctor_report(config_path)
+    w_item = max(len(r[1]) for r in rows)
+    print(f"{'STATUS':<6}  {'ITEM':<{w_item}}  DETAIL")
+    print(f"{'-' * 6}  {'-' * w_item}  {'-' * 40}")
+    for status, item, detail in rows:
+        print(f"{status:<6}  {item:<{w_item}}  {detail}")
+    counts = {k: sum(1 for r in rows if r[0] == k) for k in (PASS, WARN, FAIL)}
+    print(f"\n{counts[PASS]} passed, {counts[WARN]} warning(s), {counts[FAIL]} failure(s)")
+    return 1 if counts[FAIL] else 0
 
 
 # --------------------------------------------------------------------------- main
@@ -3672,10 +4745,18 @@ def _configure_logging() -> None:
         pass
     logging.basicConfig(
         level=logging.INFO,
-        format="%(asctime)s %(message)s",
+        format="%(asctime)s %(levelname)s [%(threadName)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         handlers=handlers,
     )
+
+    def _thread_excepthook(args):
+        if args.exc_type is SystemExit:
+            return
+        LOG.error("Unhandled exception in thread %s", getattr(args.thread, "name", "?"),
+                  exc_info=(args.exc_type, args.exc_value, args.exc_traceback))
+
+    threading.excepthook = _thread_excepthook
 
 
 def main() -> None:
@@ -3686,10 +4767,14 @@ def main() -> None:
             "discover", "dump", "calibrate", "check", "recover", "watch", "startup", "stop",
             "displays", "reconnect", "release-device",
             "video", "bookmark", "reference", "obs-setup", "hotkeys", "drills", "lines", "save-lines",
+            "doctor", "bridge",
         ],
     )
     ap.add_argument("arg", nargs="?")
     ap.add_argument("--config", default=str(HERE / "config.json"))
+    ap.add_argument("--demo", action="store_true", help="bridge: emit a synthetic shot every few seconds (no rig needed)")
+    ap.add_argument("--demo-interval", type=float, default=4.0, help="bridge --demo: seconds between synthetic shots")
+    ap.add_argument("--port", type=int, default=None, help="bridge: override bridge.port from config.json")
     a = ap.parse_args()
 
     _configure_logging()
@@ -3704,6 +4789,8 @@ def main() -> None:
             sys.exit(f"Drills page not found at {drills_html}")
         os.startfile(str(drills_html))
         return
+    if a.command == "doctor":
+        sys.exit(run_doctor(Path(a.config)))
     if a.command == "discover":
         return discover()
     if a.command == "dump":
@@ -3711,7 +4798,9 @@ def main() -> None:
     if a.command == "calibrate":
         return calibrate()
 
-    cfg = load_config(Path(a.config))
+    cfg = load_config(Path(a.config), command=a.command)
+    if a.command == "bridge":
+        return cmd_bridge(cfg, demo=a.demo, demo_interval=a.demo_interval, port=a.port)
     if a.command == "check":
         run_checks(cfg)
     elif a.command == "recover":

@@ -1,7 +1,14 @@
 @echo off
+setlocal
 cd /d "%~dp0"
 title SimWatch Video Practice (Kinovea 2x2 + Hotkeys)
-set "PYEXE=python"
-if exist "%LOCALAPPDATA%\Programs\Python\Python314\python.exe" set "PYEXE=%LOCALAPPDATA%\Programs\Python\Python314\python.exe"
-"%PYEXE%" simwatch.py video
+call "%~dp0_find_python.bat"
+if errorlevel 1 (
+  pause
+  exit /b 1
+)
+"%PY%" simwatch.py video
+set "RC=%errorlevel%"
+if not "%RC%"=="0" echo [SimWatch] simwatch.py video exited with code %RC%. See simwatch.log
 pause
+exit /b %RC%

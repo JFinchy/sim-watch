@@ -14,7 +14,7 @@ window.DEFAULT_DRILLS_DATA = {
       "shortLabel": "Kids Asleep",
       "icon": "🌙",
       "badgeColor": "#818cf8",
-      "subtitle": "Kids Asleep / Quiet Mode — Low-Noise Strike, Start Line & Sequencing"
+      "subtitle": "Kids Asleep / Quiet Mode — Low-Noise Strike, Start Line & Sequencing. Launch Pro: trust start line (HLA) and club data only; carry, ball speed and spin are not valid for Almost Golf Balls."
     },
     {
       "id": "sore",
@@ -22,7 +22,7 @@ window.DEFAULT_DRILLS_DATA = {
       "shortLabel": "Gym-Sore",
       "icon": "💪",
       "badgeColor": "#f59e0b",
-      "subtitle": "Zero/Low-Impact Mobility, Slow-Mo Kinovea Rehearsals & Putting/Chipping"
+      "subtitle": "Zero/Low-Impact Mobility, Slow-Mo Kinovea Rehearsals & Putting/Chipping. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
     }
   ],
   "routines": [
@@ -37,7 +37,7 @@ window.DEFAULT_DRILLS_DATA = {
         "sore"
       ],
       "summary": "Quick daily baseline to wake up low point, center strike, and start line before sim play or focused block work.",
-      "hackmotionPrescription": "10 Biofeedback calibration reps: P4 Flat Wrist (0°) -> P7 Bowed Impact (-14°). Green tone check.",
+      "hackmotionPrescription": "10 calibration reps with a 7-iron: note your address reading, check the top reads flatter than address and impact reads ~5–10° more flexion than your top. Green tone check.",
       "cadenceTarget": "24/8 (Tour Standard) • 1.07s rhythm"
     },
     {
@@ -51,7 +51,7 @@ window.DEFAULT_DRILLS_DATA = {
         "sore"
       ],
       "summary": "Dial in athletic posture, one-piece P2 takeaway, and centered turn at P4 without over-swinging or rolling the face open.",
-      "hackmotionPrescription": "P1 Address: +14° Ext -> P2 Takeaway: +8° Ext -> P4 Top: 0° to -4° Flexion (Zero slice cup).",
+      "hackmotionPrescription": "Record your address reading as the baseline. P2: little change from address. P4: ~10–20° less extension than address (flat, not cupped).",
       "cadenceTarget": "27/9 (Tour Smooth) • Calm takeaway"
     },
     {
@@ -65,8 +65,8 @@ window.DEFAULT_DRILLS_DATA = {
         "sore"
       ],
       "summary": "Sequence lower body pressure shift first while keeping the trail elbow ahead of the seam and shallowing the shaft inside the hand path.",
-      "hackmotionPrescription": "P5-P6 Motorcycle move: Bow lead wrist to -10° to -14° flexion during transition to square face early.",
-      "cadenceTarget": "24/8 (Tour Standard) • Patient top pause"
+      "hackmotionPrescription": "P5-P6 motorcycle move: lead wrist adds a few degrees of flexion versus your top reading as the face squares; no added extension in transition.",
+      "cadenceTarget": "24/8 (Tour Standard) • Continuous transition, no pause at the top"
     },
     {
       "id": "day-3-impact",
@@ -79,7 +79,7 @@ window.DEFAULT_DRILLS_DATA = {
         "sore"
       ],
       "summary": "Hold lead wrist flexion through the ball, shift low point forward of the ball, and eliminate early extension.",
-      "hackmotionPrescription": "P7 Impact Bow: -14° to -18° Flexion with forward shaft lean. Red alert tone if wrist extends > 0°.",
+      "hackmotionPrescription": "P7 impact: ~5–10° more flexion than your own top reading (irons). Alert if the impact reading is more extended than address.",
       "cadenceTarget": "24/8 or 21/7 • Crisp acceleration"
     },
     {
@@ -93,7 +93,7 @@ window.DEFAULT_DRILLS_DATA = {
         "sore"
       ],
       "summary": "Own your 9-o'clock / 10:30 / full carry yardages with matched tempo and predictable peak height.",
-      "hackmotionPrescription": "Extension Clamp: Lock wrist within ±3° throughout stroke to eliminate flippy distance variance.",
+      "hackmotionPrescription": "Consistency clamp: repeat the same impact reading within ±3° shot-to-shot at each clock position (repeatability, not a frozen wrist).",
       "cadenceTarget": "18/9 (Short Game 2:1) • Smooth decel-free tempo"
     },
     {
@@ -106,7 +106,7 @@ window.DEFAULT_DRILLS_DATA = {
         "almost"
       ],
       "summary": "Build one-side miss predictability with an upward attack angle, neutral path, and disciplined start-line window.",
-      "hackmotionPrescription": "Maintain flat wrist (-5° flexion) at impact while swinging +2° to +4° upward on GSPro.",
+      "hackmotionPrescription": "Driver: impact reading close to your top (0–5° more flexion), much flatter than irons, while AoA reads +2° to +4° (Launch Pro club data).",
       "cadenceTarget": "21/7 or 24/8 • Uncoiling power"
     },
     {
@@ -131,8 +131,8 @@ window.DEFAULT_DRILLS_DATA = {
         "sore",
         "almost"
       ],
-      "summary": "When DOMS hits from squats/deadlifts/push day, stack clean motor patterns with zero joint stress so you still hit Daily Delivery.",
-      "hackmotionPrescription": "Wrist Mobility Flow: 15 slow radial/ulnar deviation rolls + P1-P6 slow-motion checkpoint holds.",
+      "summary": "When DOMS hits from squats/deadlifts/push day, stack clean motor patterns with low joint stress so you still hit Daily Delivery. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion.",
+      "hackmotionPrescription": "Wrist Mobility Flow: 15 slow unloaded wrist circles + slow P1-P6 checkpoint pauses. No loaded or pressed wrist-flexion holds.",
       "cadenceTarget": "30/10 (Deliberate Slow-Mo) • Zero strain"
     }
   ],
@@ -153,7 +153,7 @@ window.DEFAULT_DRILLS_DATA = {
         "sore"
       ],
       "duration": "5 min",
-      "reps": "8 reps/side + 10 hip hinges",
+      "reps": "6 open books/side + 3 hip CARs each direction/side + 10 hip hinges",
       "clubs": [
         "Bodyweight",
         "Alignment Stick"
@@ -166,7 +166,8 @@ window.DEFAULT_DRILLS_DATA = {
       },
       "why": "Tight lats, chest, and sore hips from gym sessions cause early spine extension and restricted shoulder turn. If the ribcage can't rotate independently over the pelvis, your arms hijack the backswing and pull the club inside. Five minutes of rotation prep restores full coil without needing high swing speed.",
       "instructions": [
-        "Place a foam roller or pillow under top knee on your side; perform 6 slow Open-Book thoracic rotations each side, exhaling at end range.",
+        "Lie on your side with a foam roller or pillow under the top knee; perform 6 slow Open-Book thoracic rotations each side, exhaling at end range.",
+        "Hip CARs: stand holding a club for balance, lift one knee to hip height and slowly draw the largest pain-free circle you can with it (out, back, down), 3 each direction per side, keeping the pelvis and trunk still.",
         "Stand with an alignment stick across your belt line and perform 10 slow athletic golf hinges (hips back, soft knees, neutral lumbar).",
         "Cross a club over your shoulders in golf posture and practice turning lead shoulder under chin while keeping lead knee flexed (no sway).",
         "Pause 2 seconds at P4 and verify balanced mid-foot pressure on both feet."
@@ -178,23 +179,12 @@ window.DEFAULT_DRILLS_DATA = {
       "modePlans": {
         "real": "Do this 5-minute flow before hitting your first 7i on GSPro to wake up rotation.",
         "almost": "Skip dynamic jumps—keep breathing nasal and silent while loosening upper back.",
-        "sore": "CORE DRILL ON GYM-SORE DAYS: Extend to 2 rounds at 6/10 effort; stop short of muscle strain."
-      },
-      "hackmotion": {
-        "targetMode": "Standard Tour Delivery Profile",
-        "addressAngle": "+14° Extension",
-        "topAngle": "-2° Flexion",
-        "p6Angle": "-10° Flexion",
-        "impactAngle": "-14° Flexion",
-        "biofeedbackTone": "Biofeedback active in transition and impact windows.",
-        "equipment": [
-          "HackMotion",
-          "SimWatch"
-        ]
+        "sore": "CORE DRILL ON GYM-SORE DAYS: Extend to 2 rounds at 6/10 effort; stop short of muscle strain. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
       }
     },
     {
       "id": "gate-towel-lowpoint",
+      "target": {"metric": "hla", "goal": 0, "tol": 3, "reps": 15, "pass": 10},
       "title": "Towel Behind Ball + Tee Strike Spray Calibration",
       "section": "Mobility & Setup Calibration",
       "focus": "Ball-First Strike & Low Point",
@@ -220,7 +210,7 @@ window.DEFAULT_DRILLS_DATA = {
         "diagram": "impact",
         "keyFrameCue": "Never touch the flat towel 4 inches behind the ball—force low point forward."
       },
-      "why": "Most directional misses on the sim come from a shifting low point—hitting slightly behind the ball tricks the launch monitor or flips the clubface shut/open at the last millisecond. A flat towel 4 inches behind the ball gives instant, quiet feedback on whether your sternum and lead wrist moved forward through impact.",
+      "why": "Many poor strikes on the sim come from an inconsistent low point: hitting slightly behind the ball changes dynamic loft and face angle at the last moment. A flat towel 4 inches behind the ball gives instant, quiet feedback on whether your sternum and hands moved forward through impact.",
       "instructions": [
         "Lay a thin microfiber towel flat 4–5 inches behind the ball (roughly one grip width behind).",
         "Spray the iron face with foot powder spray so every strike marks heel/center/toe and groove height.",
@@ -232,25 +222,14 @@ window.DEFAULT_DRILLS_DATA = {
         "fo": "Sternum stays slightly ahead of the ball at impact with hands leading the clubhead."
       },
       "modePlans": {
-        "real": "Hit 12-15 8-iron punch shots watching GSPro AoA (-3 to -5 deg down) and center smash factor (>1.33).",
-        "almost": "Ideal for night! Almost golf balls compress cleanly off a thin towel with whisper-quiet mat contact—track face marks every ball.",
+        "real": "Hit 12-15 8-iron punch shots: AoA -3° to -5° (down) and smash factor 1.28+ with a centered face mark. (Path/face/AoA/club speed need the Launch Pro club-data subscription; without it use ball data and start line.)",
+        "almost": "Good night drill: judge strike by face-spray marks and quiet ball-first turf contact, not by flight. Launch Pro: trust start line (HLA) and club data only; carry, ball speed and spin are not valid for Almost Golf Balls.",
         "sore": "Optional with half-swings only (no towel slam); keep swing length knee-to-knee."
-      },
-      "hackmotion": {
-        "targetMode": "Standard Tour Delivery Profile",
-        "addressAngle": "+14° Extension",
-        "topAngle": "-2° Flexion",
-        "p6Angle": "-10° Flexion",
-        "impactAngle": "-14° Flexion",
-        "biofeedbackTone": "Biofeedback active in transition and impact windows.",
-        "equipment": [
-          "HackMotion",
-          "SimWatch"
-        ]
       }
     },
     {
       "id": "nine-to-three-delivery",
+      "target": {"metric": "hla", "goal": 0, "tol": 2, "reps": 21, "pass": 14},
       "title": "9-to-3 Delivery Reset (Metronome Sync)",
       "section": "Mobility & Setup Calibration",
       "focus": "Arms-Body Sync & Face Control",
@@ -289,17 +268,17 @@ window.DEFAULT_DRILLS_DATA = {
         "fo": "Triangle between arms and chest stays intact; zero chicken wing on lead elbow."
       },
       "modePlans": {
-        "real": "Watch GSPro Club Path (+/- 1.5 deg) and Face to Path (+/- 1 deg) on crisp 75-95 yard 8i shots.",
-        "almost": "Perfect Kids-Asleep staple: swing at 60% effort through a foam/start-line gate; focus on pure turf brush sound.",
+        "real": "On crisp 75-95 yard 8i shots, aim for club path within ±2.5–3° and face-to-path within ±2°. (Path/face/AoA/club speed need the Launch Pro club-data subscription; without it use ball data and start line.)",
+        "almost": "Kids-Asleep staple: swing at 60% effort through a foam/start-line gate; focus on turf brush sound and start line. Launch Pro: trust start line (HLA) and club data only; carry, ball speed and spin are not valid for Almost Golf Balls.",
         "sore": "Do 2 sets of 8 brush-only or slow-mo 30% reps with 2-second hold at 3 o'clock finish—zero harsh deceleration stress."
       },
       "hackmotion": {
-        "targetMode": "P6 to P8 Delivery & Metronome Sync",
-        "addressAngle": "+14° Extension",
-        "topAngle": "0° (Half swing top)",
-        "p6Angle": "-10° Flexion",
-        "impactAngle": "-14° Flexion (Shaft lean)",
-        "biofeedbackTone": "Sync wrist flexion beep with Metronome Tone 2 and Tone 3.",
+        "targetMode": "P6 to P8 Delivery & Metronome Sync (half swing)",
+        "addressAngle": "Baseline: record your own address reading (calibration-dependent; often +10° to +25° ext)",
+        "topAngle": "9 o'clock: flatter than address (less extension)",
+        "p6Angle": "A few degrees more flexion than your 9 o'clock reading",
+        "impactAngle": "~5–10° more flexion than your 9 o'clock reading (hands slightly ahead)",
+        "biofeedbackTone": "Set the green band relative to your own readings; sync the tone with Metronome Tone 2 and Tone 3.",
         "equipment": [
           "HackMotion",
           "Tour Tempo Metronome",
@@ -342,26 +321,13 @@ window.DEFAULT_DRILLS_DATA = {
         "Complete 2 pump rehearsals to P2 before hitting an actual shot."
       ],
       "checkpoints": {
-        "dtl": "At P2 (hands over trail thigh), clubhead covers/slightly outside hands; grip end points toward belt buckle.",
+        "dtl": "At P2 (shaft parallel to the ground, hands over trail thigh), clubhead covers/slightly outside hands; shaft parallel to the target line with the grip end pointing along the target line.",
         "fo": "Lead arm straight without rigid tension; slight forward shaft lean maintained early."
       },
       "modePlans": {
         "real": "Use 2-rehearsal + 1-real-ball ratio; check Kinovea DTL Live Replay after every 3rd swing.",
-        "almost": "Do 20 almost golf balls focusing solely on hitting P2 window cleanly at 65% speed.",
+        "almost": "Hit 20 almost golf balls focusing solely on hitting the P2 window cleanly at 65% speed (judge start line only).",
         "sore": "Pure P1 -> P2 -> P3 slow-motion pauses in front of Kinovea DTL camera (no ball impact needed)."
-      },
-      "hackmotion": {
-        "targetMode": "P1 to P4 Top-of-Swing Face Alignment",
-        "addressAngle": "+14° Extension",
-        "topAngle": "0° to -4° Flexion (Anti-Slice flat wrist)",
-        "p6Angle": "-8° Flexion",
-        "impactAngle": "-12° Flexion",
-        "biofeedbackTone": "Buzzer alerts if wrist cups > +8° extension at P4.",
-        "equipment": [
-          "HackMotion",
-          "Kinovea DTL",
-          "6 Iron"
-        ]
       }
     },
     {
@@ -404,20 +370,7 @@ window.DEFAULT_DRILLS_DATA = {
       "modePlans": {
         "real": "Place your golf bag behind your trail glute during mid-iron block work on GSPro.",
         "almost": "Quiet living-room/sim rehearsal: 10 slow 3-second P4 holds followed by 10 60% almost-ball swings.",
-        "sore": "EXCELLENT GYM-SORE DRILL: Zero explosive load, builds massive awareness of pelvis tilt and depth."
-      },
-      "hackmotion": {
-        "targetMode": "P1 to P4 Top-of-Swing Face Alignment",
-        "addressAngle": "+14° Extension",
-        "topAngle": "0° to -4° Flexion (Anti-Slice flat wrist)",
-        "p6Angle": "-8° Flexion",
-        "impactAngle": "-12° Flexion",
-        "biofeedbackTone": "Buzzer alerts if wrist cups > +8° extension at P4.",
-        "equipment": [
-          "HackMotion",
-          "Kinovea DTL",
-          "6 Iron"
-        ]
+        "sore": "GOOD GYM-SORE DRILL: no explosive load; builds awareness of pelvis tilt and depth. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
       }
     },
     {
@@ -459,17 +412,17 @@ window.DEFAULT_DRILLS_DATA = {
         "fo": "Lead hip starts rotating/shifting forward while torso stays coiled closed for a split second."
       },
       "modePlans": {
-        "real": "Alternate 2 slow-pump rehearsals with 1 smooth 75% ball; track GSPro Club Path shifting from out-to-in toward +1 to +3 in-to-out.",
+        "real": "Alternate 2 slow-pump rehearsals with 1 smooth 75% ball; track club path moving from out-to-in toward +1° to +3° in-to-out. (Path/face/AoA/club speed need the Launch Pro club-data subscription; without it use ball data and start line.)",
         "almost": "With almost balls, hit real shots straight from the split-hand grip at 50% speed—instant feel for trail arm shallowing!",
         "sore": "Slow-mo mirror/Kinovea split-hand pumps only (3 sets of 10 pauses at P5, no full swing needed)."
       },
       "hackmotion": {
         "targetMode": "P4 to P5 Shallowing Flexion Increase",
-        "addressAngle": "+14° Extension",
-        "topAngle": "-2° Flexion",
-        "p6Angle": "-12° Flexion (Motorcycle shallow move)",
-        "impactAngle": "-15° Flexion",
-        "biofeedbackTone": "Audio tone fires as you pump down to P5 with flexed lead wrist.",
+        "addressAngle": "Baseline: record your own address reading (calibration-dependent; often +10° to +25° ext)",
+        "topAngle": "Flatter than address (~10–20° less extension)",
+        "p6Angle": "A few degrees more flexion than your top reading as the shaft shallows (no added extension)",
+        "impactAngle": "~5–10° more flexion than your top reading",
+        "biofeedbackTone": "Audio tone fires as you pump down to P5 with lead wrist flexion increasing from your own top reading.",
         "equipment": [
           "HackMotion",
           "Kinovea FO",
@@ -502,7 +455,7 @@ window.DEFAULT_DRILLS_DATA = {
         "diagram": "shallow",
         "keyFrameCue": "Recenter onto lead foot BEFORE P4 completes—step trail foot forward smoothly after impact."
       },
-      "why": "Hanging back on the trail foot kills compression and promotes an early scoop. Stepping through toward the target right after impact forces your weight onto your lead side early in transition and guarantees full hip rotation through P8.",
+      "why": "Hanging back on the trail foot costs compression and promotes an early scoop. Stepping through toward the target right after impact encourages your pressure to move onto your lead side early in transition and full hip rotation through P8.",
       "instructions": [
         "Take your normal stance and swing smoothly back to P4.",
         "Before your hands finish rising to the top, gently initiate pressure onto your lead heel.",
@@ -517,22 +470,11 @@ window.DEFAULT_DRILLS_DATA = {
         "real": "Hit 10-12 mid-irons focusing on rhythmic pressure transfer; notice carry distance tighten and launch lower.",
         "almost": "Use quiet 70% tempo swings with an 8-iron and almost golf balls—keep footsteps soft on the mat so kids stay asleep.",
         "sore": "Avoid full dynamic step-throughs if hips/quads are very sore; swap for P4-to-P5 Split-Hand Pump."
-      },
-      "hackmotion": {
-        "targetMode": "Standard Tour Delivery Profile",
-        "addressAngle": "+14° Extension",
-        "topAngle": "-2° Flexion",
-        "p6Angle": "-10° Flexion",
-        "impactAngle": "-14° Flexion",
-        "biofeedbackTone": "Biofeedback active in transition and impact windows.",
-        "equipment": [
-          "HackMotion",
-          "SimWatch"
-        ]
       }
     },
     {
       "id": "noodle-plane-gate",
+      "target": {"metric": "path", "goal": 2, "tol": 2, "reps": 15, "pass": 10},
       "title": "Alignment Stick / Noodle Anti-OTT Plane Guard",
       "section": "P4-P6 Transition & Shallowing",
       "focus": "Neutralize Steep Over-The-Top Path",
@@ -556,7 +498,7 @@ window.DEFAULT_DRILLS_DATA = {
         "diagram": "shallow",
         "keyFrameCue": "Swing UNDER the angled alignment stick on the downswing to force an in-to-out delivery arc."
       },
-      "why": "Feel isn't real—visual feedback in space reprograms path in minutes. Setting a foam pool noodle along your shaft plane behind and slightly above your hands makes swinging over-the-top physically impossible without hitting the foam, instantly teaching your arms to drop underneath.",
+      "why": "Feel isn't real: visual feedback in space gives immediate information on path. Setting a foam pool noodle along your shaft plane behind and slightly above your hands makes an over-the-top move hit the foam, so your arms learn to drop underneath.",
       "instructions": [
         "Angle a soft foam noodle on an alignment stick base 18 inches behind the ball, tilted parallel to your shaft at address (just above your hands).",
         "Make 3 slow rehearsal passes: take club slightly above/outside the stick going back, then loop *underneath* the noodle coming down.",
@@ -569,20 +511,8 @@ window.DEFAULT_DRILLS_DATA = {
       },
       "modePlans": {
         "real": "Ideal visual blocker drill when sim shots are leaking right or pulling left with a negative path.",
-        "almost": "Top Quiet-Night drill: foam noodle + almost golf balls is completely safe, quiet, and pure motor retraining.",
+        "almost": "Top Quiet-Night drill: foam noodle + almost golf balls is safe, quiet motor retraining. Launch Pro: trust start line (HLA) and club data only; carry, ball speed and spin are not valid for Almost Golf Balls.",
         "sore": "Set noodle up and do 15 slow practice sweeps at 30% effort—zero ball impact stress."
-      },
-      "hackmotion": {
-        "targetMode": "Standard Tour Delivery Profile",
-        "addressAngle": "+14° Extension",
-        "topAngle": "-2° Flexion",
-        "p6Angle": "-10° Flexion",
-        "impactAngle": "-14° Flexion",
-        "biofeedbackTone": "Biofeedback active in transition and impact windows.",
-        "equipment": [
-          "HackMotion",
-          "SimWatch"
-        ]
       }
     },
     {
@@ -625,15 +555,15 @@ window.DEFAULT_DRILLS_DATA = {
       "modePlans": {
         "real": "Follow 5 slow-mo motorcycle P6 pauses with 10 crisp 7i shots looking for lower dynamic loft and penetrating flight.",
         "almost": "Skip noisy impact bag thuds when kids are asleep—press silently against a pillow or do P6 holds + half almost-ball shots.",
-        "sore": "TOP GYM-SORE DRILL: Hold P7 impact alignments isometric-style for 3 seconds x 12 reps without fast impacts."
+        "sore": "Unloaded slow rehearsal only: no bag, no pressing, no isometric holds. 8 slow-motion swings to P6-P7 at 20% speed, checking face and hand position on Kinovea. Skip entirely after heavy pull/deadlift days. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
       },
       "hackmotion": {
         "targetMode": "Impact Lead Wrist Flexion & Forward Lean",
-        "addressAngle": "+14° Extension",
-        "topAngle": "-2° Flexion (Flat)",
-        "p6Angle": "-12° Flexion (Motorcycle Bow)",
-        "impactAngle": "-16° to -20° Flexion (Maximum Compression)",
-        "biofeedbackTone": "Continuous green tone when lead wrist exceeds -12° flexion into impact bag.",
+        "addressAngle": "Baseline: record your own address reading (calibration-dependent; often +10° to +25° ext)",
+        "topAngle": "Flatter than address (~10–20° less extension)",
+        "p6Angle": "A few degrees more flexion than your top reading (motorcycle)",
+        "impactAngle": "~5–10° more flexion than your top reading. Stop there: more bow is not better.",
+        "biofeedbackTone": "Green tone when the impact reading is 5–10° more flexed than your own top reading.",
         "equipment": [
           "HackMotion",
           "Impact Bag",
@@ -683,18 +613,6 @@ window.DEFAULT_DRILLS_DATA = {
         "real": "Turn on Kinovea DTL vertical butt-line drawing on Reference + Replay and verify zero hip drift on 10 7i balls.",
         "almost": "Almost balls at 65% tempo give all the time needed to feel your lead pocket clear backward cleanly.",
         "sore": "Slow-mo dry rehearsals against a chair back—15 slow turns holding impact shape for 2 seconds."
-      },
-      "hackmotion": {
-        "targetMode": "Standard Tour Delivery Profile",
-        "addressAngle": "+14° Extension",
-        "topAngle": "-2° Flexion",
-        "p6Angle": "-10° Flexion",
-        "impactAngle": "-14° Flexion",
-        "biofeedbackTone": "Biofeedback active in transition and impact windows.",
-        "equipment": [
-          "HackMotion",
-          "SimWatch"
-        ]
       }
     },
     {
@@ -723,7 +641,7 @@ window.DEFAULT_DRILLS_DATA = {
         "diagram": "wedge",
         "keyFrameCue": "Match backswing hand height (Hip = 8:00, Rib = 9:00, Shoulder = 10:30) with identical smooth 3:1 tempo."
       },
-      "why": "Throwing hard or decelerating wedges out of intuition creates 12-yard carry errors inside 100 yards. Controlling distance with *swing length* (clock face positions) while accelerating smoothly with constant tempo makes every 45–110 yard wedge automatic under pressure.",
+      "why": "Throwing hard or decelerating wedges by feel creates large carry errors inside 100 yards. Controlling distance with swing length (clock positions) while accelerating smoothly with constant tempo makes 45–110 yard wedges far more repeatable under pressure.",
       "instructions": [
         "Pick one wedge (start with 54 deg) and establish 3 clean backswing checkpoints: Hip-High (8:00), Rib/Arm Parallel (9:00), and Shoulder-High (10:30).",
         "Keep backswing-to-through-swing tempo constant (think '1-and-2', finishing chest facing target with zero deceleration).",
@@ -740,12 +658,12 @@ window.DEFAULT_DRILLS_DATA = {
         "sore": "Chip & pitch variations around 8:00 only; work on wrist hinge feel and clean ball-first brush."
       },
       "hackmotion": {
-        "targetMode": "Wedge Wrist Extension Stability Clamp",
-        "addressAngle": "+10° Extension",
-        "topAngle": "0° Flexion",
-        "p6Angle": "-6° Flexion",
-        "impactAngle": "-12° Flexion (Shaft lean)",
-        "biofeedbackTone": "Keep wrist deviation within ±3° throughout stroke to eliminate distance float.",
+        "targetMode": "Wedge Impact Consistency",
+        "addressAngle": "Baseline: record your wedge address reading (hands slightly forward; calibration-dependent)",
+        "topAngle": "Flatter than address; swing length set by the clock position, not the wrist",
+        "p6Angle": "A few degrees more flexion than your top reading",
+        "impactAngle": "Repeat your own median impact reading within ±3° shot-to-shot",
+        "biofeedbackTone": "The ±3° band is shot-to-shot consistency of the impact reading at each clock position, not a frozen wrist through the whole stroke.",
         "equipment": [
           "HackMotion",
           "54° / 58° Wedges",
@@ -780,7 +698,7 @@ window.DEFAULT_DRILLS_DATA = {
         "diagram": "wedge",
         "keyFrameCue": "Roll or chip through a 2-inch gate 14 inches ahead—pure face angle & stroke path test."
       },
-      "why": "Face angle dictates 75–85% of initial ball direction across wedges, irons, and putts. Placing a tight visual gate right in front of the ball turns silent indoor time into tournament-grade face control work without waking anyone or stressing sore muscles.",
+      "why": "Face angle is the dominant factor in start direction (roughly 75–85% on full shots and more on putts). Placing a tight visual gate right in front of the ball turns silent indoor time into face-control work without waking anyone or stressing sore muscles.",
       "instructions": [
         "Place two coins, tees, or alignment rods 2.5 inches wide, positioned ~14 inches directly in front of the ball on your start line.",
         "For putting: roll balls down a 36-inch metal yardstick or cleanly between the front gate 10 times in a row.",
@@ -793,24 +711,25 @@ window.DEFAULT_DRILLS_DATA = {
       },
       "modePlans": {
         "real": "Warm up wedges/putter on the sim with strict +/- 1.0 deg horizontal launch (HLA) tolerance.",
-        "almost": "PRIMARY KIDS-ASLEEP DRILL: Whisper quiet, high focus, genuinely lowers handicaps fastest per minute spent.",
+        "almost": "PRIMARY KIDS-ASLEEP DRILL: whisper quiet, high focus, and every rep gives clear pass/fail start-line feedback.",
         "sore": "PRIMARY GYM-SORE DRILL: Standing upright with zero spinal load—keeps daily delivery streak alive cleanly."
       },
       "hackmotion": {
-        "targetMode": "Standard Tour Delivery Profile",
-        "addressAngle": "+14° Extension",
-        "topAngle": "-2° Flexion",
-        "p6Angle": "-10° Flexion",
-        "impactAngle": "-14° Flexion",
-        "biofeedbackTone": "Biofeedback active in transition and impact windows.",
+        "targetMode": "Putting Stroke Lead Wrist Stability",
+        "addressAngle": "Baseline: your putting address reading (note it as 0)",
+        "topAngle": "End of backstroke: within ±2° of address",
+        "p6Angle": "Downstroke: within ±2° of address",
+        "impactAngle": "Impact & follow-through: within ±2° of address (no flick or breakdown)",
+        "biofeedbackTone": "Putting only: set the flex/ext band to ±2° around your address reading. Chips use a little hinge, so don't use this band for the pitching reps.",
         "equipment": [
           "HackMotion",
-          "SimWatch"
+          "Putter"
         ]
       }
     },
     {
       "id": "driver-headcover-aoa",
+      "target": {"metric": "aoa", "goal": 3, "tol": 1, "reps": 12, "pass": 8, "club": "Driver"},
       "title": "Driver Upward AoA Gate (Forward Tee + Box Shield)",
       "section": "Driver Launch & Start Line",
       "focus": "+2 to +4 Deg Attack Angle & High Launch",
@@ -837,7 +756,7 @@ window.DEFAULT_DRILLS_DATA = {
         "Tee ball high (half ball above driver crown at address), inside your lead heel.",
         "Feel slight spine tilt away from target (~5-7 deg trail shoulder lower) and set a flat empty ball sleeve/towel 12–14 inches *ahead* of the ball.",
         "Swing smoothly focusing on swinging *up* and slightly inside-out past the low point without hitting the front box.",
-        "Check GSPro numbers: target AoA +2 to +4 deg, launch 12–14 deg, spin 2100–2500 rpm."
+        "Check numbers: target AoA +2 to +4 deg, launch 12–14 deg, spin 2100–2500 rpm. (Path/face/AoA/club speed need the Launch Pro club-data subscription; without it use ball data and start line.)"
       ],
       "checkpoints": {
         "dtl": "Head stays calmly behind ball into impact; path exits low-left safely without steep swipe.",
@@ -845,16 +764,16 @@ window.DEFAULT_DRILLS_DATA = {
       },
       "modePlans": {
         "real": "Main driver sim block drill—hit 12 drives with full Kinovea DTL + FO sync and GSPro dispersion chart.",
-        "almost": "Quiet swap: use a 5-wood or 7-iron off a low rubber tee with almost golf balls at 65% speed (leave driver in bag if kids sleep overhead).",
+        "almost": "Quiet swap: use a 5-wood or 7-iron off a low rubber tee with almost golf balls at 65% speed (leave driver in bag if kids sleep overhead). Read AoA (club data) and HLA only.",
         "sore": "Skip full-speed driver on heavy DOMS days; move to Putting/Short-Putt Gates or Slow-Mo Takeaways."
       },
       "hackmotion": {
         "targetMode": "Driver Flat Wrist with Upward AoA",
-        "addressAngle": "+16° Extension",
-        "topAngle": "-2° Flexion",
-        "p6Angle": "-8° Flexion",
-        "impactAngle": "-5° Flexion (Flat wrist, no scoop, sweeping up)",
-        "biofeedbackTone": "Green tone confirms flat wrist through ball while hitting over headcover box.",
+        "addressAngle": "Baseline: record your driver address reading (often a touch more extended than irons)",
+        "topAngle": "Flatter than address, similar to your iron top",
+        "p6Angle": "Close to your top reading (0–3° change)",
+        "impactAngle": "0–5° more flexion than your top: flatter than irons, no extension (scoop) through the ball",
+        "biofeedbackTone": "Green tone confirms the wrist stays near your top reading through the ball while hitting over the box.",
         "equipment": [
           "HackMotion",
           "Driver",
@@ -864,6 +783,7 @@ window.DEFAULT_DRILLS_DATA = {
     },
     {
       "id": "driver-startline-fairway-challenge",
+      "target": {"metric": "hla", "goal": 0, "tol": 4, "reps": 10, "pass": 6, "club": "Driver"},
       "title": "One-Side Miss Fairway Start-Line Test",
       "section": "Driver Launch & Start Line",
       "focus": "Eliminate Two-Way Miss & Pressure Reps",
@@ -885,12 +805,12 @@ window.DEFAULT_DRILLS_DATA = {
         "diagram": "driver",
         "keyFrameCue": "Pick an unmistakable micro-target, commit to ONE shot shape, track fairways out of 10."
       },
-      "why": "Random block practice on a wide range creates false confidence. Scoring 10 consecutive drives against a 30-yard virtual fairway—and logging whether your miss stays strictly on ONE side of the target—trains course-transfer commitment and exposes under-pressure tendencies.",
+      "why": "Block practice on a wide range creates false confidence. Scoring 10 drives against a 40-yard virtual fairway, and logging whether your miss stays on ONE side of the target, trains course-transfer commitment and exposes under-pressure tendencies.",
       "instructions": [
-        "Open GSPro Driving Range with a 30-yard target grid (15 yds left / 15 yds right of center line).",
+        "Open GSPro Driving Range with a 40-yard target corridor (20 yds left / 20 yds right of center line).",
         "Commit to your stock shot shape (e.g., baby fade starting just left of center, or draw starting just right).",
         "Complete full pre-shot routine behind every single ball—change target line slightly every 2 balls.",
-        "Score 10 balls: +1 for hitting the 30-yard corridor, -1 for a two-way miss on the forbidden side. Log score in Daily Delivery!"
+        "Score 10 balls: +1 for hitting the 40-yard corridor, -1 for a miss on the forbidden side. Pass = 5-6/10 in the corridor with misses on one side only. Log score in Daily Delivery!"
       ],
       "checkpoints": {
         "dtl": "Committed full balanced finish held for 3 seconds on every shot (P9/P10 balance).",
@@ -900,18 +820,6 @@ window.DEFAULT_DRILLS_DATA = {
         "real": "Capstone game at the end of Day 5 Driver sessions—log X/10 Fairways & Stock Shape Consistency in Goals Tracker.",
         "almost": "Replace with Alignment Stick Gate start-line challenge using an 8-iron and almost balls.",
         "sore": "Skip on recovery days; run visualization/pre-shot routine reps only."
-      },
-      "hackmotion": {
-        "targetMode": "Standard Tour Delivery Profile",
-        "addressAngle": "+14° Extension",
-        "topAngle": "-2° Flexion",
-        "p6Angle": "-10° Flexion",
-        "impactAngle": "-14° Flexion",
-        "biofeedbackTone": "Biofeedback active in transition and impact windows.",
-        "equipment": [
-          "HackMotion",
-          "SimWatch"
-        ]
       }
     },
     {
@@ -942,25 +850,26 @@ window.DEFAULT_DRILLS_DATA = {
         "diagram": "motorcycle",
         "keyFrameCue": "Rev the motorcycle throttle downward at P5—squaring the clubface before body rotation fires."
       },
-      "why": "Over 85% of amateur slices and steep over-the-top deliveries happen because the clubface is open at P4/P5. When the brain senses an open face, it frantically casts the hands or throws the club outside-in to prevent a block right. HackMotion trains the signature modern Tour move: bowing the lead wrist early during transition (P5) so the clubface is square 3 feet before impact, allowing you to aggressively rotate your chest and hips without fear of slicing.",
+      "why": "Many amateur slices and steep over-the-top deliveries start with a face that is open at P4/P5. Sensing an open face, the body tends to cast the hands or throw the club outside-in to avoid a block right. HackMotion helps train a move common among good ball-strikers: adding lead-wrist flexion during transition (P5) so the face is squaring earlier, letting you rotate your chest and hips without fear of the slice.",
       "instructions": [
-        "Strap on HackMotion and open the Flexion/Extension Biofeedback mode with target green band set between -8° and -15° flexion.",
-        "Take your normal 7-iron address (+12° to +16° extension) and turn smoothly to P4 (flat wrist, 0° to -3°).",
+        "Strap on HackMotion, take your normal 7-iron address and record your address and top readings as your baseline.",
+        "Open Flexion/Extension Biofeedback and set the green band to roughly 3–8° more flexion than your own top reading.",
+        "Turn smoothly to P4 (flatter than address, not cupped).",
         "During transition from P4 to P5, feel your lead wrist 'bow' like revving a motorcycle throttle down toward the turf as pressure shifts to lead heel.",
         "Listen for the HackMotion audio tone confirmation at P5 before continuing rotation through to finish.",
         "Hit 5 slow-motion balls (50% speed) stopping at P6 to verify clubface angle matches spine angle on Kinovea DTL."
       ],
       "checkpoints": {
         "dtl": "Shaft shallows below trail shoulder plane; clubface matches spine angle (closed relative to path, square to arc).",
-        "fo": "Lead wrist visibly bowed; knuckles pointing down; hands leading the clubhead by 4+ inches at P6."
+        "fo": "Lead wrist visibly flatter/more flexed than at the top; shaft near parallel to the ground with the clubhead well behind the hands at P6; handle leads into P7 with modest forward shaft lean."
       },
       "hackmotion": {
         "targetMode": "Transition Flexion Biofeedback",
-        "addressAngle": "+14° Extension",
-        "topAngle": "-2° Flexion (Flat)",
-        "p6Angle": "-12° to -15° Flexion (Motorcycle Bow)",
-        "impactAngle": "-15° to -18° Flexion (Shaft Lean)",
-        "biofeedbackTone": "Continuous green tone sounds when lead wrist reaches -10° flexion at P5.",
+        "addressAngle": "Baseline: record your own address reading (calibration-dependent; often +10° to +25° ext)",
+        "topAngle": "Flatter than address (~10–20° less extension)",
+        "p6Angle": "~3–8° more flexion than your top reading (motorcycle)",
+        "impactAngle": "~5–10° more flexion than your top reading",
+        "biofeedbackTone": "Green tone sounds when the lead wrist reaches your P5 band (3–8° more flexed than your top).",
         "equipment": [
           "HackMotion Pro",
           "7 Iron",
@@ -968,8 +877,8 @@ window.DEFAULT_DRILLS_DATA = {
         ]
       },
       "modePlans": {
-        "real": "Execute 10 live balls on GSPro; verify push-draw ball flight with zero right-side miss.",
-        "almost": "Perform 15 continuous dry rehearsal reps listening for HackMotion audio tone in headphones.",
+        "real": "Hit 10 live balls on GSPro: look for a straight-to-drawing flight (start at or right of target, curving back). The miss you're removing is the open-face block/slice that starts right and keeps going right.",
+        "almost": "15 dry rehearsal reps with the tone in headphones, then 10 almost balls judged on start line only. Launch Pro: trust start line (HLA) and club data only; carry, ball speed and spin are not valid for Almost Golf Balls.",
         "sore": "Ultra-slow-motion motor pattern mapping: 10 reps holding P5-P6 for 3 seconds each with zero joint shock."
       }
     },
@@ -999,15 +908,15 @@ window.DEFAULT_DRILLS_DATA = {
         "localPath": "shorts/hackmotion-shaft-lean-impact.mp4",
         "youtubeUrl": "",
         "diagram": "impact",
-        "keyFrameCue": "Lead wrist bowed -15° at impact—knuckles to turf, forward shaft lean, zero scoop."
+        "keyFrameCue": "Lead wrist more flexed at impact than at the top: forward shaft lean, zero scoop."
       },
-      "why": "Amateur golfers commonly scoop or flip at impact trying to help the golf ball into the air, resulting in weak spinny launch, fat/thin strikes, and loss of 20+ yards of iron distance. HackMotion measures the exact millisecond of impact: elite tour ball strikers have 12° to 18° of forward shaft lean (negative wrist extension) at strike. Training this eliminates early release permanently.",
+      "why": "Golfers often scoop or flip at impact trying to help the ball into the air, which adds loft and spin, produces fat/thin strikes and costs distance. HackMotion shows whether your lead wrist adds flexion from the top to impact (good ball-strikers typically do) or adds extension (a flip). Training a modest increase from your own top reading supports forward shaft lean without forcing an exaggerated bow.",
       "instructions": [
-        "Set HackMotion to Impact Flexion Mode. Set red buzzer alert for any strike where lead wrist is positive (cupped).",
-        "Position an impact bag or soft foam target 2 inches ahead of normal ball position.",
-        "Take a 3/4 backswing and drive lead knuckles down into the impact bag with hips open 40°.",
-        "Verify HackMotion confirms -14° to -18° flexion at contact with zero wrist extension breakdown.",
-        "Transfer immediately to 10 live balls on GSPro, taking a crisp dollar-bill divot pattern ahead of the ball."
+        "Set HackMotion Flexion/Extension mode. Record your address and top readings; set a red alert for any impact reading more extended than address.",
+        "Position an impact bag or soft foam target 2 inches ahead of normal ball position (Real/Almost only).",
+        "Take a 3/4 backswing and move the handle toward the bag with hips open ~40°, at moderate speed.",
+        "Check HackMotion: impact reading ~5–10° more flexion than your top reading, with no extension breakdown.",
+        "Transfer immediately to 10 live balls on GSPro, taking a shallow divot pattern ahead of the ball."
       ],
       "checkpoints": {
         "dtl": "Trail elbow bent against right rib cage; lead shoulder clearing up and around without chest lifting.",
@@ -1015,11 +924,11 @@ window.DEFAULT_DRILLS_DATA = {
       },
       "hackmotion": {
         "targetMode": "Impact Deloft & Compression",
-        "addressAngle": "+14° Extension",
-        "topAngle": "-2° Flexion",
-        "p6Angle": "-12° Flexion",
-        "impactAngle": "-16° to -20° Flexion (Pure Tour Shaft Lean)",
-        "biofeedbackTone": "Green tone confirms -14° or more flexion at the precise instant of ball strike.",
+        "addressAngle": "Baseline: record your own address reading (calibration-dependent; often +10° to +25° ext)",
+        "topAngle": "Flatter than address (~10–20° less extension)",
+        "p6Angle": "A few degrees more flexion than your top reading",
+        "impactAngle": "~5–10° more flexion than your top reading (no need to chase more)",
+        "biofeedbackTone": "Green tone confirms the impact reading is 5–10° more flexed than your own top reading.",
         "equipment": [
           "HackMotion",
           "Impact Bag",
@@ -1027,9 +936,9 @@ window.DEFAULT_DRILLS_DATA = {
         ]
       },
       "modePlans": {
-        "real": "Hit 10 balls on GSPro with 8-iron; aim for 21° launch angle and 7000+ rpm backspin.",
-        "almost": "Strike almost golf balls off a strike mat with spray paint checking low point is 2 inches past ball.",
-        "sore": "Static impact bag press: push club into bag holding -16° flexion for 5 seconds x 10 reps."
+        "real": "Hit 10 balls on GSPro with an 8-iron: launch ~19–23° and spin ~6500–7500 rpm (ball data, valid with real balls).",
+        "almost": "Strike almost golf balls off a strike mat with spray checking low point is ~2 inches past the ball. Launch Pro: trust start line (HLA) and club data only; carry, ball speed and spin are not valid for Almost Golf Balls.",
+        "sore": "Unloaded slow rehearsal only: no bag presses or isometric holds. 8 slow-motion swings to P7 at 20% speed watching the HackMotion graph. Skip entirely after heavy pull/deadlift days. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
       }
     },
     {
@@ -1060,13 +969,13 @@ window.DEFAULT_DRILLS_DATA = {
         "diagram": "takeaway",
         "keyFrameCue": "Eliminate the P4 wrist cup: flat lead wrist keeps the clubface aligned to lead forearm."
       },
-      "why": "Excessive wrist extension (cupping > 15°) at the top of the backswing fans the clubface wide open to the sky. From this open position, you must make a frantic compensating move on the downswing to square the clubface. Locking in 0° to -4° flexion at P4 synchronizes clubface angle with forearm plane and guarantees an effortless shallow downswing.",
+      "why": "Excessive lead-wrist extension (cupping) at the top opens the clubface, so the downswing needs a compensating move to square it. A top position flatter than address keeps the face more in line with the lead forearm and makes it easier to shallow without a late rescue.",
       "instructions": [
-        "Open HackMotion Top-of-Swing Mode. Set the green zone between 0° and -5° flexion (flat to slight bow).",
-        "Set audio warning to sound if extension exceeds +6° at the top.",
-        "Take your stance and hinge smoothly into P4. Pause for 2 seconds at the top.",
-        "Check mirror or Kinovea DTL: lead wrist is flat like a board, clubface matches lead arm angle.",
-        "Once you hear the solid confirmation tone, swing down smoothly into a balanced finish."
+        "Open HackMotion Top-of-Swing Mode and record your address reading.",
+        "Set the green zone to roughly 10–20° less extension than your address reading (flat to slight bow for most players).",
+        "Set the audio warning to sound if the top reading is as extended as, or more than, your address reading.",
+        "Take your stance and hinge smoothly into P4. Pause for 2 seconds at the top (positional drill: leave the metronome off for these reps).",
+        "Check mirror or Kinovea DTL: lead wrist flat, clubface roughly matching lead arm angle; then swing down smoothly into a balanced finish."
       ],
       "checkpoints": {
         "dtl": "Leading edge of clubface parallel to lead forearm plane at P4; zero cup or bow distortion.",
@@ -1074,11 +983,11 @@ window.DEFAULT_DRILLS_DATA = {
       },
       "hackmotion": {
         "targetMode": "P4 Top Alignment Window",
-        "addressAngle": "+14° Extension",
-        "topAngle": "0° to -4° Flexion (Flat wrist, 0° cup)",
-        "p6Angle": "-10° Flexion",
-        "impactAngle": "-14° Flexion",
-        "biofeedbackTone": "Green chime validates flat wrist at P4 before downswing begins.",
+        "addressAngle": "Baseline: record your own address reading (calibration-dependent; often +10° to +25° ext)",
+        "topAngle": "~10–20° less extension than address (flat, not cupped)",
+        "p6Angle": "A few degrees more flexion than your top reading",
+        "impactAngle": "~5–10° more flexion than your top reading",
+        "biofeedbackTone": "Green chime validates the top reading is in your flat window before the downswing begins.",
         "equipment": [
           "HackMotion",
           "Kinovea DTL",
@@ -1087,12 +996,13 @@ window.DEFAULT_DRILLS_DATA = {
       },
       "modePlans": {
         "real": "10 pause-and-hit swings at P4: pause 2 sec for green tone, then uncoil into GSPro.",
-        "almost": "15 dry swings with almost balls focusing on smooth rhythmic transition.",
+        "almost": "10 pause-at-P4 reps for the green tone, then hit 10 almost balls with a smooth rhythmic transition; judge start line only. Launch Pro: trust start line (HLA) and club data only; carry, ball speed and spin are not valid for Almost Golf Balls.",
         "sore": "Slow-motion stretch reps: hold P4 for 4 deep breaths to stretch chest & lats without pain."
       }
     },
     {
       "id": "hackmotion-wedge-matrix",
+      "target": {"metric": "carry", "goal": 50, "tol": 3, "reps": 15, "pass": 10},
       "title": "HackMotion Wedge Wrist Extension Clamp (Low Spinner vs Soft Pitch)",
       "section": "Scoring Wedges & Start Line",
       "focus": "Wedge Distance Consistency & Spin Control",
@@ -1116,27 +1026,27 @@ window.DEFAULT_DRILLS_DATA = {
         "localPath": "shorts/hackmotion-wedge-matrix.mp4",
         "youtubeUrl": "",
         "diagram": "clock",
-        "keyFrameCue": "Clamp wrist delta to ±2°—consistent dynamic loft equals laser distance control."
+        "keyFrameCue": "Repeat the same impact reading within ±3° shot-to-shot: consistent dynamic loft, tighter distance control."
       },
-      "why": "Wedge distance dispersion is rarely caused by swing speed; it is almost always caused by variable wrist action flipping or de-lofting randomly at impact. By measuring and clamping your HackMotion wrist angle delta, dynamic loft stays identical on every swing, landing your wedges within 6 feet of your target yardage every time.",
+      "why": "Wedge distance dispersion comes from varying speed, strike and dynamic loft. Variable wrist action at impact is a big contributor to the loft part. Matching your own HackMotion impact reading shot-to-shot keeps dynamic loft more consistent and tightens carry windows.",
       "instructions": [
-        "Select your 54° wedge and set HackMotion to Wedge Distance Control mode.",
-        "For Low Check & Spinner: Preset -10° flexion at address; maintain -14° flexion through impact (low launch, 9000+ rpm).",
-        "For Soft High Pitch: Maintain neutral +4° extension through impact, allowing bounce to glide through turf.",
-        "Hit 10 consecutive 50-yard targets on GSPro range; track carry yardage variance (goal: < 3 yards spread).",
-        "Move to 75-yard pin and repeat with 54° wedge."
+        "Select your 54° wedge, record your address reading and set HackMotion to Flexion/Extension mode.",
+        "Low Check & Spinner: hands slightly forward; impact reading ~5–8° more flexion than your address reading (lower launch, more spin than the soft pitch).",
+        "Soft High Pitch: impact reading close to your address reading (little added flexion), letting the bounce glide through turf.",
+        "Hit 10 balls to a 50-yard target on GSPro range; pass = 7/10 carries within ±3 yards and impact readings within ±3° of your median.",
+        "Move to a 75-yard pin and repeat with the 54° wedge."
       ],
       "checkpoints": {
         "dtl": "Shallow bounce engagement; clubhead does not dig or flip past hands through impact.",
         "fo": "Chest turns through with hands; sternum leads the clubhead into finish."
       },
       "hackmotion": {
-        "targetMode": "Wedge Dynamic Loft Clamp",
-        "addressAngle": "+10° Extension (Neutral)",
-        "topAngle": "0° (Half swing clock)",
-        "p6Angle": "-8° Flexion",
-        "impactAngle": "-12° Flexion (Spinner) or +2° (High Soft)",
-        "biofeedbackTone": "Tolerance chime sounds when wrist angle stays within ±3° window.",
+        "targetMode": "Wedge Dynamic Loft Consistency",
+        "addressAngle": "Baseline: record your wedge address reading (calibration-dependent)",
+        "topAngle": "Flatter than address (half-swing clock)",
+        "p6Angle": "A few degrees more flexion than your top reading",
+        "impactAngle": "Spinner: ~5–8° more flexion than address • High Soft: close to address reading",
+        "biofeedbackTone": "Tolerance chime when the impact reading lands within ±3° of your median for that shot type (shot-to-shot consistency, not the whole stroke).",
         "equipment": [
           "HackMotion",
           "54° / 58° Wedges",
@@ -1145,7 +1055,7 @@ window.DEFAULT_DRILLS_DATA = {
       },
       "modePlans": {
         "real": "Hit 10 balls to 50 yds, 10 to 75 yds on GSPro; log carry consistency in Bag Matrix.",
-        "almost": "Start-line and launch window gates: hit almost balls through low and high foam gates in room.",
+        "almost": "Start-line and launch-window gates: hit almost balls through low and high foam gates in the room. Launch Pro: trust start line (HLA) and club data only; carry, ball speed and spin are not valid for Almost Golf Balls.",
         "sore": "Short putting/chipping stroke calibration: 20 low-stress 10-yard chip-and-runs."
       }
     },
@@ -1173,15 +1083,15 @@ window.DEFAULT_DRILLS_DATA = {
         "localPath": "shorts/hackmotion-radial-ulnar-whip.mp4",
         "youtubeUrl": "",
         "diagram": "driver",
-        "keyFrameCue": "Radial cock creates lag; ulnar unhinge releases the whip through low point."
+        "keyFrameCue": "Radial cock sets the hinge; lag peaks around P5-P6; the unhinge happens progressively into impact."
       },
-      "why": "Radial deviation cocks the lead thumb vertically creating effortless lag. Ulnar deviation unhinges the wrists down toward the turf through impact, guaranteeing the club reaches bottom of arc 2-3 inches past the golf ball. Monitoring this timing on HackMotion prevents early casting and maximizes clubhead speed transfer.",
+      "why": "Radial deviation (lead thumb up) sets the wrist hinge; maximum lag typically occurs around P5-P6 in the downswing, not at the top. Ulnar deviation then unhinges the wrists into impact. Watching the timing of that unhinge on the HackMotion graph helps spot an early cast (unhinging from the top), which costs speed and moves low point back.",
       "instructions": [
-        "Switch HackMotion graph to Radial / Ulnar Deviation.",
-        "Hinge to P4: check for +22° to +26° radial deviation (lead thumb pointing straight up).",
-        "Downswing: hold radial lag until hands reach trail thigh (P6).",
-        "Through impact (P7): release into -15° to -22° ulnar deviation as arms extend down into turf.",
-        "Take 10 step-through whip swings feeling the 'crack of the towel' at low point."
+        "Record your address reading in Radial / Ulnar Deviation as your baseline.",
+        "Hinge to P4: note your radial reading (lead thumb pointing up).",
+        "Downswing: keep the hinge through P5-P6, where lag is greatest; the graph should not drop back toward address before P6.",
+        "Through impact (P7): the reading returns toward (or slightly past) your address value as the arms extend.",
+        "Take 10 step-through whip swings feeling the 'crack of the towel' at low point; check clubhead speed on Launch Pro, not HackMotion."
       ],
       "checkpoints": {
         "dtl": "Clubhead lags behind hands entering delivery zone; no early casting outside the line.",
@@ -1189,11 +1099,11 @@ window.DEFAULT_DRILLS_DATA = {
       },
       "hackmotion": {
         "targetMode": "Radial / Ulnar Deviation Timing",
-        "addressAngle": "Neutral (0° to +5° Radial)",
-        "topAngle": "+24° Radial Cock (Maximum Lag)",
-        "p6Angle": "+18° Radial Hold",
-        "impactAngle": "-18° Ulnar Unhinge (Crisp Low Point Release)",
-        "biofeedbackTone": "Speed peak chime validates ulnar release happens at ball, not before.",
+        "addressAngle": "Baseline: record your address radial/ulnar reading (calibration-dependent)",
+        "topAngle": "Radial cock set (more radial than address)",
+        "p6Angle": "Lag peaks around P5-P6: still near or above your top radial reading",
+        "impactAngle": "Back toward (or slightly past) your address reading: progressive release, not from the top",
+        "biofeedbackTone": "HackMotion can't detect clubhead speed peak. Review the graph for release timing (unhinge after P6) and use Launch Pro for speed.",
         "equipment": [
           "HackMotion",
           "Driver",
@@ -1201,9 +1111,229 @@ window.DEFAULT_DRILLS_DATA = {
         ]
       },
       "modePlans": {
-        "real": "Hit 10 drives on GSPro tracking clubhead speed and smash factor gains.",
-        "almost": "Almost ball speed swings with alignment stick whip sound past impact.",
+        "real": "Hit 10 drives on GSPro tracking ball speed (and club speed/smash if you have club data) while checking release timing on the graph.",
+        "almost": "Swap driver for wedges (GW/SW) at 60–70% speed: watch release timing on the graph and judge contact and start line only. Launch Pro: trust start line (HLA) and club data only; carry, ball speed and spin are not valid for Almost Golf Balls.",
         "sore": "Wrist mobility rolls: gentle circular wrist rotations 10 reps each direction."
+      }
+    },
+    {
+      "id": "random-variable-practice-block",
+      "target": {"metric": "manual", "reps": 18, "pass": 12},
+      "title": "Random Practice Block (New Club + Target Every Ball)",
+      "section": "Course Transfer & Pressure",
+      "focus": "Transfer to the Course & Pre-Shot Routine",
+      "days": [
+        "day-3-impact",
+        "day-5-driver",
+        "day-4-wedges"
+      ],
+      "modes": [
+        "real",
+        "almost"
+      ],
+      "duration": "12 min",
+      "reps": "18 balls, no two in a row with the same club/target. Pass: 12/18 inside the target window (wedges ±10% of distance, irons a 20-yd green, driver a 40-yd fairway).",
+      "clubs": [
+        "Driver",
+        "7 Iron",
+        "9 Iron",
+        "PW",
+        "SW"
+      ],
+      "video": {
+        "localPath": "shorts/15_random_block.mp4",
+        "youtubeUrl": "",
+        "diagram": "posture",
+        "keyFrameCue": "Full pre-shot routine on every ball: pick target, rehearse, commit, go."
+      },
+      "why": "Hitting the same club at the same target over and over feels good but transfers poorly to the course. Changing club and target every ball, with your full pre-shot routine, is harder in the session but builds the skill you actually use on the course: one shot, one chance.",
+      "instructions": [
+        "Write or call a sequence of 18 shots in advance (e.g. driver to a fairway, 7i to a green, 60y wedge, 9i, SW 40y...). Never repeat the same club and target back-to-back.",
+        "Behind the ball every time: pick a precise target, make one rehearsal swing, step in and hit within ~10 seconds.",
+        "Score each ball pass/fail against the window for that club and log the total.",
+        "No re-hits. A miss is data: note it and move on to the next shot."
+      ],
+      "checkpoints": {
+        "dtl": "Same setup routine and alignment check on every ball (club down first, then feet).",
+        "fo": "Balanced finish held for 2 seconds on every shot."
+      },
+      "modePlans": {
+        "real": "Use GSPro range targets and score carry/dispersion. Pass = 12/18.",
+        "almost": "Swap driver for a 7-wood or 7-iron and score start line only (HLA within ±3°). Launch Pro: trust start line (HLA) and club data only; carry, ball speed and spin are not valid for Almost Golf Balls.",
+        "sore": "Skip on sore days: run 5 slow pre-shot-routine rehearsals (no balls) instead."
+      }
+    },
+    {
+      "id": "nine-shot-shape-test",
+      "target": {"metric": "manual", "reps": 9, "pass": 6},
+      "title": "9-Shot Shape Test (Scored Pressure Game)",
+      "section": "Course Transfer & Pressure",
+      "focus": "Face & Path Control Under Pressure",
+      "days": [
+        "day-2-transition",
+        "day-5-driver"
+      ],
+      "modes": [
+        "real",
+        "almost"
+      ],
+      "duration": "10 min",
+      "reps": "9 called shots (high/mid/low × draw/straight/fade), 1 ball each. Pass: 6/9 with correct start side and curve direction; personal best logged.",
+      "clubs": [
+        "7 Iron"
+      ],
+      "video": {
+        "localPath": "shorts/16_nine_shot.mp4",
+        "youtubeUrl": "",
+        "diagram": "impact",
+        "keyFrameCue": "Call it, then hit it: one ball per shape, no mulligans."
+      },
+      "why": "Being able to start the ball where you choose and curve it the way you intend is the clearest test of face-to-path control. Scoring it with one ball per shape adds the pressure that block practice lacks.",
+      "instructions": [
+        "Draw a 3×3 grid in your notes: rows high/mid/low trajectory, columns draw/straight/fade.",
+        "Before each ball, say the shape out loud and pick a start line. Draw: start right, curve left. Fade: start left, curve right (right-handed).",
+        "One ball per square. Score 1 if the start side and curve direction match the call (and trajectory is visibly high/mid/low).",
+        "Log the score. Repeat the test weekly with the same club to track progress."
+      ],
+      "checkpoints": {
+        "dtl": "Ball position/handle position change for high vs low, not a different swing each time.",
+        "fo": "Finish height matches the trajectory: high finish for high, held-off finish for low."
+      },
+      "modePlans": {
+        "real": "Score from GSPro start direction (HLA) and curve. Face-to-path from club data helps diagnose misses if you have the subscription.",
+        "almost": "Score start line and trajectory only (straight / draw / fade start sides). Curvature with foam balls is not reliable. Launch Pro: trust start line (HLA) and club data only; carry, ball speed and spin are not valid for Almost Golf Balls.",
+        "sore": "Skip on sore days: visualize each of the 9 shapes with your pre-shot routine and a slow rehearsal swing."
+      }
+    },
+    {
+      "id": "wedge-distance-control-ladder",
+      "target": {"metric": "manual", "reps": 16, "pass": 11},
+      "title": "Wedge Distance Control Ladder (30–100 yds, Scored)",
+      "section": "Scoring Wedges & Start Line",
+      "focus": "Carry Distance Control Inside 100 yds",
+      "days": [
+        "day-4-wedges"
+      ],
+      "modes": [
+        "real"
+      ],
+      "duration": "12 min",
+      "reps": "8 targets (30, 40, 50, 60, 70, 80, 90, 100y) × 2 balls, random order. Pass: 70%+ of balls carry within 10% of the target distance (e.g. ±5y at 50y).",
+      "clubs": [
+        "PW",
+        "GW (50°)",
+        "SW (54°)",
+        "LW (58°)"
+      ],
+      "video": {
+        "localPath": "shorts/17_wedge_ladder.mp4",
+        "youtubeUrl": "",
+        "diagram": "wedge",
+        "keyFrameCue": "Pick the club and clock length, commit, then check carry against a ±10% window."
+      },
+      "why": "Most strokes inside 100 yards are lost to carry distance error, not direction. Scoring every ball against a window that scales with distance (10%) gives an honest, repeatable number you can track week to week.",
+      "instructions": [
+        "Write the 8 target distances on cards, shuffle, and draw two at a time.",
+        "Choose club and backswing length (Wedge Clock) for each; full pre-shot routine on every ball.",
+        "Score a ball as a pass if carry is within 10% of the target (30y: ±3y, 60y: ±6y, 100y: ±10y).",
+        "Record % passed. Re-test the distances you missed most at the end of the session."
+      ],
+      "checkpoints": {
+        "dtl": "Same tempo regardless of distance: length changes, speed doesn't jump.",
+        "fo": "Chest turns through to the target on every shot (no deceleration)."
+      },
+      "modePlans": {
+        "real": "Use carry (not total) from the launch monitor. Pass = 70%+ within 10%.",
+        "almost": "Not valid with Almost balls (no reliable carry). Use the 3-Clock Wedge Matrix backswing-length checks instead.",
+        "sore": "Skip on sore days; use the 3-Foot Circle + Lag Ladder instead."
+      }
+    },
+    {
+      "id": "putting-circle-lag-ladder",
+      "title": "3-Foot Circle + Lag Speed Ladder (Carpet Gate in Quiet Mode)",
+      "section": "Scoring Wedges & Start Line",
+      "focus": "Short-Putt Conversion & Lag Speed",
+      "days": [
+        "kids-asleep",
+        "gym-sore",
+        "day-4-wedges",
+        "daily-calibration"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "12 min",
+      "reps": "Circle: 8 balls around the hole at 3 ft; pass = 8/8 twice in a row. Ladder: 3 balls each at 20/30/40 ft; pass = 7/9 finishing 0–3 ft past the hole (none short). Quiet gate: pass = 18/20 through a 2-ball-wide gate at 3 ft.",
+      "clubs": [
+        "Putter"
+      ],
+      "video": {
+        "localPath": "shorts/18_putting_circle.mp4",
+        "youtubeUrl": "",
+        "diagram": "wedge",
+        "keyFrameCue": "Short putts: start line through the gate. Long putts: speed that finishes just past the hole."
+      },
+      "why": "Three-footers and long-putt speed decide most putting scores: short misses from poor start line, three-putts from poor lag speed. Scoring both with clear pass marks gives you a standard you can hit on any night, with zero noise and no physical load.",
+      "instructions": [
+        "3-ft circle: place 8 balls in a circle 3 ft from the cup. Hole all 8; if you miss one, start again. Goal: two clean circles in a row.",
+        "Lag ladder: 3 balls each from 20, 30 and 40 ft. Score a ball if it finishes 0–3 ft past the hole. Short = fail.",
+        "Quiet/carpet version: two tees 2 ball-widths apart, 12 in in front of the ball on a 3-ft line. Roll 20 putts through the gate without touching.",
+        "Log all three scores."
+      ],
+      "checkpoints": {
+        "dtl": "Eyes over or just inside the ball; putter face square to the start line at address.",
+        "fo": "Shoulders rock, wrists quiet, stroke length grows with distance (tempo stays the same)."
+      },
+      "modePlans": {
+        "real": "Run circle + ladder on a putting green or mat (or GSPro putting if your rig reads putts).",
+        "almost": "Carpet start-line gate + 3-ft circle on a mat or carpet with a cup. Fully silent.",
+        "sore": "Ideal on sore days: upright posture, no loaded rotation. Run the gate and circle. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "structured-5min-warmup",
+      "title": "Structured 5-Minute Warm-Up",
+      "section": "Mobility & Setup Calibration",
+      "focus": "Ready to Swing in 5 Minutes",
+      "days": [
+        "daily-calibration"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "5 min",
+      "reps": "5 one-minute blocks. Pass: last 3 balls with the 7-iron start within ±3° HLA of your target line and strike near center of the face.",
+      "clubs": [
+        "SW (54°)",
+        "8 Iron",
+        "7 Iron"
+      ],
+      "video": {
+        "localPath": "shorts/19_five_min_warmup.mp4",
+        "youtubeUrl": "",
+        "diagram": "posture",
+        "keyFrameCue": "Mobility, then half swings, then 9-to-3, then 3/4, then your first real shot with full routine."
+      },
+      "why": "Cold swings at full speed produce ugly first shots and raise injury risk. A fixed 5-minute progression raises body temperature, rehearses contact and ends with a full pre-shot-routine rep, so your practice starts with quality instead of warming up on the first 10 balls.",
+      "instructions": [
+        "Min 1: arm circles, 10 torso turns with a club across the shoulders, 3 hip CARs each direction per side.",
+        "Min 2: SW half swings (hip to hip) at 50% speed, focusing on ball-first contact.",
+        "Min 3: 8-iron 9-to-3 swings at 70% (see 9-to-3 Delivery Reset).",
+        "Min 4: 7-iron 3/4 swings, building toward stock speed.",
+        "Min 5: 3 shots with the 7-iron using your full pre-shot routine to a defined target. Score against the pass criterion."
+      ],
+      "checkpoints": {
+        "dtl": "Posture and alignment set with a club on the ground for the final 3 shots.",
+        "fo": "Balanced finish held on every swing; speed builds gradually, not from swing one."
+      },
+      "modePlans": {
+        "real": "Run all 5 blocks; score the last 3 balls on HLA and face strike.",
+        "almost": "Same progression with almost balls; score HLA only. Launch Pro: trust start line (HLA) and club data only; carry, ball speed and spin are not valid for Almost Golf Balls.",
+        "sore": "Minute 1 only plus slow-motion rehearsal swings (no balls) for minutes 2-5. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
       }
     }
   ],
@@ -1233,7 +1363,7 @@ window.DEFAULT_DRILLS_DATA = {
       "metric": "Shaft tracks at or inside plane line; GSPro Path -1.5 to +2.5",
       "target": "Stock neutral/slight-draw path",
       "progress": 40,
-      "notes": "Split-Hand Pumps before live balls keep lower body starting first."
+      "notes": "Split-Hand Pumps before live balls keep lower body starting first. Path needs Launch Pro club data."
     },
     {
       "id": "goal-wedge-matrix",
@@ -1248,25 +1378,25 @@ window.DEFAULT_DRILLS_DATA = {
       "id": "goal-driver-startline",
       "title": "Eliminate Two-Way Miss with Driver",
       "category": "Course Transfer",
-      "metric": "7+/10 inside 30-yard fairway window with zero opposite-side big misses",
-      "target": "70%+ fairways in Challenge",
+      "metric": "50-60% of drives inside a 40-yard corridor; misses on one side only",
+      "target": "50-60% fairways in Challenge (40-yd corridor)",
       "progress": 45,
       "notes": "Stick to one committed start-line window and balance-hold finishes."
     },
     {
       "id": "goal-hackmotion-impact-compression",
-      "title": "HackMotion -14° Impact Flexion Compression",
+      "title": "HackMotion Impact Flexion vs Your Top Reading",
       "category": "Mechanics P6-P8",
-      "metric": "8/10 iron shots achieve -12° to -18° lead wrist flexion at strike",
-      "target": "80% Tour compression rate on HackMotion",
+      "metric": "8/10 7-iron shots read ~5–10° more lead wrist flexion at impact than at the top",
+      "target": "80% of iron shots in your own impact window",
       "progress": 70,
-      "notes": "No scooping! Knuckles pointing to turf with forward shaft lean."
+      "notes": "No scooping! Readings are calibration-dependent, so compare to your own address/top values, not tour numbers."
     },
     {
       "id": "goal-tempo-cadence-consistency",
       "title": "Tour Tempo Cadence 3:1 Lock (24/8 Ratio)",
       "category": "Rhythm & Timing",
-      "metric": "Maintain 3.0:1 swing tempo ratio within ±1 frame on Kinovea",
+      "metric": "Maintain 3.0:1 swing tempo ratio within ±1 frame at 30fps (±2 at 60fps) on Kinovea",
       "target": "24/8 standard cadence on 85% of simulator swings",
       "progress": 60,
       "notes": "Use built-in Cadence Metronome during GSPro practice rounds."
@@ -3790,10 +3920,10 @@ window.DEFAULT_DRILLS_DATA = {
       "status": "Active Artillery",
       "desc": "Measures lead wrist flexion/extension, radial/ulnar deviation, and clubface rotation in real time with audio tone biofeedback.",
       "greenZones": {
-        "address": "+12° to +18° Extension (Neutral setup)",
-        "top": "-2° to -6° Flexion (Flat to bowed, square face)",
-        "p6": "-10° to -14° Flexion (Motorcycle shallowing slot)",
-        "impact": "-14° to -18° Flexion (Forward shaft lean & pure compression)"
+        "address": "Your own baseline reading (calibration-dependent; often +10° to +25° ext)",
+        "top": "Flatter than address (~10–20° less extension)",
+        "p6": "A few degrees more flexion than your top",
+        "impact": "Irons ~5–10° more flexion than top; driver 0–5°; putting ±2° of address"
       },
       "audioCues": "Set green zone band in HackMotion app. Continuous tone sounds when wrist angle is in the sweet spot."
     },
@@ -3812,7 +3942,7 @@ window.DEFAULT_DRILLS_DATA = {
       "icon": "⛳",
       "category": "Sim Ball Flight Engine",
       "status": "Connected Sim",
-      "desc": "Ultra-realistic ball flight physics, club path/face angle data, and 60+ world-class courses and practice ranges.",
+      "desc": "Ball flight physics, club path/face angle data (Launch Pro club-data subscription), and a large library of courses and practice ranges.",
       "keyMetrics": "Ball Speed, Launch Angle, Spin Rate, Path vs Face, Attack Angle (AoA)."
     },
     {
@@ -3843,6 +3973,10 @@ window.DEFAULT_DRILLS_DATA = {
       "keyMetrics": "Forward shaft lean check, square face contact, lead leg brace."
     }
   ],
+  // cadencePresets: backFrames/downFrames are Tour Tempo frame counts at 30fps (fps field);
+  // backSec = backFrames / 30. bpm is the metronome setting where one beat = the downswing
+  // duration (60 / downSec): takeaway on beat 1, top on beat 4 (3:1) or beat 3 (2:1), impact on the next beat.
+  // index.html displays bpm; it does not drive the built-in metronome.
   "cadencePresets": [
     {
       "id": "21-7",
@@ -3854,9 +3988,10 @@ window.DEFAULT_DRILLS_DATA = {
       "backSec": 0.7,
       "downSec": 0.23,
       "totalSec": 0.93,
-      "bpm": 193,
-      "proExamples": "Brooks Koepka, Rory McIlroy, Tiger Woods, Jon Rahm",
-      "desc": "Aggressive, athletic tempo for high swing speeds and fast hip rotation."
+      "bpm": 257,
+      "proExamples": "Fast-tempo athletic swingers",
+      "desc": "Aggressive, athletic tempo for high swing speeds and fast hip rotation. Frames are at 30fps (= 42/14 at 60fps, 84/28 at 120fps, 168/56 at 240fps). Smooth continuous motion, no pause at the top.",
+      "fps": 30
     },
     {
       "id": "24-8",
@@ -3868,9 +4003,10 @@ window.DEFAULT_DRILLS_DATA = {
       "backSec": 0.8,
       "downSec": 0.27,
       "totalSec": 1.07,
-      "bpm": 169,
-      "proExamples": "Scottie Scheffler, Justin Thomas, Jordan Spieth, Viktor Hovland",
-      "desc": "The universal PGA Tour benchmark. Balances full coil with calm transition."
+      "bpm": 225,
+      "proExamples": "Most common full-swing tempo in Tour Tempo research",
+      "desc": "A common Tour Tempo full-swing benchmark. Balances full coil with calm transition. Frames are at 30fps (= 48/16 at 60fps, 96/32 at 120fps, 192/64 at 240fps). Smooth continuous motion, no pause at the top.",
+      "fps": 30
     },
     {
       "id": "27-9",
@@ -3882,9 +4018,10 @@ window.DEFAULT_DRILLS_DATA = {
       "backSec": 0.9,
       "downSec": 0.3,
       "totalSec": 1.2,
-      "bpm": 150,
-      "proExamples": "Ernie Els, Fred Couples, Collin Morikawa, Hideki Matsuyama",
-      "desc": "Silky, deliberate takeaway that lets gravity and momentum do the work."
+      "bpm": 200,
+      "proExamples": "Smooth deliberate swingers",
+      "desc": "Silky, deliberate takeaway that lets gravity and momentum do the work. Frames are at 30fps (= 54/18 at 60fps, 108/36 at 120fps, 216/72 at 240fps). Smooth continuous motion, no pause at the top.",
+      "fps": 30
     },
     {
       "id": "30-10",
@@ -3896,9 +4033,10 @@ window.DEFAULT_DRILLS_DATA = {
       "backSec": 1,
       "downSec": 0.33,
       "totalSec": 1.33,
-      "bpm": 135,
+      "bpm": 180,
       "proExamples": "Motor Learning & Slow-Mo Checkpoint Calibration",
-      "desc": "Slow-motion rhythm ideal for HackMotion biofeedback and gym-sore days."
+      "desc": "Slow-motion rhythm ideal for HackMotion biofeedback and gym-sore days. Frames are at 30fps (= 60/20 at 60fps, 120/40 at 120fps, 240/80 at 240fps). Smooth continuous motion, no pause at the top.",
+      "fps": 30
     },
     {
       "id": "18-9",
@@ -3910,9 +4048,10 @@ window.DEFAULT_DRILLS_DATA = {
       "backSec": 0.6,
       "downSec": 0.3,
       "totalSec": 0.9,
-      "bpm": 133,
-      "proExamples": "Wedge Pitches, Flop Shots, Bunker Splash",
-      "desc": "2:1 short-game rhythm for smooth acceleration through turf without decel."
+      "bpm": 200,
+      "proExamples": "Wedge pitches / flops / bunker splash",
+      "desc": "2:1 short-game rhythm for smooth acceleration through turf without decel. Frames are at 30fps (= 36/18 at 60fps, 72/36 at 120fps, 144/72 at 240fps). Smooth continuous motion, no pause at the top.",
+      "fps": 30
     },
     {
       "id": "20-10",
@@ -3924,9 +4063,10 @@ window.DEFAULT_DRILLS_DATA = {
       "backSec": 0.67,
       "downSec": 0.33,
       "totalSec": 1,
-      "bpm": 120,
-      "proExamples": "Brad Faxon, Tiger Woods Putting Stroke",
-      "desc": "Pendulum putting tempo ensuring consistent roll distance on GSPro greens."
+      "bpm": 180,
+      "proExamples": "Pendulum putting stroke",
+      "desc": "Pendulum putting tempo ensuring consistent roll distance on GSPro greens. Frames are at 30fps (= 40/20 at 60fps, 80/40 at 120fps, 160/80 at 240fps). Smooth continuous motion, no pause at the top.",
+      "fps": 30
     }
   ],
   "bagMatrix": [
@@ -3939,7 +4079,7 @@ window.DEFAULT_DRILLS_DATA = {
       "ballSpeed": 154,
       "launch": 12.5,
       "spin": 2400,
-      "hmFlex": "-5°",
+      "hmFlex": "0–5° flex vs top",
       "role": "Fairway Finder & Power"
     },
     {
@@ -3951,7 +4091,7 @@ window.DEFAULT_DRILLS_DATA = {
       "ballSpeed": 145,
       "launch": 13.5,
       "spin": 3200,
-      "hmFlex": "-8°",
+      "hmFlex": "3–7° flex vs top",
       "role": "Long Par 5s & Tight Tees"
     },
     {
@@ -3963,127 +4103,127 @@ window.DEFAULT_DRILLS_DATA = {
       "ballSpeed": 136,
       "launch": 15,
       "spin": 3800,
-      "hmFlex": "-10°",
+      "hmFlex": "3–7° flex vs top",
       "role": "High Soft Landings"
     },
     {
       "id": "4i",
       "club": "4 Iron",
       "loft": "21.0°",
-      "carry": 190,
-      "total": 200,
+      "carry": 177,
+      "total": 187,
       "ballSpeed": 128,
       "launch": 14.5,
       "spin": 4400,
-      "hmFlex": "-12°",
+      "hmFlex": "5–10° flex vs top",
       "role": "Stinger & Long Approach"
     },
     {
       "id": "5i",
       "club": "5 Iron",
       "loft": "24.0°",
-      "carry": 180,
-      "total": 188,
+      "carry": 167,
+      "total": 175,
       "ballSpeed": 122,
       "launch": 16,
       "spin": 5000,
-      "hmFlex": "-13°",
+      "hmFlex": "5–10° flex vs top",
       "role": "Standard Long Approach"
     },
     {
       "id": "6i",
       "club": "6 Iron",
       "loft": "27.5°",
-      "carry": 170,
-      "total": 176,
+      "carry": 157,
+      "total": 163,
       "ballSpeed": 116,
       "launch": 17.5,
       "spin": 5600,
-      "hmFlex": "-14°",
+      "hmFlex": "5–10° flex vs top",
       "role": "Mid-Iron Workhorse"
     },
     {
       "id": "7i",
       "club": "7 Iron",
       "loft": "31.5°",
-      "carry": 160,
-      "total": 165,
+      "carry": 148,
+      "total": 153,
       "ballSpeed": 110,
       "launch": 19,
       "spin": 6300,
-      "hmFlex": "-15°",
+      "hmFlex": "5–10° flex vs top",
       "role": "Calibration Baseline Club"
     },
     {
       "id": "8i",
       "club": "8 Iron",
       "loft": "35.5°",
-      "carry": 150,
-      "total": 154,
+      "carry": 138,
+      "total": 142,
       "ballSpeed": 104,
       "launch": 21,
       "spin": 7100,
-      "hmFlex": "-16°",
+      "hmFlex": "5–10° flex vs top",
       "role": "Scoring Iron Target Pin"
     },
     {
       "id": "9i",
       "club": "9 Iron",
       "loft": "40.0°",
-      "carry": 140,
-      "total": 143,
+      "carry": 126,
+      "total": 129,
       "ballSpeed": 97,
       "launch": 23.5,
       "spin": 8000,
-      "hmFlex": "-17°",
+      "hmFlex": "5–10° flex vs top",
       "role": "Aggressive Pin Attack"
     },
     {
       "id": "pw",
       "club": "PW (46°)",
       "loft": "46.0°",
-      "carry": 125,
-      "total": 127,
+      "carry": 113,
+      "total": 115,
       "ballSpeed": 89,
       "launch": 26.5,
       "spin": 8900,
-      "hmFlex": "-18°",
-      "role": "100-125yd Scoring Weapon"
+      "hmFlex": "5–10° flex vs top",
+      "role": "Full PW Scoring Shot (~110y)"
     },
     {
       "id": "gw",
       "club": "GW (50°)",
       "loft": "50.0°",
-      "carry": 112,
-      "total": 113,
+      "carry": 103,
+      "total": 104,
       "ballSpeed": 82,
       "launch": 29,
       "spin": 9400,
-      "hmFlex": "-18°",
+      "hmFlex": "5–10° flex vs top",
       "role": "Full Wedge Control"
     },
     {
       "id": "sw",
       "club": "SW (54°)",
       "loft": "54.0°",
-      "carry": 98,
-      "total": 99,
+      "carry": 91,
+      "total": 92,
       "ballSpeed": 74,
       "launch": 31.5,
       "spin": 9800,
-      "hmFlex": "-18°",
+      "hmFlex": "5–10° flex vs top",
       "role": "Mid Wedge & Greenside"
     },
     {
       "id": "lw",
       "club": "LW (58°)",
       "loft": "58.0°",
-      "carry": 82,
-      "total": 83,
+      "carry": 79,
+      "total": 80,
       "ballSpeed": 66,
       "launch": 34,
       "spin": 9500,
-      "hmFlex": "-15°",
+      "hmFlex": "±3° shot-to-shot",
       "role": "Pinpoint Stop & Flop"
     }
   ],
@@ -4109,14 +4249,14 @@ window.DEFAULT_DRILLS_DATA = {
       "tagline": "Master clubface awareness by hitting extreme shapes on command (from agentic-caddy).",
       "focusArea": "Face & Path Control",
       "recommendedClub": "7 Iron / 8 Iron",
-      "hackmotionCue": "Draw: increase P5-P6 flexion (-14°). Fade: hold off release (-8° flexion).",
+      "hackmotionCue": "Compare to your own stock readings: draw = slightly more flexion through P6-P7 (face closed to path); fade = slightly less (hold the face off).",
       "cadence": "24/8 (Tour Standard)",
       "steps": [
-        "Hit 3 balls with a high push-draw (feel trail forearm supination and closed face relative to out-to-in path).",
-        "Hit 3 balls with a low pull-fade (feel wrist flexion hold-off and steep delivery angle).",
-        "Hit 3 balls with a high soft tower shot (toe-biased sweet spot, neutral path).",
-        "Hit 3 balls with a low piercing punch (forward ball position or hands pressed, -18° impact flexion).",
-        "Sim challenge: Play 3 virtual holes alternating high draw and low fade off every tee box."
+        "Hit 3 balls with a high push-draw: in-to-out path, face closed to the path but open to the target (starts right, curves back).",
+        "Hit 3 balls with a low pull-fade: out-to-in path, face open to the path but closed to the target (starts left, curves back).",
+        "Hit 3 balls with a high soft tower shot: ball slightly forward, more dynamic loft, centered strike, neutral path.",
+        "Hit 3 balls with a low piercing punch: ball back, hands pressed forward, abbreviated finish (impact a few degrees more flexed than your stock reading).",
+        "Sim challenge: play 3 virtual holes alternating high draw and low fade off every tee box."
       ]
     },
     "iron-ladder": {
@@ -4125,12 +4265,12 @@ window.DEFAULT_DRILLS_DATA = {
       "tagline": "Dial in distance gapping and ball compression using your stock yardages.",
       "focusArea": "Distance Control & Gapping",
       "recommendedClub": "7 Iron & 8 Iron",
-      "hackmotionCue": "Consistent -15° impact flexion produces identical dynamic loft every swing.",
+      "hackmotionCue": "Repeat your stock impact reading within ±3° to keep dynamic loft consistent.",
       "cadence": "24/8 (Tour Standard)",
       "steps": [
-        "Target lock: Hit 10 balls to a virtual 150-yard green; track dispersion circle diameter on GSPro.",
-        "Distance ladder: Hit 140, 150, and 160 yards with the exact same 7-iron by adjusting backswing clock length.",
-        "Window ladder: Hit low punch (<50ft apex), stock (70-80ft apex), and high tower (95ft+ apex) with an 8-iron."
+        "Target lock: hit 10 balls to a virtual green at your stock 7-iron carry (~148y); track dispersion circle diameter on GSPro.",
+        "Distance ladder: with the same 7-iron hit stock, stock -10y and stock -20y by shortening backswing length.",
+        "Window ladder: hit low punch (<50ft apex), stock (70-80ft apex), and high (95ft+ apex) with an 8-iron."
       ]
     },
     "driving-combine": {
@@ -4139,11 +4279,11 @@ window.DEFAULT_DRILLS_DATA = {
       "tagline": "Establish a reliable tournament driver delivery with +2° to +4° upward AoA.",
       "focusArea": "Driver Dispersion & Launch",
       "recommendedClub": "Driver",
-      "hackmotionCue": "Maintain flat wrist (-5° flexion) at impact while sweeping up +3°.",
+      "hackmotionCue": "Impact reading close to your top (0–5° more flexion), no extension through the ball, while AoA reads about +3° (Launch Pro club data).",
       "cadence": "24/8 or 21/7",
       "steps": [
         "Spray clubface with strike spray or dry shampoo; hit 5 drives focusing on high-toe sweet spot strike.",
-        "Fairway corridor test: 10 consecutive drives; score 1 point for every ball landing in a 30-yard fairway.",
+        "Fairway corridor test: 10 consecutive drives; score 1 point for every ball finishing in a 40-yard fairway (pass = 5-6/10).",
         "Pressure drive: Imagine 18th hole at Cabot Cliffs with ocean right; execute committed stock shape."
       ]
     }

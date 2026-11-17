@@ -13,16 +13,15 @@ Everything in SimWatch is plain Windows scripting (Win32 API calls, `PrintWindow
 ## Requirements & Setup
 
 - **OS:** Windows (uses Win32 APIs, `winsound`, and Task Scheduler)
-- **Python:** Python 3 with the packages in `requirements.txt`:
-  - `psutil`
-  - `pywinauto`
-  - `pywin32`
-  - `Pillow`
+- **Python:** 3.10+ (3.11+ recommended). Core packages in `requirements.txt` (`psutil`, `pywinauto`, `pywin32`, `Pillow`); optional ball detection / swing tracing in `requirements-video.txt` (`opencv-python`, `numpy`).
 
-Install dependencies:
+**Fresh machine:** follow [`SETUP.md`](SETUP.md). The short version:
 ```powershell
-pip install -r requirements.txt
+setup.bat                      # creates .venv, installs deps, runs doctor, offers autostart
+python simwatch.py doctor      # PASS/WARN/FAIL table: config, exe paths, ports, scheduled task
 ```
+
+`config.json` is validated on load: `watch`/`startup` refuse to start on errors (unknown app keys, unknown check types, bad recovery references) instead of failing silently later. Exe paths are machine-specific — check them in `doctor` output.
 
 > **Admin privileges:** Run from an **Administrator** terminal (or use `install_autostart.bat`, which schedules with highest privileges) if any sim app runs as admin. Windows blocks UI clicks and window automation across privilege levels.
 
@@ -55,7 +54,6 @@ A check must fail `fail_threshold` (default `3`) times in a row (checked every `
 |---|---|---|
 | 0 | `restart GSPro Connect + GameChanger` | `gspro_connect`, `integrator` |
 | 1 | `restart GSPro and the chain behind it` | `gspro`, `gspro_connect`, `integrator` |
-| 2 | `restart everything` | `gspro`, `gspro_connect`, `integrator` |
 
 - Whenever `integrator` is in the restart list, SimWatch first runs `fsx_disconnect` as a safety net so FSX Pro cannot hold port `9970`.
 - After restarting, SimWatch waits `settle_sec` (default `15` s) before resuming checks.
@@ -204,6 +202,26 @@ Open `drills/index.html` directly (or double-click `open_drills.bat`, run `pytho
 
 ---
 
+## Shot-Data Bridge (drills hub auto-scoring)
+
+`watch`, `startup` and `video` also start a small local server (stdlib only, bound to `127.0.0.1`) that
+records every shot the OpenConnect (:921) sniffer sees and serves it to `drills/index.html`.
+
+- **Storage:** one JSON line per shot in `Swings/Sessions/YYYY-MM-DD/shots.jsonl`: `ts` (local ISO-8601 with
+  offset), `shot_num`, `club`, `ball` {speed, carry, total, hla, vla, spin, spin_axis}, `club_data`
+  {speed, path, face, aoa} or null, `clip` (session clip filename once Kinovea's recording is saved; DTL
+  preferred) and `drill_id`. Anything the launch monitor didn't send is `null`. Linking a clip rewrites that
+  day's file atomically.
+- **API** (`http://127.0.0.1:8765`, CORS `*` so the `file://` page can call it): `GET /api/status`,
+  `GET /api/shots?date=YYYY-MM-DD`, `GET /api/events` (Server-Sent Events: `status`, `shot`, 15s heartbeat),
+  `POST /api/drill {"drill_id": "..."|null}` (sets the active drill; ids are 1-80 chars of `A-Za-z0-9_-`).
+  `GET /` serves the `drills/` folder only.
+- While a drill is active its id is stored on each shot and added to clip names as `_D-<id>`.
+- **Config:** `"bridge": {"enabled": true, "port": 8765, "sessions_dir": "Swings/Sessions"}`. A busy port is
+  logged and the watchdog carries on without the bridge.
+- **Testing:** `python simwatch.py bridge` runs only the server + sniffer; add `--demo` (optionally
+  `--demo-interval 2`, `--port 8766`) to emit a synthetic shot every few seconds. The demo runs on macOS too.
+
 ## Manual Setup & What We Need From You (One-Time Checklist)
 
 ### How Auto-Created Swing Plane Lines Work (No Manual Drawing Required)
@@ -275,6 +293,7 @@ With **`opencv-python`** installed (`detect_ball_in_mp4`), SimWatch reads Frame 
 All commands accept an optional `--config <path>` flag (defaults to `config.json` next to `simwatch.py`).
 
 ```powershell
+python simwatch.py doctor                # validate config, exe paths, ports, scheduled task (exit 1 on FAIL)
 python simwatch.py check                 # run every health check once and print results
 python simwatch.py watch                 # watch forever, escalate recovery, and run video rig
 python simwatch.py startup               # cold start everything in order, then watch
@@ -283,6 +302,7 @@ python simwatch.py recover [level]       # run one recovery level now (default 0
 python simwatch.py displays              # show detected displays and projector decision
 python simwatch.py video                 # standalone TV-only 2x2 Kinovea grid + hotkeys (no GSPro)
 python simwatch.py drills                # open the local Golf Drills & Daily Delivery Hub
+python simwatch.py bridge [--demo]       # run only the shot-data bridge (:8765) + :921 sniffer
 python simwatch.py obs-setup             # generate Swings/ layout, workspaces & OBS scene JSON
 python simwatch.py lines [apply|on|off|toggle]  # apply or toggle Kinovea swing plane .kva lines
 python simwatch.py save-lines [club]     # save dragged .kva line coords as the new default
@@ -302,11 +322,19 @@ python simwatch.py calibrate             # hover over a green status light -> in
 
 - `simwatch.py` — main watchdog, UI/display automation, Kinovea/OBS/Shot rig, and CLI entrypoint
 - `config.json` — apps, checks, recovery levels, device, projector, and video settings
-- `requirements.txt` — Python package dependencies
+- `requirements.txt` / `requirements-video.txt` / `requirements-dev.txt` — core, optional OpenCV, and test dependencies
+- `setup.bat`, `_find_python.bat` — one-shot install and shared Python discovery used by every launcher
+- `SETUP.md` — fresh-machine install checklist
+- `tests/` — pytest suite (`python -m pytest`; runs on any OS)
+- `drills/tools/validate_data.js` — `node drills/tools/validate_data.js` checks drill/course data integrity
+- `manual-testing-inbox/` — what still needs a human pass on the Windows rig (`PRIORITIES.md`)
 - `assets/fsx_icon_wired.png`, `assets/fsx_icon_wifi.png` — reference icons for FSX Pro tile matching
 - `run_simwatch.bat`, `run_practice_video.bat`, `open_drills.bat`, `install_autostart.bat`, `reconnect_sim.bat`, `release_device.bat` — Windows helper scripts
 - `drills/` — offline Golf Drills, Routines & Daily Delivery Hub (`index.html`, `drills_data.js`, `shorts/`)
 - `Swings/` — organized session recordings, `My-Go-To/`, `Pros/`, `Workspaces/`, and `OBS_SimWatch_SceneCollection.json`
-- `simwatch.log` — rotating runtime log file (UTF-8, `YYYY-MM-DD HH:MM:SS` timestamps, max 2 MB × 3 backups)
+- `simwatch.log` — rotating runtime log file (UTF-8, level + thread name per line, full tracebacks, max 2 MB × 3 backups)
+- `simwatch_status.json` — rewritten every cycle: `timestamp`, `state` (`healthy`, `degraded`, `recovering`, `device_offline`, `backoff`, `paused`, `error`, …), failing checks, recovery level
+- `logs/launcher.log` — autostart (`run_simwatch.bat --no-pause`) output; a startup failure also pops a message box instead of closing silently
+- `*.bak` — one rolling backup written before SimWatch overwrites Kinovea preferences or the OBS scene collection (only when content changes)
 
 > **Note:** GSPro still opens on its main menu — SimWatch does not select Practice or a course for you.

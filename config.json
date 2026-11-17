@@ -57,6 +57,7 @@
       "enabled": true,
       "auto_detect_ball": true,
       "auto_trace_path": true,
+      "handedness": "right",
       "dtl_plane_angles_deg": {
         "Driver": 48,
         "Iron": 60,
@@ -75,6 +76,12 @@
       "toggle_lines": "Alt+L",
       "save_lines": "Alt+Shift+L"
     }
+  },
+  "bridge": {
+    "_note": "Local shot-data bridge for the drills hub: every OpenConnect shot is appended to <sessions_dir>/YYYY-MM-DD/shots.jsonl and served on http://127.0.0.1:<port>/ (127.0.0.1 only).",
+    "enabled": true,
+    "port": 8765,
+    "sessions_dir": "Swings/Sessions"
   },
   "apps": [
     {
@@ -189,14 +196,6 @@
     },
     {
       "name": "restart GSPro and the chain behind it",
-      "restart": [
-        "gspro",
-        "gspro_connect",
-        "integrator"
-      ]
-    },
-    {
-      "name": "restart everything",
       "restart": [
         "gspro",
         "gspro_connect",

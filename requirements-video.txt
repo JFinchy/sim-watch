@@ -1,0 +1,4 @@
+# Optional: enables ball auto-detect and swing-path auto-trace (simwatch.py imports cv2 lazily and
+# falls back gracefully when it is missing). Install with: pip install -r requirements-video.txt
+opencv-python>=4.8,<5
+numpy>=1.24,<3

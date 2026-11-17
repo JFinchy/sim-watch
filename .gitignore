@@ -18,3 +18,13 @@ Swings/Sessions/
 # OS / editor artifacts
 Thumbs.db
 .DS_Store
+
+# Added for setup/ops hardening
+logs/
+*.bak
+simwatch_status.json
+.pytest_cache/
+
+# Empty agent tooling skeleton dirs (local only)
+.agents/
+.gemini/

@@ -1,5 +1,6 @@
-psutil
-pywinauto
-pywin32
-Pillow
-opencv-python
+# SimWatch core dependencies (Python 3.10+, Windows 10/11).
+# Optional video analysis (OpenCV/numpy) lives in requirements-video.txt.
+psutil>=5.9,<8
+pywinauto>=0.6.8,<0.7; sys_platform == "win32"
+pywin32>=306; sys_platform == "win32"
+Pillow>=10,<13

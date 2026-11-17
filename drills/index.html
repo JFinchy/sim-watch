@@ -361,6 +361,11 @@
       border: 0;
       background: #000;
     }
+    .video-missing {
+      width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 6px; padding: 14px; text-align: center; color: var(--muted); font-size: 0.86rem;
+    }
+    .video-missing code { color: var(--text); }
     .diagram-box {
       width: 100%;
       height: 100%;
@@ -798,6 +803,9 @@
       pointer-events: none;
     }
     .toast.show { opacity: 1; transform: translateY(0); }
+    .toast { max-width: calc(100vw - 40px); }
+    .toast.has-action.show { pointer-events: auto; }
+    .toast .toast-undo { margin-left: 10px; background: transparent; border: 1px solid currentColor; color: inherit; border-radius: 6px; padding: 2px 10px; font: inherit; cursor: pointer; }
 
     /* Courses, Playgrounds & Historical Rounds */
     .courses-toolbar {
@@ -1064,9 +1072,11 @@
       flex-direction: column;
       gap: 18px;
     }
+    .backup-status { font-size: 0.8rem; color: var(--muted); margin: -4px 0 12px; }
+    .backup-status.stale { color: #fbbf24; }
     .cadence-hero {
       display: grid;
-      grid-template-columns: 320px 1fr;
+      grid-template-columns: minmax(0, 320px) minmax(0, 1fr);
       gap: 20px;
       background: rgba(17, 24, 39, 0.95);
       border: 1px solid var(--border);
@@ -1075,7 +1085,14 @@
       box-shadow: var(--shadow);
     }
     @media (max-width: 860px) {
-      .cadence-hero { grid-template-columns: 1fr; }
+      .cadence-hero { grid-template-columns: minmax(0, 1fr); padding: 14px; }
+    }
+    .bag-table { min-width: 560px; }
+    :focus-visible { outline: 2px solid #38bdf8; outline-offset: 2px; }
+    [role="button"]:focus-visible { outline-offset: 1px; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+      .tempo-orb.phase-takeaway, .tempo-orb.phase-top, .tempo-orb.phase-impact { transform: none; }
     }
     .tempo-orb-container {
       display: flex;
@@ -1202,7 +1219,8 @@
     }
     .editable-num:focus {
       border-color: var(--accent);
-      outline: none;
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
       background: #1e293b;
     }
 
@@ -1225,11 +1243,205 @@
       border-color: rgba(56, 189, 248, 0.45);
       background: var(--bg-hover);
     }
+
+    /* --- Correctness/UX pass: neutral header link, tab bar, phone overflow, gear reference --- */
+    button.stat-pill { font: inherit; font-size: 0.85rem; font-weight: 600; color: var(--text); cursor: pointer; }
+    .stat-pill.link-pill { background: transparent; text-decoration: underline; text-underline-offset: 3px; color: #cbd5e1; }
+    .stat-pill.link-pill:hover { color: #fff; }
+    .gear-ref summary { cursor: pointer; font-weight: 700; }
+    .gear-ref-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 10px; margin-top: 12px; }
+    .gear-ref-item { background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-size: 0.82rem; min-width: 0; overflow-wrap: anywhere; }
+    .gear-ref-item h4 { margin: 0 0 4px; font-size: 0.9rem; }
+    .gear-ref-item dl { margin: 6px 0 0; display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; }
+    .gear-ref-item dt { color: var(--muted); text-transform: capitalize; }
+    .gear-ref-item dd { margin: 0; }
+    .gear-ref-item.flash { border-color: #38bdf8; }
+    @media (max-width: 720px) {
+      /* Main tabs: one horizontally scrollable row instead of seven stacked rows */
+      .controls-strip { display: block; }
+      .controls-strip > .pill-group { margin-bottom: 10px; }
+      #viewTabs { flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: thin; }
+      #viewTabs .btn-pill { flex: 0 0 auto; white-space: nowrap; }
+      #view-tracker input, #view-tracker select, #view-tracker textarea { max-width: 100%; min-width: 0 !important; box-sizing: border-box; }
+      #view-tracker [data-goal-note], #view-tracker [data-goal-slider] { flex-basis: 100% !important; }
+    }
+    /* Grid items must be allowed to shrink below their content (the 580px chart scrolls inside .chart-wrap) */
+    .tracker-top-grid > *, .form-grid > * { min-width: 0; }
+    .chart-wrap { overflow-x: auto; max-width: 100%; }
+    @media (max-width: 520px) {
+      #view-courses .form-grid { grid-template-columns: minmax(0, 1fr) !important; }
+      #view-courses .form-grid > * { grid-column: 1 / -1 !important; }
+      #view-courses select, #view-courses input { max-width: 100%; min-width: 0; box-sizing: border-box; }
+    }
+
+    /* ===== SESSION: Tonight launcher + Mat mode overlay ===== */
+    .tonight-card {
+      background: linear-gradient(135deg, rgba(16,185,129,0.14), rgba(56,189,248,0.10) 60%, var(--bg-card));
+      border: 1px solid rgba(16,185,129,0.45);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 16px 20px;
+      margin-bottom: 14px;
+    }
+    .tonight-card.hidden { display: none; }
+    .tn-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; }
+    .tn-title { font-size: 1.45rem; font-weight: 800; line-height: 1.25; margin: 0; }
+    .tn-title .tn-kicker { color: #6ee7b7; }
+    .tn-title .tn-sep { color: var(--muted); font-weight: 400; padding: 0 4px; }
+    .tn-start {
+      background: var(--green); color: #04130d; border: none; border-radius: 12px;
+      font-size: 1.2rem; font-weight: 800; padding: 14px 26px; min-height: 56px; cursor: pointer;
+    }
+    .tn-start:hover { filter: brightness(1.1); }
+    .tn-start:disabled { opacity: 0.5; cursor: not-allowed; }
+    .tn-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; margin-top: 12px; }
+    .tn-seg { display: inline-flex; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .tn-seg button {
+      background: var(--bg-elev); border: none; border-right: 1px solid var(--border); color: var(--text);
+      padding: 9px 14px; min-height: 44px; font-size: 0.98rem; font-weight: 600; cursor: pointer;
+    }
+    .tn-seg button:last-child { border-right: none; }
+    .tn-seg button[aria-pressed="true"] { background: var(--accent); color: #04121c; }
+    .sim-pill {
+      display: inline-flex; align-items: center; gap: 6px; border-radius: 999px; padding: 5px 12px;
+      font-size: 0.9rem; font-weight: 700; border: 1px solid var(--border); background: var(--bg-elev); color: var(--muted);
+    }
+    .sim-pill::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: #64748b; }
+    .sim-pill.live { color: #6ee7b7; border-color: rgba(16,185,129,0.6); }
+    .sim-pill.live::before { background: var(--green); }
+    .tn-meta { margin-top: 10px; color: #cbd5e1; font-size: 1rem; display: flex; flex-wrap: wrap; gap: 4px 14px; align-items: center; }
+    .tn-meta button.linklike { background: none; border: none; color: var(--accent); padding: 0; cursor: pointer; font: inherit; text-decoration: underline; }
+    .tn-plan { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(380px, 1fr)); gap: 8px; }
+    .tn-plan li {
+      display: flex; align-items: center; gap: 8px; background: rgba(11,17,32,0.7); border: 1px solid var(--border);
+      border-radius: 10px; padding: 7px 8px 7px 12px; min-width: 0;
+    }
+    .tn-role { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; font-weight: 800; color: var(--muted); flex: 0 0 auto; }
+    .tn-role.r-focus { color: #7dd3fc; } .tn-role.r-test { color: #fcd34d; } .tn-role.r-warmup { color: #6ee7b7; }
+    .tn-name { flex: 1 1 auto; min-width: 0; font-weight: 600; font-size: 0.98rem; line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .tn-min { color: var(--muted); font-size: 0.88rem; flex: 0 0 auto; }
+    .tn-plan li button {
+      flex: 0 0 auto; background: var(--bg-elev); border: 1px solid var(--border); color: var(--text); border-radius: 8px;
+      min-width: 40px; min-height: 36px; font-size: 0.85rem; cursor: pointer; padding: 0 8px;
+    }
+    .tn-plan li button:hover { background: var(--bg-hover); }
+    .tn-empty { color: var(--muted); margin-top: 10px; }
+    .tn-spark { flex: 0 0 auto; display: inline-block; vertical-align: middle; }
+    @media (max-width: 600px) {
+      .tonight-card { padding: 12px 14px; }
+      .tn-title { font-size: 1.15rem; }
+      .tn-start { width: 100%; }
+      .tn-plan { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+      .tn-plan li { padding: 4px 6px 4px 10px; }
+      .tn-seg button { padding: 8px 11px; }
+    }
+
+    body.mat-open { overflow: hidden; }
+    .mat-overlay {
+      position: fixed; inset: 0; z-index: 900; background: #000; color: #fff; overflow-y: auto;
+      display: flex; flex-direction: column; padding: 18px clamp(16px, 3vw, 40px) 22px;
+      font-family: "Segoe UI", -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    }
+    .mat-overlay.hidden { display: none; }
+    .mat-overlay:focus { outline: none; }
+    .mat-top { display: flex; align-items: center; justify-content: space-between; gap: 10px 22px; flex-wrap: wrap; font-size: 24px; }
+    .mat-top .mat-progress { font-size: 34px; font-weight: 900; color: #fde68a; }
+    .mat-top .mat-clock { font-variant-numeric: tabular-nums; font-size: 30px; font-weight: 700; }
+    .mat-top .mat-clock small { font-size: 18px; color: #cbd5e1; font-weight: 600; margin-right: 6px; }
+    .mat-top .mat-clock.over { color: #fbbf24; }
+    .mat-top .sim-pill { font-size: 18px; padding: 6px 14px; background: #111; }
+    .mat-top-btns { display: flex; gap: 10px; }
+    .mat-small-btn {
+      background: #111; color: #fff; border: 2px solid #475569; border-radius: 12px; min-height: 52px; padding: 0 16px;
+      font-size: 20px; font-weight: 700; cursor: pointer;
+    }
+    .mat-small-btn.active { border-color: var(--green); color: #6ee7b7; }
+    .mat-title { font-size: clamp(48px, 5vw, 84px); font-weight: 900; line-height: 1.05; margin: 14px 0 8px; letter-spacing: -0.01em; }
+    .mat-cue { font-size: clamp(30px, 2.8vw, 44px); line-height: 1.2; color: #fde68a; font-weight: 700; margin: 0 0 10px; }
+    .mat-target { font-size: 24px; color: #e2e8f0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+    .mat-target .mat-goal-btn { min-height: 44px; min-width: 52px; font-size: 24px; }
+    .mat-note { font-size: 20px; color: #fbbf24; }
+    .mat-main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 22px; align-items: center; flex: 1 0 auto; margin: 14px 0; }
+    .mat-count { font-size: clamp(96px, 13vw, 210px); font-weight: 900; line-height: 0.95; font-variant-numeric: tabular-nums; }
+    .mat-count .of { color: #94a3b8; font-size: 0.5em; font-weight: 800; }
+    .mat-hm { font-size: 32px; font-weight: 800; margin-top: 6px; }
+    .mat-hm .h { color: #4ade80; } .mat-hm .m { color: #f87171; } .mat-hm .r { color: #e2e8f0; }
+    .mat-shot { border: 3px solid #334155; border-radius: 20px; padding: 16px 20px; min-height: 200px; }
+    .mat-shot.hit { border-color: #22c55e; } .mat-shot.miss { border-color: #ef4444; }
+    .mat-shot-label { font-size: 20px; color: #cbd5e1; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; }
+    .mat-shot-grid { display: flex; flex-wrap: wrap; gap: 8px 30px; margin-top: 6px; }
+    .mat-shot-grid .k { font-size: 18px; color: #94a3b8; font-weight: 700; }
+    .mat-shot-grid .v { font-size: clamp(48px, 5vw, 76px); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+    .mat-shot-grid .v.focus { color: #fde68a; }
+    .mat-verdict { font-size: 40px; font-weight: 900; margin-top: 8px; }
+    .mat-verdict.hit { color: #4ade80; } .mat-verdict.miss { color: #f87171; } .mat-verdict.none { color: #cbd5e1; font-size: 26px; }
+    .mat-banner { background: #14532d; color: #fff; border-radius: 14px; padding: 12px 18px; font-size: 28px; font-weight: 800; margin-bottom: 10px; }
+    .mat-actions { display: grid; grid-template-columns: 2fr 2fr 1fr 1fr 1fr 1fr; gap: 12px; }
+    .mat-btn {
+      min-height: 104px; border-radius: 20px; border: 3px solid #475569; background: #0f172a; color: #fff;
+      font-size: 30px; font-weight: 900; cursor: pointer; padding: 6px 10px; line-height: 1.1;
+    }
+    .mat-btn small { display: block; font-size: 15px; font-weight: 600; color: #94a3b8; margin-top: 4px; }
+    .mat-btn.hit { background: #14532d; border-color: #22c55e; font-size: 40px; }
+    .mat-btn.miss { background: #450a0a; border-color: #ef4444; font-size: 40px; }
+    .mat-btn.end { border-color: #f59e0b; }
+    .mat-btn:active { filter: brightness(1.3); }
+    .mat-btn:focus-visible, .mat-small-btn:focus-visible { outline: 4px solid #38bdf8; outline-offset: 2px; }
+    .mat-keys { margin-top: 10px; color: #94a3b8; font-size: 16px; text-align: center; }
+    .mat-confirm { position: fixed; inset: 0; background: rgba(0,0,0,0.88); display: flex; align-items: center; justify-content: center; z-index: 2; padding: 20px; }
+    .mat-confirm-box { background: #0f172a; border: 3px solid #f59e0b; border-radius: 22px; padding: 28px; max-width: 820px; width: 100%; }
+    .mat-confirm-box h2 { font-size: 44px; margin: 0 0 10px; }
+    .mat-confirm-box p { font-size: 24px; color: #cbd5e1; margin: 0 0 18px; }
+    .mat-confirm-box .mat-actions { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .mat-flash { animation: matFlash 0.45s ease-out; }
+    @keyframes matFlash { from { transform: scale(1.06); } to { transform: scale(1); } }
+    .mat-sum { max-width: 1200px; width: 100%; margin: 0 auto; }
+    .mat-sum h2 { font-size: clamp(40px, 4.4vw, 64px); margin: 6px 0 4px; line-height: 1.05; }
+    .mat-sum .sum-sub { font-size: 24px; color: #cbd5e1; margin-bottom: 16px; }
+    .sum-kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-bottom: 16px; }
+    .sum-kpi { background: #0f172a; border: 2px solid #334155; border-radius: 16px; padding: 12px 16px; }
+    .sum-kpi .k { font-size: 16px; color: #94a3b8; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+    .sum-kpi .v { font-size: 40px; font-weight: 900; line-height: 1.1; }
+    .sum-kpi .s { font-size: 18px; color: #cbd5e1; }
+    .sum-table { width: 100%; border-collapse: collapse; font-size: 22px; margin-bottom: 18px; }
+    .sum-table th { text-align: left; font-size: 15px; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.05em; padding: 6px 8px; border-bottom: 2px solid #334155; }
+    .sum-table td { padding: 10px 8px; border-bottom: 1px solid #1e293b; vertical-align: middle; }
+    .sum-table .pct { font-weight: 900; font-size: 28px; font-variant-numeric: tabular-nums; }
+    .delta-up { color: #4ade80; font-weight: 800; } .delta-down { color: #f87171; font-weight: 800; } .delta-flat { color: #cbd5e1; }
+    .sum-log { background: #0f172a; border: 2px solid #334155; border-radius: 18px; padding: 16px 18px; }
+    .sum-log h3 { font-size: 26px; margin: 0 0 10px; }
+    .sum-log .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; font-size: 20px; }
+    .sum-log .opt { background: #111827; color: #fff; border: 2px solid #475569; border-radius: 12px; min-height: 50px; min-width: 50px; padding: 0 14px; font-size: 20px; font-weight: 700; cursor: pointer; }
+    .sum-log .opt[aria-pressed="true"] { border-color: #38bdf8; background: #0c4a6e; }
+    .sum-log textarea { width: 100%; min-height: 90px; background: #020617; color: #fff; border: 2px solid #475569; border-radius: 12px; padding: 10px 12px; font-size: 18px; }
+    .sum-actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 14px; }
+    .sum-actions .mat-btn { min-height: 72px; font-size: 26px; padding: 0 26px; }
+    .sum-actions .mat-btn.primary { background: #14532d; border-color: #22c55e; }
+    @media (max-width: 760px) {
+      .mat-main { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+      .mat-run-actions { position: sticky; bottom: -22px; background: #000; padding: 8px 0 12px; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+      .mat-run-actions .mat-btn.hit, .mat-run-actions .mat-btn.miss { grid-column: span 2; min-height: 96px; }
+      .mat-btn { min-height: 64px; font-size: 22px; padding: 4px; }
+      .mat-btn small { font-size: 12px; }
+      .mat-target { font-size: 20px; }
+      .mat-top { font-size: 18px; }
+      .mat-top .mat-progress, .mat-top .mat-clock { font-size: 26px; }
+      .mat-confirm-box .mat-actions { grid-template-columns: minmax(0, 1fr); }
+      .sum-table { font-size: 18px; }
+      .sum-table .hide-sm { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .mat-flash { animation: none; }
+      .mat-overlay *, .tonight-card * { transition: none !important; animation: none !important; }
+    }
   </style>
 
 </head>
 <body>
   <div class="app-shell">
+    <!-- TONIGHT LAUNCHER (rendered by renderTonightCard; Drill Deck view only) -->
+    <section id="tonightCard" class="tonight-card" aria-label="Tonight's practice session"></section>
+
     <!-- TOP HEADER -->
     <header class="topbar">
       <div class="brand">
@@ -1248,14 +1460,14 @@
         <span class="pill-group-label">Session Mode</span>
       </div>
 
-      <div class="pill-group" id="viewTabs">
-        <button class="btn-pill active" data-view="deck">🎯 Drill Deck</button>
-        <button class="btn-pill" data-view="browse">🗂️ Routines &amp; Sections</button>
-        <button class="btn-pill" data-view="tracker">📊 Goals &amp; Delivery Chart</button>
-        <button class="btn-pill" data-view="courses">⛳ GSPro Courses &amp; Rounds</button>
-        <button class="btn-pill" data-view="cadence">⏱️ Cadence &amp; Tempo</button>
-        <button class="btn-pill" data-view="bag">🎒 Club Bag &amp; Gapping</button>
-        <button class="btn-pill" data-view="editor">➕ Add / Edit Drill</button>
+      <div class="pill-group" id="viewTabs" role="tablist" aria-label="Hub sections">
+        <button class="btn-pill active" role="tab" aria-selected="true" aria-controls="view-deck" data-view="deck">🎯 Drill Deck</button>
+        <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-browse" data-view="browse">🗂️ Routines &amp; Sections</button>
+        <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-tracker" data-view="tracker">📊 Goals &amp; Delivery Chart</button>
+        <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-courses" data-view="courses">⛳ GSPro Courses &amp; Rounds</button>
+        <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-cadence" data-view="cadence">⏱️ Cadence &amp; Tempo</button>
+        <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-bag" data-view="bag">🎒 Club Bag &amp; Gapping</button>
+        <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-editor" data-view="editor">➕ Add / Edit Drill</button>
       </div>
     </div>
 
@@ -1266,7 +1478,7 @@
     </section>
 
     <!-- VIEW 1: DRILL DECK PLAYER -->
-    <main id="view-deck">
+    <main id="view-deck" role="tabpanel">
       <div class="deck-nav-bar">
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button class="nav-btn" id="btnPrevSection" title="Previous Section (Up Arrow)">&laquo; Prev Section</button>
@@ -1294,25 +1506,28 @@
     </main>
 
     <!-- VIEW 2: ROUTINES & SECTIONS BROWSER -->
-    <section id="view-browse" class="hidden"></section>
+    <section id="view-browse" class="hidden" role="tabpanel"></section>
 
     <!-- VIEW 3: GOALS & DAILY DELIVERY TRACKER -->
-    <section id="view-tracker" class="hidden"></section>
+    <section id="view-tracker" class="hidden" role="tabpanel"></section>
 
     <!-- VIEW 4: GSPRO COURSES, DRILL PLAYGROUNDS & HISTORICAL ROUNDS -->
-    <section id="view-courses" class="hidden"></section>
+    <section id="view-courses" class="hidden" role="tabpanel"></section>
 
     <!-- VIEW 5: ADD / EDIT DRILL + BACKUP -->
-    <section id="view-editor" class="hidden"></section>
+    <section id="view-editor" class="hidden" role="tabpanel"></section>
 
     <!-- VIEW 6: CADENCE & TOUR TEMPO STUDIO -->
-    <section id="view-cadence" class="hidden"></section>
+    <section id="view-cadence" class="hidden" role="tabpanel"></section>
 
     <!-- VIEW 7: CLUB BAG & GAPPING MATRIX + WEATHER / ALTITUDE NORMALIZER -->
-    <section id="view-bag" class="hidden"></section>
+    <section id="view-bag" class="hidden" role="tabpanel"></section>
   </div>
 
-  <div class="toast" id="toastEl"></div>
+  <!-- MAT MODE (full-screen session overlay, rendered by renderMat) -->
+  <div id="matOverlay" class="mat-overlay hidden" role="dialog" aria-modal="true" aria-label="Mat mode practice session" tabindex="-1"></div>
+
+  <div class="toast" id="toastEl" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <script src="./drills_data.js"></script>
   <script>
@@ -1348,31 +1563,85 @@
       function showToast(msg) {
         const el = document.getElementById("toastEl");
         el.textContent = msg;
+        el.classList.remove("has-action");
         el.classList.add("show");
         clearTimeout(showToast._t);
-        showToast._t = setTimeout(() => el.classList.remove("show"), 2400);
+        showToast._t = setTimeout(() => el.classList.remove("show"), msg.length > 60 ? 5000 : 2400);
       }
+
+      // Toast with an Undo button for destructive actions (stays up ~7s).
+      function showUndoToast(msg, undoFn) {
+        const el = document.getElementById("toastEl");
+        el.textContent = msg;
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "toast-undo";
+        btn.textContent = "Undo";
+        btn.onclick = () => {
+          clearTimeout(showToast._t);
+          el.classList.remove("show", "has-action");
+          undoFn();
+        };
+        el.appendChild(btn);
+        el.classList.add("show", "has-action");
+        clearTimeout(showToast._t);
+        showToast._t = setTimeout(() => el.classList.remove("show", "has-action"), 7000);
+      }
+
+      // Numeric default that keeps a legitimate 0 (unlike `v || def`).
+      function numOr(v, def) { return typeof v === "number" && isFinite(v) ? v : def; }
 
       const DEFAULTS = window.DEFAULT_DRILLS_DATA || { modes: [], routines: [], drills: [], goals: [] };
 
       
-      function mergeDrills(savedDrills) {
+      function stableStr(v) {
+        if (Array.isArray(v)) return "[" + v.map(stableStr).join(",") + "]";
+        if (v && typeof v === "object") {
+          return "{" + Object.keys(v).sort().filter((k) => k !== "userEdited" && k !== "custom").map((k) => JSON.stringify(k) + ":" + stableStr(v[k])).join(",") + "}";
+        }
+        return JSON.stringify(v === undefined ? null : v);
+      }
+
+      // Merge semantics: drills saved via the editor carry userEdited:true and are kept verbatim.
+      // Untouched default drills always take the current default data. Tombstoned default ids stay deleted.
+      // Legacy saves (no userEdited flag) are migrated: a saved default drill that differs from the
+      // default (as the old merge would have shown it) is treated as user-edited.
+      function mergeDrills(savedDrills, deletedIds) {
         const defaults = JSON.parse(JSON.stringify(DEFAULTS.drills || []));
-        if (!Array.isArray(savedDrills) || !savedDrills.length) return defaults;
-        const savedMap = new Map(savedDrills.map((d) => [d.id, d]));
-        const seen = new Set();
-        const merged = defaults.map((d) => {
-          seen.add(d.id);
+        const deleted = new Set(Array.isArray(deletedIds) ? deletedIds : []);
+        if (!Array.isArray(savedDrills) || !savedDrills.length) {
+          return defaults.filter((d) => !deleted.has(d.id));
+        }
+        const savedMap = new Map();
+        for (const s of savedDrills) if (s && s.id) savedMap.set(s.id, s);
+        const defaultIds = new Set(defaults.map((d) => d.id));
+        const merged = [];
+        for (const d of defaults) {
+          if (deleted.has(d.id)) continue;
           const s = savedMap.get(d.id);
-          if (!s) return d;
-          return Object.assign({}, d, s, {
-            hackmotion: d.hackmotion || s.hackmotion,
-            days: d.days || s.days,
-            modes: d.modes || s.modes
-          });
-        });
+          if (!s) { merged.push(d); continue; }
+          let edited = s.userEdited === true;
+          if (s.userEdited === undefined) {
+            const legacy = Object.assign({}, d, s, {
+              hackmotion: d.hackmotion || s.hackmotion,
+              days: d.days || s.days,
+              modes: d.modes || s.modes
+            });
+            edited = stableStr(legacy) !== stableStr(d);
+          }
+          if (edited) {
+            const keep = JSON.parse(JSON.stringify(s));
+            keep.userEdited = true;
+            // Older edited copies predate `target`: inherit the default's scoring target.
+            if (keep.target === undefined && d.target) keep.target = JSON.parse(JSON.stringify(d.target));
+            delete keep.custom;
+            merged.push(keep);
+          } else {
+            merged.push(d);
+          }
+        }
         for (const s of savedDrills) {
-          if (s && s.id && !seen.has(s.id)) {
+          if (s && s.id && !defaultIds.has(s.id)) {
             merged.push(Object.assign({ custom: true }, s));
           }
         }
@@ -1383,10 +1652,39 @@
         const defaults = JSON.parse(JSON.stringify(DEFAULTS.bagMatrix || []));
         if (!Array.isArray(savedBag) || !savedBag.length) return defaults;
         const savedMap = new Map(savedBag.map((b) => [b.id || b.club, b]));
-        return defaults.map((d) => {
+        const merged = defaults.map((d) => {
           const s = savedMap.get(d.id || d.club);
           return s ? Object.assign({}, d, s) : d;
         });
+        // Keep user-added clubs that are not in the defaults.
+        const defaultKeys = new Set(defaults.map((d) => d.id || d.club));
+        const extras = savedBag.filter((b) => b && (b.id || b.club) && !defaultKeys.has(b.id || b.club));
+        return merged.concat(extras.map((b) => Object.assign({ custom: true }, b)));
+      }
+
+      // Goals: default goals always present (so new defaults reach returning users) unless the user
+      // deleted them (deletedGoalIds tombstones). User-editable fields (progress, notes) overlay the
+      // default; user-added goals are appended.
+      function mergeGoals(savedGoals, deletedIds) {
+        const defaults = JSON.parse(JSON.stringify(DEFAULTS.goals || []));
+        const deleted = new Set(Array.isArray(deletedIds) ? deletedIds : []);
+        const saved = Array.isArray(savedGoals) ? savedGoals.filter((g) => g && typeof g === "object") : [];
+        const savedMap = new Map(saved.filter((g) => g.id).map((g) => [g.id, g]));
+        const defaultIds = new Set(defaults.map((g) => g.id));
+        const merged = [];
+        for (const d of defaults) {
+          if (deleted.has(d.id)) continue;
+          const s = savedMap.get(d.id);
+          if (!s) { merged.push(d); continue; }
+          merged.push(Object.assign({}, d, {
+            progress: typeof s.progress === "number" && isFinite(s.progress) ? s.progress : d.progress,
+            notes: typeof s.notes === "string" ? s.notes : d.notes
+          }));
+        }
+        for (const s of saved) {
+          if (!s.id || !defaultIds.has(s.id)) merged.push(s);
+        }
+        return merged;
       }
 
       function mergeCourses(savedCourses) {
@@ -1414,6 +1712,86 @@
         return merged;
       }
 
+      // ---- Saved-state migration + validation for mat-mode sessions (schema v3). Function declarations
+      // only (no consts) because loadState() runs before the SESSION section below is evaluated.
+      function migrateSavedState(saved) {
+        if (!saved || typeof saved !== "object" || Array.isArray(saved)) return {};
+        const from = typeof saved.schemaVersion === "number" ? saved.schemaVersion : 1;
+        if (from < 3) {
+          // v1/v2 -> v3: mat-mode history did not exist yet; start empty.
+          saved.sessions = [];
+          saved.sessionPrefs = null;
+          saved.activeSession = null;
+        }
+        return saved;
+      }
+      function sanitizeSessionTarget(t) {
+        if (!t || typeof t !== "object" || Array.isArray(t)) return null;
+        if (!/^(hla|carry|ball_speed|face|path|spin_axis|aoa|manual)$/.test(String(t.metric))) return null;
+        const n = (v) => (typeof v === "number" && isFinite(v) ? v : null);
+        const out = { metric: t.metric, goal: n(t.goal), tol: n(t.tol), reps: n(t.reps), pass: n(t.pass) };
+        if (typeof t.club === "string") out.club = t.club.slice(0, 40);
+        if (t.foam === true) out.foam = true;
+        return out;
+      }
+      function sanitizeSessionBlock(b) {
+        if (!b || typeof b !== "object" || typeof b.drillId !== "string" || !b.drillId) return null;
+        const reps = (Array.isArray(b.reps) ? b.reps : []).filter((r) => r && typeof r === "object").slice(0, 1000).map((r) => {
+          const rep = {
+            ok: r.ok === true ? true : r.ok === false ? false : null,
+            value: typeof r.value === "number" && isFinite(r.value) ? r.value : null,
+            ts: typeof r.ts === "string" ? r.ts : ""
+          };
+          if (typeof r.shotTs === "string" && r.shotTs) rep.shotTs = r.shotTs;
+          return rep;
+        });
+        const num = (v, d) => (typeof v === "number" && isFinite(v) ? v : d);
+        return {
+          drillId: b.drillId,
+          target: sanitizeSessionTarget(b.target),
+          repGoal: num(b.repGoal, null),
+          planMin: num(b.planMin, null),
+          secs: Math.max(0, num(b.secs, 0)),
+          done: b.done === true,
+          reps
+        };
+      }
+      function sanitizeSessions(arr) {
+        if (!Array.isArray(arr)) return [];
+        const out = [];
+        for (const s of arr) {
+          if (!s || typeof s !== "object" || typeof s.id !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(String(s.date))) continue;
+          const blocks = (Array.isArray(s.blocks) ? s.blocks : []).map(sanitizeSessionBlock).filter(Boolean);
+          out.push({
+            id: s.id,
+            date: s.date,
+            mode: /^(real|almost|sore)$/.test(String(s.mode)) ? s.mode : "real",
+            minutes: typeof s.minutes === "number" && isFinite(s.minutes) ? s.minutes : 30,
+            routineId: typeof s.routineId === "string" ? s.routineId : null,
+            startedAt: typeof s.startedAt === "string" ? s.startedAt : null,
+            endedAt: typeof s.endedAt === "string" ? s.endedAt : null,
+            savedToLog: s.savedToLog === true,
+            blocks
+          });
+        }
+        return out.slice(-500);
+      }
+      function sanitizeSessionPrefs(p) {
+        const out = { mode: null, minutes: 30 };
+        if (p && typeof p === "object") {
+          if (/^(real|almost|sore)$/.test(String(p.mode))) out.mode = p.mode;
+          if ([20, 30, 45].includes(p.minutes)) out.minutes = p.minutes;
+        }
+        return out;
+      }
+      function sanitizeActiveSession(a) {
+        if (!a || typeof a !== "object") return null;
+        const s = sanitizeSessions([a])[0];
+        if (!s || !s.blocks.length) return null;
+        s.idx = typeof a.idx === "number" && a.idx >= 0 && a.idx < s.blocks.length ? Math.floor(a.idx) : 0;
+        return s;
+      }
+
       function loadState() {
         const base = {
           activeView: "deck",
@@ -1423,7 +1801,10 @@
           selectedDrillId: (DEFAULTS.drills[0] && DEFAULTS.drills[0].id) || null,
           selectedLogDate: todayISO(0),
           drills: JSON.parse(JSON.stringify(DEFAULTS.drills)),
-          goals: JSON.parse(JSON.stringify(DEFAULTS.goals)),
+          deletedDrillIds: [],
+          deletedGoalIds: [],
+          lastBackupAt: null,
+          goals: mergeGoals(null, []),
           deliveryLogs: {},        // { "YYYY-MM-DD": { status, mode, quality, notes, completedDrills: [] } }
           drillNotes: {},          // { drillId: "custom feel notes" }
           courses: mergeCourses(null),
@@ -1437,14 +1818,23 @@
           prefillRoundCourseId: null,
           prefillRoundTee: null,
           showAddCourseForm: false,
-          showBulkImport: false
+          showBulkImport: false,
+          sessions: [],            // mat-mode session history (see SESSION section)
+          sessionPrefs: { mode: null, minutes: 30 },
+          activeSession: null      // in-progress mat session (resumable after reload)
         };
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
           if (raw) {
-            const saved = JSON.parse(raw);
+            const saved = migrateSavedState(JSON.parse(raw));
+            base.sessions = sanitizeSessions(saved.sessions);
+            base.sessionPrefs = sanitizeSessionPrefs(saved.sessionPrefs);
+            base.activeSession = sanitizeActiveSession(saved.activeSession);
             if (Array.isArray(saved.drills) && saved.drills.length) base.drills = saved.drills;
-            if (Array.isArray(saved.goals)) base.goals = saved.goals;
+            if (Array.isArray(saved.deletedDrillIds)) base.deletedDrillIds = saved.deletedDrillIds.filter((x) => typeof x === "string");
+            if (typeof saved.lastBackupAt === "string") base.lastBackupAt = saved.lastBackupAt;
+            if (Array.isArray(saved.deletedGoalIds)) base.deletedGoalIds = saved.deletedGoalIds.filter((x) => typeof x === "string");
+            if (Array.isArray(saved.goals)) base.goals = mergeGoals(saved.goals, base.deletedGoalIds);
             if (saved.deliveryLogs && typeof saved.deliveryLogs === "object") base.deliveryLogs = saved.deliveryLogs;
             if (saved.drillNotes && typeof saved.drillNotes === "object") base.drillNotes = saved.drillNotes;
             if (Array.isArray(saved.courses)) base.courses = mergeCourses(saved.courses);
@@ -1460,7 +1850,7 @@
             if (typeof saved.simTemp === "number") base.simTemp = saved.simTemp;
             if (typeof saved.simAltitude === "number") base.simAltitude = saved.simAltitude;
           }
-          base.drills = mergeDrills(base.drills);
+          base.drills = mergeDrills(base.drills, base.deletedDrillIds);
           if (!base.bagMatrix) base.bagMatrix = mergeBagMatrix(null);
           if (!base.cadencePresetId) base.cadencePresetId = "24-8";
           if (typeof base.cadenceDelaySec !== "number") base.cadenceDelaySec = 2.5;
@@ -1490,30 +1880,41 @@
         return audioCtx;
       }
 
-      function playTone(freq, durationSec, type = "sine", gainVal = 0.3) {
+      const activeOscillators = new Set();
+      function playToneAt(freq, durationSec, type = "sine", gainVal = 0.3, when = 0) {
         try {
           const ctx = getAudioContext();
           if (!ctx) return;
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
-          const now = ctx.currentTime;
+          const t0 = Math.max(when || 0, ctx.currentTime);
           osc.type = type;
-          osc.frequency.setValueAtTime(freq, now);
-          gain.gain.setValueAtTime(gainVal * (state.cadenceVolume || 0.7), now);
-          gain.gain.exponentialRampToValueAtTime(0.0001, now + durationSec);
+          osc.frequency.setValueAtTime(freq, t0);
+          gain.gain.setValueAtTime(gainVal * (numOr(state.cadenceVolume, 0.7)), t0);
+          gain.gain.exponentialRampToValueAtTime(0.0001, t0 + durationSec);
           osc.connect(gain);
           gain.connect(ctx.destination);
-          osc.start(now);
-          osc.stop(now + durationSec);
+          activeOscillators.add(osc);
+          osc.onended = () => {
+            activeOscillators.delete(osc);
+            try { osc.disconnect(); gain.disconnect(); } catch (e) { /* ignore */ }
+          };
+          osc.start(t0);
+          osc.stop(t0 + durationSec + 0.02);
         } catch (err) {
           console.warn("Audio error:", err);
         }
       }
+      function playTone(freq, durationSec, type = "sine", gainVal = 0.3) {
+        playToneAt(freq, durationSec, type, gainVal, 0);
+      }
 
       function playHackMotionTone(isInZone = true) {
         if (isInZone) {
-          playTone(660, 0.22, "triangle", 0.35);
-          setTimeout(() => playTone(880, 0.30, "sine", 0.40), 90);
+          const ctx = getAudioContext();
+          const t = ctx ? ctx.currentTime : 0;
+          playToneAt(660, 0.22, "triangle", 0.35, t);
+          playToneAt(880, 0.30, "sine", 0.40, t + 0.09);
         } else {
           playTone(220, 0.25, "sawtooth", 0.25);
         }
@@ -1521,10 +1922,12 @@
 
       const cadenceState = {
         isPlaying: false,
-        timerId: null,
+        schedTimer: null,
+        rafId: null,
+        nextCycleTime: 0,
+        events: [],          // visual events scheduled on the audio clock: { t, phase }
         currentPhase: "ready",
-        repCount: 0,
-        cycleId: 0
+        repCount: 0
       };
 
       function updateCadenceUI(phase) {
@@ -1547,68 +1950,99 @@
         }
       }
 
-      function scheduleCadenceBeat() {
-        if (!cadenceState.isPlaying) return;
-        const currentCycle = ++cadenceState.cycleId;
+      function getCadenceTiming() {
         const presets = DEFAULTS.cadencePresets || [];
         const preset = presets.find((p) => p.id === state.cadencePresetId) || presets[1] || { backSec: 0.8, downSec: 0.27 };
-        const backSec = preset.backSec || 0.8;
-        const downSec = preset.downSec || 0.27;
-        const delaySec = state.cadenceDelaySec || 2.5;
+        return {
+          backSec: numOr(preset.backSec, 0.8),
+          downSec: numOr(preset.downSec, 0.27),
+          delaySec: numOr(state.cadenceDelaySec, 2.5)
+        };
+      }
 
-        // Tone 1: Start Takeaway
-        updateCadenceUI("takeaway");
-        playTone(520, 0.12, "sine", 0.4);
+      // Schedule one full swing cycle (3 tones + visual events) at absolute audio time t. Returns cycle length.
+      function scheduleCadenceCycle(t) {
+        const { backSec, downSec, delaySec } = getCadenceTiming();
+        playToneAt(520, 0.12, "sine", 0.4, t);
+        playToneAt(680, 0.12, "sine", 0.45, t + backSec);
+        playToneAt(880, 0.18, "triangle", 0.55, t + backSec + downSec);
+        cadenceState.events.push(
+          { t, phase: "takeaway" },
+          { t: t + backSec, phase: "top" },
+          { t: t + backSec + downSec, phase: "impact", rep: true },
+          { t: t + backSec + downSec + 0.35, phase: "ready" }
+        );
+        return backSec + downSec + delaySec;
+      }
 
-        // Tone 2: Top / Transition
-        setTimeout(() => {
-          if (!cadenceState.isPlaying || cadenceState.cycleId !== currentCycle) return;
-          updateCadenceUI("top");
-          playTone(680, 0.12, "sine", 0.45);
-        }, backSec * 1000);
-
-        // Tone 3: Impact Strike
-        setTimeout(() => {
-          if (!cadenceState.isPlaying || cadenceState.cycleId !== currentCycle) return;
-          updateCadenceUI("impact");
-          playTone(880, 0.18, "triangle", 0.55);
-          cadenceState.repCount++;
+      // Apply every visual event whose audio time has arrived (also catches up after tab was hidden).
+      function drainCadenceEvents() {
+        const ctx = audioCtx;
+        if (!ctx) return;
+        const now = ctx.currentTime;
+        let lastPhase = null;
+        let repsAdded = false;
+        while (cadenceState.events.length && cadenceState.events[0].t <= now) {
+          const ev = cadenceState.events.shift();
+          lastPhase = ev.phase;
+          if (ev.rep) { cadenceState.repCount++; repsAdded = true; }
+        }
+        if (lastPhase) updateCadenceUI(lastPhase);
+        if (repsAdded) {
           const repEl = document.getElementById("cadenceRepCounter");
           if (repEl) repEl.textContent = cadenceState.repCount;
-        }, (backSec + downSec) * 1000);
+        }
+      }
 
-        // Reset to Ready
-        setTimeout(() => {
-          if (!cadenceState.isPlaying || cadenceState.cycleId !== currentCycle) return;
-          updateCadenceUI("ready");
-        }, (backSec + downSec + 0.35) * 1000);
+      function cadenceSchedulerTick() {
+        if (!cadenceState.isPlaying || !audioCtx) return;
+        // Lookahead is longer when the tab is hidden because browsers throttle timers there.
+        const lookahead = document.hidden ? 3.0 : 0.12;
+        while (cadenceState.nextCycleTime < audioCtx.currentTime + lookahead) {
+          cadenceState.nextCycleTime += scheduleCadenceCycle(cadenceState.nextCycleTime);
+        }
+        drainCadenceEvents();
+      }
 
-        // Loop next swing
-        const totalCycleMs = (backSec + downSec + delaySec) * 1000;
-        cadenceState.timerId = setTimeout(() => {
-          if (cadenceState.isPlaying && cadenceState.cycleId === currentCycle) scheduleCadenceBeat();
-        }, totalCycleMs);
+      function cadenceFrame() {
+        if (!cadenceState.isPlaying) { cadenceState.rafId = null; return; }
+        drainCadenceEvents();
+        cadenceState.rafId = requestAnimationFrame(cadenceFrame);
       }
 
       function startCadenceMetronome() {
+        const ctx = getAudioContext();
+        if (!ctx) { showToast("Web Audio is not available in this browser."); return; }
         cadenceState.isPlaying = true;
-        getAudioContext();
+        cadenceState.events = [];
+        cadenceState.nextCycleTime = ctx.currentTime + 0.1;
         updateCadenceUI("ready");
-        scheduleCadenceBeat();
-        showToast(`⏱️ Cadence Metronome Started (${state.cadencePresetId})`);
+        cadenceSchedulerTick();
+        cadenceState.schedTimer = setInterval(cadenceSchedulerTick, 25);
+        cadenceState.rafId = requestAnimationFrame(cadenceFrame);
+        const startedPreset = (DEFAULTS.cadencePresets || []).find((p) => p.id === state.cadencePresetId);
+        showToast(`⏱️ Cadence metronome started${startedPreset && startedPreset.name ? ` (${startedPreset.name})` : ""}`);
         renderHeader();
         if (state.activeView === "cadence") renderCadence();
+        enhanceA11y();
       }
 
       function stopCadenceMetronome() {
         cadenceState.isPlaying = false;
-        cadenceState.cycleId++;
-        if (cadenceState.timerId) clearTimeout(cadenceState.timerId);
-        cadenceState.timerId = null;
+        if (cadenceState.schedTimer) clearInterval(cadenceState.schedTimer);
+        cadenceState.schedTimer = null;
+        if (cadenceState.rafId) cancelAnimationFrame(cadenceState.rafId);
+        cadenceState.rafId = null;
+        cadenceState.events = [];
+        for (const osc of Array.from(activeOscillators)) {
+          try { osc.onended = null; osc.stop(0); osc.disconnect(); } catch (e) { /* already stopped */ }
+        }
+        activeOscillators.clear();
         updateCadenceUI("ready");
         showToast("⏱️ Cadence Metronome Stopped");
         renderHeader();
         if (state.activeView === "cadence") renderCadence();
+        enhanceA11y();
       }
 
       function toggleCadenceMetronome() {
@@ -1618,28 +2052,238 @@
 
       function saveState() {
         try {
-          const persist = {
-            activeMode: state.activeMode,
-            activeRoutine: state.activeRoutine,
-            activeSection: state.activeSection,
-            selectedDrillId: state.selectedDrillId,
-            drills: state.drills,
-            goals: state.goals,
-            deliveryLogs: state.deliveryLogs,
-            drillNotes: state.drillNotes,
-            courses: state.courses,
-            roundLogs: state.roundLogs,
-            bagMatrix: state.bagMatrix,
-            cadencePresetId: state.cadencePresetId,
-            cadenceDelaySec: state.cadenceDelaySec,
-            cadenceVolume: state.cadenceVolume,
-            simTemp: state.simTemp,
-            simAltitude: state.simAltitude
-          };
+          const persist = buildPersistObject();
           localStorage.setItem(STORAGE_KEY, JSON.stringify(persist));
         } catch (err) {
           console.warn("Could not save to localStorage:", err);
         }
+      }
+
+      // ---- Persistent video shorts (File System Access API + IndexedDB handles) ----
+      const FS_DIR_SUPPORTED = typeof window.showDirectoryPicker === "function";
+      const FS_FILE_SUPPORTED = typeof window.showOpenFilePicker === "function";
+      const shortsStore = { dir: null, dirName: "", perm: "none", tried: {}, missing: {} };
+
+      function idbOpen() {
+        return new Promise((resolve, reject) => {
+          if (!window.indexedDB) { reject(new Error("no indexedDB")); return; }
+          const req = indexedDB.open("simwatch_drills_hub_handles", 1);
+          req.onupgradeneeded = () => req.result.createObjectStore("handles");
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
+      function idbOp(mode, fn) {
+        return idbOpen().then((db) => new Promise((resolve, reject) => {
+          const tx = db.transaction("handles", mode);
+          const r = fn(tx.objectStore("handles"));
+          tx.oncomplete = () => { db.close(); resolve(r && r.result); };
+          tx.onerror = () => { db.close(); reject(tx.error); };
+        }));
+      }
+      const idbGet = (k) => idbOp("readonly", (st) => st.get(k)).catch(() => undefined);
+      const idbSet = (k, v) => idbOp("readwrite", (st) => st.put(v, k)).catch(() => undefined);
+
+      function shortFileName(drill) {
+        const raw = ((drill.video && drill.video.localPath) || "").trim();
+        const base = raw && raw !== "shorts/" ? raw.split(/[\\/]/).pop() : "";
+        return base || (drill.id + ".mp4");
+      }
+
+      async function refreshShortsPermission() {
+        if (!shortsStore.dir) { shortsStore.perm = "none"; return; }
+        try { shortsStore.perm = await shortsStore.dir.queryPermission({ mode: "read" }); }
+        catch (e) { shortsStore.perm = "prompt"; }
+      }
+
+      async function loadShortsHandles() {
+        if (!FS_DIR_SUPPORTED) return;
+        const dir = await idbGet("shortsDir");
+        if (dir) {
+          shortsStore.dir = dir;
+          shortsStore.dirName = dir.name || "";
+          await refreshShortsPermission();
+          if (state.activeView === "deck") renderDeck();
+        }
+      }
+
+      // Try to resolve a playable blob URL for this drill from a stored file handle or the linked folder.
+      async function ensureShortUrl(drill) {
+        if (sessionObjectUrls[drill.id]) return true;
+        const name = shortFileName(drill);
+        try {
+          const fh = await idbGet("file:" + drill.id);
+          if (fh && (await fh.queryPermission({ mode: "read" })) === "granted") {
+            sessionObjectUrls[drill.id] = URL.createObjectURL(await fh.getFile());
+            return true;
+          }
+        } catch (e) { /* fall through to folder */ }
+        if (shortsStore.dir && shortsStore.perm === "granted") {
+          try {
+            const fh = await shortsStore.dir.getFileHandle(name);
+            sessionObjectUrls[drill.id] = URL.createObjectURL(await fh.getFile());
+            return true;
+          } catch (e) { shortsStore.missing[drill.id] = true; }
+        }
+        return false;
+      }
+
+      async function linkShortsFolder() {
+        try {
+          const dir = await window.showDirectoryPicker({ id: "simwatch-shorts", mode: "read" });
+          shortsStore.dir = dir;
+          shortsStore.dirName = dir.name || "";
+          shortsStore.perm = "granted";
+          shortsStore.tried = {};
+          shortsStore.missing = {};
+          for (const k of Object.keys(sessionObjectUrls)) { try { URL.revokeObjectURL(sessionObjectUrls[k]); } catch (e) { /* ignore */ } delete sessionObjectUrls[k]; }
+          await idbSet("shortsDir", dir);
+          showToast(`Linked shorts folder "${dir.name}" - it will be remembered.`);
+          renderAll();
+        } catch (err) {
+          if (err && err.name !== "AbortError") showToast("Could not link folder: " + (err.message || err.name));
+        }
+      }
+
+      async function reconnectShortsFolder() {
+        try {
+          const res = await shortsStore.dir.requestPermission({ mode: "read" });
+          shortsStore.perm = res;
+          shortsStore.tried = {};
+          shortsStore.missing = {};
+          if (res === "granted") showToast("Shorts folder reconnected.");
+          else showToast("Permission not granted for the shorts folder.");
+          renderAll();
+        } catch (err) {
+          showToast("Could not reconnect folder: " + (err.message || err.name));
+        }
+      }
+
+      // ---- Backup / import helpers ----
+      const SCHEMA_VERSION = 3; // v3: sessions / sessionPrefs / activeSession (mat mode)
+      function buildPersistObject() {
+        return {
+          schemaVersion: SCHEMA_VERSION,
+          sessions: state.sessions,
+          sessionPrefs: state.sessionPrefs,
+          activeSession: state.activeSession,
+          activeMode: state.activeMode,
+          activeRoutine: state.activeRoutine,
+          activeSection: state.activeSection,
+          selectedDrillId: state.selectedDrillId,
+          drills: state.drills,
+          deletedDrillIds: state.deletedDrillIds,
+          deletedGoalIds: state.deletedGoalIds,
+          lastBackupAt: state.lastBackupAt,
+          goals: state.goals,
+          deliveryLogs: state.deliveryLogs,
+          drillNotes: state.drillNotes,
+          courses: state.courses,
+          roundLogs: state.roundLogs,
+          bagMatrix: state.bagMatrix,
+          cadencePresetId: state.cadencePresetId,
+          cadenceDelaySec: state.cadenceDelaySec,
+          cadenceVolume: state.cadenceVolume,
+          simTemp: state.simTemp,
+          simAltitude: state.simAltitude
+        };
+      }
+
+      function isPlainObj(v) { return v && typeof v === "object" && !Array.isArray(v); }
+
+      // Returns a human summary string, or null if the file has nothing recognizable.
+      function applyImportedBackup(parsed) {
+        if (!isPlainObj(parsed)) return null;
+        const parts = [];
+        const objs = (arr, test) => (Array.isArray(arr) ? arr.filter((x) => isPlainObj(x) && test(x)) : null);
+        const str = (v) => typeof v === "string" && v.length > 0;
+        const drills = objs(parsed.drills, (d) => str(d.id) && str(d.title));
+        const tomb = Array.isArray(parsed.deletedDrillIds) ? parsed.deletedDrillIds.filter(str) : null;
+        if (tomb) state.deletedDrillIds = tomb;
+        const goalTomb = Array.isArray(parsed.deletedGoalIds) ? parsed.deletedGoalIds.filter(str) : null;
+        if (goalTomb) state.deletedGoalIds = goalTomb;
+        if (drills) {
+          for (const d of drills) {
+            if (!Array.isArray(d.days)) d.days = ["daily-calibration"];
+            if (!Array.isArray(d.modes)) d.modes = ["real"];
+            if (!Array.isArray(d.instructions)) d.instructions = [];
+            if (!Array.isArray(d.clubs)) d.clubs = [];
+          }
+          state.drills = mergeDrills(drills, state.deletedDrillIds);
+          if (!state.drills.length) state.drills = mergeDrills(null, []);
+          if (!state.drills.some((d) => d.id === state.selectedDrillId)) state.selectedDrillId = state.drills[0] && state.drills[0].id;
+          parts.push(`${drills.length} drills`);
+        } else if (tomb) {
+          // Tombstones alone still need to be applied to the current drill list.
+          state.drills = mergeDrills(state.drills, state.deletedDrillIds);
+          if (!state.drills.some((d) => d.id === state.selectedDrillId)) state.selectedDrillId = state.drills[0] && state.drills[0].id;
+          parts.push(`${tomb.length} deleted-drill markers`);
+        }
+        const goals = objs(parsed.goals, () => true);
+        if (goals) { state.goals = mergeGoals(goals, state.deletedGoalIds); parts.push(`${goals.length} goals`); }
+        else if (goalTomb) state.goals = mergeGoals(state.goals, state.deletedGoalIds);
+        if (isPlainObj(parsed.deliveryLogs)) {
+          const logs = {};
+          for (const [k, v] of Object.entries(parsed.deliveryLogs)) {
+            if (/^\d{4}-\d{2}-\d{2}$/.test(k) && isPlainObj(v)) {
+              if (!Array.isArray(v.completedDrills)) v.completedDrills = [];
+              logs[k] = v;
+            }
+          }
+          state.deliveryLogs = logs;
+          parts.push(`${Object.keys(logs).length} log days`);
+        }
+        if (isPlainObj(parsed.drillNotes)) {
+          const notes = {};
+          for (const [k, v] of Object.entries(parsed.drillNotes)) if (typeof v === "string") notes[k] = v;
+          state.drillNotes = notes;
+        }
+        const courses = objs(parsed.courses, (c) => str(c.id) && str(c.name));
+        if (courses) { state.courses = mergeCourses(courses); parts.push(`${courses.length} courses`); }
+        const rounds = objs(parsed.roundLogs, () => true);
+        if (rounds) { state.roundLogs = rounds; parts.push(`${rounds.length} rounds`); }
+        if (Array.isArray(parsed.sessions)) {
+          state.sessions = sanitizeSessions(parsed.sessions);
+          parts.push(`${state.sessions.length} mat sessions`);
+        }
+        if (isPlainObj(parsed.sessionPrefs)) state.sessionPrefs = sanitizeSessionPrefs(parsed.sessionPrefs);
+        const bag = objs(parsed.bagMatrix, (b) => str(b.id) || str(b.club));
+        if (bag && bag.length) { state.bagMatrix = mergeBagMatrix(bag); parts.push(`${bag.length} bag clubs`); }
+        if (typeof parsed.cadencePresetId === "string") state.cadencePresetId = parsed.cadencePresetId;
+        if (typeof parsed.cadenceDelaySec === "number" && isFinite(parsed.cadenceDelaySec)) state.cadenceDelaySec = parsed.cadenceDelaySec;
+        if (typeof parsed.cadenceVolume === "number" && isFinite(parsed.cadenceVolume)) state.cadenceVolume = Math.max(0, Math.min(1, parsed.cadenceVolume));
+        if (typeof parsed.simTemp === "number" && isFinite(parsed.simTemp)) state.simTemp = parsed.simTemp;
+        if (typeof parsed.simAltitude === "number" && isFinite(parsed.simAltitude)) state.simAltitude = parsed.simAltitude;
+        if (!parts.length && !drills && !tomb) {
+          if (typeof parsed.cadencePresetId !== "string" && typeof parsed.simTemp !== "number") return null;
+        }
+        return parts.length ? parts.join(", ") : "settings only";
+      }
+
+      function hasUserData() {
+        return state.drills.some((d) => d.userEdited || d.custom) ||
+          (state.deletedDrillIds || []).length > 0 ||
+          Object.keys(state.deliveryLogs || {}).length > 0 ||
+          (state.roundLogs || []).length > 0 ||
+          (state.sessions || []).length > 0 ||
+          Object.values(state.drillNotes || {}).some((v) => v) ||
+          (state.courses || []).some((c) => c.custom || c.favorite || c.userNotes || c.rating);
+      }
+      function backupAgeDays() {
+        if (!state.lastBackupAt) return null;
+        const t = Date.parse(state.lastBackupAt);
+        return isNaN(t) ? null : Math.floor((Date.now() - t) / 86400000);
+      }
+      function backupIsStale() {
+        if (!hasUserData()) return false;
+        const age = backupAgeDays();
+        return age === null || age > 14;
+      }
+      function backupStatusText() {
+        const age = backupAgeDays();
+        if (age === null) return hasUserData() ? "No backup exported yet - export one to protect your data." : "No backup exported yet.";
+        const when = new Date(state.lastBackupAt).toLocaleDateString();
+        return `Last backup: ${when} (${age} day${age === 1 ? "" : "s"} ago)` + (backupIsStale() ? " - time for a fresh export." : "");
       }
 
       function formatBestFor(bf) {
@@ -1898,21 +2542,24 @@
         const curPreset = presets.find((p) => p.id === state.cadencePresetId) || presets[1] || { name: "24/8" };
         const shortCadenceName = curPreset.name.split(" ")[0];
         document.getElementById("headerStats").innerHTML = `
-          <span class="stat-pill good" id="btnTopbarHackMotion" style="cursor:pointer;" title="HackMotion Biofeedback Sensor Active">🎯 HackMotion Ready</span>
+          <button type="button" class="stat-pill link-pill" id="btnTopbarHackMotion" title="Open the HackMotion wrist target reference (Bag tab)">⌚ HackMotion targets</button>
           <button type="button" class="hud-badge-cadence ${cadenceState.isPlaying ? "playing" : ""}" id="btnTopbarCadence" title="Click to toggle Cadence Metronome or press 'T'">
             <span class="pulse-dot"></span>
             <span>⏱️ Cadence: ${shortCadenceName} ${cadenceState.isPlaying ? "❚❚" : "▶"}</span>
           </button>
           <span class="stat-pill ${metrics.streak > 0 ? "good" : ""}">🔥 Streak: ${metrics.streak}d</span>
           <span class="stat-pill ${st.cls}">${st.text}</span>
-          <span class="stat-pill info">🎯 Today: ${doneCount} drill${doneCount === 1 ? "" : "s"} done</span>
+          <span class="stat-pill info">☑️ Today: ${doneCount} drill${doneCount === 1 ? "" : "s"} done</span>
         `;
         const cadBtn = document.getElementById("btnTopbarCadence");
         if (cadBtn) cadBtn.onclick = toggleCadenceMetronome;
         const hmBtn = document.getElementById("btnTopbarHackMotion");
         if (hmBtn) hmBtn.onclick = () => {
-          state.activeView = "deck";
+          gearRefOpen = true;
+          state.activeView = "bag";
           renderAll();
+          const target = document.getElementById("gear-hackmotion") || document.getElementById("gearRefDetails");
+          if (target) target.scrollIntoView({ block: "center" });
         };
       }
 
@@ -1950,6 +2597,7 @@
         tabs.querySelectorAll("[data-view]").forEach((btn) => {
           const v = btn.getAttribute("data-view");
           btn.classList.toggle("active", state.activeView === v);
+          btn.setAttribute("aria-selected", String(state.activeView === v));
           btn.onclick = () => {
             if (v === "editor") editingDrillId = null;
             state.activeView = v;
@@ -2106,6 +2754,12 @@
                 ${showVideo ? `
                   <video id="drillVideo" src="${esc(localSrc)}" controls loop playsinline></video>
                 ` : ""}
+                <div class="video-missing hidden" id="videoMissing" role="status">
+                  <div style="font-size:1.8rem;">🎞️</div>
+                  <div><strong>Video short not found</strong></div>
+                  <div>Expected file: <code>${esc(shortFileName(drill))}</code></div>
+                  <div style="font-size:0.78rem;">${FS_DIR_SUPPORTED ? "Click <em>Link Shorts Folder</em> to point at your shorts folder (remembered next time)," : "Click <em>Pick Local Short</em> (this browser can only remember it for this session),"} or add the file to <code>drills/shorts/</code>.</div>
+                </div>
                 <div class="diagram-box ${showYt || showVideo ? "hidden" : ""}" id="diagramFallback">
                   ${renderDiagramSvg(drill.video && drill.video.diagram)}
                   <div class="diagram-caption">
@@ -2117,10 +2771,10 @@
               <div class="media-toolbar">
                 <div class="media-toolbar-left">
                   <button class="btn-sm" id="btnToggleDiagram">👁️ Toggle Diagram / Video</button>
-                  <label class="btn-sm" style="cursor:pointer;">
-                    📂 Pick Local Short (.mp4)
-                    <input type="file" accept="video/*" id="fileVideoInput" style="display:none;" />
-                  </label>
+                  <button type="button" class="btn-sm" id="btnPickShort">📂 Pick Local Short (.mp4)</button>
+                  <input type="file" accept="video/*" id="fileVideoInput" style="display:none;" tabindex="-1" aria-label="Pick local video short" />
+                  ${FS_DIR_SUPPORTED ? `<button type="button" class="btn-sm" id="btnLinkShortsFolder">🔗 Link Shorts Folder${shortsStore.dirName ? " (" + esc(shortsStore.dirName) + ")" : ""}</button>` : ""}
+                  ${FS_DIR_SUPPORTED && shortsStore.dir && shortsStore.perm !== "granted" ? `<button type="button" class="btn-sm" id="btnReconnectShorts">🔓 Reconnect Shorts Folder</button>` : ""}
                 </div>
                 <div class="media-toolbar-right">
                   <button class="btn-sm" id="btnEditCurrentDrill">✏️ Edit Drill / Add Short Link</button>
@@ -2133,9 +2787,9 @@
 
               <!-- MODE SPECIFIC PLANS -->
               <div class="info-block" style="margin-top:14px;">
-                <h3>📋 Plan By Session Mode (Real vs Almost vs Gym-Sore)</h3>
+                <h3>📋 ${state.activeMode === "all" ? "Plan By Session Mode (Real vs Almost vs Gym-Sore)" : "Plan For Selected Session Mode"}</h3>
                 <div class="mode-adapt-grid">
-                  ${modeMeta.map((m) => {
+                  ${modeMeta.filter((m) => state.activeMode === "all" || state.activeMode === m.key).map((m) => {
                     const txt = (drill.modePlans && drill.modePlans[m.key]) || "Not prescribed for this mode.";
                     const isHi = state.activeMode === m.key;
                     return `
@@ -2161,62 +2815,36 @@
                   </div>
                 </div>
               </div>
-              <!-- HACKMOTION WRIST TARGETS & BIOFEEDBACK -->
-              <div class="info-block hackmotion-card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:6px;">
-                  <h3 style="margin:0; display:flex; align-items:center; gap:6px; color:#6ee7b7;">
-                    <span>🎯</span> HackMotion Wrist Biofeedback &amp; Checkpoints
-                  </h3>
-                  <button type="button" class="btn-sm" id="btnTestHackMotionTone" style="background:rgba(16,185,129,0.2); border-color:#10b981; color:#6ee7b7; font-weight:700;">
-                    🔊 Test Biofeedback Tone
-                  </button>
-                </div>
-
-                <div style="font-size:0.8rem; color:var(--muted); margin-bottom:8px;">
-                  Active Mode: <strong style="color:#6ee7b7;">${esc((drill.hackmotion && drill.hackmotion.targetMode) || "Lead Wrist Flexion/Extension")}</strong>
-                </div>
-
-                <div class="checkpoint-grid" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));">
-                  <div class="cp-card" style="border-left: 3px solid #38bdf8;">
-                    <strong>P1 Address</strong>
-                    <span>${esc((drill.hackmotion && drill.hackmotion.addressAngle) || "+14° Extension")}</span>
-                  </div>
-                  <div class="cp-card" style="border-left: 3px solid #818cf8;">
-                    <strong>P4 Top</strong>
-                    <span>${esc((drill.hackmotion && drill.hackmotion.topAngle) || "0° to -4° Flexion (Flat)")}</span>
-                  </div>
-                  <div class="cp-card" style="border-left: 3px solid #f59e0b;">
-                    <strong>P6 Delivery</strong>
-                    <span>${esc((drill.hackmotion && drill.hackmotion.p6Angle) || "-10° to -14° Flexion")}</span>
-                  </div>
-                  <div class="cp-card" style="border-left: 3px solid #10b981;">
-                    <strong>P7 Impact</strong>
-                    <span>${esc((drill.hackmotion && drill.hackmotion.impactAngle) || "-14° to -18° (Shaft Lean)")}</span>
-                  </div>
-                </div>
-
+              <!-- HACKMOTION WRIST TARGETS (only for drills that prescribe them; collapsed by default) -->
+              ${drill.hackmotion ? (() => {
+                const hm = drill.hackmotion;
+                const cp = [
+                  ["P1 Address", hm.addressAngle, "#38bdf8"],
+                  ["P4 Top", hm.topAngle, "#818cf8"],
+                  ["P6 Delivery", hm.p6Angle, "#f59e0b"],
+                  ["P7 Impact", hm.impactAngle, "#10b981"]
+                ].filter((r) => r[1]);
+                return `
+              <details class="info-block hackmotion-card" id="hackmotionDetails">
+                <summary style="cursor:pointer; font-weight:700; color:#6ee7b7;">⌚ HackMotion Wrist Targets${hm.targetMode ? ` &mdash; <span style="font-weight:600;">${esc(hm.targetMode)}</span>` : ""}</summary>
+                ${cp.length ? `
+                <div class="checkpoint-grid" style="grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin-top:10px;">
+                  ${cp.map((r) => `
+                  <div class="cp-card" style="border-left: 3px solid ${r[2]};">
+                    <strong>${r[0]}</strong>
+                    <span>${esc(r[1])}</span>
+                  </div>`).join("")}
+                </div>` : ""}
+                ${hm.biofeedbackTone ? `
                 <div class="hackmotion-cue-box" style="margin-top:10px; padding:10px 12px; background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:8px; font-size:0.82rem;">
                   <div style="font-weight:700; color:#6ee7b7; margin-bottom:3px;">🎧 Audio Biofeedback Cue:</div>
-                  <div style="color:var(--text);">${esc((drill.hackmotion && drill.hackmotion.biofeedbackTone) || "Green continuous audio tone sounds when lead wrist is within target flexion window.")}</div>
+                  <div style="color:var(--text);">${esc(hm.biofeedbackTone)}</div>
+                </div>` : ""}
+                <div style="margin-top:10px;">
+                  <button type="button" class="btn-sm" id="btnTestHackMotionTone">🔊 Test Biofeedback Tone</button>
                 </div>
-
-                <!-- Interactive Wrist Gauge Simulator -->
-                <div style="margin-top:12px; padding:10px 12px; background:rgba(0,0,0,0.35); border-radius:8px; border:1px solid var(--border);">
-                  <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.78rem; margin-bottom:6px;">
-                    <span style="font-weight:600;">Simulated Lead Wrist Flexion Angle:</span>
-                    <span id="wristSimAngleDisplay" style="font-weight:700; color:#10b981; font-family:monospace; font-size:0.88rem;">-15° (Target Green Zone)</span>
-                  </div>
-                  <input type="range" id="wristSimSlider" min="-30" max="30" value="-15" style="width:100%; accent-color:#10b981; cursor:pointer;" />
-                  <div style="display:flex; justify-content:space-between; font-size:0.7rem; color:var(--muted); margin-top:4px;">
-                    <span style="color:#38bdf8;">-30° (Extreme Bow)</span>
-                    <span style="color:#10b981; font-weight:700;">🟢 TARGET (-12° to -18°)</span>
-                    <span style="color:#ef4444;">+30° (Cupping / Scoop)</span>
-                  </div>
-                  <div id="wristSimFeedback" style="margin-top:6px; font-size:0.78rem; font-weight:600; color:#6ee7b7; text-align:center;">
-                    ✅ Tour Forward Shaft Lean — Ball Compressed with Zero Scoop
-                  </div>
-                </div>
-              </div>
+              </details>`;
+              })() : ""}
 
               <!-- BEST GSPRO COURSES FOR THIS DRILL -->
               ${(() => {
@@ -2244,11 +2872,11 @@
             <div class="panel">
               <div class="drill-header">
                 <div class="tag-row">
-                  <span class="badge">🎯 ${esc(drill.focus)}</span>
+                  <span class="badge">${esc(drill.focus)}</span>
                   <span class="badge">⏱️ ${esc(drill.duration || "8 min")}</span>
                   <span class="badge">🔁 ${esc(drill.reps || "15 reps")}</span>
                   <span class="badge">🏌️ ${esc((drill.clubs || []).join(", "))}</span>
-                  ${drill.hackmotion ? `<span class="badge" style="background:rgba(16,185,129,0.2); color:#6ee7b7; border-color:rgba(16,185,129,0.45);">🎯 HackMotion Biofeedback</span>` : ""}
+                  ${drill.hackmotion ? `<span class="badge" style="background:rgba(16,185,129,0.2); color:#6ee7b7; border-color:rgba(16,185,129,0.45);">⌚ HackMotion</span>` : ""}
                 </div>
                 <div class="tag-row">
                   ${(drill.modes || []).includes("real") ? `<span class="badge real">🏌️ Real Balls</span>` : ""}
@@ -2300,33 +2928,7 @@
         if (btnTestTone) {
           btnTestTone.onclick = () => {
             playHackMotionTone(true);
-            showToast("🔊 HackMotion Green Zone Biofeedback Tone");
-          };
-        }
-
-        const wristSlider = document.getElementById("wristSimSlider");
-        const wristDisplay = document.getElementById("wristSimAngleDisplay");
-        const wristFb = document.getElementById("wristSimFeedback");
-        if (wristSlider && wristDisplay && wristFb) {
-          wristSlider.oninput = () => {
-            const angle = parseInt(wristSlider.value, 10);
-            const sign = angle > 0 ? "+" : "";
-            if (angle <= -12 && angle >= -18) {
-              wristDisplay.textContent = `${sign}${angle}° (Target Green Zone)`;
-              wristDisplay.style.color = "#10b981";
-              wristFb.style.color = "#6ee7b7";
-              wristFb.textContent = "✅ Tour Forward Shaft Lean — Ball Compressed with Zero Scoop";
-            } else if (angle > 0) {
-              wristDisplay.textContent = `${sign}${angle}° (Cupping / Scoop Alert)`;
-              wristDisplay.style.color = "#ef4444";
-              wristFb.style.color = "#fca5a5";
-              wristFb.textContent = "🔴 Cupping Alert (>0°) — Clubface fans open, lose compression, scooping";
-            } else {
-              wristDisplay.textContent = `${sign}${angle}° (Marginal Flexion)`;
-              wristDisplay.style.color = "#38bdf8";
-              wristFb.style.color = "#7dd3fc";
-              wristFb.textContent = "⚡ Acceptable Delivery — Ensure shaft lean holds through low point";
-            }
+            showToast("🔊 HackMotion green-zone tone");
           };
         }
 
@@ -2345,6 +2947,42 @@
             fallback.classList.toggle("hidden");
           } else {
             showToast("No video linked for this drill — showing diagram.");
+          }
+        };
+
+        const missingEl = document.getElementById("videoMissing");
+        if (vid && missingEl) {
+          vid.addEventListener("error", () => {
+            vid.classList.add("hidden");
+            fallback && fallback.classList.add("hidden");
+            missingEl.classList.remove("hidden");
+          });
+        }
+        if (!sessionObjectUrls[drill.id] && !shortsStore.tried[drill.id] && (FS_DIR_SUPPORTED || FS_FILE_SUPPORTED)) {
+          shortsStore.tried[drill.id] = true;
+          ensureShortUrl(drill).then((ok) => {
+            if (ok && state.activeView === "deck" && state.selectedDrillId === drill.id) renderDeck();
+          });
+        }
+        const btnLink = document.getElementById("btnLinkShortsFolder");
+        if (btnLink) btnLink.onclick = linkShortsFolder;
+        const btnRecon = document.getElementById("btnReconnectShorts");
+        if (btnRecon) btnRecon.onclick = reconnectShortsFolder;
+        document.getElementById("btnPickShort").onclick = async () => {
+          if (FS_FILE_SUPPORTED) {
+            try {
+              const [fh] = await window.showOpenFilePicker({ id: "simwatch-shorts-file", types: [{ description: "Video", accept: { "video/*": [".mp4", ".mov", ".webm", ".m4v"] } }] });
+              if (sessionObjectUrls[drill.id]) URL.revokeObjectURL(sessionObjectUrls[drill.id]);
+              sessionObjectUrls[drill.id] = URL.createObjectURL(await fh.getFile());
+              await idbSet("file:" + drill.id, fh);
+              showToast(`Linked ${fh.name} for this drill (remembered).`);
+              renderDeck();
+            } catch (err) {
+              if (err && err.name !== "AbortError") showToast("Could not open file: " + (err.message || err.name));
+            }
+          } else {
+            showToast("This browser can't remember files - the pick lasts until you close the tab.");
+            document.getElementById("fileVideoInput").click();
           }
         };
 
@@ -2436,7 +3074,7 @@
                       </div>
                       <h4>${esc(r.fullTitle)}</h4>
                       <p style="margin-top:6px;">${esc(r.summary)}</p>
-                      ${r.hackmotionPrescription ? `<div style="margin-top:6px; font-size:0.78rem; color:#6ee7b7; background:rgba(16,185,129,0.1); padding:4px 8px; border-radius:6px; border:1px solid rgba(16,185,129,0.25);">🎯 <strong>HackMotion:</strong> ${esc(r.hackmotionPrescription)}</div>` : ""}
+                      ${r.hackmotionPrescription ? `<div style="margin-top:6px; font-size:0.78rem; color:#6ee7b7; background:rgba(16,185,129,0.1); padding:4px 8px; border-radius:6px; border:1px solid rgba(16,185,129,0.25);">⌚ <strong>HackMotion:</strong> ${esc(r.hackmotionPrescription)}</div>` : ""}
                       ${r.cadenceTarget ? `<div style="margin-top:4px; font-size:0.78rem; color:#7dd3fc; background:rgba(56,189,248,0.1); padding:4px 8px; border-radius:6px; border:1px solid rgba(56,189,248,0.25);">⏱️ <strong>Cadence:</strong> ${esc(r.cadenceTarget)}</div>` : ""}
                     </div>
                     <div style="font-size:0.82rem; color:var(--accent); font-weight:700;">Open Routine in Deck &rarr;</div>
@@ -2632,7 +3270,7 @@
             </div>
             <div class="kpi-card">
               <div class="label">Today's Drills Done</div>
-              <div class="val" style="color:#fde68a;">🎯 ${getDayLog(todayISO(0)).completedDrills.length}</div>
+              <div class="val" style="color:#fde68a;">☑️ ${getDayLog(todayISO(0)).completedDrills.length}</div>
               <div class="sub">Completed on ${todayISO(0)}</div>
             </div>
           </div>
@@ -2785,7 +3423,8 @@
             targetLog.mode = document.getElementById("logModeSelect").value;
             targetLog.notes = document.getElementById("logNotesInput").value;
             saveState();
-            showToast(`Logged ${selIso}: ${targetLog.status}`);
+            const statusLabels = { met: "Daily delivery met", recovery: "Recovery session", partial: "Partial session", missed: "Missed" };
+            showToast(`Logged ${shortDateLabel(selIso)}: ${statusLabels[targetLog.status] || targetLog.status}`);
             renderHeader();
             renderTracker();
           };
@@ -2816,17 +3455,25 @@
           targetLog.mode = document.getElementById("logModeSelect").value;
           targetLog.notes = document.getElementById("logNotesInput").value;
           saveState();
-          showToast(`Saved Daily Delivery check-in for ${selIso}`);
+          showToast(`Saved daily delivery check-in for ${shortDateLabel(selIso)}`);
           renderHeader();
           renderTracker();
         };
 
         document.getElementById("btnClearDayLog").onclick = () => {
+          const prevLog = state.deliveryLogs[selIso];
+          if (!prevLog) { showToast("Nothing logged for that day."); return; }
           delete state.deliveryLogs[selIso];
           saveState();
-          showToast(`Cleared log for ${selIso}`);
           renderHeader();
           renderTracker();
+          showUndoToast(`Cleared log for ${shortDateLabel(selIso)}`, () => {
+            state.deliveryLogs[selIso] = prevLog;
+            saveState();
+            renderHeader();
+            if (state.activeView === "tracker") renderTracker();
+            showToast("Restored day log.");
+          });
         };
 
         el.querySelectorAll("[data-chart-date]").forEach((node) => {
@@ -2896,7 +3543,12 @@
         el.querySelectorAll("[data-goal-del]").forEach((btn) => {
           btn.onclick = () => {
             const idx = Number(btn.getAttribute("data-goal-del"));
+            const g = state.goals[idx];
+            if (!g || !confirm(`Delete goal "${g.title || "Untitled goal"}"?`)) return;
             state.goals.splice(idx, 1);
+            if (g.id && (DEFAULTS.goals || []).some((d) => d.id === g.id)) {
+              state.deletedGoalIds = Array.from(new Set((state.deletedGoalIds || []).concat(g.id)));
+            }
             saveState();
             renderTracker();
           };
@@ -3261,7 +3913,7 @@
 
                   <div class="course-drill-box">
                     <div style="font-weight:700; color:#bae6fd; margin-bottom:3px;">
-                      🎯 ${esc(c.drillFocus || "Sim Practice")} ${formatBestFor(c.bestFor) ? `&mdash; ${esc(formatBestFor(c.bestFor))}` : ""}
+                      ${esc(c.drillFocus || "Sim Practice")} ${formatBestFor(c.bestFor) ? `&mdash; ${esc(formatBestFor(c.bestFor))}` : ""}
                     </div>
                     <div style="color:#cbd5e1; line-height:1.4;">${esc(c.drillNote || "")}</div>
                     ${linkedDrills.length ? `
@@ -3282,10 +3934,10 @@
                   <div class="course-stats-bar">
                     <div>
                       ${stats.plays ? `
-                        <span>Plays: <strong>${stats.plays}</strong></span> &bull;
-                        <span>Best: <strong style="color:#6ee7b7;">${stats.bestScore} (${esc(stats.bestRelStr)})</strong></span> &bull;
-                        <span>Avg: <strong>${stats.avgScore}</strong></span> &bull;
-                        <span>Last: ${esc(stats.lastDate)} (${stats.lastScore})</span>
+                        <span>Plays: <strong>${esc(stats.plays)}</strong></span> &bull;
+                        <span>Best: <strong style="color:#6ee7b7;">${esc(stats.bestScore)} (${esc(stats.bestRelStr)})</strong></span> &bull;
+                        <span>Avg: <strong>${esc(stats.avgScore)}</strong></span> &bull;
+                        <span>Last: ${esc(stats.lastDate)} (${esc(stats.lastScore)})</span>
                       ` : `<span>No rounds logged here yet</span>`}
                     </div>
                     <div style="display:flex; gap:6px; align-items:center;">
@@ -3523,7 +4175,7 @@
                        placeholder="Search course, location, designer, drill note..." />
                 <select id="courseFocusSelect" class="courses-select" aria-label="Filter by Drill Focus">
                   <option value="all" ${state.courseFocusFilter === "all" ? "selected" : ""}>All Drill Focuses</option>
-                  ${focusOptions.map((f) => `<option value="${esc(f)}" ${state.courseFocusFilter === f ? "selected" : ""}>🎯 ${esc(f)}</option>`).join("")}
+                  ${focusOptions.map((f) => `<option value="${esc(f)}" ${state.courseFocusFilter === f ? "selected" : ""}>${esc(f)}</option>`).join("")}
                 </select>
                 <select id="courseSortSelect" class="courses-select" aria-label="Sort Courses">
                   <option value="favorites" ${state.courseSort === "favorites" ? "selected" : ""}>Sort: Favorites &amp; Drill Fit</option>
@@ -3584,7 +4236,7 @@
                     <div class="crd-card">
                       <h4>${esc(crd.name || crd.title || crd.file || "Custom Practice Round")}</h4>
                       <div style="font-size:0.78rem; color:var(--muted); margin-bottom:4px;">${esc(metaParts)}</div>
-                      ${crd.focus ? `<div style="font-size:0.78rem; color:#7dd3fc; font-weight:600; margin-bottom:3px;">🎯 ${esc(crd.focus)}</div>` : ""}
+                      ${crd.focus ? `<div style="font-size:0.78rem; color:#7dd3fc; font-weight:600; margin-bottom:3px;">${esc(crd.focus)}</div>` : ""}
                       <div style="color:#cbd5e1; line-height:1.4;">${esc(crd.drillNote || crd.description || crd.note || crd.notes || "")}</div>
                     </div>
                   `;
@@ -3700,10 +4352,8 @@
                   <strong>📥 Bulk Historical Import (Paste CSV lines or upload .csv / .json)</strong>
                   <div style="display:flex; gap:8px; flex-wrap:wrap;">
                     <button type="button" class="nav-btn" id="btnLoadSampleRounds">Load Sample Lines</button>
-                    <label class="nav-btn" style="cursor:pointer;">
-                      Upload .csv / .json
-                      <input type="file" id="bulkImportFile" accept=".csv,.txt,.json" class="hidden" />
-                    </label>
+                    <button type="button" class="nav-btn" id="btnUploadBulk">Upload .csv / .json</button>
+                    <input type="file" id="bulkImportFile" accept=".csv,.txt,.json" class="hidden" tabindex="-1" aria-label="Upload CSV or JSON of rounds" />
                   </div>
                 </div>
                 <div style="font-size:0.8rem; color:var(--muted); margin-bottom:6px;">
@@ -3750,10 +4400,10 @@
                         const diff = Number(r.score) - Number(r.par);
                         const relStr = formatRelPar(r.score, r.par);
                         const statParts = [
-                          r.fir ? `FIR ${r.fir}` : "",
-                          r.gir ? `GIR ${r.gir}` : "",
-                          r.putts !== undefined && r.putts !== "" ? `${r.putts}p` : "",
-                          r.birdies !== undefined && r.birdies !== "" ? `${r.birdies}🐦` : ""
+                          r.fir ? esc(`FIR ${r.fir}`) : "",
+                          r.gir ? esc(`GIR ${r.gir}`) : "",
+                          r.putts !== undefined && r.putts !== "" ? esc(`${r.putts}p`) : "",
+                          r.birdies !== undefined && r.birdies !== "" ? esc(`${r.birdies}🐦`) : ""
                         ].filter(Boolean).join(" &bull; ");
                         return `
                           <tr>
@@ -4067,6 +4717,8 @@
         }
 
         const bulkImportFile = document.getElementById("bulkImportFile");
+        const btnUploadBulk = document.getElementById("btnUploadBulk");
+        if (btnUploadBulk && bulkImportFile) btnUploadBulk.onclick = () => bulkImportFile.click();
         if (bulkImportFile) {
           bulkImportFile.onchange = (ev) => {
             const file = ev.target.files && ev.target.files[0];
@@ -4105,10 +4757,16 @@
         el.querySelectorAll("[data-del-round]").forEach((btn) => {
           btn.onclick = () => {
             const rid = btn.getAttribute("data-del-round");
+            const prevRounds = state.roundLogs.slice();
             state.roundLogs = state.roundLogs.filter((r) => r.id !== rid);
             saveState();
-            showToast("Deleted round entry.");
             redrawCourses(true);
+            showUndoToast("Deleted round entry.", () => {
+              state.roundLogs = prevRounds;
+              saveState();
+              if (state.activeView === "courses") redrawCourses(true);
+              showToast("Restored round entry.");
+            });
           };
         });
       }
@@ -4143,7 +4801,7 @@
                   <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
                     <div>
                       <span class="badge" style="background:rgba(56,189,248,0.15); color:#7dd3fc; border-color:rgba(56,189,248,0.4);">
-                        🎯 ${esc(current.ratio)} Swing Ratio • ${esc(current.bpm)} BPM
+                        ⏱️ ${esc(current.ratio)} Swing Ratio • ${esc(current.bpm)} BPM
                       </span>
                       <h2 style="margin:8px 0 4px; font-size:1.6rem;">${esc(current.name)}</h2>
                       <p style="color:var(--muted); margin:0; font-size:0.9rem;">${esc(current.desc)}</p>
@@ -4180,16 +4838,16 @@
                   <div>
                     <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
                       <span>Reset Pause Between Swings:</span>
-                      <strong id="delayValDisplay">${(state.cadenceDelaySec || 2.5).toFixed(1)}s</strong>
+                      <strong id="delayValDisplay">${(numOr(state.cadenceDelaySec, 2.5)).toFixed(1)}s</strong>
                     </div>
-                    <input type="range" id="cadenceDelaySlider" min="1.5" max="5.0" step="0.5" value="${state.cadenceDelaySec || 2.5}" style="width:100%; accent-color:#38bdf8;" />
+                    <input type="range" id="cadenceDelaySlider" min="1.5" max="5.0" step="0.5" value="${numOr(state.cadenceDelaySec, 2.5)}" style="width:100%; accent-color:#38bdf8;" />
                   </div>
                   <div>
                     <div style="display:flex; justify-content:space-between; font-size:0.8rem; margin-bottom:4px;">
                       <span>Metronome Volume:</span>
-                      <strong id="volumeValDisplay">${Math.round((state.cadenceVolume || 0.7) * 100)}%</strong>
+                      <strong id="volumeValDisplay">${Math.round((numOr(state.cadenceVolume, 0.7)) * 100)}%</strong>
                     </div>
-                    <input type="range" id="cadenceVolumeSlider" min="0.1" max="1.0" step="0.1" value="${state.cadenceVolume || 0.7}" style="width:100%; accent-color:#10b981;" />
+                    <input type="range" id="cadenceVolumeSlider" min="0.1" max="1.0" step="0.1" value="${numOr(state.cadenceVolume, 0.7)}" style="width:100%; accent-color:#10b981;" />
                   </div>
                 </div>
               </div>
@@ -4223,7 +4881,7 @@
             <!-- HACKMOTION & CADENCE BIOMECHANICS SYNC GUIDE -->
             <div class="panel" style="background:linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(17,24,39,0.95) 100%); border-color:rgba(16,185,129,0.3);">
               <h3 style="margin-top:0; color:#6ee7b7; display:flex; align-items:center; gap:8px;">
-                <span>🎯</span> Syncing HackMotion Wrist Angles to Cadence Tones
+                <span>⌚</span> Syncing HackMotion Wrist Angles to Cadence Tones
               </h3>
               <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:14px; margin-top:12px;">
                 <div style="background:rgba(0,0,0,0.3); border:1px solid var(--border); border-radius:10px; padding:12px;">
@@ -4285,6 +4943,35 @@
             saveState();
           };
         }
+      }
+
+      // Read-only "Gear & Sensor Reference" built from DEFAULTS.artillery (collapsed by default).
+      let gearRefOpen = false;
+      function renderGearReferenceHtml() {
+        const items = Array.isArray(DEFAULTS.artillery) ? DEFAULTS.artillery.filter((a) => a && typeof a === "object") : [];
+        if (!items.length) return "";
+        const skip = new Set(["id", "name", "icon", "category", "status", "desc"]);
+        const label = (k) => String(k).replace(/([a-z])([A-Z0-9])/g, "$1 $2");
+        const rows = (a) => Object.keys(a).filter((k) => !skip.has(k)).map((k) => {
+          const v = a[k];
+          if (v && typeof v === "object" && !Array.isArray(v)) {
+            return Object.keys(v).map((sub) => `<dt>${esc(label(k))}: ${esc(sub)}</dt><dd>${esc(v[sub])}</dd>`).join("");
+          }
+          return `<dt>${esc(label(k))}</dt><dd>${esc(Array.isArray(v) ? v.join(", ") : v)}</dd>`;
+        }).join("");
+        return `
+            <details class="panel gear-ref" id="gearRefDetails" ${gearRefOpen ? "open" : ""}>
+              <summary>🧰 Gear &amp; Sensor Reference <span style="font-weight:400; color:var(--muted); font-size:0.82rem;">(${items.length} items)</span></summary>
+              <div class="gear-ref-grid">
+                ${items.map((a) => `
+                  <div class="gear-ref-item" id="gear-${esc(a.id)}">
+                    <h4>${esc(a.name)}</h4>
+                    ${a.category ? `<div style="color:var(--muted); font-size:0.76rem;">${esc(a.category)}</div>` : ""}
+                    ${a.desc ? `<p style="margin:6px 0 0;">${esc(a.desc)}</p>` : ""}
+                    ${rows(a) ? `<dl>${rows(a)}</dl>` : ""}
+                  </div>`).join("")}
+              </div>
+            </details>`;
       }
 
       function renderBag() {
@@ -4405,7 +5092,7 @@
             <div class="panel">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
                 <div>
-                  <h3 style="margin:0;">🎯 Simulator Practice Combines (from agentic-caddy)</h3>
+                  <h3 style="margin:0;">🏁 Simulator Practice Combines (from agentic-caddy)</h3>
                   <p style="color:var(--muted); font-size:0.82rem; margin:2px 0 0;">
                     Structured skill challenges for GSPro driving range &amp; on-course sessions.
                   </p>
@@ -4426,7 +5113,7 @@
                         <p style="font-size:0.8rem; color:var(--muted); margin-bottom:10px;">${esc(comb.tagline)}</p>
                         
                         <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.25); border-radius:6px; padding:6px 10px; font-size:0.78rem; margin-bottom:10px;">
-                          🎯 <strong>HackMotion:</strong> ${esc(comb.hackmotionCue)}
+                          ⌚ <strong>HackMotion:</strong> ${esc(comb.hackmotionCue)}
                         </div>
 
                         <ol style="margin:0; padding-left:18px; font-size:0.8rem; color:var(--text); line-height:1.4;">
@@ -4442,8 +5129,13 @@
                 }).join("")}
               </div>
             </div>
+
+            ${renderGearReferenceHtml()}
           </div>
         `;
+
+        const gearDetails = document.getElementById("gearRefDetails");
+        if (gearDetails) gearDetails.ontoggle = () => { gearRefOpen = gearDetails.open; };
 
         const tempSlider = document.getElementById("tempSlider");
         if (tempSlider) {
@@ -4540,16 +5232,16 @@
                   Add your own video short path (<code>shorts/my_drill.mp4</code> or YouTube Short URL), write-up, and Real / Kids-Asleep / Gym-Sore variations.
                 </p>
               </div>
-              <div style="display:flex; gap:8px;">
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 ${existing ? `<button class="nav-btn" id="btnNewBlankDrill">+ Create New Instead</button>` : ""}
-                <button class="nav-btn" id="btnExportBackup">⬇️ Export JSON Backup</button>
-                <label class="nav-btn" style="cursor:pointer;">
-                  ⬆️ Import JSON
-                  <input type="file" accept=".json" id="fileImportJson" style="display:none;" />
-                </label>
-                <button class="nav-btn danger" id="btnResetDefaults">↺ Reset Default Drills</button>
+                <button type="button" class="nav-btn" id="btnExportBackup">⬇️ Export Full Backup</button>
+                <button type="button" class="nav-btn" id="btnImportJson">⬆️ Import Backup</button>
+                <input type="file" accept=".json" id="fileImportJson" style="display:none;" tabindex="-1" aria-label="Import backup JSON file" />
+                <button type="button" class="nav-btn danger" id="btnResetDefaults" title="Resets drills and goals only. Logs, courses, rounds and bag are kept.">↺ Reset Drills &amp; Goals</button>
+                <button type="button" class="nav-btn danger" id="btnResetEverything" title="Erases ALL saved data in this browser.">⚠ Reset Everything</button>
               </div>
             </div>
+            <div class="backup-status ${backupIsStale() ? "stale" : ""}" id="backupStatus">${esc(backupStatusText())}</div>
 
             <div class="form-grid">
               <div class="field">
@@ -4679,6 +5371,9 @@
             }
             if (!confirm(`Delete drill "${existing.title}"?`)) return;
             state.drills = state.drills.filter((x) => x.id !== existing.id);
+            if ((DEFAULTS.drills || []).some((x) => x.id === existing.id) && !state.deletedDrillIds.includes(existing.id)) {
+              state.deletedDrillIds.push(existing.id);
+            }
             for (const day of Object.values(state.deliveryLogs || {})) {
               if (day && Array.isArray(day.completedDrills)) {
                 day.completedDrills = day.completedDrills.filter((id) => id !== existing.id);
@@ -4735,7 +5430,9 @@
             }
           };
 
+          obj.userEdited = true;
           if (existing) {
+            for (const k of Object.keys(existing)) if (!(k in obj)) obj[k] = existing[k];
             const idx = state.drills.findIndex((x) => x.id === existing.id);
             state.drills[idx] = obj;
           } else {
@@ -4750,66 +5447,1130 @@
         };
 
         document.getElementById("btnExportBackup").onclick = () => {
-          const blob = new Blob([JSON.stringify({
-            exportedAt: new Date().toISOString(),
-            drills: state.drills,
-            goals: state.goals,
-            deliveryLogs: state.deliveryLogs,
-            drillNotes: state.drillNotes,
-            courses: state.courses,
-            roundLogs: state.roundLogs
-          }, null, 2)], { type: "application/json" });
+          state.lastBackupAt = new Date().toISOString();
+          saveState();
+          const payload = Object.assign({ exportedAt: state.lastBackupAt }, buildPersistObject());
+          const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
           const a = document.createElement("a");
           a.href = URL.createObjectURL(blob);
           a.download = `simwatch_drills_backup_${todayISO(0)}.json`;
+          document.body.appendChild(a);
           a.click();
-          showToast("Exported backup JSON!");
+          a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+          const st = document.getElementById("backupStatus");
+          if (st) { st.textContent = backupStatusText(); st.classList.remove("stale"); }
+          showToast("Exported full backup JSON!");
         };
 
+        document.getElementById("btnImportJson").onclick = () => document.getElementById("fileImportJson").click();
         document.getElementById("fileImportJson").onchange = (ev) => {
-          const file = ev.target.files && ev.target.files[0];
+          const input = ev.target;
+          const file = input.files && input.files[0];
           if (!file) return;
           const reader = new FileReader();
           reader.onload = () => {
             try {
               const parsed = JSON.parse(reader.result);
-              if (Array.isArray(parsed.drills)) state.drills = parsed.drills;
-              if (Array.isArray(parsed.goals)) state.goals = parsed.goals;
-              if (parsed.deliveryLogs) state.deliveryLogs = parsed.deliveryLogs;
-              if (parsed.drillNotes) state.drillNotes = parsed.drillNotes;
-              if (Array.isArray(parsed.courses)) state.courses = mergeCourses(parsed.courses);
-            if (Array.isArray(parsed.bagMatrix)) state.bagMatrix = mergeBagMatrix(parsed.bagMatrix);
-            if (parsed.cadencePresetId) state.cadencePresetId = parsed.cadencePresetId;
-            if (typeof parsed.simTemp === "number") state.simTemp = parsed.simTemp;
-            if (typeof parsed.simAltitude === "number") state.simAltitude = parsed.simAltitude;
-              if (Array.isArray(parsed.roundLogs)) state.roundLogs = parsed.roundLogs;
+              const summary = applyImportedBackup(parsed);
+              if (!summary) { showToast("Import failed: not a SimWatch backup file."); return; }
               saveState();
-              showToast("Imported backup successfully!");
+              showToast("Imported: " + summary);
               renderAll();
-            } catch {
+            } catch (err) {
+              console.warn("Import failed:", err);
               showToast("Invalid JSON backup file.");
+            } finally {
+              input.value = ""; // allow re-selecting the same file after a failed import
             }
           };
+          reader.onerror = () => { input.value = ""; showToast("Could not read that file."); };
           reader.readAsText(file);
         };
 
         document.getElementById("btnResetDefaults").onclick = () => {
-          if (!confirm("Reset drills & default goals back to factory presets? (Your Daily Delivery chart history stays intact.)")) return;
+          if (!confirm("Reset ONLY your drills and goals back to factory presets?\n\nThis discards your drill edits, custom drills and deleted-drill choices. Daily delivery logs, drill notes, courses, rounds, club bag and cadence settings are kept.")) return;
           state.drills = JSON.parse(JSON.stringify(DEFAULTS.drills));
-          state.goals = JSON.parse(JSON.stringify(DEFAULTS.goals));
+          state.deletedDrillIds = [];
+          state.deletedGoalIds = [];
+          state.goals = mergeGoals(null, []);
           state.selectedDrillId = state.drills[0] && state.drills[0].id;
           editingDrillId = null;
           saveState();
-          showToast("Reset default drills & goals.");
+          showToast("Reset drills & goals to factory presets.");
           renderAll();
         };
+
+        document.getElementById("btnResetEverything").onclick = () => {
+          if (!confirm("RESET EVERYTHING?\n\nThis erases ALL saved data in this browser: drills, goals, delivery logs, notes, courses, rounds, club bag, cadence and sim settings.\n\nTip: click Export Full Backup first.")) return;
+          if (!confirm("Last chance - really erase everything?")) return;
+          try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
+          if (cadenceState.isPlaying) stopCadenceMetronome();
+          location.reload();
+        };
       }
+
+      // Make div-based clickable cards keyboard accessible and reflect toggle state for assistive tech.
+      const CLICKABLE_SEL = "[data-pick-routine],[data-open-drill],[data-pick-cadence],[data-chart-date],#tempoOrb";
+      // =====================================================================================
+      // ===== SESSION: Tonight launcher · Mat mode overlay · live shot-bridge scoring · history
+      // =====================================================================================
+      // Everything for the nightly practice flow lives between this banner and "END SESSION".
+      // State it owns: state.sessions (history), state.sessionPrefs ({mode, minutes}),
+      // state.activeSession (in-progress, resumable). Persisted via buildPersistObject (schema v3).
+
+      // Scoring targets come from `drill.target` in drills_data.js:
+      // { metric: "hla"|"carry"|"ball_speed"|"face"|"path"|"spin_axis"|"aoa"|"manual",
+      //   goal, tol, reps, pass, club? }   hit = |value - goal| <= tol; a missing value is not scored.
+      // Real rig note: GSPro computes carry, so `carry` is often null from the Launch Pro feed -
+      // hla / club-data targets auto-score; carry targets fall back to tap-to-score when absent.
+
+      const SESSION_METRICS = {
+        hla: { label: "Start line", short: "HLA", unit: "°", step: 1, foamOk: true, get: (s) => s.ball && s.ball.hla },
+        carry: { label: "Carry", short: "Carry", unit: " yd", step: 5, foamOk: false, get: (s) => s.ball && s.ball.carry },
+        ball_speed: { label: "Ball speed", short: "Speed", unit: " mph", step: 1, foamOk: false, get: (s) => s.ball && s.ball.speed },
+        spin_axis: { label: "Spin axis", short: "Axis", unit: "°", step: 1, foamOk: false, get: (s) => s.ball && s.ball.spin_axis },
+        face: { label: "Face", short: "Face", unit: "°", step: 1, foamOk: true, get: (s) => s.club_data && s.club_data.face },
+        path: { label: "Club path", short: "Path", unit: "°", step: 1, foamOk: true, get: (s) => s.club_data && s.club_data.path },
+        aoa: { label: "Attack angle", short: "AoA", unit: "°", step: 1, foamOk: true, get: (s) => s.club_data && s.club_data.aoa },
+        manual: { label: "Tap to score", short: "", unit: "", step: 0, foamOk: true, get: () => null }
+      };
+      const SESSION_MODES = ["real", "almost", "sore"];
+      const SESSION_MINUTES = [20, 30, 45];
+      const BRIDGE_URL = "http://127.0.0.1:8765";
+      const AUTO_ADVANCE_MS = 2500;
+      const DONE_MIN_SECS = 45; // a block with no reps counts as done after this long on it
+
+      function sNum(v) {
+        if (typeof v === "number") return isFinite(v) ? v : null;
+        if (typeof v === "string" && v.trim() !== "" && isFinite(Number(v))) return Number(v);
+        return null;
+      }
+      function drillById(id) { return state.drills.find((d) => d.id === id) || null; }
+      function modeDef(id) { return (DEFAULTS.modes || []).find((m) => m.id === id) || { id, label: id, shortLabel: id, icon: "" }; }
+      function fmtClock(sec) {
+        sec = Math.max(0, Math.floor(sec));
+        const m = Math.floor(sec / 60), s = sec % 60;
+        return `${m}:${String(s).padStart(2, "0")}`;
+      }
+      function weekdayShort(iso) {
+        const d = new Date(`${iso}T12:00:00`);
+        return isNaN(d) ? iso : d.toLocaleDateString(undefined, { weekday: "short" });
+      }
+      function shortTitle(d, max = 30) {
+        const t = d ? String(d.title || d.id) : "Drill";
+        return t.length > max ? t.slice(0, max - 1).trimEnd() + "…" : t;
+      }
+
+      // "5 min", "8–10 min", "1 hr", "90 sec", 12 -> minutes (default 5).
+      function parseDurationMin(str) {
+        if (typeof str === "number" && isFinite(str) && str > 0) return Math.min(180, Math.round(str));
+        const s = String(str || "").toLowerCase().replace(/[–—]/g, "-");
+        const m = s.match(/(\d+(?:\.\d+)?)(?:\s*(?:-|to)\s*(\d+(?:\.\d+)?))?\s*(hours?|hrs?|h\b|minutes?|mins?|m\b|'|seconds?|secs?|s\b)?/);
+        if (!m) return 5;
+        let v = m[2] ? (parseFloat(m[1]) + parseFloat(m[2])) / 2 : parseFloat(m[1]);
+        const unit = m[3] || "min";
+        if (/^h/.test(unit)) v *= 60;
+        else if (/^s/.test(unit)) v /= 60;
+        v = Math.round(v);
+        return v >= 1 && v <= 180 ? v : 5;
+      }
+
+      // Rep goal from a drill's free-text reps string; null when it is ambiguous (=> no auto-advance).
+      function parseRepGoal(str) {
+        let s = String(str || "").toLowerCase().replace(/\([^)]*\)/g, " ");
+        s = s.split(/pass\s*[:=]|[;/,]|\.\s|\bthen\b/)[0];
+        const clamp = (n) => (n >= 1 && n <= 200 ? n : null);
+        let m = s.match(/(\d+)\s*(?:sets?|targets?|rounds?|stations?)\s*(?:of|x|×)\s*(\d+)/);
+        if (m) return clamp(Number(m[1]) * Number(m[2]));
+        m = s.match(/(\d+)\s*(?:balls?|shots?)\s*per\s*\S+\s*[x×]\s*(\d+)/);
+        if (m) return clamp(Number(m[1]) * Number(m[2]));
+        const ballRe = /(\d+)\s+(?:(?!\d)[^\s+]+\s+){0,3}?(?:balls?|shots?|putts?|chips?|drives?)\b/g;
+        let sum = 0, hit;
+        while ((hit = ballRe.exec(s))) sum += Number(hit[1]);
+        if (sum) return clamp(sum);
+        m = s.match(/(\d+)\s+(?:[^\s+]+\s+){0,2}?(?:reps?|rehearsals?|holds?|pauses?|gates?|swings?)\b/);
+        if (m && !s.includes("+")) return clamp(Number(m[1]));
+        return null;
+      }
+
+      function getSessionTarget(drill, mode) {
+        if (!drill) return null;
+        const raw = drill.target;
+        if (!isPlainObj(raw) || !SESSION_METRICS[raw.metric]) return null;
+        const t = {
+          metric: raw.metric,
+          goal: sNum(raw.goal),
+          tol: sNum(raw.tol),
+          reps: sNum(raw.reps) && raw.reps > 0 ? Math.round(raw.reps) : null,
+          pass: sNum(raw.pass) && raw.pass > 0 ? Math.round(raw.pass) : null
+        };
+        if (typeof raw.club === "string" && raw.club) t.club = raw.club;
+        if (t.metric !== "manual" && (t.goal === null || t.tol === null || t.tol < 0)) t.metric = "manual";
+        // Almost Golf (foam) balls: carry / ball speed / spin are not valid -> tap-to-score only.
+        if (mode === "almost" && !SESSION_METRICS[t.metric].foamOk) { t.metric = "manual"; t.foam = true; }
+        return t;
+      }
+      function repGoalFor(drill, target) {
+        if (target && target.reps) return target.reps;
+        return drill ? parseRepGoal(drill.reps) : null;
+      }
+      function targetText(t) {
+        if (!t) return "";
+        if (t.metric === "manual") return t.foam ? "Foam balls: tap ✓ / ✗ to score" : "Tap ✓ / ✗ to score";
+        const mt = SESSION_METRICS[t.metric];
+        const g = t.goal > 0 && mt.unit === "°" ? `+${t.goal}` : String(t.goal);
+        return `${mt.label} ${g}${mt.unit} ±${t.tol}${mt.unit}${t.club ? ` · ${t.club}` : ""}`;
+      }
+
+      // Score one bridge shot against a target. ok: true/false, or null when not scorable.
+      function scoreShot(shot, target, mode) {
+        const hla = sNum(shot && shot.ball && shot.ball.hla);
+        if (!target || target.metric === "manual") return { value: hla, ok: null, reason: target && target.foam ? "foam" : "manual" };
+        const mt = SESSION_METRICS[target.metric];
+        if (mode === "almost" && !mt.foamOk) return { value: null, ok: null, reason: "foam" };
+        const v = sNum(mt.get(shot || {}));
+        if (v === null) return { value: null, ok: null, reason: "nodata" };
+        return { value: v, ok: Math.abs(v - target.goal) <= target.tol, reason: "" };
+      }
+
+      // ---- drill classification for the planner ----
+      function drillText(d) { return [d.id, d.title, d.section, d.category, d.type].filter(Boolean).join(" ").toLowerCase(); }
+      function isTestDrill(d) {
+        const own = [d.id, d.title, d.category, d.type].filter(Boolean).join(" ").toLowerCase();
+        const grp = [d.section, d.category].filter(Boolean).join(" ").toLowerCase();
+        return /\b(test|game|challenge|combine|ladder|scored)\b/.test(own) || /\b(pressure|transfer|test|games?)\b/.test(grp);
+      }
+      // Pure warm-up / mobility flows (by id/title, not section) never fill a focus slot.
+      function isPureWarm(d) { return /warm-?up|mobility|unlock|stretch/.test([d.id, d.title].join(" ").toLowerCase()); }
+      function warmRank(d, mode) {
+        const t = drillText(d);
+        if (mode === "sore" && /mobility|unlock|stretch/.test(t)) return -1;
+        if (/warm-?up|warmup/.test(t)) return 0;
+        if (/mobility|calibration|warm|unlock|stretch/.test(t)) return 1;
+        return 9;
+      }
+
+      // ---- history helpers ----
+      function sortedSessions() {
+        return (state.sessions || []).slice().sort((a, b) => String(a.startedAt || a.date).localeCompare(String(b.startedAt || b.date)));
+      }
+      function blockScore(b) {
+        let hits = 0, n = 0;
+        for (const r of b.reps || []) if (r.ok === true || r.ok === false) { n++; if (r.ok) hits++; }
+        return { hits, n };
+      }
+      function sessionDrillScore(s, drillId) {
+        let hits = 0, n = 0, reps = 0;
+        for (const b of s.blocks || []) if (b.drillId === drillId) { const x = blockScore(b); hits += x.hits; n += x.n; reps += (b.reps || []).length; }
+        return { hits, n, reps, rate: n ? hits / n : null };
+      }
+      // Chronological hit-rate history for a drill (scored sessions only), optionally stopping at a session id.
+      function drillRateHistory(drillId, limit = 5, uptoId = null) {
+        const out = [];
+        for (const s of sortedSessions()) {
+          const sc = sessionDrillScore(s, drillId);
+          if (sc.n) out.push({ id: s.id, date: s.date, rate: sc.rate, hits: sc.hits, n: sc.n });
+          if (uptoId && s.id === uptoId) break;
+        }
+        return out.slice(-limit);
+      }
+      function recentRate(drillId) {
+        const h = drillRateHistory(drillId, 5);
+        if (!h.length) return null;
+        let hits = 0, n = 0;
+        h.forEach((x) => { hits += x.hits; n += x.n; });
+        return hits / n;
+      }
+      function sparklineSvg(rates, w = 64, h = 20) {
+        if (!rates || !rates.length) return "";
+        const pts = rates.map((r, i) => {
+          const x = rates.length === 1 ? w / 2 : 3 + (i * (w - 6)) / (rates.length - 1);
+          const y = h - 3 - Math.max(0, Math.min(1, r)) * (h - 6);
+          return [Math.round(x * 10) / 10, Math.round(y * 10) / 10];
+        });
+        const last = pts[pts.length - 1];
+        const label = `Hit rate trend: ${rates.map((r) => Math.round(r * 100) + "%").join(", ")}`;
+        return `<svg class="tn-spark" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="${esc(label)}">` +
+          `<title>${esc(label)}</title>` +
+          `<line x1="0" y1="${h / 2}" x2="${w}" y2="${h / 2}" stroke="#334155" stroke-width="1" stroke-dasharray="2 3"/>` +
+          (pts.length > 1 ? `<polyline fill="none" stroke="#38bdf8" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" points="${pts.map((p) => p.join(",")).join(" ")}"/>` : "") +
+          `<circle cx="${last[0]}" cy="${last[1]}" r="3" fill="#fde68a"/></svg>`;
+      }
+
+      // ---- routine sequencing ----
+      function dayRoutineSeq() {
+        return (DEFAULTS.routines || []).filter((r) => /^day-\d+/.test(r.id))
+          .sort((a, b) => parseInt(a.id.slice(4), 10) - parseInt(b.id.slice(4), 10)).map((r) => r.id);
+      }
+      // Next "Day N" routine: the one after the last session's routine (same one if that was today).
+      function nextRoutineDay() {
+        const seq = dayRoutineSeq();
+        if (!seq.length) return null;
+        let last = null, lastDate = null;
+        const hist = sortedSessions().reverse();
+        for (const s of hist) if (s.routineId && seq.includes(s.routineId)) { last = s.routineId; lastDate = s.date; break; }
+        if (!last) {
+          // Fallback: infer from the most recent day log's completed drills.
+          const dates = Object.keys(state.deliveryLogs || {}).filter((k) => ((state.deliveryLogs[k] || {}).completedDrills || []).length).sort().reverse();
+          for (const iso of dates) {
+            const counts = {};
+            for (const id of state.deliveryLogs[iso].completedDrills) {
+              const d = drillById(id);
+              for (const day of (d && d.days) || []) if (seq.includes(day)) counts[day] = (counts[day] || 0) + 1;
+            }
+            const best = seq.filter((id) => counts[id]).sort((a, b) => counts[b] - counts[a] || seq.indexOf(a) - seq.indexOf(b))[0];
+            if (best) { last = best; lastDate = iso; break; }
+          }
+        }
+        if (!last) return seq[0];
+        if (lastDate === todayISO(0)) return last;
+        return seq[(seq.indexOf(last) + 1) % seq.length];
+      }
+
+      // Deterministic planner: same inputs (drills, history, date) => same plan.
+      function buildTonightSession(opts) {
+        const minutes = SESSION_MINUTES.includes(Number(opts && opts.minutes)) ? Number(opts.minutes) : 30;
+        const mode = SESSION_MODES.includes(opts && opts.mode) ? opts.mode : "real";
+        const nextDay = nextRoutineDay();
+        const modeRoutine = mode === "almost" ? "kids-asleep" : mode === "sore" ? "gym-sore" : null;
+        const pool = state.drills
+          .map((d, i) => ({ d, i, min: parseDurationMin(d.duration) }))
+          .filter((x) => (x.d.modes || []).includes(mode));
+        const rateCache = {};
+        const rate = (x) => {
+          if (!(x.d.id in rateCache)) { const r = recentRate(x.d.id); rateCache[x.d.id] = r === null ? 0.6 : r; }
+          return rateCache[x.d.id];
+        };
+        const tier = (x) => ((x.d.days || []).includes(nextDay) ? 0 : modeRoutine && (x.d.days || []).includes(modeRoutine) ? 1 : 2);
+        // On ball-striking nights, mobility/setup drills belong in the warm-up slot, not a focus slot.
+        const mob = (x) => (mode !== "sore" && /mobility/i.test(String(x.d.section || "")) ? 1 : 0);
+        const byPref = (a, b) => mob(a) - mob(b) || tier(a) - tier(b) || rate(a) - rate(b) || a.i - b.i;
+        const slack = 2;
+        const items = [];
+        let used = 0;
+        const take = (x, role, alts) => { items.push({ drillId: x.d.id, role, minutes: x.min, alts: alts.map((a) => a.d.id) }); used += x.min; };
+        const fits = (x, extra = 0) => used + x.min + extra <= minutes + slack;
+
+        const warmPool = pool.filter((x) => warmRank(x.d, mode) < 9 && !isTestDrill(x.d))
+          .sort((a, b) => warmRank(a.d, mode) - warmRank(b.d, mode) ||
+            Number((b.d.days || []).includes("daily-calibration")) - Number((a.d.days || []).includes("daily-calibration")) ||
+            a.min - b.min || a.i - b.i);
+        const warm = warmPool.find((x) => x.min <= Math.max(5, minutes * 0.3)) || null;
+        if (warm) take(warm, "warmup", warmPool.filter((x) => x !== warm && x.min <= Math.max(5, minutes * 0.3)).slice(0, 6));
+
+        const taken = () => new Set(items.map((it) => it.drillId));
+        const testPool = pool.filter((x) => isTestDrill(x.d) && !taken().has(x.d.id)).sort(byPref);
+        const focusPool = pool.filter((x) => !isTestDrill(x.d) && !isPureWarm(x.d) && !taken().has(x.d.id)).sort(byPref);
+        const shortestFocus = focusPool.reduce((m, x) => Math.min(m, x.min), Infinity);
+        let test = testPool.find((t) => fits(t, shortestFocus)) || null;
+        let f1 = focusPool.find((f) => fits(f, test ? test.min : 0)) || null;
+        if (!f1) { test = null; f1 = focusPool.find((f) => fits(f)) || focusPool[0] || null; }
+        const focusTaken = [];
+        if (f1) { take(f1, "focus", []); focusTaken.push(f1); }
+        // Keep adding focus blocks (max 4) while they fit alongside the test, so 45-min plans fill the budget.
+        while (focusTaken.length < 4) {
+          const next = focusPool.find((f) => !focusTaken.includes(f) && fits(f, test ? test.min : 0));
+          if (!next) break;
+          take(next, "focus", []); focusTaken.push(next);
+        }
+        const focusAlts = focusPool.filter((f) => !focusTaken.includes(f)).slice(0, 10);
+        items.forEach((it) => { if (it.role === "focus") it.alts = focusAlts.map((a) => a.d.id); });
+        const finalTest = testPool.find((t) => fits(t)) || null;
+        if (finalTest) take(finalTest, "test", testPool.filter((t) => t !== finalTest).slice(0, 6));
+
+        return {
+          mode, minutes, routineId: nextDay,
+          items,
+          totalMin: items.reduce((s, it) => s + it.minutes, 0)
+        };
+      }
+
+      // ---- Tonight card UI state (plan edits survive re-renders until mode/minutes/history change) ----
+      const tonightUi = { key: null, plan: null, edited: false };
+      function tonightPrefs() {
+        const p = state.sessionPrefs || {};
+        const mode = SESSION_MODES.includes(p.mode) ? p.mode : (SESSION_MODES.includes(state.activeMode) ? state.activeMode : "real");
+        const minutes = SESSION_MINUTES.includes(p.minutes) ? p.minutes : 30;
+        return { mode, minutes };
+      }
+      function getTonightPlan() {
+        const { mode, minutes } = tonightPrefs();
+        const key = `${mode}|${minutes}|${(state.sessions || []).length}|${todayISO(0)}|${state.drills.length}`;
+        if (!tonightUi.plan || tonightUi.key !== key || !tonightUi.edited) {
+          if (tonightUi.key !== key) tonightUi.edited = false;
+          if (!tonightUi.edited) tonightUi.plan = buildTonightSession({ mode, minutes });
+          tonightUi.key = key;
+        }
+        return tonightUi.plan;
+      }
+      function recomputePlanTotal(plan) { plan.totalMin = plan.items.reduce((s, it) => s + it.minutes, 0); }
+      function swapPlanItem(i) {
+        const plan = getTonightPlan();
+        const it = plan.items[i];
+        if (!it) return;
+        if (!it.cycle) it.cycle = [it.drillId].concat(it.alts || []);
+        const used = new Set(plan.items.filter((_, j) => j !== i).map((x) => x.drillId));
+        let k = it.cycle.indexOf(it.drillId);
+        for (let step = 0; step < it.cycle.length; step++) {
+          k = (k + 1) % it.cycle.length;
+          const cand = it.cycle[k];
+          if (!used.has(cand) && drillById(cand)) {
+            if (cand === it.drillId) break;
+            it.drillId = cand;
+            it.minutes = parseDurationMin(drillById(cand).duration);
+            tonightUi.edited = true;
+            recomputePlanTotal(plan);
+            renderTonightCard();
+            return;
+          }
+        }
+        showToast("No other drill fits that slot in this mode.");
+      }
+      function removePlanItem(i) {
+        const plan = getTonightPlan();
+        if (!plan.items[i]) return;
+        plan.items.splice(i, 1);
+        tonightUi.edited = true;
+        recomputePlanTotal(plan);
+        renderTonightCard();
+      }
+
+      function lastSessionHeadline() {
+        const s = sortedSessions().pop();
+        if (!s) return null;
+        let best = null;
+        for (const b of s.blocks) {
+          const sc = blockScore(b);
+          if (sc.n && (!best || sc.n > best.n)) best = { b, n: sc.n, rate: sc.hits / sc.n };
+        }
+        const day = weekdayShort(s.date);
+        if (best) {
+          const d = drillById(best.b.drillId);
+          const m = best.b.target && SESSION_METRICS[best.b.target.metric];
+          const pct = Math.round(best.rate * 100);
+          const text = m && best.b.target.metric !== "manual"
+            ? `Last: ${pct}% ${m.label.toLowerCase()} hits (${shortTitle(d, 22)}), ${day}`
+            : `Last: ${pct}% hits on ${shortTitle(d, 28)}, ${day}`;
+          return { s, text };
+        }
+        const done = s.blocks.filter((b) => b.done).length;
+        return { s, text: `Last: ${done} drill${done === 1 ? "" : "s"}, ${sessionMinutes(s)} min, ${day}` };
+      }
+      function sessionMinutes(s) {
+        const a = Date.parse(s.startedAt), b = Date.parse(s.endedAt);
+        if (isNaN(a) || isNaN(b)) return Math.round(s.blocks.reduce((t, x) => t + (x.secs || 0), 0) / 60);
+        return Math.max(0, Math.round((b - a) / 60000));
+      }
+
+      function renderTonightCard() {
+        const el = document.getElementById("tonightCard");
+        if (!el) return;
+        el.classList.toggle("hidden", state.activeView !== "deck");
+        if (state.activeView !== "deck") return;
+        const { mode, minutes } = tonightPrefs();
+        const plan = getTonightPlan();
+        const md = modeDef(mode);
+        const metrics = computeDeliveryMetrics();
+        const head = lastSessionHeadline();
+        const nextR = (DEFAULTS.routines || []).find((r) => r.id === plan.routineId);
+        const act = state.activeSession;
+        const actReps = act ? act.blocks.reduce((t, b) => t + b.reps.length, 0) : 0;
+        const roleLabel = { warmup: "Warm-up", focus: "Focus", test: "Test" };
+        const title = act
+          ? `<span class="tn-kicker">Session in progress</span><span class="tn-sep">·</span>${esc(modeDef(act.mode).shortLabel || act.mode)}<span class="tn-sep">·</span>drill ${act.idx + 1}/${act.blocks.length}<span class="tn-sep">·</span>${actReps} reps`
+          : `<span class="tn-kicker">Tonight</span><span class="tn-sep">·</span>${esc(md.shortLabel || md.label)}<span class="tn-sep">·</span>${plan.items.length} drill${plan.items.length === 1 ? "" : "s"}<span class="tn-sep">·</span>~${plan.totalMin} min`;
+        el.innerHTML = `
+          <div class="tn-head">
+            <h2 class="tn-title">${title}</h2>
+            <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+              ${act ? `<button type="button" class="nav-btn" id="btnTonightEndSaved">End &amp; save</button><button type="button" class="nav-btn" id="btnTonightDiscard">Discard</button>` : ""}
+              <button type="button" class="tn-start" id="btnTonightStart" ${!act && !plan.items.length ? "disabled" : ""}>${act ? "▶ Resume session" : "▶ Start session"}</button>
+            </div>
+          </div>
+          <div class="tn-controls">
+            <div class="tn-seg" role="group" aria-label="Ball mode for tonight">
+              ${SESSION_MODES.map((m) => { const d = modeDef(m); return `<button type="button" data-tn-mode="${esc(m)}" aria-pressed="${m === mode}" title="${esc(d.label)}">${d.icon ? esc(d.icon) + " " : ""}${esc(d.shortLabel || d.label)}</button>`; }).join("")}
+            </div>
+            <div class="tn-seg" role="group" aria-label="Minutes available">
+              ${SESSION_MINUTES.map((n) => `<button type="button" data-tn-min="${n}" aria-pressed="${n === minutes}">${n} min</button>`).join("")}
+            </div>
+            <span class="sim-pill" data-sim-pill></span>
+          </div>
+          <div class="tn-meta">
+            <span>🔥 ${metrics.streak}-day streak</span>
+            ${head ? `<button type="button" class="linklike" id="btnTonightLast" title="Open the summary of your last session">${esc(head.text)}</button>` : `<span>No mat sessions yet - tonight's the first.</span>`}
+            ${nextR ? `<span>Next up: <strong>${esc(nextR.title)}</strong></span>` : ""}
+          </div>
+          ${plan.items.length ? `<ol class="tn-plan" aria-label="Tonight's plan">
+            ${plan.items.map((it, i) => {
+              const d = drillById(it.drillId);
+              const spark = sparklineSvg(drillRateHistory(it.drillId, 5).map((h) => h.rate), 44, 18);
+              return `<li>
+                <span class="tn-role r-${esc(it.role)}">${esc(roleLabel[it.role] || it.role)}</span>
+                <span class="tn-name" title="${esc(d ? d.title : it.drillId)}">${esc(d ? d.title : it.drillId)}</span>
+                ${spark}
+                <span class="tn-min">${it.minutes}m</span>
+                <button type="button" data-tn-swap="${i}" title="Swap for another ${esc(roleLabel[it.role] || "")} drill" aria-label="Swap ${esc(d ? d.title : "")}">⇄</button>
+                <button type="button" data-tn-remove="${i}" title="Remove from tonight" aria-label="Remove ${esc(d ? d.title : "")}">✕</button>
+              </li>`;
+            }).join("")}
+          </ol>${tonightUi.edited ? `<div style="margin-top:6px;"><button type="button" class="nav-btn" id="btnTonightReset" style="padding:4px 10px; font-size:0.85rem;">↺ Reset plan</button></div>` : ""}`
+          : `<p class="tn-empty">No drills available in ${esc(md.label)} mode${tonightUi.edited ? ` - <button type="button" class="nav-btn" id="btnTonightReset">↺ Reset plan</button>` : "."}</p>`}
+        `;
+        el.querySelectorAll("[data-tn-mode]").forEach((b) => b.onclick = () => {
+          state.sessionPrefs = Object.assign({}, state.sessionPrefs, { mode: b.getAttribute("data-tn-mode") });
+          saveState(); renderTonightCard();
+        });
+        el.querySelectorAll("[data-tn-min]").forEach((b) => b.onclick = () => {
+          state.sessionPrefs = Object.assign({}, state.sessionPrefs, { minutes: Number(b.getAttribute("data-tn-min")) });
+          saveState(); renderTonightCard();
+        });
+        el.querySelectorAll("[data-tn-swap]").forEach((b) => b.onclick = () => swapPlanItem(Number(b.getAttribute("data-tn-swap"))));
+        el.querySelectorAll("[data-tn-remove]").forEach((b) => b.onclick = () => removePlanItem(Number(b.getAttribute("data-tn-remove"))));
+        const reset = document.getElementById("btnTonightReset");
+        if (reset) reset.onclick = () => { tonightUi.edited = false; tonightUi.plan = null; renderTonightCard(); };
+        document.getElementById("btnTonightStart").onclick = startSession;
+        const last = document.getElementById("btnTonightLast");
+        if (last && head) last.onclick = () => openSummary(head.s.id);
+        const endSaved = document.getElementById("btnTonightEndSaved");
+        if (endSaved) endSaved.onclick = () => { openMatShell(); finishSession(); };
+        const discard = document.getElementById("btnTonightDiscard");
+        if (discard) discard.onclick = () => {
+          const keep = state.activeSession;
+          state.activeSession = null;
+          postActiveDrill(null);
+          saveState(); renderTonightCard();
+          showUndoToast("Session discarded.", () => { state.activeSession = keep; saveState(); renderTonightCard(); });
+        };
+        updateSimPills();
+      }
+
+      // ---- active session lifecycle ----
+      const mat = { open: false, view: "run", confirm: false, advanceTimer: null, tick: null, lastShot: null, flash: null, summaryId: null, logDraft: null, wakeLock: null, returnFocus: null };
+
+      function curBlock() { const s = state.activeSession; return s ? s.blocks[s.idx] || null : null; }
+      function flushBlockTime(b) {
+        if (b && b.enteredAt) { b.secs = (b.secs || 0) + Math.max(0, (Date.now() - b.enteredAt) / 1000); b.enteredAt = Date.now(); }
+      }
+      function saveSessionState() { flushBlockTime(curBlock()); saveState(); }
+      function cancelAutoAdvance() { if (mat.advanceTimer) { clearTimeout(mat.advanceTimer); mat.advanceTimer = null; } }
+
+      function startSession() {
+        if (state.activeSession) { openMat(); return; }
+        const plan = getTonightPlan();
+        if (!plan.items.length) { showToast("No drills in tonight's plan - pick another mode or reset the plan."); return; }
+        const now = new Date();
+        state.activeSession = {
+          id: `s-${now.getTime().toString(36)}`,
+          date: todayISO(0),
+          mode: plan.mode,
+          minutes: plan.minutes,
+          routineId: plan.routineId,
+          startedAt: now.toISOString(),
+          endedAt: null,
+          idx: 0,
+          blocks: plan.items.map((it) => {
+            const d = drillById(it.drillId);
+            const target = getSessionTarget(d, plan.mode);
+            return { drillId: it.drillId, target, repGoal: repGoalFor(d, target), planMin: it.minutes, secs: 0, done: false, reps: [] };
+          })
+        };
+        tonightUi.edited = false;
+        openMat();
+      }
+
+      function enterBlock(i) {
+        const s = state.activeSession;
+        if (!s || i < 0 || i >= s.blocks.length) return;
+        const prev = curBlock();
+        if (prev && prev.enteredAt) { flushBlockTime(prev); prev.enteredAt = null; }
+        cancelAutoAdvance();
+        s.idx = i;
+        s.blocks[i].enteredAt = Date.now();
+        mat.lastShot = null;
+        postActiveDrill(s.blocks[i].drillId);
+        saveState();
+        renderMat();
+      }
+      function nextBlock() {
+        const s = state.activeSession;
+        if (!s) return;
+        if (s.idx < s.blocks.length - 1) enterBlock(s.idx + 1);
+        else finishSession();
+      }
+      function prevBlock() { const s = state.activeSession; if (s && s.idx > 0) enterBlock(s.idx - 1); }
+
+      function logRep(ok) {
+        const b = curBlock();
+        if (!b || mat.view !== "run") return;
+        const last = b.reps[b.reps.length - 1];
+        // Tapping right after an unscored shot scores that shot instead of adding a separate rep.
+        if (last && last.ok === null && last.shotTs && Date.now() - Date.parse(last.ts) < 30000) last.ok = ok;
+        else b.reps.push({ ok, value: null, ts: new Date().toISOString() });
+        if (mat.lastShot && last && last.shotTs && mat.lastShot.shot.ts === last.shotTs) mat.lastShot.score.ok = last.ok;
+        afterRep(ok);
+      }
+      function afterRep(ok) {
+        mat.flash = ok === true ? "hit" : ok === false ? "miss" : null;
+        saveSessionState();
+        renderMat();
+        const b = curBlock();
+        if (b && b.repGoal && b.reps.length >= b.repGoal && !mat.advanceTimer) {
+          mat.advanceTimer = setTimeout(() => { mat.advanceTimer = null; if (mat.open && mat.view === "run") nextBlock(); }, AUTO_ADVANCE_MS);
+          renderMat();
+        }
+      }
+      function undoRep() {
+        const b = curBlock();
+        if (!b || !b.reps.length) return;
+        b.reps.pop();
+        if (mat.advanceTimer && (!b.repGoal || b.reps.length < b.repGoal)) cancelAutoAdvance();
+        mat.flash = null;
+        saveSessionState();
+        renderMat();
+      }
+
+      function finishSession() {
+        const s = state.activeSession;
+        if (!s) { closeMat(); return; }
+        cancelAutoAdvance();
+        const b = curBlock();
+        if (b && b.enteredAt) { flushBlockTime(b); b.enteredAt = null; }
+        const blocks = s.blocks.map((x) => ({
+          drillId: x.drillId, target: x.target, repGoal: x.repGoal, planMin: x.planMin,
+          secs: Math.round(x.secs || 0), done: x.reps.length > 0 || (x.secs || 0) >= DONE_MIN_SECS, reps: x.reps
+        }));
+        state.activeSession = null;
+        postActiveDrill(null);
+        if (cadenceState.isPlaying) stopCadenceMetronome();
+        if (!blocks.some((x) => x.done)) {
+          saveState();
+          closeMat();
+          renderTonightCard();
+          showToast("Session ended - nothing logged, so nothing was saved.");
+          return;
+        }
+        const routineOk = s.routineId && blocks.some((x) => x.done && ((drillById(x.drillId) || {}).days || []).includes(s.routineId));
+        const done = {
+          id: s.id, date: s.date, mode: s.mode, minutes: s.minutes, routineId: routineOk ? s.routineId : null,
+          startedAt: s.startedAt, endedAt: new Date().toISOString(), savedToLog: false, blocks
+        };
+        state.sessions.push(done);
+        if (state.sessions.length > 500) state.sessions = state.sessions.slice(-500);
+        // Existing completed-drills mechanism (same rules as toggleDrillDoneToday).
+        const log = ensureDayLog(done.date);
+        for (const x of blocks) if (x.done && !log.completedDrills.includes(x.drillId)) log.completedDrills.push(x.drillId);
+        if (!log.status) { log.status = done.mode === "sore" ? "recovery" : "partial"; log.mode = done.mode; }
+        saveState();
+        renderHeader();
+        openSummary(done.id);
+      }
+
+      // ---- overlay open/close ----
+      function openMatShell() {
+        const ov = document.getElementById("matOverlay");
+        if (!mat.open) mat.returnFocus = document.activeElement;
+        mat.open = true;
+        ov.classList.remove("hidden");
+        document.body.classList.add("mat-open");
+        ov.focus({ preventScroll: true });
+        if (!mat.tick) mat.tick = setInterval(updateMatClock, 1000);
+        requestWakeLock();
+      }
+      function openMat() {
+        const s = state.activeSession;
+        if (!s) return;
+        mat.view = "run";
+        mat.confirm = false;
+        openMatShell();
+        enterBlock(Math.min(s.idx || 0, s.blocks.length - 1));
+      }
+      function openSummary(sessionId) {
+        const s = (state.sessions || []).find((x) => x.id === sessionId);
+        if (!s) return;
+        mat.view = "summary";
+        mat.confirm = false;
+        mat.summaryId = sessionId;
+        mat.logDraft = null;
+        openMatShell();
+        renderMat();
+        const ov = document.getElementById("matOverlay");
+        ov.scrollTop = 0;
+      }
+      function closeMat() {
+        cancelAutoAdvance();
+        const s = state.activeSession;
+        const b = curBlock();
+        if (b && b.enteredAt) { flushBlockTime(b); b.enteredAt = null; }
+        if (s) { postActiveDrill(null); saveState(); }
+        mat.open = false;
+        mat.confirm = false;
+        if (mat.tick) { clearInterval(mat.tick); mat.tick = null; }
+        const ov = document.getElementById("matOverlay");
+        ov.classList.add("hidden");
+        ov.innerHTML = "";
+        document.body.classList.remove("mat-open");
+        releaseWakeLock();
+        if (document.fullscreenElement && document.exitFullscreen) document.exitFullscreen().catch(() => {});
+        renderTonightCard();
+        renderHeader();
+        const back = document.getElementById("btnTonightStart") || mat.returnFocus;
+        if (back && back.focus) back.focus({ preventScroll: true });
+      }
+      async function requestWakeLock() {
+        try { if (navigator.wakeLock && !mat.wakeLock) mat.wakeLock = await navigator.wakeLock.request("screen"); } catch (e) { mat.wakeLock = null; }
+      }
+      function releaseWakeLock() { try { if (mat.wakeLock) mat.wakeLock.release(); } catch (e) { /* ignore */ } mat.wakeLock = null; }
+      function toggleFullscreen() {
+        const ov = document.getElementById("matOverlay");
+        if (document.fullscreenElement) { document.exitFullscreen().catch(() => {}); return; }
+        if (ov.requestFullscreen) ov.requestFullscreen().catch(() => showToast("Full screen not available here."));
+      }
+
+      // ---- tempo (existing cadence metronome) ----
+      function tempoPresetFor(drill, routineId) {
+        const presets = DEFAULTS.cadencePresets || [];
+        const has = (id) => presets.some((p) => p.id === id);
+        const fromText = (t) => { const m = /(\d{2})\s*\/\s*(\d{1,2})/.exec(String(t || "")); return m && has(`${m[1]}-${m[2]}`) ? `${m[1]}-${m[2]}` : null; };
+        if (!drill) return null;
+        for (const k of ["cadencePresetId", "cadencePreset", "tempoPreset", "cadence"]) {
+          const v = drill[k];
+          if (typeof v === "string" && v) { if (has(v)) return v; const p = fromText(v); if (p) return p; }
+        }
+        const days = drill.days || [];
+        const order = routineId && days.includes(routineId) ? [routineId].concat(days) : days;
+        for (const id of order) {
+          const r = (DEFAULTS.routines || []).find((x) => x.id === id);
+          const p = r && fromText(r.cadenceTarget);
+          if (p) return p;
+        }
+        return null;
+      }
+      function toggleSessionTempo() {
+        const s = state.activeSession, b = curBlock();
+        const id = b && tempoPresetFor(drillById(b.drillId), s.routineId);
+        if (!id) { toggleCadenceMetronome(); renderMat(); return; }
+        if (cadenceState.isPlaying && state.cadencePresetId === id) stopCadenceMetronome();
+        else {
+          if (cadenceState.isPlaying) stopCadenceMetronome();
+          state.cadencePresetId = id;
+          saveState();
+          startCadenceMetronome();
+        }
+        renderMat();
+      }
+
+      // ---- rendering: run view ----
+      function updateMatClock() {
+        if (!mat.open || mat.view !== "run") return;
+        const s = state.activeSession, b = curBlock();
+        if (!s || !b) return;
+        const drillSecs = (b.secs || 0) + (b.enteredAt ? (Date.now() - b.enteredAt) / 1000 : 0);
+        const sessSecs = (Date.now() - Date.parse(s.startedAt)) / 1000;
+        const dEl = document.getElementById("matDrillClock");
+        const sEl = document.getElementById("matSessClock");
+        if (dEl) {
+          dEl.querySelector("span").textContent = `${fmtClock(drillSecs)}${b.planMin ? ` / ${b.planMin}:00` : ""}`;
+          dEl.classList.toggle("over", !!b.planMin && drillSecs > b.planMin * 60);
+        }
+        if (sEl) sEl.querySelector("span").textContent = fmtClock(sessSecs);
+      }
+      function fmtVal(v, unit, signed) {
+        if (v === null || v === undefined) return "–";
+        const r = Math.round(v * 10) / 10;
+        return `${signed && r > 0 ? "+" : ""}${r}${unit || ""}`;
+      }
+      function renderShotPanel(s, b) {
+        const ls = mat.lastShot;
+        if (!ls) {
+          return `<div class="mat-shot"><div class="mat-shot-label">Last shot</div>
+            <div class="mat-verdict none">${bridge.live ? "Waiting for a shot…" : "Sim offline - tap ✓ Hit / ✗ Miss"}</div></div>`;
+        }
+        const sh = ls.shot, sc = ls.score, foam = s.mode === "almost";
+        const ball = sh.ball || {}, cd = sh.club_data || {};
+        const tiles = [];
+        const metric = b.target && b.target.metric;
+        if (!foam) tiles.push(["Ball speed", fmtVal(sNum(ball.speed), ""), metric === "ball_speed"]);
+        tiles.push(["HLA", fmtVal(sNum(ball.hla), "°", true), metric === "hla" || !metric || metric === "manual"]);
+        if (!foam && sNum(ball.carry) !== null) tiles.push(["Carry", fmtVal(sNum(ball.carry), ""), metric === "carry"]);
+        if (metric && ["face", "path", "aoa"].includes(metric)) tiles.push([SESSION_METRICS[metric].label, fmtVal(sNum(cd[metric]), "°", true), true]);
+        if (metric === "spin_axis" && !foam) tiles.push(["Spin axis", fmtVal(sNum(ball.spin_axis), "°", true), true]);
+        const verdict = sc.ok === true ? `<div class="mat-verdict hit">✓ HIT</div>`
+          : sc.ok === false ? `<div class="mat-verdict miss">✗ MISS</div>`
+          : `<div class="mat-verdict none">${sc.reason === "nodata" ? "No reading for this metric - tap ✓ / ✗" : "Not auto-scored - tap ✓ / ✗"}</div>`;
+        const clubWarn = b.target && b.target.club && sh.club && String(sh.club).toLowerCase().replace(/[^a-z0-9]/g, "") !== String(b.target.club).toLowerCase().replace(/[^a-z0-9]/g, "")
+          ? `<div class="mat-note">Club ${esc(sh.club)} (target: ${esc(b.target.club)})</div>` : "";
+        return `<div class="mat-shot ${sc.ok === true ? "hit" : sc.ok === false ? "miss" : ""}">
+          <div class="mat-shot-label">Last shot${sh.club ? ` · ${esc(sh.club)}` : ""}${sh.shot_num != null ? ` · #${esc(sh.shot_num)}` : ""}</div>
+          <div class="mat-shot-grid">${tiles.map(([k, v, f]) => `<div><div class="k">${esc(k)}</div><div class="v ${f ? "focus" : ""}">${esc(v)}</div></div>`).join("")}</div>
+          ${verdict}${clubWarn}
+        </div>`;
+      }
+      function renderMat() {
+        const ov = document.getElementById("matOverlay");
+        if (!ov || !mat.open) return;
+        if (mat.view === "summary") { renderSummary(ov); return; }
+        const s = state.activeSession, b = curBlock();
+        if (!s || !b) { closeMat(); return; }
+        const d = drillById(b.drillId);
+        const cue = (d && d.video && d.video.keyFrameCue) || (d && d.instructions && d.instructions[0]) || "";
+        const plan = d && d.modePlans && d.modePlans[s.mode];
+        const sc = blockScore(b);
+        const count = b.reps.length;
+        const tempoId = tempoPresetFor(d, s.routineId);
+        const tempoPreset = (DEFAULTS.cadencePresets || []).find((p) => p.id === tempoId);
+        const tempoOn = cadenceState.isPlaying && (!tempoId || state.cadencePresetId === tempoId);
+        const isLast = s.idx === s.blocks.length - 1;
+        const unscored = b.reps.filter((r) => r.ok === null).length;
+        const t = b.target;
+        const canAdjust = t && t.metric !== "manual" && SESSION_METRICS[t.metric].step;
+        const flashCls = mat.flash ? "mat-flash" : "";
+        ov.innerHTML = `
+          <div class="mat-top">
+            <div class="mat-progress" aria-label="Drill ${s.idx + 1} of ${s.blocks.length}">${s.idx + 1}/${s.blocks.length}</div>
+            <div class="mat-clock" id="matDrillClock"><small>Drill</small><span></span></div>
+            <div class="mat-clock" id="matSessClock"><small>Session</small><span></span></div>
+            <span class="sim-pill" data-sim-pill></span>
+            <div class="mat-top-btns">
+              <button type="button" class="mat-small-btn ${tempoOn ? "active" : ""}" id="matTempo" title="Start/stop the cadence metronome${tempoPreset ? ` at ${esc(tempoPreset.name)}` : ""} (T)">Tempo ${tempoOn ? "❚❚" : "▶"} ${esc(tempoPreset ? tempoPreset.name.split(" ")[0] : "")}</button>
+              <button type="button" class="mat-small-btn" id="matFull" title="Full screen">⛶</button>
+            </div>
+          </div>
+          <h1 class="mat-title">${esc(d ? d.title : b.drillId)}</h1>
+          ${cue ? `<p class="mat-cue">${esc(cue)}</p>` : ""}
+          <div class="mat-target">
+            ${t ? `<span>🎯 ${esc(targetText(t))}</span>` : `<span>${esc(d && d.reps ? d.reps : "")}</span>`}
+            ${canAdjust ? `<button type="button" class="mat-small-btn mat-goal-btn" data-goal="-1" aria-label="Lower goal">−</button><button type="button" class="mat-small-btn mat-goal-btn" data-goal="1" aria-label="Raise goal">+</button>` : ""}
+            ${t && t.pass && b.repGoal ? `<span>· pass ${t.pass}/${b.repGoal}</span>` : ""}
+          </div>
+          ${plan && s.mode !== "real" ? `<div class="mat-note">${esc(modeDef(s.mode).shortLabel)}: ${esc(plan)}</div>` : ""}
+          <div class="mat-main">
+            <div class="${flashCls}">
+              <div class="mat-count" aria-live="polite">${count}${b.repGoal ? `<span class="of"> / ${b.repGoal}</span>` : ""}</div>
+              <div class="mat-hm"><span class="h">✓ ${sc.hits}</span> &nbsp; <span class="m">✗ ${sc.n - sc.hits}</span>${sc.n ? ` &nbsp; <span class="r">${Math.round((sc.hits / sc.n) * 100)}%</span>` : ""}${unscored ? ` &nbsp; <span class="r" style="font-size:22px;">${unscored} unscored</span>` : ""}</div>
+            </div>
+            ${renderShotPanel(s, b)}
+          </div>
+          ${mat.advanceTimer ? `<div class="mat-banner" role="status">✓ Rep goal reached - ${isLast ? "finishing session" : "next drill"} in a moment (Undo to stay)</div>` : ""}
+          <div class="mat-actions mat-run-actions">
+            <button type="button" class="mat-btn hit" id="matHit">✓ Hit<small>Space · H · 1</small></button>
+            <button type="button" class="mat-btn miss" id="matMiss">✗ Miss<small>M · X · 2</small></button>
+            <button type="button" class="mat-btn" id="matUndo">Undo<small>Backspace</small></button>
+            <button type="button" class="mat-btn" id="matPrev" ${s.idx === 0 ? "disabled" : ""}>‹ Prev<small>PgUp · ←</small></button>
+            <button type="button" class="mat-btn" id="matNext">${isLast ? "Finish" : "Next ›"}<small>PgDn · →</small></button>
+            <button type="button" class="mat-btn end" id="matEnd">End<small>Esc</small></button>
+          </div>
+          <div class="mat-keys">Presenter clicker: PgDn = next · PgUp = prev · T = tempo · Shots from the sim are logged automatically when it is live.</div>
+          ${mat.confirm ? `<div class="mat-confirm" role="alertdialog" aria-modal="true" aria-labelledby="matConfirmTitle">
+            <div class="mat-confirm-box">
+              <h2 id="matConfirmTitle">End session?</h2>
+              <p>${s.blocks.reduce((tt, x) => tt + x.reps.length, 0)} reps logged so far.</p>
+              <div class="mat-actions">
+                <button type="button" class="mat-btn hit" id="matConfirmEnd" style="font-size:28px;">End &amp; summary<small>Enter</small></button>
+                <button type="button" class="mat-btn" id="matConfirmPause">Pause<small>resume later</small></button>
+                <button type="button" class="mat-btn" id="matConfirmKeep">Keep going<small>Esc</small></button>
+              </div>
+            </div>
+          </div>` : ""}
+        `;
+        mat.flash = null;
+        const on = (id, fn) => { const n = document.getElementById(id); if (n) n.onclick = fn; };
+        on("matHit", () => logRep(true));
+        on("matMiss", () => logRep(false));
+        on("matUndo", undoRep);
+        on("matPrev", prevBlock);
+        on("matNext", nextBlock);
+        on("matEnd", requestEndSession);
+        on("matTempo", toggleSessionTempo);
+        on("matFull", toggleFullscreen);
+        on("matConfirmEnd", () => { mat.confirm = false; finishSession(); });
+        on("matConfirmPause", () => { mat.confirm = false; closeMat(); showToast("Session paused - Resume from the Tonight card."); });
+        on("matConfirmKeep", () => { mat.confirm = false; renderMat(); });
+        ov.querySelectorAll("[data-goal]").forEach((n) => n.onclick = () => {
+          const step = SESSION_METRICS[t.metric].step * Number(n.getAttribute("data-goal"));
+          t.goal = Math.round((t.goal + step) * 10) / 10;
+          saveSessionState();
+          renderMat();
+        });
+        updateSimPills();
+        updateMatClock();
+        if (mat.confirm) { const c = document.getElementById("matConfirmEnd"); if (c) c.focus(); }
+      }
+      function requestEndSession() {
+        const s = state.activeSession;
+        if (!s) { closeMat(); return; }
+        const reps = s.blocks.reduce((t, x) => t + x.reps.length, 0);
+        if (reps > 0 || s.blocks.some((x) => (x.secs || 0) >= DONE_MIN_SECS)) { mat.confirm = true; renderMat(); return; }
+        // Nothing logged: just leave (and drop the empty session).
+        state.activeSession = null;
+        postActiveDrill(null);
+        saveState();
+        closeMat();
+      }
+
+      // ---- rendering: summary view ----
+      function prevRateBefore(drillId, sessionId) {
+        let prev = null;
+        for (const s of sortedSessions()) {
+          if (s.id === sessionId) break;
+          const sc = sessionDrillScore(s, drillId);
+          if (sc.n) prev = sc.rate;
+        }
+        return prev;
+      }
+      function sessionAutoNote(s) {
+        const parts = s.blocks.filter((b) => b.done).map((b) => {
+          const d = drillById(b.drillId), sc = blockScore(b);
+          return `${shortTitle(d, 28)} ${sc.n ? `${sc.hits}/${sc.n}` : `${b.reps.length} reps`}`;
+        });
+        return `Mat session ${sessionMinutes(s)}m (${modeDef(s.mode).shortLabel || s.mode}): ${parts.join(", ")}`;
+      }
+      function renderSummary(ov) {
+        const s = (state.sessions || []).find((x) => x.id === mat.summaryId);
+        if (!s) { closeMat(); return; }
+        const planned = s.blocks.length;
+        const doneN = s.blocks.filter((b) => b.done).length;
+        const balls = s.blocks.reduce((t, b) => t + b.reps.length, 0);
+        let hitsAll = 0, nAll = 0;
+        const rows = s.blocks.map((b) => {
+          const sc = blockScore(b);
+          hitsAll += sc.hits; nAll += sc.n;
+          const prev = prevRateBefore(b.drillId, s.id);
+          const rate = sc.n ? sc.hits / sc.n : null;
+          const delta = rate !== null && prev !== null ? Math.round((rate - prev) * 100) : null;
+          const trend = drillRateHistory(b.drillId, 5, s.id).map((h) => h.rate);
+          return { b, d: drillById(b.drillId), sc, rate, delta, trend };
+        });
+        const scored = rows.filter((r) => r.rate !== null);
+        const best = scored.length ? scored.reduce((a, r) => (r.rate > a.rate ? r : a)) : null;
+        const worstC = scored.length > 1 ? scored.reduce((a, r) => (r.rate < a.rate ? r : a)) : null;
+        const worst = worstC && best && worstC.rate < best.rate ? worstC : null;
+        const log = getDayLog(s.date);
+        if (!mat.logDraft || mat.logDraft.id !== s.id) {
+          const derived = doneN === planned ? "met" : doneN > 0 ? "partial" : "missed";
+          const note = sessionAutoNote(s);
+          const existing = String(log.notes || "");
+          mat.logDraft = {
+            id: s.id,
+            status: log.status === "met" ? "met" : derived,
+            quality: typeof log.quality === "number" ? log.quality : 4,
+            notes: s.savedToLog || existing.includes(note) ? existing : (existing ? existing + "\n" : "") + note
+          };
+        }
+        const dr = mat.logDraft;
+        const statusOpts = [["met", "✅ Met"], ["partial", "⚡ Partial"], ["recovery", "💪 Recovery"], ["missed", "❌ Missed"]];
+        ov.innerHTML = `
+          <div class="mat-sum">
+            <div class="mat-top">
+              <div class="mat-progress">Session summary</div>
+              <span class="sim-pill" data-sim-pill></span>
+              <div class="mat-top-btns"><button type="button" class="mat-small-btn" id="sumClose">Close (Esc)</button></div>
+            </div>
+            <h2>${doneN}/${planned} drills · ${sessionMinutes(s)} min</h2>
+            <div class="sum-sub">${esc(weekdayShort(s.date))} ${esc(s.date)} · ${esc(modeDef(s.mode).label)}${s.routineId ? ` · ${esc(((DEFAULTS.routines || []).find((r) => r.id === s.routineId) || {}).title || s.routineId)}` : ""}</div>
+            <div class="sum-kpis">
+              <div class="sum-kpi"><div class="k">Total balls / reps</div><div class="v">${balls}</div></div>
+              <div class="sum-kpi"><div class="k">Hit rate</div><div class="v">${nAll ? Math.round((hitsAll / nAll) * 100) + "%" : "–"}</div><div class="s">${nAll ? `${hitsAll}/${nAll} scored` : "nothing scored"}</div></div>
+              <div class="sum-kpi"><div class="k">Best</div><div class="v" style="font-size:26px;">${best ? esc(shortTitle(best.d, 24)) : "–"}</div><div class="s">${best ? Math.round(best.rate * 100) + "%" : ""}</div></div>
+              <div class="sum-kpi"><div class="k">Needs work</div><div class="v" style="font-size:26px;">${worst ? esc(shortTitle(worst.d, 24)) : "–"}</div><div class="s">${worst ? Math.round(worst.rate * 100) + "%" : ""}</div></div>
+            </div>
+            <table class="sum-table">
+              <thead><tr><th>Drill</th><th>Hits</th><th>Rate</th><th class="hide-sm">vs last</th><th>Trend</th></tr></thead>
+              <tbody>${rows.map((r) => `<tr>
+                <td>${esc(r.d ? r.d.title : r.b.drillId)}${r.b.done ? "" : ` <span style="color:#94a3b8;">(skipped)</span>`}<div style="font-size:15px; color:#94a3b8;">${esc(r.b.target ? targetText(r.b.target) : "")}${r.b.secs ? ` · ${fmtClock(r.b.secs)}` : ""}</div></td>
+                <td>${r.sc.n ? `${r.sc.hits}/${r.sc.n}` : `${r.b.reps.length} reps`}</td>
+                <td class="pct">${r.rate !== null ? Math.round(r.rate * 100) + "%" : "–"}</td>
+                <td class="hide-sm">${r.delta === null ? `<span class="delta-flat">${r.rate === null ? "" : "first time"}</span>` : (r.delta === 0 ? `<span class="delta-flat">same as last</span>` : `<span class="${r.delta > 0 ? "delta-up" : "delta-down"}">${r.delta > 0 ? "+" : ""}${r.delta}% vs last</span>`)}</td>
+                <td>${sparklineSvg(r.trend, 80, 26)}</td>
+              </tr>`).join("")}</tbody>
+            </table>
+            <div class="sum-log">
+              <h3>📅 Daily delivery log · ${esc(s.date)}${s.savedToLog ? ` <span style="color:#4ade80; font-size:20px;">✓ saved</span>` : ""}</h3>
+              <div class="row" role="group" aria-label="Status"><span style="min-width:90px;">Status</span>${statusOpts.map(([v, l]) => `<button type="button" class="opt" data-sum-status="${v}" aria-pressed="${dr.status === v}">${l}</button>`).join("")}</div>
+              <div class="row" role="group" aria-label="Quality"><span style="min-width:90px;">Quality</span>${[1, 2, 3, 4, 5].map((n) => `<button type="button" class="opt" data-sum-q="${n}" aria-pressed="${dr.quality === n}">${n}</button>`).join("")}</div>
+              <label for="sumNotes" style="font-size:18px; color:#cbd5e1;">Notes</label>
+              <textarea id="sumNotes">${esc(dr.notes)}</textarea>
+              <div class="sum-actions">
+                <button type="button" class="mat-btn primary" id="sumSave">💾 ${s.savedToLog ? "Update day log" : "Save to day log"}</button>
+                <button type="button" class="mat-btn" id="sumOpenLog">Open day log</button>
+                <button type="button" class="mat-btn" id="sumDone">Done</button>
+              </div>
+            </div>
+          </div>`;
+        ov.querySelectorAll("[data-sum-status]").forEach((n) => n.onclick = () => { dr.notes = document.getElementById("sumNotes").value; dr.status = n.getAttribute("data-sum-status"); renderMat(); });
+        ov.querySelectorAll("[data-sum-q]").forEach((n) => n.onclick = () => { dr.notes = document.getElementById("sumNotes").value; dr.quality = Number(n.getAttribute("data-sum-q")); renderMat(); });
+        document.getElementById("sumNotes").oninput = (e) => { dr.notes = e.target.value; };
+        document.getElementById("sumSave").onclick = () => saveSessionToDayLog(s);
+        document.getElementById("sumClose").onclick = closeMat;
+        document.getElementById("sumDone").onclick = closeMat;
+        document.getElementById("sumOpenLog").onclick = () => {
+          state.selectedLogDate = s.date;
+          state.activeView = "tracker";
+          closeMat();
+          renderAll();
+          window.scrollTo(0, 0);
+        };
+        updateSimPills();
+      }
+      function saveSessionToDayLog(s) {
+        const dr = mat.logDraft;
+        const log = ensureDayLog(s.date);
+        log.status = dr.status;
+        log.mode = s.mode;
+        log.quality = dr.quality;
+        log.notes = String(dr.notes || "");
+        for (const b of s.blocks) if (b.done && !log.completedDrills.includes(b.drillId)) log.completedDrills.push(b.drillId);
+        s.savedToLog = true;
+        saveState();
+        renderHeader();
+        showToast(`Saved to day log for ${s.date}`);
+        renderMat();
+      }
+
+      // ---- keyboard: scoped to the overlay (capture phase, so the page's T / M / arrows never fire underneath) ----
+      window.addEventListener("keydown", (e) => {
+        if (!mat.open) return;
+        const tgt = e.target || {};
+        const typing = tgt.tagName === "TEXTAREA" || tgt.tagName === "INPUT" || tgt.tagName === "SELECT";
+        e.stopImmediatePropagation();
+        if (e.key === "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
+        if (mat.view === "summary") {
+          if (e.key === "Escape") { e.preventDefault(); closeMat(); }
+          return;
+        }
+        if (typing) return;
+        const k = e.key;
+        if (mat.confirm) {
+          if (k === "Escape") { e.preventDefault(); mat.confirm = false; renderMat(); }
+          else if (k === "Enter") { e.preventDefault(); mat.confirm = false; finishSession(); }
+          return;
+        }
+        const handled = () => e.preventDefault();
+        if (k === "PageDown" || k === "ArrowRight") { handled(); if (!e.repeat) nextBlock(); }
+        else if (k === "PageUp" || k === "ArrowLeft") { handled(); if (!e.repeat) prevBlock(); }
+        else if (k === " " || k === "h" || k === "H" || k === "1") { handled(); if (!e.repeat) logRep(true); }
+        else if (k === "m" || k === "M" || k === "x" || k === "X" || k === "2") { handled(); if (!e.repeat) logRep(false); }
+        else if (k === "Backspace" || k === "u" || k === "U") { handled(); undoRep(); }
+        else if (k === "t" || k === "T") { handled(); if (!e.repeat) toggleSessionTempo(); }
+        else if (k === "Escape") { handled(); requestEndSession(); }
+        else if (k === "ArrowUp" || k === "ArrowDown" || k === "b" || k === "B" || k === ".") { handled(); } // clicker "blank" keys etc.: swallow
+      }, true);
+
+      // ---- live shot bridge (simwatch.py bridge; CORS-enabled so it works from file://) ----
+      const bridge = { es: null, live: false, retry: null, seen: new Set(), status: null, lastShot: null };
+      function updateSimPills() {
+        const st = bridge.status || {};
+        document.querySelectorAll("[data-sim-pill]").forEach((n) => {
+          n.classList.toggle("live", bridge.live);
+          n.textContent = bridge.live ? "Sim live" : "Sim offline (manual scoring)";
+          n.title = bridge.live
+            ? `Shot bridge connected${st.sniffer_ok ? " · GSPro feed OK" : " · waiting for the GSPro feed"}${st.last_shot_ts ? ` · last shot ${st.last_shot_ts}` : ""}`
+            : `No shot bridge at ${BRIDGE_URL} - run "python simwatch.py bridge" (retrying every 15s). Tap ✓ / ✗ to score.`;
+        });
+      }
+      function setBridgeLive(live) {
+        const was = bridge.live;
+        bridge.live = live;
+        updateSimPills();
+        if (live && !was && state.activeSession && mat.open && mat.view === "run") postActiveDrill(curBlock() && curBlock().drillId);
+        if (was !== live && mat.open && mat.view === "run" && !mat.lastShot) renderMat();
+      }
+      function scheduleBridgeRetry() {
+        clearTimeout(bridge.retry);
+        bridge.retry = setTimeout(bridgeConnect, 15000);
+      }
+      async function bridgeConnect() {
+        clearTimeout(bridge.retry);
+        if (bridge.es) return;
+        if (typeof window.EventSource !== "function" || typeof window.fetch !== "function") { setBridgeLive(false); return; }
+        try {
+          const ctl = typeof AbortController === "function" ? new AbortController() : null;
+          const to = ctl ? setTimeout(() => ctl.abort(), 2500) : null;
+          const res = await fetch(`${BRIDGE_URL}/api/status`, { cache: "no-store", signal: ctl ? ctl.signal : undefined });
+          if (to) clearTimeout(to);
+          const doc = await res.json();
+          if (!res.ok || !doc || doc.ok !== true) throw new Error("bad status");
+          bridge.status = doc;
+        } catch (e) {
+          setBridgeLive(false);
+          scheduleBridgeRetry();
+          return;
+        }
+        let es;
+        try { es = new EventSource(`${BRIDGE_URL}/api/events`); } catch (e) { setBridgeLive(false); scheduleBridgeRetry(); return; }
+        bridge.es = es;
+        es.onopen = () => setBridgeLive(true);
+        es.addEventListener("status", (ev) => {
+          try { const doc = JSON.parse(ev.data); if (isPlainObj(doc)) bridge.status = doc; } catch (e) { /* ignore */ }
+          setBridgeLive(true);
+        });
+        es.addEventListener("shot", (ev) => {
+          let shot = null;
+          try { shot = JSON.parse(ev.data); } catch (e) { return; }
+          onBridgeShot(shot);
+        });
+        es.onerror = () => {
+          es.close();
+          if (bridge.es === es) bridge.es = null;
+          setBridgeLive(false);
+          scheduleBridgeRetry();
+        };
+      }
+      function postActiveDrill(drillId) {
+        if (!bridge.live || typeof window.fetch !== "function") return;
+        const id = typeof drillId === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(drillId) ? drillId : null;
+        fetch(`${BRIDGE_URL}/api/drill`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ drill_id: id })
+        }).catch(() => { /* bridge went away; the EventSource error handler flips the pill */ });
+      }
+      function onBridgeShot(shot) {
+        if (!isPlainObj(shot) || typeof shot.ts !== "string" || !shot.ts) return;
+        if (bridge.seen.has(shot.ts)) return; // ts is the unique key (shot_num resets)
+        bridge.seen.add(shot.ts);
+        if (bridge.seen.size > 3000) bridge.seen = new Set(Array.from(bridge.seen).slice(-1000));
+        bridge.lastShot = shot;
+        if (bridge.status) bridge.status.last_shot_ts = shot.ts;
+        const s = state.activeSession, b = curBlock();
+        if (!mat.open || mat.view !== "run" || !s || !b || mat.confirm) { updateSimPills(); return; }
+        const sc = scoreShot(shot, b.target, s.mode);
+        b.reps.push({ ok: sc.ok, value: sc.value, ts: new Date().toISOString(), shotTs: shot.ts });
+        mat.lastShot = { shot, score: sc };
+        afterRep(sc.ok);
+      }
+
+      // ============================== END SESSION ==============================
+
+      function enhanceA11y() {
+        document.querySelectorAll(CLICKABLE_SEL).forEach((n) => {
+          if (n.tagName === "BUTTON" || n.tagName === "A") return;
+          if (!n.hasAttribute("role")) n.setAttribute("role", "button");
+          if (!n.hasAttribute("tabindex")) n.setAttribute("tabindex", "0");
+        });
+        const orb = document.getElementById("tempoOrb");
+        if (orb) { orb.setAttribute("aria-pressed", String(cadenceState.isPlaying)); orb.setAttribute("aria-label", cadenceState.isPlaying ? "Stop metronome" : "Start metronome"); }
+        document.querySelectorAll("[data-pick-cadence]").forEach((n) => n.setAttribute("aria-pressed", String(n.classList.contains("active") || n.classList.contains("is-active") || n.getAttribute("data-pick-cadence") === state.cadencePresetId)));
+        document.querySelectorAll("[data-routine],[data-section]").forEach((n) => n.setAttribute("aria-pressed", String(n.classList.contains("active"))));
+        document.querySelectorAll(".btn-pill:not([role=tab])").forEach((n) => n.setAttribute("aria-pressed", String(n.classList.contains("active"))));
+        document.querySelectorAll("#btnCadencePlayToggle, #btnTopbarCadence").forEach((n) => n.setAttribute("aria-pressed", String(cadenceState.isPlaying)));
+      }
+      document.addEventListener("keydown", (e) => {
+        if ((e.key === "Enter" || e.key === " ") && e.target && e.target.getAttribute && e.target.getAttribute("role") === "button" &&
+            e.target.tagName !== "BUTTON" && !e.altKey && !e.ctrlKey && !e.metaKey) {
+          e.preventDefault();
+          e.stopPropagation();
+          e.target.click();
+        }
+      }, true);
 
       function renderAll() {
         renderHeader();
         renderModeBar();
         renderViewTabs();
         renderFilterBar();
+        renderTonightCard();
 
         ["deck", "browse", "tracker", "courses", "editor", "cadence", "bag"].forEach((v) => {
           const viewEl = document.getElementById(`view-${v}`);
@@ -4823,6 +6584,7 @@
         else if (state.activeView === "editor") renderEditor();
         else if (state.activeView === "cadence") renderCadence();
         else if (state.activeView === "bag") renderBag();
+        enhanceA11y();
       }
 
       // Deck navigation listeners
@@ -4833,19 +6595,23 @@
 
       // Keyboard navigation (ignore when typing inside inputs/textareas/selects or holding modifier keys)
       window.addEventListener("keydown", (e) => {
-        if (e.altKey || e.ctrlKey || e.metaKey) return;
-        const tag = (e.target && e.target.tagName) || "";
-        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
+        if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey && e.key.length > 1 || e.defaultPrevented) return;
+        const tgt = e.target || {};
+        const tag = tgt.tagName || "";
+        if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || tgt.isContentEditable ||
+            (tgt.getAttribute && /^(textbox|combobox|slider|spinbutton|searchbox)$/.test(tgt.getAttribute("role") || ""))) return;
 
         // Global Cadence Metronome toggle
         if (e.key === "t" || e.key === "T") {
           e.preventDefault();
+          if (e.repeat) return; // holding T must not flap the metronome on/off
           toggleCadenceMetronome();
           return;
         }
 
         // Drill deck navigation only on Deck view
         if (state.activeView !== "deck") return;
+        if (tag === "VIDEO" && e.key.startsWith("Arrow")) return;
 
         if (e.key === "ArrowLeft") {
           e.preventDefault();
@@ -4860,7 +6626,7 @@
           e.preventDefault();
           jumpSection(1);
         } else if (e.key === " " || e.code === "Space") {
-          if (tag === "BUTTON" || tag === "A") return;
+          if (tag === "BUTTON" || tag === "A" || tag === "VIDEO" || (tgt.getAttribute && tgt.getAttribute("role") === "button")) return;
           const vid = document.getElementById("drillVideo");
           if (vid && !vid.classList.contains("hidden")) {
             e.preventDefault();
@@ -4876,6 +6642,9 @@
       });
 
       renderAll();
+      loadShortsHandles();
+      bridgeConnect();
+      if (backupIsStale()) setTimeout(() => showToast("Reminder: " + backupStatusText() + " (Editor tab > Export Full Backup)"), 1200);
     })();
   </script>
 </body>
