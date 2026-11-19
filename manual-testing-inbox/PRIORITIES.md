@@ -12,6 +12,9 @@
 - [ ] Drills content accuracy & safety (HackMotion, Gym-Sore, new drills) - see `drills-content-accuracy.md`
 - [ ] Drills hub fixes - see `drills-hub-fixes.md`
 - [ ] Swing Checklist - see `swing-checklist.md`
+- [ ] Feels, test blocks & personalized checklist - see `feels-and-blocks.md`
+- [ ] Bridge session context + session stats - see `bridge-session-context.md`
+- [ ] Drill library expansion (faults, environments, templates) - see `drill-library-expansion.md`
 
 ## Minor
 

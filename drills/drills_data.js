@@ -142,6 +142,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "T-Spine Open Books + Hip CARs Setup Flow",
       "section": "Mobility & Setup Calibration",
       "focus": "Rotation Separation & Posture",
+      "faultTags": ["poor-setup-posture","overturning"],
+      "environments": ["mirror","gym"],
+      "swingPhase": "setup",
+      "equipment": ["Alignment stick"],
+      "keyFeel": "Open your ribcage and hips first so the turn comes from the body, not the arms.",
+      "pacing": "block",
       "days": [
         "daily-calibration",
         "gym-sore",
@@ -188,6 +194,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "Towel Behind Ball + Tee Strike Spray Calibration",
       "section": "Mobility & Setup Calibration",
       "focus": "Ball-First Strike & Low Point",
+      "faultTags": ["low-point-control","early-release-scoop"],
+      "environments": ["sim","range"],
+      "swingPhase": "impact",
+      "equipment": ["Towel","Tee"],
+      "keyFeel": "Strike the ball first and the turf after, without touching the towel.",
+      "pacing": "block",
       "days": [
         "daily-calibration",
         "kids-asleep",
@@ -233,6 +245,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "9-to-3 Delivery Reset (Metronome Sync)",
       "section": "Mobility & Setup Calibration",
       "focus": "Arms-Body Sync & Face Control",
+      "faultTags": ["holding-off","face-control"],
+      "environments": ["sim","range","mirror"],
+      "swingPhase": "impact",
+      "equipment": [],
+      "keyFeel": "Body and arms arrive together from hip height to hip height.",
+      "pacing": "block",
       "days": [
         "daily-calibration",
         "kids-asleep",
@@ -291,6 +309,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "Headcover Gate P2 One-Piece Takeaway",
       "section": "P1-P4 Backswing Structure",
       "focus": "Prevent Inside Roll & Steep Top",
+      "faultTags": ["takeaway-inside-roll","over-the-top"],
+      "environments": ["sim","range"],
+      "swingPhase": "takeaway",
+      "equipment": ["Headcover"],
+      "keyFeel": "Move the club straight back past the headcover with the clubhead outside your hands.",
+      "pacing": "block",
       "days": [
         "day-1-takeaway",
         "kids-asleep",
@@ -335,6 +359,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "Trail-Side Wall / Stick P4 Depth Check",
       "section": "P1-P4 Backswing Structure",
       "focus": "Hip Depth & Structure at the Top",
+      "faultTags": ["early-extension","overturning"],
+      "environments": ["mirror","sim"],
+      "swingPhase": "top",
+      "equipment": ["Wall, chair or golf bag"],
+      "keyFeel": "Turn back into your trail glute with depth, not sideways away from the ball.",
+      "pacing": "block",
       "days": [
         "day-1-takeaway",
         "gym-sore"
@@ -378,6 +408,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "P4-to-P5 Split-Hand Shallowing Pump",
       "section": "P4-P6 Transition & Shallowing",
       "focus": "Drop Trail Elbow & Shallow Shaft",
+      "faultTags": ["over-the-top","lazy-transition","trail-elbow-flying"],
+      "environments": ["sim","range","mirror"],
+      "swingPhase": "transition",
+      "equipment": [],
+      "keyFeel": "Drop the hands and trail elbow into the slot before the shoulders turn.",
+      "pacing": "block",
       "days": [
         "day-2-transition",
         "kids-asleep",
@@ -435,6 +471,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "Gary Player Step-Through Sequencing Drill",
       "section": "P4-P6 Transition & Shallowing",
       "focus": "Ground Force & Sequence Timing",
+      "faultTags": ["lazy-transition","low-speed"],
+      "environments": ["sim","range"],
+      "swingPhase": "transition",
+      "equipment": [],
+      "keyFeel": "Push into the ground and get to the lead side before you turn.",
+      "pacing": "block",
       "days": [
         "day-2-transition",
         "day-5-driver"
@@ -478,6 +520,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "Alignment Stick / Noodle Anti-OTT Plane Guard",
       "section": "P4-P6 Transition & Shallowing",
       "focus": "Neutralize Steep Over-The-Top Path",
+      "faultTags": ["over-the-top"],
+      "environments": ["sim","range"],
+      "swingPhase": "transition",
+      "equipment": ["Pool noodle or alignment stick"],
+      "keyFeel": "Swing under the noodle and keep the handle on the inside track.",
+      "pacing": "block",
       "days": [
         "day-2-transition",
         "kids-asleep"
@@ -520,6 +568,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "Impact Bag + Motorcycle Lead-Wrist Bow Drill",
       "section": "P6-P8 Impact & Compression",
       "focus": "Forward Shaft Lean & Face Squareness",
+      "faultTags": ["early-release-scoop"],
+      "environments": ["sim","mirror"],
+      "swingPhase": "impact",
+      "equipment": ["Impact bag"],
+      "keyFeel": "Handle ahead of the clubhead with the lead wrist bent forward at impact.",
+      "pacing": "block",
       "days": [
         "day-3-impact",
         "gym-sore"
@@ -576,6 +630,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "Hip Clearance / Anti-Early-Extension Doorframe Feel",
       "section": "P6-P8 Impact & Compression",
       "focus": "Eliminate Early Extension & Scoop",
+      "faultTags": ["early-extension","early-release-scoop"],
+      "environments": ["mirror","sim"],
+      "swingPhase": "impact",
+      "equipment": ["Chair or golf bag"],
+      "keyFeel": "Slide the lead hip back, not at the ball, so your arms have room.",
+      "pacing": "block",
       "days": [
         "day-3-impact",
         "gym-sore",
@@ -620,6 +680,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "3-Clock Wedge Matrix (8 / 9 / 10:30 Systems)",
       "section": "Scoring Wedges & Start Line",
       "focus": "Repeatable Carry Gaps & Trajectory",
+      "faultTags": ["wedge-distance"],
+      "environments": ["sim","range"],
+      "swingPhase": "short-game",
+      "equipment": [],
+      "keyFeel": "Match swing length to the clock face and log every carry.",
+      "pacing": "block",
       "days": [
         "day-4-wedges",
         "kids-asleep"
@@ -676,6 +742,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "Silent Ruler / Tee-Gate Start-Line Precision",
       "section": "Scoring Wedges & Start Line",
       "focus": "Face-at-Impact Calibration (Zero Impact)",
+      "faultTags": ["putting-start-line"],
+      "environments": ["putting-mat","sim"],
+      "swingPhase": "putting",
+      "equipment": ["Alignment sticks or tees"],
+      "keyFeel": "Start the ball through the gate by keeping the face square at impact.",
+      "pacing": "either",
       "days": [
         "kids-asleep",
         "gym-sore",
@@ -733,6 +805,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "Driver Upward AoA Gate (Forward Tee + Box Shield)",
       "section": "Driver Launch & Start Line",
       "focus": "+2 to +4 Deg Attack Angle & High Launch",
+      "faultTags": ["steep-driver-aoa"],
+      "environments": ["sim","range"],
+      "swingPhase": "impact",
+      "equipment": ["Headcover","Tee"],
+      "keyFeel": "Swing up through the ball off a high tee without hitting the front box.",
+      "pacing": "block",
       "days": [
         "day-5-driver"
       ],
@@ -787,6 +865,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "One-Side Miss Fairway Start-Line Test",
       "section": "Driver Launch & Start Line",
       "focus": "Eliminate Two-Way Miss & Pressure Reps",
+      "faultTags": ["face-control","driver-hook","open-face-slice"],
+      "environments": ["sim","range","course"],
+      "swingPhase": "impact",
+      "equipment": ["Alignment sticks"],
+      "keyFeel": "Pick one fairway side and hold the line under pressure.",
+      "pacing": "transfer",
       "days": [
         "day-5-driver"
       ],
@@ -827,6 +911,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "HackMotion Motorcycle Shallowing & Flexion Lock (P5-P6)",
       "section": "P4-P6 Transition & Shallowing",
       "focus": "Lead Wrist Flexion & Early Face Squaring",
+      "faultTags": ["early-release-scoop","top-position-wrist"],
+      "environments": ["sim","mirror"],
+      "swingPhase": "transition",
+      "equipment": ["HackMotion sensor"],
+      "keyFeel": "Flex the lead wrist into the downswing and keep it there at P6.",
+      "pacing": "block",
       "days": [
         "day-2-transition",
         "daily-calibration",
@@ -887,6 +977,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "HackMotion Pure Shaft Lean & Compression (P7 Strike)",
       "section": "P6-P8 Impact & Compression",
       "focus": "Anti-Scoop & Forward Shaft Lean",
+      "faultTags": ["early-release-scoop"],
+      "environments": ["sim"],
+      "swingPhase": "impact",
+      "equipment": ["HackMotion sensor","Impact bag"],
+      "keyFeel": "Lead the clubhead with the handle through impact.",
+      "pacing": "block",
       "days": [
         "day-3-impact",
         "daily-calibration",
@@ -946,6 +1042,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "HackMotion P4 Top-of-Swing Face Alignment (Anti-Slice Cup Fix)",
       "section": "P1-P4 Backswing Structure",
       "focus": "Top-of-Swing Wrist Alignment & Face Control",
+      "faultTags": ["top-position-wrist"],
+      "environments": ["sim","mirror"],
+      "swingPhase": "top",
+      "equipment": ["HackMotion sensor","Alignment stick"],
+      "keyFeel": "Flat lead wrist at the top, flatter than address, not cupped.",
+      "pacing": "block",
       "days": [
         "day-1-takeaway",
         "daily-calibration",
@@ -1006,6 +1108,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "HackMotion Wedge Wrist Extension Clamp (Low Spinner vs Soft Pitch)",
       "section": "Scoring Wedges & Start Line",
       "focus": "Wedge Distance Consistency & Spin Control",
+      "faultTags": ["wedge-distance"],
+      "environments": ["sim","range"],
+      "swingPhase": "short-game",
+      "equipment": ["HackMotion sensor"],
+      "keyFeel": "Control wedge distance with wrist hinge and swing length, not extra speed.",
+      "pacing": "block",
       "days": [
         "day-4-wedges",
         "kids-asleep"
@@ -1064,6 +1172,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "HackMotion Radial Cock & Ulnar Unhinge Release Gate",
       "section": "P4-P6 Transition & Shallowing",
       "focus": "Lag Generation & Low-Point Strike Timing",
+      "faultTags": ["early-release-scoop","low-speed"],
+      "environments": ["sim"],
+      "swingPhase": "transition",
+      "equipment": ["HackMotion sensor"],
+      "keyFeel": "Keep lag then release it late for speed without early flipping.",
+      "pacing": "block",
       "days": [
         "day-2-transition",
         "day-5-driver"
@@ -1122,6 +1236,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "Random Practice Block (New Club + Target Every Ball)",
       "section": "Course Transfer & Pressure",
       "focus": "Transfer to the Course & Pre-Shot Routine",
+      "faultTags": ["false-groove","course-transfer"],
+      "environments": ["sim","range","course"],
+      "swingPhase": "mental-tempo",
+      "equipment": [],
+      "keyFeel": "Change club and target every shot and run the full routine each time.",
+      "pacing": "transfer",
       "days": [
         "day-3-impact",
         "day-5-driver",
@@ -1169,6 +1289,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "9-Shot Shape Test (Scored Pressure Game)",
       "section": "Course Transfer & Pressure",
       "focus": "Face & Path Control Under Pressure",
+      "faultTags": ["face-control","false-groove"],
+      "environments": ["sim","range"],
+      "swingPhase": "impact",
+      "equipment": [],
+      "keyFeel": "Own the curve both ways by controlling face and path on purpose.",
+      "pacing": "either",
       "days": [
         "day-2-transition",
         "day-5-driver"
@@ -1211,6 +1337,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "Wedge Distance Control Ladder (30–100 yds, Scored)",
       "section": "Scoring Wedges & Start Line",
       "focus": "Carry Distance Control Inside 100 yds",
+      "faultTags": ["wedge-distance"],
+      "environments": ["sim","range"],
+      "swingPhase": "short-game",
+      "equipment": [],
+      "keyFeel": "Build a yardage ladder you can trust, one calibrated swing per number.",
+      "pacing": "either",
       "days": [
         "day-4-wedges"
       ],
@@ -1253,6 +1385,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "3-Foot Circle + Lag Speed Ladder (Carpet Gate in Quiet Mode)",
       "section": "Scoring Wedges & Start Line",
       "focus": "Short-Putt Conversion & Lag Speed",
+      "faultTags": ["putting-speed","short-putt-pressure"],
+      "environments": ["putting-mat"],
+      "swingPhase": "putting",
+      "equipment": ["Putting mat","Cup"],
+      "keyFeel": "Roll lag putts 0-3 ft past the hole and make every 3-footer.",
+      "pacing": "either",
       "days": [
         "kids-asleep",
         "gym-sore",
@@ -1297,6 +1435,12 @@ window.DEFAULT_DRILLS_DATA = {
       "title": "Structured 5-Minute Warm-Up",
       "section": "Mobility & Setup Calibration",
       "focus": "Ready to Swing in 5 Minutes",
+      "faultTags": ["false-groove","rushed-tempo"],
+      "environments": ["sim","range","mirror"],
+      "swingPhase": "setup",
+      "equipment": [],
+      "keyFeel": "Five one-minute blocks that take you from loose to routine-ready.",
+      "pacing": "either",
       "days": [
         "daily-calibration"
       ],
@@ -1334,6 +1478,1537 @@ window.DEFAULT_DRILLS_DATA = {
         "real": "Run all 5 blocks; score the last 3 balls on HLA and face strike.",
         "almost": "Same progression with almost balls; score HLA only. Launch Pro: trust start line (HLA) and club data only; carry, ball speed and spin are not valid for Almost Golf Balls.",
         "sore": "Minute 1 only plus slow-motion rehearsal swings (no balls) for minutes 2-5. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "ball-between-elbows",
+      "title": "Ball Between the Elbows",
+      "section": "P4-P6 Transition & Shallowing",
+      "focus": "Elbow Separation & Out-to-In Handle",
+      "faultTags": [
+        "over-the-top",
+        "trail-elbow-flying"
+      ],
+      "environments": [
+        "mirror",
+        "sim",
+        "range"
+      ],
+      "swingPhase": "transition",
+      "equipment": [
+        "Ball or headcover"
+      ],
+      "keyFeel": "Keep the ball pinned between your upper arms so the arms and body turn as one unit.",
+      "pacing": "block",
+      "days": [
+        "day-2-transition",
+        "kids-asleep",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "8 min",
+      "reps": "3 rounds: half, 3/4, full",
+      "clubs": [
+        "7 Iron",
+        "PW"
+      ],
+      "video": {
+        "localPath": "shorts/20_ball_between_elbows.mp4",
+        "youtubeUrl": "",
+        "diagram": "shallow",
+        "keyFrameCue": "Ball stays pinned between the upper arms until after impact; arms never run away from the chest."
+      },
+      "why": "Arms that separate from the chest in transition force the handle outward and across the ball. Holding a ball between the upper arms ties arm motion to body rotation and teaches you to drop the hands first, then turn.",
+      "instructions": [
+        "Place a ball or small headcover between your upper arms, just above the elbows, and take your normal grip.",
+        "Make half swings (hip to hip) keeping the ball pinned; feel the arms follow the chest turn rather than lifting away.",
+        "Move to 3/4 swings; if the ball drops, your arms are racing the body, so slow the transition.",
+        "Finish with 5 full swings, ball held to just after impact, then remove it and hit 5 shots keeping the same connected feel."
+      ],
+      "checkpoints": {
+        "dtl": "Handle drops toward the trail hip pocket, not out toward the ball; shaft stays on or inside the target line from P5 to P6.",
+        "fo": "Both elbows stay close to the ribcage; lead arm stays across the chest through P7."
+      },
+      "modePlans": {
+        "real": "3 balls between elbows, then 3 real shots; look for a path trending toward neutral or slightly in-to-out and no pull.",
+        "almost": "Half to 3/4 swings with almost balls at 60% speed; read start line (HLA) and club data only.",
+        "sore": "Slow rehearsals in front of a mirror, half swings only, ball between the elbows, 2 sets of 10. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "butt-on-wall",
+      "title": "Butt-on-Wall Setup & Turn",
+      "section": "P6-P8 Impact & Compression",
+      "focus": "Early Extension (Setup-to-Impact Posture)",
+      "faultTags": [
+        "early-extension"
+      ],
+      "environments": [
+        "mirror",
+        "sim"
+      ],
+      "swingPhase": "transition",
+      "equipment": [
+        "Wall"
+      ],
+      "keyFeel": "Keep your glutes in light contact with the wall while the chest turns over them.",
+      "pacing": "block",
+      "days": [
+        "day-3-impact",
+        "day-2-transition",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "6 min",
+      "reps": "3 x 8 slow turns, then 10 balls",
+      "clubs": [
+        "7 Iron",
+        "No Club"
+      ],
+      "video": {
+        "localPath": "shorts/21_butt_on_wall.mp4",
+        "youtubeUrl": "",
+        "diagram": "posture",
+        "keyFrameCue": "Glutes keep light contact with the wall from setup into the downswing; they never move toward the ball."
+      },
+      "why": "Early extension means the hips drift toward the ball and the spine stands up. Feeling a wall behind your glutes gives immediate feedback on hip depth. It is the setup-and-turn version of the hip-clearance drill: that drill trains the lead hip to clear back at impact; this one keeps the glutes back from address.",
+      "instructions": [
+        "Set up with your glutes touching a wall (or a door) lightly, knees soft, spine tilted forward from the hips.",
+        "Turn to the top with your trail glute staying on the wall; do not sit back into it.",
+        "Start down and keep the lead glute in touch with the wall as the belt buckle turns open.",
+        "If you lose contact, stop; the hips have moved toward the ball. Repeat 8 slow turns, then hit 10 balls from a normal setup, trying to keep the same back-of-hip feel."
+      ],
+      "checkpoints": {
+        "dtl": "Glute line from P1 stays behind the original vertical line through P7; head does not lift.",
+        "fo": "Pelvis rotates open while posture stays stacked; no belt-line rise toward the ball."
+      },
+      "modePlans": {
+        "real": "Rehearse 5 turns on the wall, then 5 balls; check Kinovea DTL for butt-line drift.",
+        "almost": "Wall turns plus quiet half swings with almost balls; focus on contact with the wall, not speed.",
+        "sore": "Wall turns slowly, hands crossed on chest, no club or ball, 3 sets of 8. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "parallel-pump",
+      "title": "Parallel Pump",
+      "section": "P4-P6 Transition & Shallowing",
+      "focus": "Transition Sequencing",
+      "faultTags": [
+        "lazy-transition",
+        "rushed-tempo",
+        "over-the-top"
+      ],
+      "environments": [
+        "sim",
+        "range",
+        "mirror"
+      ],
+      "swingPhase": "transition",
+      "equipment": [
+        "Metronome (optional)"
+      ],
+      "keyFeel": "Let the body wait while the arms pump down to parallel, then release.",
+      "pacing": "block",
+      "days": [
+        "day-2-transition",
+        "kids-asleep"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "8 min",
+      "reps": "3 pumps x 10 swings",
+      "clubs": [
+        "7 Iron",
+        "8 Iron"
+      ],
+      "video": {
+        "localPath": "shorts/22_parallel_pump.mp4",
+        "youtubeUrl": "",
+        "diagram": "shallow",
+        "keyFrameCue": "Club reaches parallel back, pumps down to parallel two or three times with the hips settled, then releases."
+      },
+      "why": "Rushing from the top throws the shoulders at the ball. Pumping to parallel two or three times rehearses a patient sequence: lower body settles, hands drop, and then the club is released.",
+      "instructions": [
+        "Swing back to parallel (club roughly parallel to the ground) with a calm tempo; a metronome at about 60 BPM helps.",
+        "Pump down to the parallel-down position 2-3 times, feeling the lead leg post and the body wait while the hands drop.",
+        "On the last pump, release through the ball at 70% speed.",
+        "Do 10 swings; if the club gets steep or the shoulders spin first, reduce the pump size."
+      ],
+      "checkpoints": {
+        "dtl": "Shaft at parallel-down points at or inside the ball-target line; trail elbow in front of the hip.",
+        "fo": "Chest still faces the ball at the bottom of the pump; lead leg firm."
+      },
+      "modePlans": {
+        "real": "Alternate 2 pumps with 1 ball; track path trending toward neutral (Launch Pro club data required for path).",
+        "almost": "Pump and hit almost balls at 60% speed; check HLA.",
+        "sore": "Pump rehearsals only, no balls, 20% speed, 3 sets of 8. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "pocket-pause",
+      "title": "Pocket Pause",
+      "section": "Driver Launch & Start Line",
+      "focus": "Hook and Cut-Slice Timing",
+      "faultTags": [
+        "driver-hook",
+        "open-face-slice"
+      ],
+      "environments": [
+        "sim",
+        "range"
+      ],
+      "swingPhase": "impact",
+      "equipment": [
+        "Camera"
+      ],
+      "keyFeel": "Pause with your hands at your trail pocket and your chest still facing the ball.",
+      "pacing": "block",
+      "days": [
+        "day-5-driver",
+        "day-2-transition"
+      ],
+      "modes": [
+        "real",
+        "almost"
+      ],
+      "duration": "10 min",
+      "reps": "3 x 8 swings",
+      "clubs": [
+        "Driver",
+        "7 Iron"
+      ],
+      "video": {
+        "localPath": "shorts/23_pocket_pause.mp4",
+        "youtubeUrl": "",
+        "diagram": "driver",
+        "keyFrameCue": "Hands reach the trail pocket with the chest still facing the ball before the swing continues."
+      },
+      "why": "Early body opening produces hooks; a stalled club with hips popping open produces cut-slices. Pausing at P6 trains the body to wait for the club so chest and club arrive in sync.",
+      "instructions": [
+        "Swing to P6 (hands near the trail pocket) in slow motion and pause.",
+        "Check that the chest still faces the ball and the club shaft points near the target line.",
+        "Swing through at about 50% speed and check the start line.",
+        "Repeat 8 times; then hit 3 swings at full tempo, trying to keep the same chest and club timing."
+      ],
+      "checkpoints": {
+        "dtl": "At the pause, hands are near the trail pocket and the shaft is on plane, not across the line.",
+        "fo": "Chest still facing the ball at the pause; lead shoulder not already open."
+      },
+      "modePlans": {
+        "real": "Pause, then 50% swings; compare face-to-path on the monitor; check the dial both ways.",
+        "almost": "Quiet low-speed reps with 7 iron and almost balls; read HLA."
+      }
+    },
+    {
+      "id": "stick-across-chest",
+      "title": "Stick Across the Chest",
+      "section": "P4-P6 Transition & Shallowing",
+      "focus": "Overturning",
+      "faultTags": [
+        "overturning"
+      ],
+      "environments": [
+        "mirror",
+        "sim"
+      ],
+      "swingPhase": "transition",
+      "equipment": [
+        "Alignment stick"
+      ],
+      "keyFeel": "At P6 the stick across your chest points near the ball, not out at the target.",
+      "pacing": "block",
+      "days": [
+        "day-2-transition",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "6 min",
+      "reps": "3 x 8 swings",
+      "clubs": [
+        "No Club",
+        "7 Iron"
+      ],
+      "video": {
+        "localPath": "shorts/24_stick_across_chest.mp4",
+        "youtubeUrl": "",
+        "diagram": "posture",
+        "keyFrameCue": "Stick across the chest points at the ball at P6, not at the target."
+      },
+      "why": "An overly open chest at P6 means the body has outrun the club. The stick across the chest gives a clear visual for chest direction.",
+      "instructions": [
+        "Hold an alignment stick (or club) across your chest, arms crossed over it.",
+        "Turn back to P4, then start down; at P6 look down at the stick.",
+        "The stick should point at or near the ball line, not at the target or left of it.",
+        "Do 8 slow turns, then hit 5 half-swing shots keeping that chest timing."
+      ],
+      "checkpoints": {
+        "dtl": "Stick points toward the ball/target-line at P6.",
+        "fo": "Chest has not yet rotated past about 20-30 degrees open at P6."
+      },
+      "modePlans": {
+        "real": "After 8 stick turns, hit 5 balls; look for fewer pulls and hooks.",
+        "almost": "Same, with almost balls at 60%.",
+        "sore": "Stick turns only, 20% effort, no balls, 3 sets of 8. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "smash-bag-elbow-trap",
+      "title": "Smash Bag Elbow Trap",
+      "section": "P4-P6 Transition & Shallowing",
+      "focus": "Trail Elbow Flying",
+      "faultTags": [
+        "trail-elbow-flying"
+      ],
+      "environments": [
+        "sim"
+      ],
+      "swingPhase": "transition",
+      "equipment": [
+        "Smash bag",
+        "Towel",
+        "GBox"
+      ],
+      "keyFeel": "Pin a towel under your trail elbow and swing slow into the bag.",
+      "pacing": "block",
+      "days": [
+        "day-2-transition",
+        "day-3-impact"
+      ],
+      "modes": [
+        "real",
+        "almost"
+      ],
+      "duration": "8 min",
+      "reps": "3 x 8 slow swings",
+      "clubs": [
+        "7 Iron"
+      ],
+      "video": {
+        "localPath": "shorts/25_smash_bag_elbow_trap.mp4",
+        "youtubeUrl": "",
+        "diagram": "shallow",
+        "keyFrameCue": "Towel stays pinned under the trail elbow until after impact with the bag."
+      },
+      "why": "A trail elbow that flies out steepens the downswing. Pinning a towel keeps the elbow near the ribcage so the club can drop into the slot.",
+      "instructions": [
+        "Tuck a small towel under your trail upper arm and set the smash bag at ball position.",
+        "Swing at 40-50% speed into the bag, keeping the towel pinned.",
+        "If the towel drops, the elbow has left your side; slow the transition and let the hands drop first.",
+        "After 8 swings remove the towel and hit 5 real or foam balls with the same elbow feel."
+      ],
+      "checkpoints": {
+        "dtl": "Trail elbow stays in front of the trail hip; no flying or lifting.",
+        "fo": "Trail upper arm connected to the ribcage until after impact."
+      },
+      "modePlans": {
+        "real": "3 sets of 8 with the bag, then 5 balls; record face-to-path (club data) if available.",
+        "almost": "Replace the bag with almost balls at 50%.",
+        "sore": "Skip bag contact. Towel-pinned dry rehearsals only, 20% speed, no impact, 2 sets of 8. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "tee-behind-the-ball",
+      "title": "Tee Behind the Ball",
+      "section": "P6-P8 Impact & Compression",
+      "focus": "Irons: Angle of Attack",
+      "faultTags": [
+        "low-point-control",
+        "early-release-scoop"
+      ],
+      "environments": [
+        "sim",
+        "range"
+      ],
+      "swingPhase": "impact",
+      "equipment": [
+        "Tee",
+        "Tour Strike ball (optional)"
+      ],
+      "keyFeel": "Hit the ball without touching the tee one inch behind it.",
+      "pacing": "block",
+      "days": [
+        "day-3-impact"
+      ],
+      "modes": [
+        "real",
+        "almost"
+      ],
+      "duration": "8 min",
+      "reps": "15 shots",
+      "clubs": [
+        "7 Iron",
+        "8 Iron",
+        "PW"
+      ],
+      "video": {
+        "localPath": "shorts/26_tee_behind_ball.mp4",
+        "youtubeUrl": "",
+        "diagram": "impact",
+        "keyFrameCue": "Tee sits one inch behind the ball; strike the ball without clipping the tee."
+      },
+      "why": "A tee just behind the ball makes a scoop obvious: if the club bottoms out early you hit the tee. It trains a forward low point and a downward attack angle with irons.",
+      "instructions": [
+        "Place a ball and push a tee into the ground about 1 inch behind it, with the head flush to the turf.",
+        "Hit 5 shots at 60% speed trying not to touch the tee.",
+        "Increase to 75% speed for 5 more shots.",
+        "Remove the tee and hit 5 shots with the same low-point feel; check attack angle (target -4 to -6 with a 7 iron)."
+      ],
+      "checkpoints": {
+        "dtl": "Club bottoms out ahead of the ball; divot starts at or after the ball.",
+        "fo": "Weight on the lead side at impact; handle forward."
+      },
+      "modePlans": {
+        "real": "Check attack angle on the monitor (needs club data); track the tee-touch count.",
+        "almost": "Quiet version off a mat with foam balls; focus on strike, read HLA only."
+      }
+    },
+    {
+      "id": "narrow-stick-gate",
+      "title": "Narrow Stick Gate",
+      "section": "P4-P6 Transition & Shallowing",
+      "focus": "Path Too In-to-Out",
+      "faultTags": [
+        "path-too-in-to-out"
+      ],
+      "environments": [
+        "sim",
+        "range"
+      ],
+      "swingPhase": "transition",
+      "equipment": [
+        "Alignment sticks"
+      ],
+      "keyFeel": "Clip the inside stick and you dropped the club too far behind you.",
+      "pacing": "block",
+      "days": [
+        "day-2-transition",
+        "day-3-impact"
+      ],
+      "modes": [
+        "real",
+        "almost"
+      ],
+      "duration": "8 min",
+      "reps": "15 shots",
+      "clubs": [
+        "7 Iron",
+        "8 Iron"
+      ],
+      "video": {
+        "localPath": "shorts/27_narrow_stick_gate.mp4",
+        "youtubeUrl": "",
+        "diagram": "shallow",
+        "keyFrameCue": "Two sticks outside the ball; the club passes between them without hitting the inside stick."
+      },
+      "why": "A path that is too far inside leads to pushes and push-hooks. A stick placed inside the ball line gives instant feedback when the club comes too far from the inside.",
+      "instructions": [
+        "Place one stick just outside the ball (target side) and one about a clubhead's width behind the ball on the inside.",
+        "Make slow swings and watch the club path pass the inside stick without touching.",
+        "Hit 5 balls at 60% speed; if you clip the inside stick, feel the hands stay in front of the trail hip.",
+        "Increase to 75% for 10 shots; check path and start line."
+      ],
+      "checkpoints": {
+        "dtl": "Club approaches slightly from the inside but never underneath the inside stick.",
+        "fo": "Trail elbow in front of the hip at P6."
+      },
+      "modePlans": {
+        "real": "Track path on the monitor; target about +1 to +3 with irons.",
+        "almost": "Same with almost balls at 60%; read HLA."
+      }
+    },
+    {
+      "id": "hit-hard-stop-quick",
+      "title": "Hit Hard, Stop Quick",
+      "section": "P6-P8 Impact & Compression",
+      "focus": "Early Flip",
+      "faultTags": [
+        "early-release-scoop"
+      ],
+      "environments": [
+        "sim",
+        "range"
+      ],
+      "swingPhase": "impact",
+      "equipment": [
+        "Camera"
+      ],
+      "keyFeel": "Strike, then stop: the handle must still be ahead of the clubhead when you freeze.",
+      "pacing": "block",
+      "days": [
+        "day-3-impact"
+      ],
+      "modes": [
+        "real",
+        "almost"
+      ],
+      "duration": "6 min",
+      "reps": "3 x 8 swings",
+      "clubs": [
+        "7 Iron",
+        "PW"
+      ],
+      "video": {
+        "localPath": "shorts/28_hit_hard_stop_quick.mp4",
+        "youtubeUrl": "",
+        "diagram": "impact",
+        "keyFrameCue": "Waist-high backswing, hit, stop; handle ahead of clubhead at the stop."
+      },
+      "why": "Stopping right after impact exposes an early flip: if you cannot hold the position, the hands and clubhead were not synced. Short swings force a forward handle.",
+      "instructions": [
+        "Take a waist-high backswing and swing through; stop the club about hip high through the ball.",
+        "Hold the stop; the handle should be ahead of the clubhead and the lead wrist flat or bent forward.",
+        "Hit at about 70% effort; try to keep the face square through the stop.",
+        "Do 8 swings x 3 sets; film one set and check the stop position."
+      ],
+      "checkpoints": {
+        "dtl": "At the stop, handle is ahead of the clubhead; shaft leaning toward the target.",
+        "fo": "Chest facing the ball or slightly open; lead arm still connected."
+      },
+      "modePlans": {
+        "real": "Hit 3 sets, then 5 full shots; check shaft lean via camera or HackMotion if available.",
+        "almost": "Same with almost balls; quiet stops."
+      }
+    },
+    {
+      "id": "p6-to-impact",
+      "title": "P6-to-Impact Short Swings",
+      "section": "P6-P8 Impact & Compression",
+      "focus": "Release Timing",
+      "faultTags": [
+        "early-release-scoop",
+        "holding-off"
+      ],
+      "environments": [
+        "mirror",
+        "sim"
+      ],
+      "swingPhase": "impact",
+      "equipment": [],
+      "keyFeel": "Swing from shaft-parallel down to impact with the hands slightly ahead of the ball.",
+      "pacing": "block",
+      "days": [
+        "day-3-impact",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "6 min",
+      "reps": "3 x 10 short swings",
+      "clubs": [
+        "7 Iron",
+        "PW"
+      ],
+      "video": {
+        "localPath": "shorts/29_p6_to_impact.mp4",
+        "youtubeUrl": "",
+        "diagram": "impact",
+        "keyFrameCue": "Short swings from P6 to impact; hands slightly ahead of the ball at contact."
+      },
+      "why": "Most release problems show up in the last few feet. Rehearsing P6 to impact in isolation lets you feel timing without the whole swing.",
+      "instructions": [
+        "Start with the club at P6 (shaft parallel to the ground, hands near the trail hip).",
+        "Swing through the ball to hip high with a smooth release.",
+        "Check that the hands are slightly ahead of the ball at contact and the face is square.",
+        "Do 10 swings x 3 sets, then hit 5 balls with a full swing keeping that feel."
+      ],
+      "checkpoints": {
+        "dtl": "Hands slightly ahead of the ball at impact; shaft leaning forward.",
+        "fo": "Lead arm and club form a straight line at P7; no flipping."
+      },
+      "modePlans": {
+        "real": "Short-swing balls first; then full swing; track attack angle.",
+        "almost": "Same with almost balls at 50%.",
+        "sore": "Dry slow rehearsals in a mirror, 20% speed, 3 sets of 10. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "wrist-twist-p2",
+      "title": "Wrist Twist at P2",
+      "section": "P1-P4 Backswing Structure",
+      "focus": "Face Dial",
+      "faultTags": [
+        "face-control"
+      ],
+      "environments": [
+        "mirror",
+        "sim",
+        "range"
+      ],
+      "swingPhase": "takeaway",
+      "equipment": [],
+      "keyFeel": "Pause at P2 with the face slightly down and dial the twist up or down to steer the flight.",
+      "pacing": "block",
+      "days": [
+        "day-1-takeaway",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "6 min",
+      "reps": "3 x 6 swings",
+      "clubs": [
+        "7 Iron"
+      ],
+      "video": {
+        "localPath": "shorts/30_wrist_twist_p2.mp4",
+        "youtubeUrl": "",
+        "diagram": "takeaway",
+        "keyFrameCue": "At P2 the clubface points slightly toward the ground; exaggerate or soften the twist and watch the flight."
+      },
+      "why": "The face at P2 influences the face at the top. Learning to dial the twist at P2 gives you a controllable face reference for the whole swing.",
+      "instructions": [
+        "Take the club to P2 (shaft parallel, hands hip high) and pause.",
+        "Look at the face: toe pointing up (open), face pointing toward the ground (slightly down), or somewhere between.",
+        "Exaggerate the twist toward face-down for 3 swings and note the flight; then soften it for 3 swings.",
+        "Pick the setting that produces a straight shot and repeat it."
+      ],
+      "checkpoints": {
+        "dtl": "At P2 the leading edge is roughly parallel to your spine angle and the toe points up; face neither wide open nor shut.",
+        "fo": "Hands in front of the chest; no excessive forearm roll."
+      },
+      "modePlans": {
+        "real": "Compare face-to-path in each setting; log the best one.",
+        "almost": "Same with almost balls; read HLA.",
+        "sore": "Pause and dial at P2 with no ball, 20% speed, 3 sets of 6. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "low-tee-driver-bridge",
+      "title": "Low-Tee Driver Bridge",
+      "section": "Driver Launch & Start Line",
+      "focus": "Driver vs Iron Release",
+      "faultTags": [
+        "driver-hook",
+        "steep-driver-aoa"
+      ],
+      "environments": [
+        "sim",
+        "range"
+      ],
+      "swingPhase": "impact",
+      "equipment": [
+        "Tee"
+      ],
+      "keyFeel": "Start with a low tee and wedge-like ball position, then raise and move forward gradually.",
+      "pacing": "block",
+      "days": [
+        "day-5-driver"
+      ],
+      "modes": [
+        "real"
+      ],
+      "duration": "10 min",
+      "reps": "3 stages x 5 shots",
+      "clubs": [
+        "Driver"
+      ],
+      "video": {
+        "localPath": "shorts/31_low_tee_driver_bridge.mp4",
+        "youtubeUrl": "",
+        "diagram": "driver",
+        "keyFrameCue": "Driver with a very low tee and a ball position like a wedge; raise the tee and move forward over three stages."
+      },
+      "why": "Many players release the driver like an iron and hook it. Starting low and centered shortens the arc and quiets the hands; gradually moving to a full driver setup carries the calm release into the normal position.",
+      "instructions": [
+        "Stage 1: tee barely above the ground, ball in the middle of the stance; hit 5 shots at 70% speed and watch start line.",
+        "Stage 2: raise the tee a half inch and move the ball slightly forward; hit 5 shots, keeping the same release.",
+        "Stage 3: normal driver tee height and ball position; hit 5 shots, release at about 80% intensity.",
+        "Check the dial both ways; if the miss swings to the other side, back off one stage."
+      ],
+      "checkpoints": {
+        "dtl": "Club approaches slightly from the inside; face closing gradually.",
+        "fo": "Chest not open early; head stays behind the ball."
+      },
+      "modePlans": {
+        "real": "Count how many of the 5 shots start on line in each stage; track face-to-path."
+      }
+    },
+    {
+      "id": "three-ball-ladder",
+      "title": "Three-Ball Ladder",
+      "section": "Scoring Wedges & Start Line",
+      "focus": "Face Control",
+      "faultTags": [
+        "face-control",
+        "driver-hook",
+        "open-face-slice"
+      ],
+      "environments": [
+        "sim"
+      ],
+      "swingPhase": "impact",
+      "equipment": [
+        "Launch monitor"
+      ],
+      "keyFeel": "Hit one exaggerated slice feel, one exaggerated hook feel, and one middle ball.",
+      "pacing": "block",
+      "days": [
+        "day-2-transition",
+        "day-5-driver"
+      ],
+      "modes": [
+        "real"
+      ],
+      "duration": "10 min",
+      "reps": "3-4 rounds of 3 balls",
+      "clubs": [
+        "7 Iron",
+        "Driver"
+      ],
+      "video": {
+        "localPath": "shorts/32_three_ball_ladder.mp4",
+        "youtubeUrl": "",
+        "diagram": "impact",
+        "keyFrameCue": "Exaggerate slice feel, exaggerate hook feel, then find the middle."
+      },
+      "why": "Feeling both extremes gives you a reference for the neutral face. The middle ball becomes the one you can repeat on purpose.",
+      "instructions": [
+        "Hit ball 1 with an exaggerated slice feel (open face).",
+        "Hit ball 2 with an exaggerated hook feel (closed face).",
+        "Hit ball 3 trying to find the middle: straight start, neutral curve.",
+        "Repeat 3-4 rounds, logging face angle and face-to-path each time."
+      ],
+      "checkpoints": {
+        "dtl": "Club path within about 2 degrees of the target line on the middle ball.",
+        "fo": "Face square within about 1-2 degrees at impact on the middle ball."
+      },
+      "modePlans": {
+        "real": "Log face angle and face-to-path for each ball; the middle ball should land inside the two extremes."
+      }
+    },
+    {
+      "id": "straight-station",
+      "title": "Straight Station",
+      "section": "Scoring Wedges & Start Line",
+      "focus": "Knowing Straight",
+      "faultTags": [
+        "face-control"
+      ],
+      "environments": [
+        "sim",
+        "range"
+      ],
+      "swingPhase": "impact",
+      "equipment": [
+        "Alignment sticks"
+      ],
+      "keyFeel": "Make half swings through a stick gate with face and path both close to zero.",
+      "pacing": "block",
+      "days": [
+        "day-2-transition",
+        "day-3-impact"
+      ],
+      "modes": [
+        "real",
+        "almost"
+      ],
+      "duration": "8 min",
+      "reps": "15 half swings",
+      "clubs": [
+        "7 Iron",
+        "PW"
+      ],
+      "video": {
+        "localPath": "shorts/33_straight_station.mp4",
+        "youtubeUrl": "",
+        "diagram": "wedge",
+        "keyFrameCue": "Half swings through a stick gate; path and face both within about 1 degree."
+      },
+      "why": "If you cannot hit a straight shot at slow speed, you have no zero reference. Spend about 15-20% of your reps proving you can find it.",
+      "instructions": [
+        "Set two sticks 2-3 feet ahead of the ball forming a gate on the target line.",
+        "Make half swings (hip to hip) trying to start the ball through the gate.",
+        "Check face and path on the monitor; both within about 1 degree.",
+        "If the numbers drift, reduce speed until the zero returns, then build back up."
+      ],
+      "checkpoints": {
+        "dtl": "Shaft returns to the target line at impact.",
+        "fo": "Chest square at impact; no early opening."
+      },
+      "modePlans": {
+        "real": "Count balls through the gate; keep 10 of 15 straight.",
+        "almost": "Count gate passes with almost balls."
+      }
+    },
+    {
+      "id": "finish-and-freeze",
+      "title": "Finish and Freeze",
+      "section": "P6-P8 Impact & Compression",
+      "focus": "Release Feedback",
+      "faultTags": [
+        "holding-off",
+        "early-release-scoop"
+      ],
+      "environments": [
+        "sim",
+        "range",
+        "mirror"
+      ],
+      "swingPhase": "finish",
+      "equipment": [
+        "Camera"
+      ],
+      "keyFeel": "Freeze your finish for two seconds with the toe of your trail foot up.",
+      "pacing": "either",
+      "days": [
+        "day-3-impact",
+        "kids-asleep",
+        "daily-calibration"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "6 min",
+      "reps": "3 x 8 swings",
+      "clubs": [
+        "7 Iron",
+        "Driver"
+      ],
+      "video": {
+        "localPath": "shorts/34_finish_freeze.mp4",
+        "youtubeUrl": "",
+        "diagram": "posture",
+        "keyFrameCue": "Hold the finish for 2 seconds; trail toe up, chest to target, weight on the lead foot."
+      },
+      "why": "A balanced finish proves the sequence was on time. Falling back or off balance usually means the release or weight shift was wrong.",
+      "instructions": [
+        "Hit a shot or make a swing at 70% speed.",
+        "Freeze in the finish for 2 seconds; trail toe up, belt buckle facing the target.",
+        "If you wobble, slow the swing; the release is out of sync with the body.",
+        "Film one set from DTL and check the freeze."
+      ],
+      "checkpoints": {
+        "dtl": "Trail foot on its toe, body stacked over the lead leg.",
+        "fo": "Chest facing the target; club wrapped around the neck."
+      },
+      "modePlans": {
+        "real": "Count balanced finishes out of 10.",
+        "almost": "Same with almost balls.",
+        "sore": "Slow finishes with no ball, 3 sets of 8. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "swing-plate-45-check",
+      "title": "Swing Plate 45 Degree Check",
+      "section": "Mobility & Setup Calibration",
+      "focus": "Driver Setup",
+      "faultTags": [
+        "poor-setup-posture"
+      ],
+      "environments": [
+        "mirror",
+        "sim"
+      ],
+      "swingPhase": "setup",
+      "equipment": [
+        "Swing plate"
+      ],
+      "keyFeel": "Set a plate at 45 degrees and freeze at address, P2 and P6 to check your setup.",
+      "pacing": "block",
+      "days": [
+        "daily-calibration",
+        "day-5-driver"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "6 min",
+      "reps": "3 x 5 freezes",
+      "clubs": [
+        "Driver"
+      ],
+      "video": {
+        "localPath": "shorts/35_swing_plate_45.mp4",
+        "youtubeUrl": "",
+        "diagram": "driver",
+        "keyFrameCue": "Plate at 45 degrees, check address, then freeze at P2 and P6."
+      },
+      "why": "A swing plate shows whether your driver setup, plane and positions repeat. A check before you start makes the first shots more consistent.",
+      "instructions": [
+        "Place the swing plate at about 45 degrees to the target line.",
+        "Set up with the driver and check ball position, spine tilt and distance from the plate.",
+        "Swing to P2 and freeze; the club should match the plate angle.",
+        "Swing to P6 and freeze; check the club is on the plate and not through it."
+      ],
+      "checkpoints": {
+        "dtl": "Shaft parallels the plate at P2 and P6.",
+        "fo": "Posture unchanged between address and P2."
+      },
+      "modePlans": {
+        "real": "Run 3 sets, then hit 5 drives.",
+        "almost": "Freeze checks with a short club and almost balls.",
+        "sore": "Freeze checks with no ball, 20% speed, 3 sets. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "lead-side-brace-reps",
+      "title": "Lead-Side Brace Reps",
+      "section": "P4-P6 Transition & Shallowing",
+      "focus": "Post, Then Turn",
+      "faultTags": [
+        "lazy-transition"
+      ],
+      "environments": [
+        "mirror",
+        "sim"
+      ],
+      "swingPhase": "transition",
+      "equipment": [],
+      "keyFeel": "Post on the lead leg first, then turn with long legs and a short torso.",
+      "pacing": "block",
+      "days": [
+        "day-2-transition",
+        "day-5-driver",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "6 min",
+      "reps": "3 x 8 slow reps",
+      "clubs": [
+        "7 Iron",
+        "Driver"
+      ],
+      "video": {
+        "localPath": "shorts/36_lead_side_brace.mp4",
+        "youtubeUrl": "",
+        "diagram": "shallow",
+        "keyFrameCue": "Hips go back, lead leg braces, then the body turns."
+      },
+      "why": "Without a brace the hips spin and the club falls behind; contact degrades as the session goes on. Slow reps build the brace feel; add volume gradually.",
+      "instructions": [
+        "Set up and turn to P4 with weight loading into the trail side.",
+        "Start down by pressing into the lead foot and posting on the lead leg; feel the hips move back, not at the ball.",
+        "Keep the legs long and the torso short as you turn through.",
+        "Do 8 slow reps, then 3 sets; build volume over several sessions."
+      ],
+      "checkpoints": {
+        "dtl": "Lead leg straightens or posts; hips stay back.",
+        "fo": "Weight on the lead heel at impact; no lead knee collapse."
+      },
+      "modePlans": {
+        "real": "Rehearse slowly, then hit 5 balls; compare the first 3 and last 3 of the session.",
+        "almost": "Same, with almost balls at 60%.",
+        "sore": "Slow brace rehearsals only, 20% speed; reduce depth if any joint feels sore, 3 sets of 8. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "door-drill",
+      "title": "Door Drill",
+      "section": "P6-P8 Impact & Compression",
+      "focus": "Early Release / Hitting Up",
+      "faultTags": [
+        "early-release-scoop"
+      ],
+      "environments": [
+        "mirror",
+        "sim"
+      ],
+      "swingPhase": "impact",
+      "equipment": [
+        "Door frame"
+      ],
+      "keyFeel": "Press into the lead side and let the club drop naturally to square impact.",
+      "pacing": "block",
+      "days": [
+        "day-3-impact",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "6 min",
+      "reps": "3 x 8 reps",
+      "clubs": [
+        "7 Iron",
+        "PW"
+      ],
+      "video": {
+        "localPath": "shorts/37_door_drill.mp4",
+        "youtubeUrl": "",
+        "diagram": "impact",
+        "keyFrameCue": "Pressure on the lead side with the club dropping to a square impact position."
+      },
+      "why": "Hitting up on irons often comes from the weight staying back and the hands flipping. A door frame gives a fixed reference so you can feel pressure on the lead side.",
+      "instructions": [
+        "Stand with your lead hip near a door frame, club at P6.",
+        "Press into the lead side without moving your head toward the target; feel the club drop naturally.",
+        "Swing through at 50% speed with the face square at impact.",
+        "Do 8 reps, then hit 5 shots keeping the lead pressure."
+      ],
+      "checkpoints": {
+        "dtl": "Hands ahead of the ball at impact; no hand flip.",
+        "fo": "Weight on the lead foot; chest open about 30 degrees."
+      },
+      "modePlans": {
+        "real": "Door reps then 5 shots; attack angle should trend negative with irons.",
+        "almost": "Same with almost balls.",
+        "sore": "Slow door-frame pressure feels only, no club speed, 3 sets of 8. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "wood-block-push",
+      "title": "Wood Block Push",
+      "section": "P6-P8 Impact & Compression",
+      "focus": "Holding vs Releasing",
+      "faultTags": [
+        "holding-off"
+      ],
+      "environments": [
+        "mirror",
+        "sim"
+      ],
+      "swingPhase": "impact",
+      "equipment": [
+        "Wooden block"
+      ],
+      "keyFeel": "Push a flat clubface through impact with the hands leading, then let it release.",
+      "pacing": "block",
+      "days": [
+        "day-3-impact"
+      ],
+      "modes": [
+        "real",
+        "almost"
+      ],
+      "duration": "6 min",
+      "reps": "3 x 8 reps",
+      "clubs": [
+        "7 Iron"
+      ],
+      "video": {
+        "localPath": "shorts/38_wood_block_push.mp4",
+        "youtubeUrl": "",
+        "diagram": "impact",
+        "keyFrameCue": "Arms down, hands lead, push a flat face a few inches past impact, then release."
+      },
+      "why": "Holding off keeps the face open past impact. Pushing a flat face a few inches teaches you the feeling of the release being a natural result of the body turning.",
+      "instructions": [
+        "Place a small wooden block (or a firm headcover) at ball position.",
+        "Set up and push the block with a flat face a few inches toward the target.",
+        "Continue the swing and let the club release naturally past the block.",
+        "Repeat 8 times, then hit 5 balls with a smooth release."
+      ],
+      "checkpoints": {
+        "dtl": "Flat lead wrist at impact; no face rolling early.",
+        "fo": "Forearms rotate after impact, not before."
+      },
+      "modePlans": {
+        "real": "Check face-to-path on 5 balls after the block work.",
+        "almost": "Same, with almost balls."
+      }
+    },
+    {
+      "id": "putting-mirror-gate",
+      "title": "Putting Mirror + Gate",
+      "section": "Scoring Wedges & Start Line",
+      "focus": "Start Line & Stroke Path",
+      "faultTags": [
+        "putting-start-line"
+      ],
+      "environments": [
+        "putting-mat",
+        "mirror"
+      ],
+      "swingPhase": "putting",
+      "equipment": [
+        "Mirror",
+        "Two tees or putter gate",
+        "Putter"
+      ],
+      "keyFeel": "Keep the eyes over the ball and roll it through a tight gate.",
+      "pacing": "block",
+      "days": [
+        "day-4-wedges",
+        "kids-asleep",
+        "gym-sore",
+        "daily-calibration"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "8 min",
+      "reps": "20 putts from 4 ft",
+      "clubs": [
+        "Putter"
+      ],
+      "video": {
+        "localPath": "shorts/39_putting_mirror_gate.mp4",
+        "youtubeUrl": "",
+        "diagram": "wedge",
+        "keyFrameCue": "Eyes over the ball, shoulders level, and the ball rolls through a gate two balls wide."
+      },
+      "why": "Most missed short putts start off line. A mirror shows eye and shoulder alignment; a gate gives instant start-line feedback.",
+      "instructions": [
+        "Place a mirror behind or beside the ball so you can see your eyes and shoulders (or use a phone camera).",
+        "Set two tees a ball-and-a-half apart about 12 inches in front of the ball.",
+        "Roll 20 putts from 4 ft; the ball must pass through without touching a tee.",
+        "Log how many pass; check the mirror for eye line and shoulder tilt."
+      ],
+      "checkpoints": {
+        "dtl": "Putter head swings along a gentle arc with the face square.",
+        "fo": "Eyes directly over the ball line; shoulders level."
+      },
+      "modePlans": {
+        "real": "Run on a mat or green; log gate passes.",
+        "almost": "Quiet mat version; fully silent.",
+        "sore": "Upright posture, slow strokes, gate only. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "putting-ruler-speed-ladder",
+      "title": "Putting Ruler Speed Ladder",
+      "section": "Scoring Wedges & Start Line",
+      "focus": "Speed Control",
+      "faultTags": [
+        "putting-speed"
+      ],
+      "environments": [
+        "putting-mat"
+      ],
+      "swingPhase": "putting",
+      "equipment": [
+        "Ruler or tape measure",
+        "Putter"
+      ],
+      "keyFeel": "Match stroke length to distance and measure where the ball stops with a ruler.",
+      "pacing": "block",
+      "days": [
+        "day-4-wedges",
+        "gym-sore",
+        "kids-asleep"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "8 min",
+      "reps": "3 balls each at 10, 20, 30 ft",
+      "clubs": [
+        "Putter"
+      ],
+      "video": {
+        "localPath": "shorts/40_putting_ruler_ladder.mp4",
+        "youtubeUrl": "",
+        "diagram": "wedge",
+        "keyFrameCue": "Putt to a ruler at 10, 20 and 30 feet; measure the distance past or short."
+      },
+      "why": "Putting speed is what keeps you out of three-putts. Measuring the miss with a ruler gives objective feedback.",
+      "instructions": [
+        "Place a ruler or tape marker as the target at 10 ft; putt 3 balls.",
+        "Measure each ball's distance past or short of the ruler; aim to finish 0-12 inches past.",
+        "Move to 20 ft, then 30 ft; keep the same tempo and adjust only stroke length.",
+        "Log the average miss at each distance."
+      ],
+      "checkpoints": {
+        "dtl": "Putter path arcs gently; stroke length scales with distance.",
+        "fo": "Head still, shoulders rock, same tempo."
+      },
+      "modePlans": {
+        "real": "Run on a green or mat; log average miss at each distance.",
+        "almost": "Quiet mat version.",
+        "sore": "Upright, slow strokes. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "putting-metronome-60",
+      "title": "60 BPM Putting Metronome",
+      "section": "Scoring Wedges & Start Line",
+      "focus": "Putting Tempo",
+      "faultTags": [
+        "putting-speed",
+        "rushed-tempo"
+      ],
+      "environments": [
+        "putting-mat"
+      ],
+      "swingPhase": "putting",
+      "equipment": [
+        "Metronome",
+        "Putter"
+      ],
+      "keyFeel": "Back on one beat, through on the next, same tempo for every putt.",
+      "pacing": "block",
+      "days": [
+        "day-4-wedges",
+        "gym-sore",
+        "kids-asleep",
+        "daily-calibration"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "6 min",
+      "reps": "15 putts",
+      "clubs": [
+        "Putter"
+      ],
+      "video": {
+        "localPath": "shorts/41_putting_metronome.mp4",
+        "youtubeUrl": "",
+        "diagram": "wedge",
+        "keyFrameCue": "A metronome at about 60 BPM; back on one beat, through on the next."
+      },
+      "why": "A steady tempo gives consistent speed. A metronome removes guesswork; only stroke length changes with distance.",
+      "instructions": [
+        "Set a metronome to about 60 BPM (see the 2:1 putting presets for the cadence timing).",
+        "Start the stroke on one beat and reach impact on the next beat.",
+        "Putt from 10, 20 and 30 ft changing only stroke length.",
+        "Hit 15 putts; log the average distance past the hole."
+      ],
+      "checkpoints": {
+        "dtl": "Stroke length scales with distance; tempo is constant.",
+        "fo": "Quiet head, smooth acceleration through the ball."
+      },
+      "modePlans": {
+        "real": "Run on a mat or green; log the average miss.",
+        "almost": "Quiet mat version.",
+        "sore": "Slow metronome strokes, upright. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "putting-devil-ball",
+      "title": "Devil Ball Putting",
+      "section": "Scoring Wedges & Start Line",
+      "focus": "Start Line & Strike",
+      "faultTags": [
+        "putting-start-line"
+      ],
+      "environments": [
+        "putting-mat"
+      ],
+      "swingPhase": "putting",
+      "equipment": [
+        "Irregular or marked ball",
+        "Putter"
+      ],
+      "keyFeel": "Roll an uneven ball on the line you picked; a pure strike keeps it true.",
+      "pacing": "block",
+      "days": [
+        "day-4-wedges",
+        "kids-asleep",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "6 min",
+      "reps": "15 putts",
+      "clubs": [
+        "Putter"
+      ],
+      "video": {
+        "localPath": "shorts/42_putting_devil_ball.mp4",
+        "youtubeUrl": "",
+        "diagram": "wedge",
+        "keyFrameCue": "A ball with an irregular or weighted line reveals strike quality; roll it on the line you picked."
+      },
+      "why": "A weighted or irregular ball punishes poor strike and misalignment. A good strike makes it roll true.",
+      "instructions": [
+        "Use a weighted or marked training ball (or a ball with a line drawn).",
+        "Pick a spot 3 ft in front of the ball and aim the line at it.",
+        "Roll 15 putts; the line on the ball should roll end over end.",
+        "Log how many roll true; adjust strike point and face angle."
+      ],
+      "checkpoints": {
+        "dtl": "Face square and strike on the sweet spot.",
+        "fo": "Eyes over the ball; head still."
+      },
+      "modePlans": {
+        "real": "Use on a mat or green; log true rolls.",
+        "almost": "Quiet mat version.",
+        "sore": "Slow strokes, upright. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "putting-timed-4ft-pressure",
+      "title": "Timed 4-Foot Pressure Putts",
+      "section": "Course Transfer & Pressure",
+      "focus": "Short Putt Pressure",
+      "faultTags": [
+        "short-putt-pressure",
+        "putting-start-line"
+      ],
+      "environments": [
+        "putting-mat",
+        "course"
+      ],
+      "swingPhase": "putting",
+      "equipment": [
+        "Putter",
+        "Timer"
+      ],
+      "keyFeel": "Make as many 4-footers as you can in a fixed time, one routine, no practice strokes.",
+      "pacing": "transfer",
+      "days": [
+        "day-4-wedges",
+        "daily-calibration"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "5 min",
+      "reps": "3 rounds of 10 putts",
+      "clubs": [
+        "Putter"
+      ],
+      "video": {
+        "localPath": "shorts/43_putting_timed_4ft.mp4",
+        "youtubeUrl": "",
+        "diagram": "wedge",
+        "keyFrameCue": "10 putts from 4 ft against a timer; log makes."
+      },
+      "why": "Pressure turns a technical stroke into a decision. A timer adds consequence and trains you to commit.",
+      "instructions": [
+        "Place 10 balls in a circle 4 ft from the cup.",
+        "Set a timer (about 90 seconds for 10 putts).",
+        "Hole as many as you can with a consistent routine; each miss costs the time it takes to reset.",
+        "Log makes per round; try to beat it next session."
+      ],
+      "checkpoints": {
+        "dtl": "Same stroke length and tempo on every putt.",
+        "fo": "Routine unchanged under time pressure."
+      },
+      "modePlans": {
+        "real": "Run on a mat or green with a cup.",
+        "almost": "Quiet mat version.",
+        "sore": "Upright slow putts, no timer. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "gym-kettlebell-swings",
+      "title": "Kettlebell Swings (Speed Prep)",
+      "section": "Driver Launch & Start Line",
+      "focus": "Hip Drive & Ground Force",
+      "faultTags": [
+        "low-speed",
+        "lazy-transition"
+      ],
+      "environments": [
+        "gym"
+      ],
+      "swingPhase": "transition",
+      "equipment": [
+        "Kettlebell"
+      ],
+      "keyFeel": "Snap the hips and let the bell float; the power comes from the glutes, not the arms.",
+      "pacing": "block",
+      "days": [
+        "day-5-driver"
+      ],
+      "modes": [
+        "real"
+      ],
+      "duration": "10 min",
+      "reps": "4 sets of 10",
+      "clubs": [],
+      "video": {
+        "localPath": "shorts/44_gym_kettlebell_swings.mp4",
+        "youtubeUrl": "",
+        "diagram": "posture",
+        "keyFrameCue": "Hinge, then snap the hips forward and let the kettlebell float to chest height."
+      },
+      "why": "Kettlebell swings train explosive hip extension and posterior-chain power, the engine for club speed. They are a gym session, not a range drill.",
+      "instructions": [
+        "Use a moderate bell; feet shoulder-width, hinge at the hips, flat back.",
+        "Hike the bell back, then snap the hips forward and let the bell float to chest height (arms relaxed).",
+        "Do 4 sets of 10 with 60-90 s rest; stop a set if the form breaks down.",
+        "Smash-factor guard: if you test speed after this session, stop if smash drops below about 1.40 or contact degrades; cut back volume."
+      ],
+      "checkpoints": {
+        "dtl": "Flat back and hip hinge; no rounding.",
+        "fo": "Shoulders square, no sway."
+      },
+      "modePlans": {
+        "real": "Gym session before or after a golf day; keep it away from heavy lower-body days so your legs are fresh for ball striking."
+      }
+    },
+    {
+      "id": "gym-cable-chops",
+      "title": "Cable Chops (Rotational Power)",
+      "section": "Driver Launch & Start Line",
+      "focus": "Rotation & Core Sequencing",
+      "faultTags": [
+        "low-speed",
+        "overturning"
+      ],
+      "environments": [
+        "gym"
+      ],
+      "swingPhase": "transition",
+      "equipment": [
+        "Cable machine"
+      ],
+      "keyFeel": "Rotate from the hips first, then the chest, and keep the arms long.",
+      "pacing": "block",
+      "days": [
+        "day-5-driver"
+      ],
+      "modes": [
+        "real"
+      ],
+      "duration": "8 min",
+      "reps": "3 sets of 8 each side",
+      "clubs": [],
+      "video": {
+        "localPath": "shorts/45_gym_cable_chops.mp4",
+        "youtubeUrl": "",
+        "diagram": "posture",
+        "keyFrameCue": "Hip rotation first, then chest, arms long, resisting the cable."
+      },
+      "why": "Cable chops build rotational strength and teach the pelvis-to-chest sequence without any golf swing.",
+      "instructions": [
+        "Set a cable at shoulder height and stand side-on with a split stance.",
+        "Pull the cable diagonally across your body, rotating hips then chest.",
+        "Keep your arms long and your head still.",
+        "Do 3 sets of 8 each side. Smash-factor guard: if you test speed afterwards, stop if smash drops below about 1.40 or contact degrades."
+      ],
+      "checkpoints": {
+        "dtl": "Hips lead the rotation; spine angle stable.",
+        "fo": "Chest rotates after the pelvis."
+      },
+      "modePlans": {
+        "real": "Gym session; do not do heavy rotational work the day before a hard ball-striking day."
+      }
+    },
+    {
+      "id": "gym-jump-training",
+      "title": "Jump Training (Ground Force)",
+      "section": "Driver Launch & Start Line",
+      "focus": "Explosive Lower Body",
+      "faultTags": [
+        "low-speed",
+        "lazy-transition"
+      ],
+      "environments": [
+        "gym"
+      ],
+      "swingPhase": "transition",
+      "equipment": [
+        "Box or soft surface"
+      ],
+      "keyFeel": "Push into the ground and jump high; land softly and reset between reps.",
+      "pacing": "block",
+      "days": [
+        "day-5-driver"
+      ],
+      "modes": [
+        "real"
+      ],
+      "duration": "8 min",
+      "reps": "4 sets of 5 jumps",
+      "clubs": [],
+      "video": {
+        "localPath": "shorts/46_gym_jump_training.mp4",
+        "youtubeUrl": "",
+        "diagram": "posture",
+        "keyFrameCue": "Load, push hard into the ground, jump, land quiet, reset."
+      },
+      "why": "Vertical jumps train the ground-force timing that powers a fast downswing.",
+      "instructions": [
+        "Stand on a flat, non-slip surface.",
+        "Squat to a quarter depth, then jump as high as you can.",
+        "Land softly with bent knees and reset before the next rep.",
+        "Do 4 sets of 5; stop if any joint complains. Smash-factor guard: if you test speed afterwards, stop if smash drops below about 1.40 or contact degrades."
+      ],
+      "checkpoints": {
+        "dtl": "Spine stays long and stable; no collapse on landing.",
+        "fo": "Knees track over toes."
+      },
+      "modePlans": {
+        "real": "Gym session; skip on heavy lower-body days."
+      }
+    },
+    {
+      "id": "gym-overload-underload-swings",
+      "title": "Overload / Underload Swing Training",
+      "section": "Driver Launch & Start Line",
+      "focus": "Club Head Speed Training",
+      "faultTags": [
+        "low-speed"
+      ],
+      "environments": [
+        "gym",
+        "sim",
+        "range"
+      ],
+      "swingPhase": "impact",
+      "equipment": [
+        "Weighted club or speed stick",
+        "Light club or speed stick",
+        "Launch monitor"
+      ],
+      "keyFeel": "Alternate heavy and light swings, max effort with balance, and stop when contact or smash fades.",
+      "pacing": "block",
+      "days": [
+        "day-5-driver"
+      ],
+      "modes": [
+        "real"
+      ],
+      "duration": "12 min",
+      "reps": "3 rounds: 3 heavy, 3 normal, 3 light",
+      "clubs": [
+        "Driver"
+      ],
+      "video": {
+        "localPath": "shorts/47_overload_underload.mp4",
+        "youtubeUrl": "",
+        "diagram": "driver",
+        "keyFrameCue": "Heavy swings first, then normal, then light; max intent with balance."
+      },
+      "why": "Overload and underload swing training lets the nervous system practice faster speeds. It only helps if contact holds, so a smash-factor guard is part of the drill.",
+      "instructions": [
+        "Warm up, then make 3 maximum-effort swings with the overload implement.",
+        "Make 3 swings with your normal driver (or hit balls) at maximum controlled effort.",
+        "Make 3 swings with the underload implement, trying for your fastest.",
+        "Smash-factor guard: stop if smash drops below about 1.40 or contact degrades. Rest 20-30 s between max swings and keep the total to 2-3 clusters."
+      ],
+      "checkpoints": {
+        "dtl": "Same plane as your normal swing; no loss of posture.",
+        "fo": "Balanced finish."
+      },
+      "modePlans": {
+        "real": "Weekly only while contact holds; log club head speed and smash."
       }
     }
   ],
@@ -3983,6 +5658,7 @@ window.DEFAULT_DRILLS_DATA = {
       "name": "21 / 7 (Tour Fast)",
       "ratio": "3:1",
       "type": "full-swing",
+      "use": "full",
       "backFrames": 21,
       "downFrames": 7,
       "backSec": 0.7,
@@ -3998,6 +5674,7 @@ window.DEFAULT_DRILLS_DATA = {
       "name": "24 / 8 (Tour Standard)",
       "ratio": "3:1",
       "type": "full-swing",
+      "use": "full",
       "backFrames": 24,
       "downFrames": 8,
       "backSec": 0.8,
@@ -4013,6 +5690,7 @@ window.DEFAULT_DRILLS_DATA = {
       "name": "27 / 9 (Tour Smooth)",
       "ratio": "3:1",
       "type": "full-swing",
+      "use": "full",
       "backFrames": 27,
       "downFrames": 9,
       "backSec": 0.9,
@@ -4028,6 +5706,7 @@ window.DEFAULT_DRILLS_DATA = {
       "name": "30 / 10 (Deliberate / Drill)",
       "ratio": "3:1",
       "type": "full-swing",
+      "use": "full",
       "backFrames": 30,
       "downFrames": 10,
       "backSec": 1,
@@ -4043,6 +5722,7 @@ window.DEFAULT_DRILLS_DATA = {
       "name": "18 / 9 (Short Game / Pitch)",
       "ratio": "2:1",
       "type": "short-game",
+      "use": "short-game",
       "backFrames": 18,
       "downFrames": 9,
       "backSec": 0.6,
@@ -4058,6 +5738,7 @@ window.DEFAULT_DRILLS_DATA = {
       "name": "20 / 10 (Putting Standard)",
       "ratio": "2:1",
       "type": "putting",
+      "use": "putting",
       "backFrames": 20,
       "downFrames": 10,
       "backSec": 0.67,
@@ -4066,6 +5747,86 @@ window.DEFAULT_DRILLS_DATA = {
       "bpm": 180,
       "proExamples": "Pendulum putting stroke",
       "desc": "Pendulum putting tempo ensuring consistent roll distance on GSPro greens. Frames are at 30fps (= 40/20 at 60fps, 80/40 at 120fps, 160/80 at 240fps). Smooth continuous motion, no pause at the top.",
+      "fps": 30
+    },
+    {
+      "id": "sg-14-7",
+      "name": "14 / 7 (Short Game / Quick Chip)",
+      "ratio": "2:1",
+      "type": "short-game",
+      "use": "short-game",
+      "backFrames": 14,
+      "downFrames": 7,
+      "backSec": 0.47,
+      "downSec": 0.23,
+      "totalSec": 0.7,
+      "bpm": 257,
+      "proExamples": "Chips, bump-and-runs, short pitches",
+      "desc": "Fast 2:1 rhythm for short chips and bump-and-runs. Frames are at 30fps (= 28/14 at 60fps, 56/28 at 120fps, 112/56 at 240fps). Smooth continuous motion, no pause at the top.",
+      "fps": 30
+    },
+    {
+      "id": "sg-16-8",
+      "name": "16 / 8 (Short Game / Standard Pitch)",
+      "ratio": "2:1",
+      "type": "short-game",
+      "use": "short-game",
+      "backFrames": 16,
+      "downFrames": 8,
+      "backSec": 0.53,
+      "downSec": 0.27,
+      "totalSec": 0.8,
+      "bpm": 225,
+      "proExamples": "Standard pitches and partial wedges",
+      "desc": "Mid-pace 2:1 rhythm for standard pitches and partial wedges. Frames are at 30fps (= 32/16 at 60fps, 64/32 at 120fps, 128/64 at 240fps). Smooth continuous motion, no pause at the top.",
+      "fps": 30
+    },
+    {
+      "id": "pt-14-7",
+      "name": "14 / 7 (Putting / Quick)",
+      "ratio": "2:1",
+      "type": "putting",
+      "use": "putting",
+      "backFrames": 14,
+      "downFrames": 7,
+      "backSec": 0.47,
+      "downSec": 0.23,
+      "totalSec": 0.7,
+      "bpm": 257,
+      "proExamples": "Quick, firm short putts",
+      "desc": "Quicker pendulum putting tempo for firm short putts. Frames are at 30fps (= 28/14 at 60fps, 56/28 at 120fps, 112/56 at 240fps). Smooth continuous motion, no pause at the top.",
+      "fps": 30
+    },
+    {
+      "id": "pt-16-8",
+      "name": "16 / 8 (Putting / Medium)",
+      "ratio": "2:1",
+      "type": "putting",
+      "use": "putting",
+      "backFrames": 16,
+      "downFrames": 8,
+      "backSec": 0.53,
+      "downSec": 0.27,
+      "totalSec": 0.8,
+      "bpm": 225,
+      "proExamples": "Medium-length putts",
+      "desc": "Medium pendulum putting tempo for mid-range putts. Frames are at 30fps (= 32/16 at 60fps, 64/32 at 120fps, 128/64 at 240fps). Smooth continuous motion, no pause at the top.",
+      "fps": 30
+    },
+    {
+      "id": "pt-18-9",
+      "name": "18 / 9 (Putting / Smooth)",
+      "ratio": "2:1",
+      "type": "putting",
+      "use": "putting",
+      "backFrames": 18,
+      "downFrames": 9,
+      "backSec": 0.6,
+      "downSec": 0.3,
+      "totalSec": 0.9,
+      "bpm": 200,
+      "proExamples": "Smooth, longer lag putts",
+      "desc": "Smooth pendulum putting tempo for lag putts and slower greens. Frames are at 30fps (= 36/18 at 60fps, 72/36 at 120fps, 144/72 at 240fps). Smooth continuous motion, no pause at the top.",
       "fps": 30
     }
   ],
@@ -4227,6 +5988,397 @@ window.DEFAULT_DRILLS_DATA = {
       "role": "Pinpoint Stop & Flop"
     }
   ],
+  // Coach taxonomy (additive; the hub works without it). Drills reference fault ids (faultTags),
+  // environment ids (environments) and a swingPhase. sessionTemplates blocks sum to the template minutes.
+  "faults": [
+    {
+      "id": "early-extension",
+      "name": "Early extension",
+      "symptom": "Hips move toward the ball in the downswing; fat, thin or blocked/open-face strikes, heel hits.",
+      "rootCauseHint": "Lead hip thrusts forward instead of back; spine angle lost; no room for the arms.",
+      "swingPhase": "impact"
+    },
+    {
+      "id": "over-the-top",
+      "name": "Over the top (out-to-in handle)",
+      "symptom": "Handle and shoulders move out and across; pull, pull-slice or steep out-to-in path.",
+      "rootCauseHint": "Shoulder-led turn starts the downswing before the hands drop; trail elbow separates from the body.",
+      "swingPhase": "transition"
+    },
+    {
+      "id": "driver-hook",
+      "name": "Driver hook (early opening)",
+      "symptom": "Ball starts straight or right then hooks hard with the driver.",
+      "rootCauseHint": "Chest and trail shoulder open early, face already closing; iron-style throw too aggressive for the driver arc.",
+      "swingPhase": "impact"
+    },
+    {
+      "id": "open-face-slice",
+      "name": "Open-face cut-slice",
+      "symptom": "Push-fade or out-to-in slice; face open to path at impact.",
+      "rootCauseHint": "Club stalls while hips pop open; hands pulled toward lead hip, or an armsy swing with no body-to-club sync.",
+      "swingPhase": "impact"
+    },
+    {
+      "id": "lazy-transition",
+      "name": "Lazy transition (no lead-side brace)",
+      "symptom": "Contact and face fall apart late in a session, worst with driver; no post on the lead leg.",
+      "rootCauseHint": "Lead leg never braces; hips spin instead of posting then turning.",
+      "swingPhase": "transition"
+    },
+    {
+      "id": "early-release-scoop",
+      "name": "Early release / scoop (hitting up on irons)",
+      "symptom": "Fat/thin irons, high spin-less flight, hands behind the ball at impact, shallow or positive attack angle with irons.",
+      "rootCauseHint": "Wrist angles thrown away early; handle stalls and the clubhead passes the hands.",
+      "swingPhase": "impact"
+    },
+    {
+      "id": "holding-off",
+      "name": "Holding off (club held back)",
+      "symptom": "Block-push or fade, face stays open, hands never release; feels stuck through the ball.",
+      "rootCauseHint": "Fear of the left miss; lead arm pulled in; face held square-to-open past impact.",
+      "swingPhase": "impact"
+    },
+    {
+      "id": "trail-elbow-flying",
+      "name": "Trail elbow flying",
+      "symptom": "Trail elbow rises or sticks out at the top and in transition; steep, inconsistent delivery.",
+      "rootCauseHint": "Trail arm separates from the torso; no room to drop the club into the slot.",
+      "swingPhase": "top"
+    },
+    {
+      "id": "overturning",
+      "name": "Overturning",
+      "symptom": "Chest and shoulders spin open too early or too far; pull, hook or weak strikes.",
+      "rootCauseHint": "Body turn outruns the club; chest points left of target before the club arrives.",
+      "swingPhase": "transition"
+    },
+    {
+      "id": "path-too-in-to-out",
+      "name": "Path too in-to-out",
+      "symptom": "Push or push-hook; club path far right of target; clipping the inside of the ball.",
+      "rootCauseHint": "Club dropped too far behind the body; trail side drives under and out.",
+      "swingPhase": "transition"
+    },
+    {
+      "id": "grip-tension",
+      "name": "Grip and arm tension",
+      "symptom": "Lead hand squeezes on irons, trail index finger over-controls; lost speed and open face.",
+      "rootCauseHint": "White-knuckle pressure; structure coming from the hands instead of the elbows and shoulders.",
+      "swingPhase": "setup"
+    },
+    {
+      "id": "false-groove",
+      "name": "False groove (range vs course)",
+      "symptom": "Great late-session reps but poor cold shots on the course.",
+      "rootCauseHint": "Long blocked repetition grooves a feel that does not survive a cold start or a full routine.",
+      "swingPhase": "mental-tempo"
+    },
+    {
+      "id": "wedge-distance",
+      "name": "Wedge distance control",
+      "symptom": "Wedge carries are not pinpoint; gaps between clubs are uneven.",
+      "rootCauseHint": "No calibrated swing lengths; speed varies with tempo and strike.",
+      "swingPhase": "short-game"
+    },
+    {
+      "id": "putting-speed",
+      "name": "Putting speed control",
+      "symptom": "Lag putts finish short or long; three-putts.",
+      "rootCauseHint": "Stroke length and tempo not matched to distance; inconsistent strike.",
+      "swingPhase": "putting"
+    },
+    {
+      "id": "putting-start-line",
+      "name": "Putting start line",
+      "symptom": "Putts start off the intended line even on short putts.",
+      "rootCauseHint": "Face angle at impact is not square; path is not repeatable; aim off.",
+      "swingPhase": "putting"
+    },
+    {
+      "id": "low-speed",
+      "name": "Low swing speed",
+      "symptom": "Club head speed and ball speed below target; short carries.",
+      "rootCauseHint": "Weak ground force and sequencing, low rotational power, tension, or no speed training.",
+      "swingPhase": "transition"
+    },
+    {
+      "id": "takeaway-inside-roll",
+      "name": "Inside roll takeaway",
+      "symptom": "Club rolls inside and behind the hands early; steep or stuck from the top.",
+      "rootCauseHint": "Forearms rotate the face open in the first move instead of a one-piece takeaway.",
+      "swingPhase": "takeaway"
+    },
+    {
+      "id": "low-point-control",
+      "name": "Low point control (fat/thin)",
+      "symptom": "Fat and thin strikes; divot starts behind the ball.",
+      "rootCauseHint": "Weight and handle not forward at impact; low point behind the ball.",
+      "swingPhase": "impact"
+    },
+    {
+      "id": "face-control",
+      "name": "Face control (two-way miss)",
+      "symptom": "Cannot reliably start the ball straight; face-to-path wanders hook to slice.",
+      "rootCauseHint": "No reference for neutral face; feel cycling between releases.",
+      "swingPhase": "impact"
+    },
+    {
+      "id": "top-position-wrist",
+      "name": "Top-of-swing wrist position",
+      "symptom": "Cupped or bowed lead wrist at the top; face open or closed before transition.",
+      "rootCauseHint": "Wrist angle set too early or collapsed; grip and takeaway rotation.",
+      "swingPhase": "top"
+    },
+    {
+      "id": "rushed-tempo",
+      "name": "Rushed tempo",
+      "symptom": "Quick transition, no sequence; inconsistent contact.",
+      "rootCauseHint": "Backswing too short in time, or hitting from the top with the arms.",
+      "swingPhase": "mental-tempo"
+    },
+    {
+      "id": "steep-driver-aoa",
+      "name": "Hitting down on the driver",
+      "symptom": "Low launch, high spin, weak driver; negative attack angle.",
+      "rootCauseHint": "Ball too far back or tee too low; weight left at address and spine tilted toward target.",
+      "swingPhase": "impact"
+    },
+    {
+      "id": "course-transfer",
+      "name": "Range-to-course transfer",
+      "symptom": "Practice swing quality does not show up on the course or under a full pre-shot routine.",
+      "rootCauseHint": "Blocked practice with no variation, no target and no routine.",
+      "swingPhase": "mental-tempo"
+    },
+    {
+      "id": "short-putt-pressure",
+      "name": "Short putt pressure",
+      "symptom": "Misses inside 5 ft when it counts; tentative stroke.",
+      "rootCauseHint": "No pressure-practice; decelerating stroke.",
+      "swingPhase": "putting"
+    },
+    {
+      "id": "poor-setup-posture",
+      "name": "Setup and posture",
+      "symptom": "Inconsistent spine angle, ball position or alignment at address.",
+      "rootCauseHint": "No repeatable pre-swing check; limited hip hinge or rotation mobility.",
+      "swingPhase": "setup"
+    }
+  ],
+  "environments": [
+    {
+      "id": "mirror",
+      "name": "Mirror (no ball)",
+      "desc": "Full-length mirror or camera at home; slow rehearsals and position checks with no ball."
+    },
+    {
+      "id": "putting-mat",
+      "name": "Putting mat",
+      "desc": "Putting mat or carpet with a cup; quiet and good for sore days."
+    },
+    {
+      "id": "sim",
+      "name": "Sim (garage net / launch monitor)",
+      "desc": "Garage net with a launch monitor and sim software for data feedback."
+    },
+    {
+      "id": "range",
+      "name": "Range",
+      "desc": "Outdoor range or practice area with real ball flight."
+    },
+    {
+      "id": "course",
+      "name": "Course",
+      "desc": "On-course practice or play; full pre-shot routine and real consequences."
+    },
+    {
+      "id": "gym",
+      "name": "Gym",
+      "desc": "Weight room or home gym for speed and strength work."
+    }
+  ],
+  "sessionTemplates": [
+    {
+      "id": "session-15",
+      "minutes": 15,
+      "name": "15-Minute Tune-Up",
+      "blocks": [
+        {
+          "name": "Warm-up",
+          "minutes": 3,
+          "kind": "warmup",
+          "note": "Short mobility and half swings (see Structured 5-Minute Warm-Up, compressed)."
+        },
+        {
+          "name": "Cold start",
+          "minutes": 2,
+          "kind": "cold",
+          "note": "First 3 shots with a full routine to a target, before any grooving. Log them separately."
+        },
+        {
+          "name": "Active feel block",
+          "minutes": 6,
+          "kind": "block",
+          "note": "One drill, one cue. 2-5 s between swings. Rest 20-30 s between hard reps. Pick 2-3 training aids for the block, not all of them."
+        },
+        {
+          "name": "Transfer",
+          "minutes": 3,
+          "kind": "transfer",
+          "note": "3 shots, different target each, full pre-shot routine, 15-20 s between shots."
+        },
+        {
+          "name": "Log",
+          "minutes": 1,
+          "kind": "log",
+          "note": "Session summary, key takeaway, next step."
+        }
+      ]
+    },
+    {
+      "id": "session-30",
+      "minutes": 30,
+      "name": "30-Minute Core Session",
+      "blocks": [
+        {
+          "name": "Warm-up drill",
+          "minutes": 5,
+          "kind": "warmup",
+          "note": "Structured warm-up or the day's setup drill."
+        },
+        {
+          "name": "Cold start",
+          "minutes": 3,
+          "kind": "cold",
+          "note": "3-5 shots first, full routine, one target, before any grooving. Log first 3 vs last 3 later."
+        },
+        {
+          "name": "Active feel block",
+          "minutes": 12,
+          "kind": "block",
+          "note": "One or two cues only. 2-3 training aids max. Driver capped about 15-20 min total, in 2-3 clusters. Rest 20-30 s between hard reps."
+        },
+        {
+          "name": "Transfer / random set",
+          "minutes": 8,
+          "kind": "transfer",
+          "note": "Change club and target every shot; full pre-shot routine; 15-20 s between shots."
+        },
+        {
+          "name": "2-minute log",
+          "minutes": 2,
+          "kind": "log",
+          "note": "Session summary, ball flight and feel findings, key takeaway, next session step, fault tags."
+        }
+      ]
+    },
+    {
+      "id": "session-45",
+      "minutes": 45,
+      "name": "45-Minute Session",
+      "blocks": [
+        {
+          "name": "Warm-up drill",
+          "minutes": 5,
+          "kind": "warmup",
+          "note": "Structured warm-up."
+        },
+        {
+          "name": "Cold start",
+          "minutes": 4,
+          "kind": "cold",
+          "note": "3-5 shots first with a full routine; log separately."
+        },
+        {
+          "name": "Active feel block A",
+          "minutes": 12,
+          "kind": "block",
+          "note": "Main fault drill. 2-3 aids max. Rest 20-30 s between hard reps."
+        },
+        {
+          "name": "Active feel block B",
+          "minutes": 10,
+          "kind": "block",
+          "note": "Second drill or driver cluster. Driver stays inside 15-20 min across 2-3 clusters with pauses."
+        },
+        {
+          "name": "Putting",
+          "minutes": 4,
+          "kind": "putting",
+          "note": "Gate or speed ladder; one putting cue only."
+        },
+        {
+          "name": "Transfer / random set",
+          "minutes": 8,
+          "kind": "transfer",
+          "note": "Full pre-shot routine, new target each shot, 15-20 s between shots."
+        },
+        {
+          "name": "2-minute log",
+          "minutes": 2,
+          "kind": "log",
+          "note": "Structured end-of-session log with fault tags."
+        }
+      ]
+    },
+    {
+      "id": "session-60",
+      "minutes": 60,
+      "name": "60-Minute Full Session",
+      "blocks": [
+        {
+          "name": "Warm-up drill",
+          "minutes": 5,
+          "kind": "warmup",
+          "note": "Structured warm-up."
+        },
+        {
+          "name": "Cold start",
+          "minutes": 4,
+          "kind": "cold",
+          "note": "3-5 shots first with a full routine; log separately."
+        },
+        {
+          "name": "Active feel block A",
+          "minutes": 12,
+          "kind": "block",
+          "note": "Main fault drill. 2-3 aids max. Rest 20-30 s between hard reps."
+        },
+        {
+          "name": "Active feel block B",
+          "minutes": 10,
+          "kind": "block",
+          "note": "Second drill. Driver work here is cluster 1 or 2 of 2-3; total driver stays 15-20 min."
+        },
+        {
+          "name": "Speed set",
+          "minutes": 6,
+          "kind": "speed",
+          "note": "Optional overload/underload swings. Stop if smash factor drops below ~1.40 or contact degrades. Rest 20-30 s between max swings."
+        },
+        {
+          "name": "Putting",
+          "minutes": 8,
+          "kind": "putting",
+          "note": "Start-line gate, then speed ladder or pressure 4-footers."
+        },
+        {
+          "name": "Transfer / random set",
+          "minutes": 12,
+          "kind": "transfer",
+          "note": "Course simulation: full pre-shot routine, 15-20 s between shots, last 3 vs first 3 compared."
+        },
+        {
+          "name": "Log",
+          "minutes": 3,
+          "kind": "log",
+          "note": "Session summary, ball flight and feel findings, key takeaway, next step, body state."
+        }
+      ]
+    }
+  ],
   "simulatorRoutines": {
     "swing-speed": {
       "id": "swing-speed",
@@ -4316,9 +6468,6 @@ window.DEFAULT_DRILLS_DATA = {
       }
     ],
     "defaultFocusIds": [
-      "bs-lead-shoulder-chin",
-      "bs-shoulder-plane",
-      "bs-keep-tilt",
       "ds-maintain-tilt",
       "ds-trail-shoulder-chin"
     ],

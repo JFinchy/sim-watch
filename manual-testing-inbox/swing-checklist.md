@@ -10,7 +10,7 @@ A new "Swing Checklist" tab in the Drills Hub lists swing cues by phase, with a 
 ## Steps
 
 1. Open `drills\index.html` in the rig browser (and on the phone/tablet). Click **✅ Swing Checklist** (right after Drill Deck).
-2. Confirm the header shows `0 / 19 checked today` and "Days checked, last 7 days", and My Focus shows 5 starred cards (lead shoulder under chin, shoulders on a tilted plane, keep tilt, maintain tilt, trail shoulder under chin).
+2. Confirm the header shows `0 / 19 checked today` and "Days checked, last 7 days", and Active cues (max 2) shows 2 cards: with drills/player_data.js present these are your first two pre-swing checks; without it, maintain tilt and trail shoulder under chin.
 3. Tap the check button on two items. The count rises and the button stays pressed after a page reload.
 4. Un-star one My Focus item, reload: it stays un-starred (defaults must not come back).
 5. Under **Downswing**, confirm the "Am I standing up?" card, and that its two buttons scroll to and open the matching items.

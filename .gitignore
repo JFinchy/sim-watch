@@ -28,3 +28,6 @@ simwatch_status.json
 # Empty agent tooling skeleton dirs (local only)
 .agents/
 .gemini/
+
+# Private player profile (personal data; never commit)
+drills/player_data.js

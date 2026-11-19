@@ -846,15 +846,24 @@ def suppress_background_focus(cfg) -> None:
             log_throttled(f"suppress_focus:{key}", f"suppress_background_focus({key}) failed: {e}")
 
 
+def _port_listening(port: int) -> bool:
+    """True if some local process has a LISTEN socket on `port`. Read-only (psutil): unlike a test
+    connect(), this can never steal GSPro's single private :9050 slot from GSPconnect."""
+    try:
+        conns = psutil.net_connections(kind="tcp")
+    except (psutil.Error, OSError) as e:
+        log_throttled("port-listening", f"psutil.net_connections failed ({e}); cannot see :{port} yet")
+        return False
+    return any(c.status == psutil.CONN_LISTEN and c.laddr and c.laddr.port == port for c in conns)
+
+
 def wait_port(port: int, timeout: float) -> bool:
     end = time.time() + timeout
     while time.time() < end:
-        try:
-            with socket.create_connection(("127.0.0.1", port), timeout=2):
-                LOG.info("  :%d accepting connections", port)
-                return True
-        except OSError:
-            time.sleep(2)
+        if _port_listening(port):
+            LOG.info("  :%d listening", port)
+            return True
+        time.sleep(2)
     LOG.warning("  :%d never opened within %ds", port, timeout)
     return False
 
@@ -1177,13 +1186,25 @@ def _ping_ok(returncode: int, stdout: str) -> bool:
     return True
 
 
+# Runtime device facts shared between checks. learned_ip: the remote IP GameChanger was last seen
+# connected to (device_tcp pass) - the Launch Pro's link-local address can change between boots, so
+# pinging the configured IP alone can false-fail while the device is actually connected.
+_DEVICE_RUNTIME: dict = {"learned_ip": None}
+
+
+def device_ping_target(chk, cfg) -> str | None:
+    return _DEVICE_RUNTIME.get("learned_ip") or chk.get("ip") or cfg.get("device", {}).get("ip")
+
+
 def check_device_ping(chk, cfg):
+    ip = device_ping_target(chk, cfg)
+    # 2 echoes: one dropped packet on a busy link-local/Wi-Fi hop must not read as "device offline".
     r = subprocess.run(
-        ["ping", "-n", "1", "-w", "1000", chk["ip"]],
+        ["ping", "-n", "2", "-w", "1000", ip],
         capture_output=True, text=True, creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
     )
     ok = _ping_ok(r.returncode, r.stdout)
-    return ok, f"ping {chk['ip']} {'ok' if ok else 'failed'}"
+    return ok, f"ping {ip} {'ok' if ok else 'failed'}"
 
 
 def check_device_tcp(chk, cfg):
@@ -1193,8 +1214,13 @@ def check_device_tcp(chk, cfg):
     dev = cfg.get("device", {})
     ip = chk.get("ip") or dev.get("ip")
     ports = _device_ports(chk) or _device_ports(dev)
-    c = _find_device_tcp_session(pids, ip, ports)
+    c = _find_device_tcp_session(pids, _DEVICE_RUNTIME.get("learned_ip") or ip, ports)
+    if c is None and _DEVICE_RUNTIME.get("learned_ip") and ip != _DEVICE_RUNTIME.get("learned_ip"):
+        c = _find_device_tcp_session(pids, ip, ports)
     if c:
+        if c.raddr.ip and _DEVICE_RUNTIME.get("learned_ip") != c.raddr.ip:
+            LOG.info("Launch Pro seen at %s (GameChanger session); pinging that address from now on", c.raddr.ip)
+            _DEVICE_RUNTIME["learned_ip"] = c.raddr.ip
         return True, f"{app['key']} connected to {c.raddr.ip}:{c.raddr.port} ({link_kind(c.laddr.ip)})"
     return False, f"{app['key']} has no session to the launch monitor"
 
@@ -1295,9 +1321,14 @@ def evaluate_checks(cfg, verbose=True) -> dict:
     all_ok = True
     any_unknown = False
     device_ping_failed = False
+    device_tcp_seen = device_tcp_failed = False
     saw_non_device_fail = False
     level = None
+    non_device_level = None
     failing: list[str] = []
+    device_failing: list[str] = []
+    non_device_failing: list[str] = []
+    ping_failing: list[str] = []
     skipped: list[str] = []
 
     for chk in cfg["checks"]:
@@ -1320,6 +1351,9 @@ def evaluate_checks(cfg, verbose=True) -> dict:
         mark = {True: "OK ", False: "BAD", None: "?? "}[ok]
         if verbose or ok is not True:
             LOG.info("[%s] %-22s %s", mark, name, msg)
+        if chk.get("type") == "device_tcp" and ok is not None:
+            device_tcp_seen = True
+            device_tcp_failed = device_tcp_failed or ok is False
         if ok is None:
             any_unknown = True
             failing.append(f"{name} (error)")
@@ -1328,18 +1362,39 @@ def evaluate_checks(cfg, verbose=True) -> dict:
             all_ok = False
             if chk.get("type") == "device_ping":
                 device_ping_failed = True
-            if not chk.get("device"):
-                saw_non_device_fail = True
+                ping_failing.append(name)
             lvl = chk.get("recovery_level", 0)
             level = lvl if level is None else max(level, lvl)
+            if chk.get("device"):
+                device_failing.append(name)
+            else:
+                saw_non_device_fail = True
+                non_device_failing.append(name)
+                non_device_level = lvl if non_device_level is None else max(non_device_level, lvl)
+
+    # "Offline" needs BOTH signals: ping failing AND no live GameChanger session (or no device_tcp check).
+    device_offline_raw = device_ping_failed and (device_tcp_failed or not device_tcp_seen)
+    # Ping failing while GameChanger holds a live session = ICMP flake, not a device problem: drop it.
+    ping_ignored = device_ping_failed and device_tcp_seen and not device_tcp_failed
+    if ping_ignored:
+        device_failing = [n for n in device_failing if n not in ping_failing]
+        failing = [n for n in failing if n not in ping_failing]
+        all_ok = not failing or all(f.endswith(" (error)") for f in failing)
+        if all_ok:
+            level = None
 
     return {
         "all_ok": all_ok,
         "any_unknown": any_unknown,
         "device_ping_failed": device_ping_failed,
+        "device_offline_raw": device_offline_raw,
+        "ping_ignored": ping_ignored,
         "only_device_failed": (not all_ok) and (not saw_non_device_fail),
         "level": level,
+        "non_device_level": non_device_level,
         "failing": failing,
+        "device_failing": device_failing,
+        "non_device_failing": non_device_failing,
         "skipped": skipped,
     }
 
@@ -3168,14 +3223,24 @@ class OpenConnectMonitor:
 # Every OpenConnect shot becomes one record (contract below), appended to
 # <sessions_dir>/YYYY-MM-DD/shots.jsonl and pushed to the drills hub page over a local HTTP/SSE API.
 #
-# Shot record (version 1):
+# Shot record (version 2; the file/API also tolerate version-1 lines, see normalize_shot):
 #   {"ts": ISO8601 local with offset, "shot_num": int, "club": str|null,
 #    "ball": {"speed": mph, "carry": yd, "total": yd|null, "hla": deg, "vla": deg, "spin": rpm, "spin_axis": deg},
 #    "club_data": {"speed": mph, "path": deg, "face": deg, "aoa": deg}|null,
-#    "clip": str|null, "drill_id": str|null}
-# Any value the launch monitor did not send is null.
+#    "clip": str|null, "drill_id": str|null,
+#    # v2: coaching context stamped from the hub's active context (POST /api/context); null when unset
+#    "feel_id": str|null, "block_id": str|null, "session_id": str|null,
+#    "phase": "warmup"|"cold"|"block"|"transfer"|"speed"|null, "cluster": int 0-999|null,
+#    "note": str<=200|null,   # one-shot: attached to the next shot only, then cleared
+#    "derived": {"smash": ball.speed/club.speed (2dp)|null, "face_to_path": face-path (deg)|null,
+#                "start_offline_yd": carry*sin(hla) (yd, + = right of target line)|null}}
+# Any value the launch monitor did not send is null. start_offline_yd is the START-line offset only (no
+# spin-axis curve is estimated: that can't be done honestly from carry/HLA/axis alone).
 
-BRIDGE_VERSION = 1
+BRIDGE_VERSION = 2
+CONTEXT_PHASES = ("warmup", "cold", "block", "transfer", "speed")
+CONTEXT_FIELDS = ("drill_id", "feel_id", "block_id", "session_id", "phase", "cluster", "note")
+CONTEXT_NOTE_MAX = 200
 BRIDGE_DEFAULTS = {"enabled": True, "port": 8765, "sessions_dir": "Swings/Sessions"}
 DRILL_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -3200,6 +3265,41 @@ def valid_drill_id(value) -> bool:
     return value is None or (isinstance(value, str) and bool(DRILL_ID_RE.match(value)))
 
 
+def valid_context_id(value) -> bool:
+    """feel_id / block_id / session_id: same rule as a drill id (None or 1-80 chars of [A-Za-z0-9_-])."""
+    return valid_drill_id(value)
+
+
+def validate_context(doc) -> dict:
+    """Strictly validate a POST /api/context body. Returns only the keys present; raises ValueError."""
+    if not isinstance(doc, dict) or not doc:
+        raise ValueError("expected a JSON object with at least one of: " + ", ".join(CONTEXT_FIELDS))
+    unknown = sorted(k for k in doc if k not in CONTEXT_FIELDS)
+    if unknown:
+        raise ValueError(f"unknown field(s): {', '.join(map(str, unknown))}")
+    out: dict = {}
+    for key in ("drill_id", "feel_id", "block_id", "session_id"):
+        if key in doc:
+            if not valid_context_id(doc[key]):
+                raise ValueError(f"{key} must be null or 1-80 chars of [A-Za-z0-9_-]")
+            out[key] = doc[key]
+    if "phase" in doc:
+        if doc["phase"] is not None and doc["phase"] not in CONTEXT_PHASES:
+            raise ValueError("phase must be null or one of " + ", ".join(CONTEXT_PHASES))
+        out["phase"] = doc["phase"]
+    if "cluster" in doc:
+        c = doc["cluster"]
+        if c is not None and (isinstance(c, bool) or not isinstance(c, int) or not 0 <= c <= 999):
+            raise ValueError("cluster must be null or an integer 0-999")
+        out["cluster"] = c
+    if "note" in doc:
+        n = doc["note"]
+        if n is not None and (not isinstance(n, str) or len(n) > CONTEXT_NOTE_MAX):
+            raise ValueError(f"note must be null or a string of at most {CONTEXT_NOTE_MAX} chars")
+        out["note"] = n or None
+    return out
+
+
 def drill_filename_tag(drill_id: str | None) -> str:
     """'_D-<id>' for clip filenames ('' if none). Letters/digits only, so it can never look like an angle token."""
     if not drill_id:
@@ -3222,6 +3322,123 @@ def _num(v) -> float | None:
 
 def local_iso_now() -> str:
     return datetime.now().astimezone().isoformat(timespec="milliseconds")
+
+
+def derive_shot_metrics(ball: dict | None, club_data: dict | None) -> dict:
+    """The `derived` block of a v2 record. Every value is null when its inputs are missing."""
+    ball = ball if isinstance(ball, dict) else {}
+    cd = club_data if isinstance(club_data, dict) else {}
+    bs, cs = _num(ball.get("speed")), _num(cd.get("speed"))
+    face, path = _num(cd.get("face")), _num(cd.get("path"))
+    carry, hla = _num(ball.get("carry")), _num(ball.get("hla"))
+    return {
+        "smash": round(bs / cs, 2) if bs is not None and cs else None,
+        "face_to_path": round(face - path, 2) if face is not None and path is not None else None,
+        "start_offline_yd": (round(carry * math.sin(math.radians(hla)), 2)
+                             if carry is not None and hla is not None else None),
+    }
+
+
+def normalize_shot(rec: dict) -> dict:
+    """A shot dict (v1 or v2 line) in full v2 shape: missing keys become null, `derived` is recomputed
+    when absent. Returns a new dict; unknown extra keys are kept."""
+    out = dict(rec)
+    ball = out.get("ball") if isinstance(out.get("ball"), dict) else {}
+    out["ball"] = {k: ball.get(k) for k in ("speed", "carry", "total", "hla", "vla", "spin", "spin_axis")}
+    cd = out.get("club_data") if isinstance(out.get("club_data"), dict) else None
+    out["club_data"] = {k: cd.get(k) for k in ("speed", "path", "face", "aoa")} if cd else None
+    for k in ("ts", "shot_num", "club", "clip", "drill_id", "feel_id", "block_id", "session_id",
+              "phase", "cluster", "note"):
+        out.setdefault(k, None)
+    d = out.get("derived") if isinstance(out.get("derived"), dict) else {}
+    calc = derive_shot_metrics(out["ball"], out["club_data"])
+    out["derived"] = {k: d.get(k) if d.get(k) is not None else calc[k] for k in calc}
+    return out
+
+
+def _mean(vals: list) -> float | None:
+    vals = [v for v in vals if isinstance(v, (int, float)) and not isinstance(v, bool)]
+    return round(sum(vals) / len(vals), 2) if vals else None
+
+
+def _std(vals: list) -> float | None:
+    """Sample standard deviation (n-1); null with fewer than 2 values."""
+    vals = [v for v in vals if isinstance(v, (int, float)) and not isinstance(v, bool)]
+    if len(vals) < 2:
+        return None
+    m = sum(vals) / len(vals)
+    return round(math.sqrt(sum((v - m) ** 2 for v in vals) / (len(vals) - 1)), 2)
+
+
+def _shot_metrics(s: dict) -> dict:
+    cd = s.get("club_data") or {}
+    d = s.get("derived") or {}
+    ball = s.get("ball") or {}
+    return {"smash": d.get("smash"), "aoa": cd.get("aoa"), "path": cd.get("path"), "face": cd.get("face"),
+            "face_to_path": d.get("face_to_path"), "carry": ball.get("carry"), "ball_speed": ball.get("speed")}
+
+
+def _avg_metrics(shots: list[dict]) -> dict:
+    ms = [_shot_metrics(s) for s in shots]
+    return {k: _mean([m[k] for m in ms]) for k in
+            ("smash", "aoa", "path", "face", "face_to_path", "carry", "ball_speed")}
+
+
+def _spread(shots: list[dict]) -> dict:
+    return {"n": len(shots),
+            "offline_std": _std([s["derived"]["start_offline_yd"] for s in shots]),
+            "carry_std": _std([s["ball"]["carry"] for s in shots])}
+
+
+def session_stats(shots: list[dict], date: str | None = None, session_id: str | None = None) -> dict:
+    """Pure per-session summary of a list of shot dicts (v1 or v2). See the contract in the bridge notes:
+    cold start (phase "cold", else first 3), first3-vs-last3 dispersion per club (clubs with >= 6 shots,
+    else all shots pooled), per-cluster / per-feel averages, and carry std dev (strike consistency)."""
+    shots = [normalize_shot(s) for s in shots if isinstance(s, dict)]
+    if session_id is not None:
+        shots = [s for s in shots if s.get("session_id") == session_id]
+
+    tagged = [s for s in shots if s.get("phase") == "cold"]
+    cold, basis = (tagged, "tagged") if tagged else (shots[:3], "first3" if shots else "none")
+
+    by_club: dict[str, list[dict]] = {}
+    for s in shots:
+        by_club.setdefault(s.get("club") or "unknown", []).append(s)
+    groups = [(c, v) for c, v in by_club.items() if len(v) >= 6]
+    disp_basis = "clubs_with_6_plus"
+    if not groups:
+        disp_basis = "all_shots"
+        groups = [("all", shots)]
+    dispersion = []
+    for club, v in groups:
+        if len(v) >= 6:
+            dispersion.append({"club": club, "n": len(v), "first3": _spread(v[:3]), "last3": _spread(v[-3:])})
+        else:  # fewer than 6 shots: first3/last3 would overlap, so report nothing rather than something misleading
+            dispersion.append({"club": club, "n": len(v), "first3": None, "last3": None})
+
+    def grouped(key: str) -> list[dict]:
+        buckets: dict = {}
+        for s in shots:
+            if s.get(key) is not None:
+                buckets.setdefault(s[key], []).append(s)
+        return [{key: k, "n": len(v), **_avg_metrics(v)} for k, v in sorted(buckets.items())]
+
+    return {
+        "date": date,
+        "session_id": session_id,
+        "shot_count": len(shots),
+        "cold_start": {"basis": basis, "count": len(cold),
+                       "avg": _avg_metrics(cold) if cold else None,
+                       "offline_std": _std([s["derived"]["start_offline_yd"] for s in cold]),
+                       "carry_std": _std([s["ball"]["carry"] for s in cold])},
+        "dispersion": {"basis": disp_basis, "by_club": dispersion},
+        "by_cluster": grouped("cluster"),
+        "by_feel": grouped("feel_id"),
+        "strike_consistency": {
+            "carry_std": _std([s["ball"]["carry"] for s in shots]),
+            "by_club": {c: _std([s["ball"]["carry"] for s in v]) for c, v in by_club.items()},
+        },
+    }
 
 
 def openconnect_to_shot(obj: dict, club: str | None = None, ts: str | None = None) -> dict:
@@ -3255,22 +3472,30 @@ def openconnect_to_shot(obj: dict, club: str | None = None, ts: str | None = Non
     except (TypeError, ValueError):
         shot_num = None
 
+    ball_out = {
+        "speed": _num(ball.get("Speed")),
+        "carry": _num(ball.get("CarryDistance")),
+        "total": _num(ball.get("TotalDistance")),
+        "hla": _num(ball.get("HLA")),
+        "vla": _num(ball.get("VLA")),
+        "spin": spin,
+        "spin_axis": axis,
+    }
     return {
         "ts": ts or local_iso_now(),
         "shot_num": shot_num,
         "club": (str(club).strip() or None) if club else None,
-        "ball": {
-            "speed": _num(ball.get("Speed")),
-            "carry": _num(ball.get("CarryDistance")),
-            "total": _num(ball.get("TotalDistance")),
-            "hla": _num(ball.get("HLA")),
-            "vla": _num(ball.get("VLA")),
-            "spin": spin,
-            "spin_axis": axis,
-        },
+        "ball": ball_out,
         "club_data": club_data,
         "clip": None,
         "drill_id": None,
+        "feel_id": None,
+        "block_id": None,
+        "session_id": None,
+        "phase": None,
+        "cluster": None,
+        "note": None,
+        "derived": derive_shot_metrics(ball_out, club_data),
     }
 
 
@@ -3341,11 +3566,11 @@ class ShotStore:
 
 
 class ShotHub:
-    """Shared bridge state: the store, the active drill, and SSE subscriber fan-out."""
+    """Shared bridge state: the store, the active drill/coaching context, and SSE subscriber fan-out."""
 
     def __init__(self, store: ShotStore):
         self.store = store
-        self.active_drill: str | None = None
+        self.context: dict = {k: None for k in CONTEXT_FIELDS}  # active coaching context (drill_id = active drill)
         self.last_shot_ts: str | None = None
         self.health: dict | None = None
         self.sniffer = None  # an OpenConnectMonitor (its .active flag is reported as sniffer_ok)
@@ -3358,6 +3583,30 @@ class ShotHub:
         self._no_subs_since: float | None = time.monotonic()  # None while at least one SSE client is connected
         self._lock = threading.Lock()
 
+    @property
+    def active_drill(self) -> str | None:
+        return self.context["drill_id"]
+
+    @active_drill.setter
+    def active_drill(self, value: str | None) -> None:
+        self.context["drill_id"] = value
+
+    def read_shots(self, date_str: str) -> list[dict]:
+        """The day's shots, every line normalized to the v2 shape."""
+        return [normalize_shot(r) for r in self.store.read(date_str)]
+
+    def set_context(self, fields: dict) -> dict:
+        """Merge validated context fields (absent keys unchanged, null clears). Returns the new context."""
+        fields = validate_context(fields)
+        with self._lock:
+            self.context.update(fields)
+            if self._no_subs_since is not None:
+                self._no_subs_since = time.monotonic()  # a headless POST (curl) gets a full idle window
+            ctx = dict(self.context)
+        LOG.info("Context -> %s", {k: v for k, v in ctx.items() if v is not None} or "(none)")
+        self.broadcast("status", self.status())
+        return ctx
+
     def status(self) -> dict:
         doc = {
             "ok": True,
@@ -3365,6 +3614,7 @@ class ShotHub:
             "sniffer_ok": bool(getattr(self.sniffer, "active", False)),
             "last_shot_ts": self.last_shot_ts,
             "active_drill": self.active_drill,
+            "context": dict(self.context),
         }
         if self.health is not None:
             doc["health"] = self.health
@@ -3387,10 +3637,12 @@ class ShotHub:
         now = time.monotonic() if now is None else now
         with self._lock:
             idle_since = self._no_subs_since
-            if self.active_drill is None or idle_since is None or now - idle_since < self.drill_idle_timeout:
+            if (all(v is None for v in self.context.values()) or idle_since is None
+                    or now - idle_since < self.drill_idle_timeout):
                 return False
-            old, self.active_drill = self.active_drill, None
-        LOG.info("Active drill %s cleared: no drills page connected for %.0fs", old, now - idle_since)
+            old = self.context["drill_id"]
+            self.context = {k: None for k in CONTEXT_FIELDS}
+        LOG.info("Context (drill %s) cleared: no drills page connected for %.0fs", old, now - idle_since)
         self.broadcast("status", self.status())
         return True
 
@@ -3404,8 +3656,12 @@ class ShotHub:
     def record_shot(self, shot: dict) -> dict:
         """Tag with the active drill, persist, and push to SSE clients. Never raises."""
         self.expire_drill_if_idle()
-        if shot.get("drill_id") is None:
-            shot["drill_id"] = self.active_drill
+        with self._lock:
+            ctx = dict(self.context)
+            self.context["note"] = None  # the note rides on the next shot only
+        for k in CONTEXT_FIELDS:
+            if shot.get(k) is None:
+                shot[k] = ctx[k]
         try:
             self.store.append(shot)
         except OSError as e:
@@ -3453,7 +3709,7 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
     # - CORS is never `*`: only http://127.0.0.1:<port>, http://localhost:<port> and the literal "null"
     #   origin (drills/index.html opened via file://) are reflected. Any other Origin gets 403, so a
     #   foreign site can neither read shots nor change the drill (it also can't open the SSE stream).
-    # - POST /api/drill requires Content-Type: application/json, which forces a CORS preflight; a plain
+    # - POST /api/drill and /api/context (same policy) require Content-Type: application/json, which forces a CORS preflight; a plain
     #   cross-site <form>/text/plain "simple request" is refused with 415 before it can change state.
     # Residual risk (documented in README): a hostile page can produce Origin "null" from a sandboxed
     # iframe, so it could read shot data and set/clear the active drill tag. That is the price of keeping
@@ -3537,7 +3793,20 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
                 datetime.strptime(date_str, "%Y-%m-%d")
             except ValueError:
                 return self._json(400, {"error": "date must be YYYY-MM-DD"})
-            return self._json(200, {"shots": self.hub.store.read(date_str)})
+            return self._json(200, {"shots": self.hub.read_shots(date_str)})
+        if url.path == "/api/session-stats":
+            q = urllib.parse.parse_qs(url.query)
+            date_str = (q.get("date") or [time.strftime("%Y-%m-%d")])[0]
+            sid = (q.get("session_id") or [None])[0]
+            try:
+                if not _DATE_RE.match(date_str):
+                    raise ValueError
+                datetime.strptime(date_str, "%Y-%m-%d")
+            except ValueError:
+                return self._json(400, {"error": "date must be YYYY-MM-DD"})
+            if sid is not None and not valid_context_id(sid):
+                return self._json(400, {"error": "session_id must be 1-80 chars of [A-Za-z0-9_-]"})
+            return self._json(200, session_stats(self.hub.read_shots(date_str), date_str, sid))
         if url.path == "/api/events":
             return self._serve_events()
         if url.path.startswith("/api/"):
@@ -3551,7 +3820,7 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         url = urllib.parse.urlsplit(self.path)
-        if url.path != "/api/drill":
+        if url.path not in ("/api/drill", "/api/context"):
             return self._json(404, {"error": "unknown endpoint"})
         ctype = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
         if ctype != "application/json":
@@ -3568,6 +3837,12 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
             doc = json.loads(self.rfile.read(length).decode("utf-8") or "null")
         except (UnicodeDecodeError, json.JSONDecodeError):
             return self._json(400, {"error": "body must be JSON"})
+        if url.path == "/api/context":
+            try:
+                ctx = self.hub.set_context(doc)
+            except ValueError as e:
+                return self._json(400, {"error": str(e)})
+            return self._json(200, {"context": ctx})
         if not isinstance(doc, dict) or "drill_id" not in doc or not valid_drill_id(doc["drill_id"]):
             return self._json(400, {"error": "expected {\"drill_id\": null | 1-80 chars of [A-Za-z0-9_-]}"})
         return self._json(200, {"active_drill": self.hub.set_drill(doc["drill_id"])})
@@ -3734,28 +4009,36 @@ def _bridge_note_health(state: str, res: dict) -> None:
 
 
 def demo_openconnect_message(n: int) -> dict:
-    """A plausible synthetic OpenConnect v1 shot (for `bridge --demo`)."""
-    club, speed, vla, spin = random.choice([
-        ("Driver", 148, 12.5, 2600), ("7Iron", 118, 17.5, 6500), ("PW", 98, 26.0, 8800), ("5Iron", 128, 14.0, 5200),
+    """A plausible synthetic OpenConnect v1 shot (for `bridge --demo`), with coherent club data:
+    start line follows face (~75%) and path (~25%), spin axis follows face-to-path, AoA follows the club."""
+    club, speed, vla, spin, aoa_mu, smash = random.choice([
+        ("Driver", 148, 12.5, 2600, 1.5, 1.45), ("7Iron", 118, 17.5, 6500, -4.0, 1.33),
+        ("PW", 98, 26.0, 8800, -5.0, 1.24), ("5Iron", 128, 14.0, 5200, -3.0, 1.38),
     ])
+    path = random.gauss(-1.0, 2.5)
+    face = path + random.gauss(0.0, 1.8)  # face-to-path drives curvature
+    f2p = face - path
+    hla = 0.75 * face + 0.25 * path + random.gauss(0, 0.4)
+    ball_speed = speed + random.uniform(-6, 6)
+    club_speed = ball_speed / max(1.1, random.gauss(smash, 0.03))
     msg = {
         "DeviceID": "SimWatch Demo", "Units": "Yards", "ShotNumber": n, "APIversion": "1",
         "Player": {"Handed": "RH", "Club": club},
         "BallData": {
-            "Speed": round(speed + random.uniform(-6, 6), 1),
-            "SpinAxis": round(random.uniform(-8, 8), 1),
+            "Speed": round(ball_speed, 1),
+            "SpinAxis": round(max(-25.0, min(25.0, f2p * 3.5)) + random.gauss(0, 1.0), 1),
             "TotalSpin": round(spin + random.uniform(-500, 500)),
-            "HLA": round(random.uniform(-4, 4), 1),
+            "HLA": round(hla, 1),
             "VLA": round(vla + random.uniform(-2, 2), 1),
             "CarryDistance": round(speed * 1.55 + random.uniform(-8, 8), 1),
         },
         "ShotDataOptions": {"ContainsBallData": True, "ContainsClubData": True},
     }
     msg["ClubData"] = {
-        "Speed": round(msg["BallData"]["Speed"] / random.uniform(1.3, 1.48), 1),
-        "AngleOfAttack": round(random.uniform(-5, 3), 1),
-        "FaceToTarget": round(random.uniform(-3, 3), 1),
-        "Path": round(random.uniform(-4, 4), 1),
+        "Speed": round(club_speed, 1),
+        "AngleOfAttack": round(random.gauss(aoa_mu, 1.5), 1),
+        "FaceToTarget": round(face, 1),
+        "Path": round(path, 1),
     }
     return msg
 

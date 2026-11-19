@@ -33,6 +33,8 @@ def test_mapping_with_club_data():
         "club_data": {"speed": 86.1, "path": -1.9, "face": 0.8, "aoa": -4.1},
         "clip": None,
         "drill_id": None,
+        "feel_id": None, "block_id": None, "session_id": None, "phase": None, "cluster": None, "note": None,
+        "derived": {"smash": 1.38, "face_to_path": 2.7, "start_offline_yd": 4.32},
     }
 
 
@@ -148,7 +150,7 @@ def test_server_status_shots_drill(bridge):
     resp, data = _req(srv, "GET", "/api/status")
     assert resp.status == 200 and resp.getheader("Access-Control-Allow-Origin") is None  # no Origin -> no ACAO
     st = json.loads(data)
-    assert st["ok"] is True and st["version"] == 1 and st["sniffer_ok"] is False and st["active_drill"] is None
+    assert st["ok"] is True and st["version"] == 2 and st["sniffer_ok"] is False and st["active_drill"] is None
 
     resp, data = _req(srv, "POST", "/api/drill", json.dumps({"drill_id": "towel-drill"}),
                       {"Content-Type": "application/json"})
@@ -420,3 +422,216 @@ def test_bridge_sniffer_records_and_syncs(tmp_path, monkeypatch):
     sw.sync_bridge_sniffer(sniffer, False)  # not running -> nothing to stop
     sw.sync_bridge_sniffer(None, True)
     assert calls == ["start"]
+
+
+# ---------------------------------------------------------------- v2: context, derived, stats
+
+JSON = {"Content-Type": "application/json"}
+
+
+def _shot(ts_n, club="7Iron", carry=150.0, hla=0.0, **kw):
+    """A synthetic v2-ish shot dict for session_stats."""
+    s = {"ts": f"2026-11-17T10:{ts_n:02d}:00.000-08:00", "shot_num": ts_n, "club": club,
+         "ball": {"speed": 110.0, "carry": carry, "hla": hla},
+         "club_data": {"speed": 80.0, "path": -1.0, "face": 1.0, "aoa": -4.0}}
+    s.update(kw)
+    return s
+
+
+@pytest.mark.parametrize("doc,ok", [
+    ({"drill_id": "d1"}, True),
+    ({"feel_id": "f_1", "block_id": "b-2", "session_id": "s3", "phase": "cold", "cluster": 0, "note": "x"}, True),
+    ({"phase": None, "cluster": 999, "note": None, "feel_id": None}, True),
+    ({}, False), ([], False), (None, False),
+    ({"bogus": 1}, False),
+    ({"feel_id": "../x"}, False), ({"block_id": ""}, False), ({"session_id": "x" * 81}, False), ({"feel_id": 5}, False),
+    ({"phase": "range"}, False), ({"phase": 3}, False),
+    ({"cluster": -1}, False), ({"cluster": 1000}, False), ({"cluster": 1.5}, False), ({"cluster": True}, False),
+    ({"cluster": "3"}, False),
+    ({"note": "x" * 201}, False), ({"note": 7}, False),
+])
+def test_validate_context(doc, ok):
+    if ok:
+        assert sw.validate_context(doc) == doc or doc.get("note") == ""
+    else:
+        with pytest.raises(ValueError):
+            sw.validate_context(doc)
+
+
+def test_note_200_chars_ok_and_empty_note_is_null():
+    assert sw.validate_context({"note": "x" * 200})["note"] == "x" * 200
+    assert sw.validate_context({"note": ""})["note"] is None
+
+
+def test_context_stamps_shots_and_note_is_one_shot(tmp_path):
+    hub = sw.ShotHub(sw.ShotStore(tmp_path))
+    hub.set_context({"drill_id": "gate", "feel_id": "f1", "block_id": "b1", "session_id": "s1",
+                     "phase": "block", "cluster": 4, "note": "felt flat"})
+    r1 = hub.record_shot(sw.openconnect_to_shot(OC_FULL, ts="2026-11-17T10:00:00.000-08:00"))
+    r2 = hub.record_shot(sw.openconnect_to_shot(OC_FULL, ts="2026-11-17T10:01:00.000-08:00"))
+    for r in (r1, r2):
+        assert (r["drill_id"], r["feel_id"], r["block_id"], r["session_id"], r["phase"], r["cluster"]) == \
+            ("gate", "f1", "b1", "s1", "block", 4)
+    assert r1["note"] == "felt flat" and r2["note"] is None
+    # partial update merges; null clears
+    hub.set_context({"cluster": None, "phase": "cold"})
+    assert hub.context["feel_id"] == "f1" and hub.context["cluster"] is None and hub.context["phase"] == "cold"
+    assert hub.status()["context"]["phase"] == "cold"
+    on_disk = hub.store.read("2026-11-17")
+    assert on_disk[0]["feel_id"] == "f1" and on_disk[0]["derived"]["smash"] == 1.38
+
+
+def test_context_expires_with_drill_rule(tmp_path):
+    hub = sw.ShotHub(sw.ShotStore(tmp_path))
+    hub.drill_idle_timeout = 60
+    hub.set_context({"feel_id": "f1", "phase": "warmup", "note": "n"})  # no drill, context still counts
+    t0 = time.monotonic()
+    assert hub.expire_drill_if_idle(t0 + 30) is False
+    q = hub.subscribe()
+    assert hub.expire_drill_if_idle(t0 + 1000) is False
+    hub.unsubscribe(q)
+    assert hub.expire_drill_if_idle(time.monotonic() + 61) is True
+    assert all(v is None for v in hub.context.values())
+
+
+def test_derived_values():
+    d = sw.derive_shot_metrics({"speed": 150.0, "carry": 200.0, "hla": 3.0}, {"speed": 100.0, "path": 2.0, "face": -1.5})
+    assert d == {"smash": 1.5, "face_to_path": -3.5, "start_offline_yd": round(200 * 0.052336, 2)}
+    left = sw.derive_shot_metrics({"carry": 100.0, "hla": -2.0}, None)
+    assert left["start_offline_yd"] < 0 and left["smash"] is None and left["face_to_path"] is None
+    assert sw.derive_shot_metrics({"speed": 100.0}, {"speed": 0.0})["smash"] is None  # no divide by zero
+    assert sw.derive_shot_metrics(None, None) == {"smash": None, "face_to_path": None, "start_offline_yd": None}
+
+
+def test_v1_line_normalized_to_v2(tmp_path):
+    day = tmp_path / "2026-11-10"
+    day.mkdir()
+    v1 = {"ts": "2026-11-10T09:00:00.000-08:00", "shot_num": 1, "club": "PW",
+          "ball": {"speed": 100.0, "carry": 120.0, "hla": 1.0}, "club_data": {"speed": 80.0, "path": 1.0, "face": 2.0},
+          "clip": None, "drill_id": "old"}
+    (day / "shots.jsonl").write_text(json.dumps(v1) + "\n" + json.dumps({"ts": "2026-11-10T09:01:00.000-08:00"}) + "\n",
+                                     encoding="utf-8")
+    hub = sw.ShotHub(sw.ShotStore(tmp_path))
+    a, b = hub.read_shots("2026-11-10")
+    assert a["feel_id"] is None and a["phase"] is None and a["cluster"] is None and a["note"] is None
+    assert a["drill_id"] == "old" and a["ball"]["spin"] is None and a["club_data"]["aoa"] is None
+    assert a["derived"] == {"smash": 1.25, "face_to_path": 1.0, "start_offline_yd": 2.09}
+    assert b["ball"]["speed"] is None and b["club_data"] is None
+    assert b["derived"] == {"smash": None, "face_to_path": None, "start_offline_yd": None}
+    # the raw file is untouched by reading
+    assert "feel_id" not in hub.store.read("2026-11-10")[0]
+
+
+def test_session_stats_empty_and_missing_club_data():
+    st = sw.session_stats([], "2026-11-17", None)
+    assert st["shot_count"] == 0 and st["cold_start"]["basis"] == "none" and st["cold_start"]["avg"] is None
+    assert st["by_feel"] == [] and st["by_cluster"] == [] and st["strike_consistency"]["carry_std"] is None
+    shots = [_shot(1, club_data=None, carry=100.0), _shot(2, club_data=None, carry=110.0)]
+    st = sw.session_stats(shots)
+    assert st["shot_count"] == 2 and st["cold_start"]["basis"] == "first3" and st["cold_start"]["count"] == 2
+    assert st["cold_start"]["avg"]["smash"] is None and st["cold_start"]["avg"]["carry"] == 105.0
+    assert st["strike_consistency"]["carry_std"] == 7.07
+    assert st["dispersion"]["basis"] == "all_shots"
+    assert st["dispersion"]["by_club"] == [{"club": "all", "n": 2, "first3": None, "last3": None}]
+
+
+def test_session_stats_cold_tagged_vs_fallback():
+    shots = [_shot(i, carry=140.0 + i) for i in range(1, 8)]
+    assert sw.session_stats(shots)["cold_start"] == {**sw.session_stats(shots)["cold_start"],
+                                                    "basis": "first3", "count": 3}
+    shots[4]["phase"] = "cold"
+    shots[5]["phase"] = "cold"
+    cs = sw.session_stats(shots)["cold_start"]
+    assert cs["basis"] == "tagged" and cs["count"] == 2 and cs["avg"]["carry"] == 145.5
+
+
+def test_session_stats_first3_last3_per_club():
+    # 7Iron: 8 shots, tight start then wide; PW: 3 shots (excluded: < 6)
+    carries = [150, 150, 150, 140, 160, 120, 180, 200]
+    shots = [_shot(i + 1, carry=c, hla=0.0 if i < 3 else 5.0 if i % 2 else -5.0) for i, c in enumerate(carries)]
+    shots += [_shot(20 + i, club="PW", carry=100.0) for i in range(3)]
+    st = sw.session_stats(shots)
+    assert st["dispersion"]["basis"] == "clubs_with_6_plus"
+    (row,) = st["dispersion"]["by_club"]
+    assert row["club"] == "7Iron" and row["n"] == 8
+    assert row["first3"] == {"n": 3, "offline_std": 0.0, "carry_std": 0.0}
+    assert row["last3"]["n"] == 3 and row["last3"]["carry_std"] == 41.63 and row["last3"]["offline_std"] > 0
+    assert st["strike_consistency"]["by_club"]["PW"] == 0.0
+
+
+def test_session_stats_groups_and_session_filter():
+    shots = [
+        _shot(1, feel_id="f1", cluster=1, session_id="s1", ball={"speed": 100.0, "carry": 100.0, "hla": 0.0}),
+        _shot(2, feel_id="f1", cluster=1, session_id="s1", ball={"speed": 120.0, "carry": 120.0, "hla": 0.0}),
+        _shot(3, feel_id="f2", cluster=2, session_id="s1", club_data=None),
+        _shot(4, feel_id="f2", session_id="s2"),
+        _shot(5),
+    ]
+    st = sw.session_stats(shots, "2026-11-17", "s1")
+    assert st["shot_count"] == 3 and st["session_id"] == "s1"
+    f1 = next(g for g in st["by_feel"] if g["feel_id"] == "f1")
+    assert f1["n"] == 2 and f1["smash"] == 1.38 and f1["carry"] == 110.0 and f1["ball_speed"] == 110.0
+    assert f1["face_to_path"] == 2.0 and f1["aoa"] == -4.0 and f1["path"] == -1.0 and f1["face"] == 1.0
+    f2 = next(g for g in st["by_feel"] if g["feel_id"] == "f2")
+    assert f2["n"] == 1 and f2["smash"] is None and f2["aoa"] is None  # missing club data -> null
+    assert [g["cluster"] for g in st["by_cluster"]] == [1, 2]
+    assert sw.session_stats(shots)["shot_count"] == 5  # no filter -> all
+
+
+def test_server_context_end_to_end(bridge):
+    hub, srv = bridge
+    resp, data = _req(srv, "POST", "/api/context", json.dumps(
+        {"drill_id": "d1", "feel_id": "f1", "block_id": "b1", "session_id": "s1", "phase": "cold",
+         "cluster": 2, "note": "hi"}), JSON)
+    assert resp.status == 200
+    assert json.loads(data) == {"context": {"drill_id": "d1", "feel_id": "f1", "block_id": "b1",
+                                            "session_id": "s1", "phase": "cold", "cluster": 2, "note": "hi"}}
+    st = json.loads(_req(srv, "GET", "/api/status")[1])
+    assert st["context"]["feel_id"] == "f1" and st["active_drill"] == "d1"
+    # /api/drill is back-compat and shares state
+    resp, data = _req(srv, "POST", "/api/drill", json.dumps({"drill_id": "d2"}), JSON)
+    assert resp.status == 200 and json.loads(data) == {"active_drill": "d2"}
+    assert hub.context["drill_id"] == "d2" and hub.context["feel_id"] == "f1"
+    for bad in ({}, {"phase": "x"}, {"cluster": 1000}, {"feel_id": "a b"}, {"nope": 1}, [1]):
+        resp, _ = _req(srv, "POST", "/api/context", json.dumps(bad), JSON)
+        assert resp.status == 400, bad
+    assert hub.context["phase"] == "cold"  # rejected bodies changed nothing
+    # same policy: CORS / Content-Type / Origin / Host
+    resp, _ = _req(srv, "POST", "/api/context", '{"phase":"block"}', {"Content-Type": "text/plain"})
+    assert resp.status == 415
+    resp, _ = _req(srv, "POST", "/api/context", '{"phase":"block"}', {**JSON, "Origin": "https://evil.example"})
+    assert resp.status == 403
+    resp, _ = _req(srv, "POST", "/api/context", '{"phase":"block"}', {**JSON, "Origin": "null"})
+    assert resp.status == 200 and resp.getheader("Access-Control-Allow-Origin") == "null"
+    resp, _ = _req(srv, "POST", "/api/context", "not json", JSON)
+    assert resp.status == 400
+    resp, _ = _req(srv, "OPTIONS", "/api/context", headers={"Origin": "null"})
+    assert resp.status == 204
+
+
+def test_server_shots_v2_and_session_stats(bridge):
+    hub, srv = bridge
+    hub.set_context({"feel_id": "f1", "session_id": "s1", "phase": "cold", "cluster": 1})
+    for i in range(4):
+        hub.record_shot(sw.openconnect_to_shot(OC_FULL, ts=f"2026-11-17T10:0{i}:00.000-08:00"))
+    hub.set_context({"session_id": "s2", "feel_id": None})
+    hub.record_shot(sw.openconnect_to_shot(OC_FULL, ts="2026-11-17T11:00:00.000-08:00"))
+    shots = json.loads(_req(srv, "GET", "/api/shots?date=2026-11-17")[1])["shots"]
+    assert len(shots) == 5 and shots[0]["derived"]["smash"] == 1.38 and shots[0]["phase"] == "cold"
+    st = json.loads(_req(srv, "GET", "/api/session-stats?date=2026-11-17&session_id=s1")[1])
+    assert st["shot_count"] == 4 and st["cold_start"]["basis"] == "tagged" and st["by_feel"][0]["n"] == 4
+    st = json.loads(_req(srv, "GET", "/api/session-stats?date=2026-11-17")[1])
+    assert st["shot_count"] == 5 and st["session_id"] is None
+    assert json.loads(_req(srv, "GET", "/api/session-stats?date=2026-01-01")[1])["shot_count"] == 0
+    for q in ("date=nope", "date=2026-11-17&session_id=../x"):
+        assert _req(srv, "GET", "/api/session-stats?" + q)[0].status == 400
+    resp, _ = _req(srv, "GET", "/api/session-stats", headers={"Origin": "https://evil.example"})
+    assert resp.status == 403
+
+
+def test_demo_message_has_coherent_club_data():
+    for n in range(50):
+        shot = sw.openconnect_to_shot(sw.demo_openconnect_message(n), club="x")
+        cd = shot["club_data"]
+        assert all(cd[k] is not None for k in ("speed", "path", "face", "aoa"))
+        assert 1.0 < shot["derived"]["smash"] < 1.6

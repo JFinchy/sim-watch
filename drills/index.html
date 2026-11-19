@@ -1518,6 +1518,105 @@
     @media (prefers-reduced-motion: reduce) {
       .cl-bar > span { transition: none; }
     }
+
+    /* ===== Coach layer: personalized checklist, Feels & Blocks, Park it ===== */
+    .cl-badge.pre { background: var(--amber-soft); color: #fde68a; border: 1px solid var(--amber); }
+    .cl-badge.club { background: var(--accent-soft); color: #7dd3fc; }
+    .cl-badge.back { background: var(--bg-elev); color: var(--muted); border: 1px dashed var(--border); }
+    .cl-club-label { color: var(--muted); font-size: 0.85rem; align-self: center; }
+    .cl-club { display: inline-flex; gap: 6px; }
+    .cl-actions .nav-btn[aria-pressed="true"], .fl-chips .chip[aria-pressed="true"] { background: var(--accent); color: #04121c; border-color: var(--accent); }
+    .cl-personal { margin-bottom: 18px; }
+    .cl-personal > h3 { margin: 0; }
+    .cl-personal .cl-sub { margin: 2px 0 10px; }
+    .cl-rel { display: grid; gap: 14px; grid-template-columns: minmax(0, 1fr); }
+    .cl-rel.two { grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); }
+    .cl-rel-col h4 { margin: 0 0 8px; color: #fde68a; }
+    .cl-ref { margin-bottom: 18px; }
+    .cl-ref-btn { min-height: 48px; width: 100%; justify-content: space-between; margin-bottom: 12px; }
+    .cl-swap { background: var(--amber-soft); border: 2px solid var(--amber); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 12px; }
+    .cl-swap p { margin: 0 0 8px; }
+    .cl-swap-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+    .cl-swap-btns .nav-btn { min-height: 48px; white-space: normal; text-align: left; }
+    .cl-focus-head .cl-count { font-size: 0.85rem; color: var(--muted); font-weight: 500; }
+    .cue-nav.no-check { grid-template-columns: 1fr 1fr; }
+
+    .fl-banner { margin-bottom: 14px; }
+    .fl-strip { display: flex; flex-wrap: wrap; gap: 10px 22px; align-items: flex-start; background: #020617; border: 2px solid var(--indigo); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 14px; }
+    .fl-banner .fl-strip { margin-bottom: 0; }
+    .fl-strip.over { border-color: var(--amber); }
+    .fl-strip-cell { display: flex; flex-direction: column; gap: 2px; min-width: 140px; flex: 1 1 140px; overflow-wrap: anywhere; }
+    .fl-strip-cell.wide { flex: 2 1 240px; }
+    .fl-strip .nav-btn { min-height: 44px; align-self: center; }
+    .fl-k { font-size: 0.74rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #a5b4fc; }
+    .fl-sub { color: var(--muted); font-size: 0.86rem; }
+    .fl-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; }
+    .fl-row h3, .fl-block h3, .fl-form h3, .fl-hist h3, .fl-crit h3 { margin: 0 0 6px; }
+    #view-feels > section, #view-feels > form { margin-bottom: 16px; }
+    .fl-btns { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+    .fl-btns .nav-btn { min-height: 44px; }
+    .fl-day { font-size: 1.3rem; font-weight: 800; margin: 4px 0 8px; }
+    .fl-day.over, .fl-warn { color: #fde68a; }
+    .fl-dl { margin: 10px 0 0; }
+    .fl-dl dt { font-size: 0.76rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #a5b4fc; margin-top: 8px; }
+    .fl-dl dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+    .fl-dl.small dt { margin-top: 6px; }
+    .fl-form { border-color: var(--accent); }
+    .fl-guard { border: 2px solid var(--amber); background: #1a1405; }
+    .fl-form label { display: grid; gap: 4px; font-size: 0.88rem; color: #cbd5e1; margin-top: 10px; }
+    .fl-form input[type="text"], .fl-form input[type="number"], .fl-form textarea, .fl-form select, .fl-parkform input, .park-panel input, .fl-statuslbl select, .fl-filters select {
+      background: var(--bg-elev); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font: inherit; width: 100%; min-height: 44px; }
+    .fl-form textarea { min-height: 84px; resize: vertical; }
+    .fl-grid2 { display: grid; gap: 0 12px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); }
+    .fl-fieldset { border: 1px solid var(--border); border-radius: 10px; margin: 12px 0 0; padding: 6px 12px 12px; }
+    .fl-fieldset legend { font-weight: 700; padding: 0 6px; }
+    .fl-form label.fl-radio { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; padding: 8px 4px; cursor: pointer; margin: 0; }
+    .fl-radio input { width: 22px; height: 22px; margin-top: 2px; flex: 0 0 auto; }
+    .fl-filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin: 10px 0; }
+    .fl-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+    .fl-chips .chip { min-height: 40px; padding: 6px 14px; }
+    .fl-cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); align-items: start; }
+    .fl-card { background: #0d1526; border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; min-width: 0; }
+    .fl-card.st-active { border: 2px solid var(--green); }
+    .fl-card.st-retired { opacity: 0.7; }
+    .fl-card-top { display: flex; flex-wrap: wrap; gap: 6px 8px; align-items: center; }
+    .fl-card-top h4 { margin: 0; font-size: 1.05rem; flex: 1 1 100%; overflow-wrap: anywhere; }
+    .fl-cue { margin: 8px 0; font-size: 1rem; line-height: 1.4; overflow-wrap: anywhere; }
+    .fl-badge { display: inline-block; font-size: 0.72rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; background: var(--bg-elev); color: #cbd5e1; border: 1px solid var(--border); text-transform: capitalize; }
+    .fl-badge.club { background: var(--accent-soft); color: #7dd3fc; border-color: transparent; }
+    .fl-badge.st-active, .fl-badge.v-keep, .fl-badge.pk-promoted { background: var(--green-soft); color: #6ee7b7; border-color: var(--green); }
+    .fl-badge.st-candidate, .fl-badge.v-extend, .fl-badge.pk-open { background: var(--indigo-soft); color: #c7d2fe; }
+    .fl-badge.st-parked, .fl-badge.v-park, .fl-badge.v-switched { background: var(--amber-soft); color: #fde68a; border-color: var(--amber); }
+    .fl-badge.st-retired, .fl-badge.v-retire, .fl-badge.pk-dismissed { background: var(--red-soft); color: #fca5a5; }
+    .fl-statuslbl { display: inline-flex; align-items: center; gap: 6px; font-size: 0.84rem; color: var(--muted); }
+    .fl-statuslbl select { width: auto; text-transform: capitalize; }
+    .fl-flash-card { text-align: center; padding: 26px 12px; margin: 10px 0; background: #020617; border: 2px solid var(--indigo); border-radius: var(--radius); min-height: 180px; display: flex; flex-direction: column; gap: 10px; align-items: center; justify-content: center; }
+    .fl-flash-card h2 { margin: 0; font-size: clamp(1.6rem, 6vw, 2.6rem); color: #fde68a; overflow-wrap: anywhere; }
+    .fl-flash-cue { margin: 0; font-size: clamp(1.2rem, 4.5vw, 1.8rem); line-height: 1.35; overflow-wrap: anywhere; }
+    .fl-flash-btns { justify-content: center; }
+    .fl-flash-btns .nav-btn { min-height: 52px; min-width: 110px; justify-content: center; }
+    .fl-hist-item, .fl-park-item { border-top: 1px solid var(--border); padding: 10px 0; }
+    .fl-hist-item p, .fl-park-item p { margin: 4px 0; overflow-wrap: anywhere; }
+    .fl-hyp { color: #cbd5e1; font-style: italic; }
+    .fl-parkform { display: flex; gap: 8px; margin: 8px 0; }
+    .fl-parkform .nav-btn { min-height: 44px; flex: 0 0 auto; }
+    .fl-crit-list { margin: 6px 0 10px; padding-left: 24px; font-size: 1.05rem; font-weight: 600; }
+    .fl-profile h4 { margin: 12px 0 4px; color: #fde68a; }
+    .fl-profile ul { margin: 0; padding-left: 20px; }
+    .fl-profile p { overflow-wrap: anywhere; }
+    .fl-profile .fl-row .nav-btn { min-height: 44px; }
+    .fl-dial { background: var(--amber-soft); border: 1px solid var(--amber); border-radius: 10px; padding: 4px 14px 10px; margin-top: 12px; }
+    .fl-mt h5 { margin: 8px 0 2px; text-transform: uppercase; letter-spacing: 0.05em; color: #a5b4fc; }
+    .chip-static { display: inline-block; font-size: 0.8rem; padding: 3px 10px; margin: 2px 2px; border-radius: 999px; background: var(--bg-elev); border: 1px solid var(--border); color: #cbd5e1; }
+    .park-fab { position: fixed; left: 12px; bottom: 12px; z-index: 970; min-height: 52px; padding: 10px 18px; border-radius: 999px; border: 2px solid var(--amber); background: #1f1505; color: #fde68a; font-size: 1rem; font-weight: 800; cursor: pointer; box-shadow: var(--shadow); }
+    .park-fab:hover { background: #2d1f06; }
+    .park-panel { position: fixed; left: 12px; right: 12px; bottom: 76px; z-index: 971; max-width: 520px; background: var(--bg-card); border: 2px solid var(--amber); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); }
+    .park-panel label { display: block; font-size: 0.9rem; color: #cbd5e1; margin-bottom: 8px; }
+    .park-btns { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .park-btns .nav-btn { min-height: 44px; }
+    body.mat-open .park-panel { bottom: auto; top: 70px; left: auto; right: 12px; }
+    @media (max-width: 520px) { .fl-parkform { flex-direction: column; } .park-panel { left: 8px; right: 8px; } }
+    @media (prefers-reduced-motion: reduce) { .park-fab, .nav-btn { transition: none; } .nav-btn:hover:not(:disabled) { transform: none; } }
   </style>
 
 </head>
@@ -1525,6 +1624,8 @@
   <div class="app-shell">
     <!-- TONIGHT LAUNCHER (rendered by renderTonightCard; Drill Deck view only) -->
     <section id="tonightCard" class="tonight-card" aria-label="Tonight's practice session"></section>
+    <!-- ACTIVE FEEL BANNER (rendered by renderFeelBanner; Drill Deck view only) -->
+    <div id="feelBanner" class="fl-banner hidden"></div>
 
     <!-- TOP HEADER -->
     <header class="topbar">
@@ -1547,6 +1648,7 @@
       <div class="pill-group" id="viewTabs" role="tablist" aria-label="Hub sections">
         <button class="btn-pill active" role="tab" aria-selected="true" aria-controls="view-deck" data-view="deck">🎯 Drill Deck</button>
         <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-checklist" data-view="checklist">✅ Swing Checklist</button>
+        <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-feels" data-view="feels">🧪 Feels &amp; Blocks</button>
         <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-browse" data-view="browse">🗂️ Routines &amp; Sections</button>
         <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-tracker" data-view="tracker">📊 Goals &amp; Delivery Chart</button>
         <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-courses" data-view="courses">⛳ GSPro Courses &amp; Rounds</button>
@@ -1593,6 +1695,9 @@
     <!-- VIEW 8: SWING CHECKLIST (rendered by renderChecklist) -->
     <section id="view-checklist" class="hidden" role="tabpanel"></section>
 
+    <!-- VIEW 9: FEELS & TEST BLOCKS (rendered by renderFeels) -->
+    <section id="view-feels" class="hidden" role="tabpanel"></section>
+
     <!-- VIEW 2: ROUTINES & SECTIONS BROWSER -->
     <section id="view-browse" class="hidden" role="tabpanel"></section>
 
@@ -1618,9 +1723,25 @@
   <!-- PRE-SHOT CARDS (fullscreen starred-cue overlay from the Swing Checklist, rendered by renderCue) -->
   <div id="cueOverlay" class="cue-overlay hidden" role="dialog" aria-modal="true" aria-label="Pre-shot cards" tabindex="-1"></div>
 
+  <!-- PARK IT: floating quick capture (Checklist, Feels and Mat views) -->
+  <button type="button" id="parkFab" class="park-fab hidden" aria-haspopup="dialog" aria-expanded="false" title="Park a mid-session idea without switching feels">🅿️ Park it</button>
+  <div id="parkPanel" class="park-panel hidden" role="dialog" aria-label="Park an idea">
+    <form id="parkForm" autocomplete="off">
+      <label for="parkInput">Park an idea (<span id="parkCount">0 open</span>). It will not change your active feel.</label>
+      <input type="text" id="parkInput" maxlength="300" placeholder="Type it, press Enter" />
+      <div class="park-btns">
+        <button type="submit" class="nav-btn primary">Park it</button>
+        <button type="button" class="nav-btn" id="parkCancel">Cancel</button>
+        <button type="button" class="nav-btn" id="parkOpenLot">Open parking lot</button>
+      </div>
+    </form>
+  </div>
+
   <div class="toast" id="toastEl" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <script src="./drills_data.js"></script>
+  <!-- Optional private profile (git-ignored). Missing file = harmless 404; the page feature-detects window.PLAYER_DATA. -->
+  <script src="./player_data.js"></script>
   <script>
     (function () {
       "use strict";
@@ -1814,6 +1935,9 @@
           saved.sessionPrefs = null;
           saved.activeSession = null;
         }
+        // v4 -> v5: coach layer keys (feelsUser / blocks / parkingLot / checklistBacklogIds / checklistClub)
+        // are all additive; absent keys sanitize to empty values in loadState(). The 2-active-cue cap is
+        // enforced there for every save, whatever its version.
         return saved;
       }
       // ---- Swing Checklist sanitizers (function declarations: loadState() runs before the checklist section) ----
@@ -1918,6 +2042,105 @@
         return s;
       }
 
+      // ---- Coach layer sanitizers (consts + function declarations: loadState() runs before the coach section) ----
+      const FEEL_CLUBS = ["all", "driver", "irons"];
+      const FEEL_STATUSES = ["candidate", "active", "parked", "retired"];
+      const BLOCK_VERDICTS = ["keep", "park", "retire", "extend", "switched"];
+      const PARK_STATUSES = ["open", "promoted", "dismissed"];
+      const CL_MAX_CUES = 2;
+      let coachMigrationMsg = ""; // one-time toast text set while loading/importing state
+      function pdHas() { return !!(window.PLAYER_DATA && typeof window.PLAYER_DATA === "object"); }
+      function pdArr(key) {
+        const p = window.PLAYER_DATA;
+        return p && typeof p === "object" && Array.isArray(p[key])
+          ? p[key].filter((x) => x && typeof x === "object" && typeof x.id === "string" && x.id) : [];
+      }
+      function pdStr(v, n) { return typeof v === "string" ? v.trim().slice(0, n) : ""; }
+      function isIsoDate(v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v)); }
+      function clDefaultFocus() {
+        const pre = pdArr("personalChecklist").filter((p) => p.preSwing && p.title).map((p) => p.id);
+        if (pre.length) return pre.slice(0, CL_MAX_CUES);
+        return (clStrIds((DEFAULTS.swingChecklist || {}).defaultFocusIds) || []).slice(0, CL_MAX_CUES);
+      }
+      // Enforce "1-2 active cues": keep the first CL_MAX_CUES, move the rest to the backlog.
+      function clCapFocus(focus, backlog) {
+        const keep = focus.slice(0, CL_MAX_CUES);
+        const moved = focus.slice(CL_MAX_CUES);
+        const bl = Array.from(new Set((backlog || []).concat(moved))).filter((id) => !keep.includes(id));
+        return { focus: keep, backlog: bl, moved: moved.length };
+      }
+      function sanitizeFeelFields(o) {
+        const out = {};
+        if (typeof o.name === "string" && o.name.trim()) out.name = o.name.trim().slice(0, 120);
+        if (typeof o.cue === "string") out.cue = o.cue.trim().slice(0, 600);
+        if (FEEL_CLUBS.includes(o.club)) out.club = o.club;
+        if (Array.isArray(o.drillIds)) out.drillIds = clStrIds(o.drillIds) || [];
+        [["intendedFlight", 300], ["failureMode", 300], ["notes", 800], ["source", 120]].forEach((kn) => {
+          if (typeof o[kn[0]] === "string") out[kn[0]] = o[kn[0]].trim().slice(0, kn[1]);
+        });
+        if (FEEL_STATUSES.includes(o.status)) out.status = o.status;
+        return out;
+      }
+      function sanitizeFeelsUser(v) {
+        const out = {};
+        if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+        let n = 0;
+        for (const [k, o] of Object.entries(v)) {
+          if (n >= 300) break;
+          if (!o || typeof o !== "object" || Array.isArray(o) || !k || k.length > 80) continue;
+          const f = sanitizeFeelFields(o);
+          f.id = k;
+          if (o.deleted === true) f.deleted = true;
+          if (o.custom === true) { if (!f.name) continue; f.custom = true; }
+          out[k] = f;
+          n++;
+        }
+        return out;
+      }
+      function sanitizeBlockCore(b) {
+        if (!b || typeof b !== "object" || Array.isArray(b)) return null;
+        const id = pdStr(b.id, 80), feelId = pdStr(b.feelId, 80);
+        if (!id || !feelId || !isIsoDate(b.startDate)) return null;
+        const len = Math.max(1, Math.min(60, Math.round(Number(b.lengthDays)) || 7));
+        return {
+          id, feelId, feelName: pdStr(b.feelName, 120), startDate: b.startDate, lengthDays: len,
+          hypothesis: pdStr(b.hypothesis, 600), test: pdStr(b.test, 300), switchRules: pdStr(b.switchRules, 400), baseline: pdStr(b.baseline, 600),
+          switchLog: (Array.isArray(b.switchLog) ? b.switchLog : []).filter((x) => x && typeof x === "object" && isIsoDate(x.date)).slice(-30)
+            .map((x) => ({ date: x.date, reason: pdStr(x.reason, 400), toFeelId: pdStr(x.toFeelId, 80) }))
+        };
+      }
+      function sanitizeBlocks(v) {
+        const out = { active: null, history: [], queued: null };
+        if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+        out.active = sanitizeBlockCore(v.active);
+        for (const h of Array.isArray(v.history) ? v.history : []) {
+          const c = sanitizeBlockCore(h);
+          if (!c || !isIsoDate(h.endDate)) continue;
+          c.endDate = h.endDate;
+          c.verdict = BLOCK_VERDICTS.includes(h.verdict) ? h.verdict : "park";
+          c.notes = pdStr(h.notes, 800);
+          c.switchReason = pdStr(h.switchReason, 400);
+          out.history.push(c);
+        }
+        out.history = out.history.slice(-300);
+        const q = v.queued;
+        if (q && typeof q === "object" && pdStr(q.feelId, 80)) {
+          out.queued = { feelId: pdStr(q.feelId, 80), hypothesis: pdStr(q.hypothesis, 600), test: pdStr(q.test, 300), lengthDays: Math.max(1, Math.min(60, Math.round(Number(q.lengthDays)) || 7)) };
+        }
+        return out;
+      }
+      function sanitizeParking(v) {
+        if (!Array.isArray(v)) return [];
+        const out = [];
+        for (const p of v) {
+          if (!p || typeof p !== "object") continue;
+          const id = pdStr(p.id, 80), text = pdStr(p.text, 300);
+          if (!id || !text) continue;
+          out.push({ id, text, date: isIsoDate(p.date) ? p.date : todayISO(0), status: PARK_STATUSES.includes(p.status) ? p.status : "open", feelId: pdStr(p.feelId, 80) });
+        }
+        return out.slice(-500);
+      }
+
       function loadState() {
         const base = {
           activeView: "deck",
@@ -1948,7 +2171,12 @@
           sessions: [],            // mat-mode session history (see SESSION section)
           sessionPrefs: { mode: null, minutes: 30 },
           activeSession: null,     // in-progress mat session (resumable after reload)
-          checklistFocusIds: clStrIds((DEFAULTS.swingChecklist || {}).defaultFocusIds) || [], // My Focus stars; seeded from defaults once
+          checklistFocusIds: clDefaultFocus(), // Active cues (max 2); seeded once (personal pre-swing checks, else the first 2 defaults)
+          checklistBacklogIds: [], // cues un-starred / displaced by the 2-cue cap
+          checklistClub: "all",    // "all" | "driver" | "irons"
+          feelsUser: {},           // { feelId: override fields (+custom:true for user-made feels, deleted:true tombstone) } layered over PLAYER_DATA.feels
+          blocks: { active: null, history: [], queued: null },
+          parkingLot: [],
           checklistLog: {},        // { "YYYY-MM-DD": [checkedItemIds] }
           checklistCustomItems: [],// [{ id, phase, title, cue }]
           checklistFocusOnly: false
@@ -1961,6 +2189,15 @@
             base.sessionPrefs = sanitizeSessionPrefs(saved.sessionPrefs);
             base.activeSession = sanitizeActiveSession(saved.activeSession);
             if (Array.isArray(saved.checklistFocusIds)) base.checklistFocusIds = clStrIds(saved.checklistFocusIds); // [] = user un-starred everything
+            base.checklistBacklogIds = clStrIds(saved.checklistBacklogIds) || [];
+            if (FEEL_CLUBS.includes(saved.checklistClub)) base.checklistClub = saved.checklistClub;
+            base.feelsUser = sanitizeFeelsUser(saved.feelsUser);
+            base.blocks = sanitizeBlocks(saved.blocks);
+            base.parkingLot = sanitizeParking(saved.parkingLot);
+            const capped = clCapFocus(base.checklistFocusIds, base.checklistBacklogIds);
+            base.checklistFocusIds = capped.focus;
+            base.checklistBacklogIds = capped.backlog;
+            if (capped.moved) coachMigrationMsg = `Active cues are now capped at ${CL_MAX_CUES} (more than that and nothing sticks). Kept your first ${CL_MAX_CUES}; ${capped.moved} moved to your backlog.`;
             base.checklistLog = sanitizeChecklistLog(saved.checklistLog);
             base.checklistCustomItems = sanitizeChecklistCustom(saved.checklistCustomItems);
             if (typeof saved.checklistFocusOnly === "boolean") base.checklistFocusOnly = saved.checklistFocusOnly;
@@ -2294,7 +2531,7 @@
       }
 
       // ---- Backup / import helpers ----
-      const SCHEMA_VERSION = 4; // v3: sessions / sessionPrefs / activeSession (mat mode); v4: swing checklist (all additive)
+      const SCHEMA_VERSION = 5; // v3: sessions / sessionPrefs / activeSession (mat mode); v4: swing checklist; v5: coach layer (feelsUser / blocks / parkingLot / checklistBacklogIds / checklistClub); all additive
       function buildPersistObject() {
         return {
           schemaVersion: SCHEMA_VERSION,
@@ -2305,6 +2542,11 @@
           checklistLog: state.checklistLog,
           checklistCustomItems: state.checklistCustomItems,
           checklistFocusOnly: state.checklistFocusOnly,
+          checklistBacklogIds: state.checklistBacklogIds,
+          checklistClub: state.checklistClub,
+          feelsUser: state.feelsUser,
+          blocks: state.blocks,
+          parkingLot: state.parkingLot,
           activeMode: state.activeMode,
           activeRoutine: state.activeRoutine,
           activeSection: state.activeSection,
@@ -2391,7 +2633,27 @@
         }
         if (Array.isArray(parsed.checklistFocusIds)) {
           state.checklistFocusIds = clStrIds(parsed.checklistFocusIds);
-          parts.push(`${state.checklistFocusIds.length} focus items`);
+          if (Array.isArray(parsed.checklistBacklogIds)) state.checklistBacklogIds = clStrIds(parsed.checklistBacklogIds) || [];
+          const capped = clCapFocus(state.checklistFocusIds, state.checklistBacklogIds);
+          state.checklistFocusIds = capped.focus;
+          state.checklistBacklogIds = capped.backlog;
+          parts.push(`${state.checklistFocusIds.length} active cues`);
+          if (capped.moved) { parts.push(`${capped.moved} extra cues moved to backlog (max ${CL_MAX_CUES} active)`); }
+        } else if (Array.isArray(parsed.checklistBacklogIds)) {
+          state.checklistBacklogIds = clStrIds(parsed.checklistBacklogIds) || [];
+        }
+        if (FEEL_CLUBS.includes(parsed.checklistClub)) state.checklistClub = parsed.checklistClub;
+        if (isPlainObj(parsed.feelsUser)) {
+          state.feelsUser = sanitizeFeelsUser(parsed.feelsUser);
+          parts.push(`${Object.keys(state.feelsUser).length} feel edits`);
+        }
+        if (isPlainObj(parsed.blocks)) {
+          state.blocks = sanitizeBlocks(parsed.blocks);
+          parts.push(`${state.blocks.history.length} test blocks${state.blocks.active ? " + 1 active" : ""}`);
+        }
+        if (Array.isArray(parsed.parkingLot)) {
+          state.parkingLot = sanitizeParking(parsed.parkingLot);
+          parts.push(`${state.parkingLot.length} parked ideas`);
         }
         if (isPlainObj(parsed.checklistLog)) {
           state.checklistLog = sanitizeChecklistLog(parsed.checklistLog);
@@ -2419,6 +2681,9 @@
           (state.sessions || []).length > 0 ||
           Object.keys(state.checklistLog || {}).length > 0 ||
           (state.checklistCustomItems || []).length > 0 ||
+          Object.keys(state.feelsUser || {}).length > 0 ||
+          !!(state.blocks && (state.blocks.active || (state.blocks.history || []).length)) ||
+          (state.parkingLot || []).length > 0 ||
           Object.values(state.drillNotes || {}).some((v) => v) ||
           (state.courses || []).some((c) => c.custom || c.favorite || c.userNotes || c.rating);
       }
@@ -5655,7 +5920,7 @@
         };
 
         document.getElementById("btnResetEverything").onclick = () => {
-          if (!confirm("RESET EVERYTHING?\n\nThis erases ALL saved data in this browser: drills, goals, delivery logs, notes, courses, rounds, club bag, swing checklist, cadence and sim settings.\n\nTip: click Export Full Backup first.")) return;
+          if (!confirm("RESET EVERYTHING?\n\nThis erases ALL saved data in this browser: drills, goals, delivery logs, notes, courses, rounds, club bag, swing checklist, feels, test blocks and block history, parking lot, cadence and sim settings.\n\nTip: click Export Full Backup first.")) return;
           if (!confirm("Last chance - really erase everything?")) return;
           try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
           if (cadenceState.isPlaying) stopCadenceMetronome();
@@ -6387,6 +6652,7 @@
             <span class="sim-pill" data-sim-pill></span>
             <div class="mat-top-btns">
               <button type="button" class="mat-small-btn ${tempoOn ? "active" : ""}" id="matTempo" title="Start/stop the cadence metronome${tempoPreset ? ` at ${esc(tempoPreset.name)}` : ""} (T)">Tempo ${tempoOn ? "❚❚" : "▶"} ${esc(tempoPreset ? tempoPreset.name.split(" ")[0] : "")}</button>
+              <button type="button" class="mat-small-btn" id="matPark" title="Park an idea without switching feels" aria-label="Park an idea">🅿️ Park</button>
               <button type="button" class="mat-small-btn" id="matFull" title="Full screen">⛶</button>
             </div>
           </div>
@@ -6726,23 +6992,34 @@
       // =====================================================================================
       const clExpanded = new Set();          // item ids whose details are open (UI only)
       const clDraft = { title: "", cue: "", phase: "" };
+      const clUi = { refOpen: null, swap: null, focusSwap: false }; // refOpen: null = auto (collapsed when personal data exists)
       const clCue = { open: false, idx: 0, ids: [], returnFocus: null, tx: 0, ty: 0 };
 
       function clData() { return DEFAULTS.swingChecklist || { phases: [], defaultFocusIds: [], items: [] }; }
       function clPhases() { return Array.isArray(clData().phases) ? clData().phases : []; }
       function clAllItems() {
         const built = (clData().items || []).map((it) => Object.assign({}, it, { custom: false }));
+        const seen = new Set(built.map((it) => it.id));
+        const personal = pdArr("personalChecklist").filter((p) => typeof p.title === "string" && p.title && !seen.has(p.id)).map((p) => ({
+          id: p.id, phase: "", title: p.title, cue: p.cue || "", why: p.why || "", check: { dtl: "", fo: "" },
+          fault: "", feel: "", drillIds: Array.isArray(p.drillIds) ? p.drillIds : [], custom: false, personal: true,
+          preSwing: p.preSwing === true, release: p.release === true, clubs: p.clubs === "driver" || p.clubs === "irons" ? p.clubs : "all"
+        }));
         const custom = (state.checklistCustomItems || []).map((it) => ({
           id: it.id, phase: it.phase, title: it.title, cue: it.cue, why: "", check: { dtl: "", fo: "" },
           fault: "", feel: "", drillIds: [], custom: true
         }));
-        return built.concat(custom);
+        return personal.concat(built, custom);
       }
+      function clHasPersonal() { return clAllItems().some((it) => it.personal); }
+      function clClub() { return FEEL_CLUBS.includes(state.checklistClub) ? state.checklistClub : "all"; }
+      function clClubMatch(it) { const c = clClub(); return c === "all" || !it.clubs || it.clubs === "all" || it.clubs === c; }
+      function clFocusIds() { const ok = new Set(clAllItems().map((it) => it.id)); return (state.checklistFocusIds || []).filter((id) => ok.has(id)); }
       function clItemById(id) { return clAllItems().find((it) => it.id === id) || null; }
       function clTodaySet() { return new Set(state.checklistLog[todayISO(0)] || []); }
-      function clFocusSet() { return new Set(state.checklistFocusIds || []); }
+      function clFocusSet() { return new Set(clFocusIds()); }
       function clVisibleItems() {
-        const all = clAllItems();
+        const all = clAllItems().filter(clClubMatch);
         const f = clFocusSet();
         // Focus-only with nothing starred would show an empty list; fall back to everything.
         if (!state.checklistFocusOnly || !f.size) return all;
@@ -6769,11 +7046,41 @@
         if (cur.size) state.checklistLog[iso] = Array.from(cur); else delete state.checklistLog[iso];
         saveState();
       }
-      function clToggleStar(id) {
-        const cur = new Set(state.checklistFocusIds || []);
-        if (cur.has(id)) cur.delete(id); else cur.add(id);
-        state.checklistFocusIds = Array.from(cur);
-        saveState();
+      // Active cues are capped at CL_MAX_CUES. Un-starred items go to the backlog; a 3rd star opens an inline chooser.
+      function clSetStar(id, on) {
+        const focus = (state.checklistFocusIds || []).filter((x) => x !== id);
+        const back = (state.checklistBacklogIds || []).filter((x) => x !== id);
+        if (on) focus.push(id); else back.push(id);
+        state.checklistFocusIds = focus;
+        state.checklistBacklogIds = back;
+      }
+      function clStar(id) {
+        const it = clItemById(id);
+        if (!it) return;
+        const focus = clFocusIds();
+        if (focus.includes(id)) {
+          clSetStar(id, false);
+          saveState(); renderChecklist();
+          showToast("Moved to your backlog.");
+        } else if (focus.length >= CL_MAX_CUES) {
+          clUi.swap = id; clUi.focusSwap = true;
+          renderChecklist();
+        } else {
+          clSetStar(id, true);
+          saveState(); renderChecklist();
+          showToast("Added to your active cues.");
+        }
+      }
+      function clSwapWith(outId) {
+        const inId = clUi.swap;
+        clUi.swap = null;
+        if (inId && clItemById(inId) && clFocusIds().includes(outId)) {
+          clSetStar(outId, false);
+          clSetStar(inId, true);
+          saveState();
+          showToast("Swapped. The other cue is in your backlog.");
+        }
+        renderChecklist();
       }
 
       function clDrillChips(it) {
@@ -6786,18 +7093,20 @@
         const done = today.has(it.id);
         return `
           <article class="cl-fcard ${done ? "done" : ""}">
-            <span class="cl-kicker">${esc(clPhaseName(it.phase))}</span>
+            <span class="cl-kicker">${esc(it.preSwing ? "Pre-swing check" : it.personal ? "My fundamental" : clPhaseName(it.phase))}</span>
             <h4>${esc(it.title)}</h4>
             ${it.cue ? `<p>${esc(it.cue)}</p>` : ""}
             <div class="cl-fbtns">
               <button type="button" class="cl-toggle cl-check" data-cl-act="check" data-cl-id="${esc(it.id)}" data-fk="check:${esc(it.id)}:f" aria-pressed="${done}" aria-label="Checked today: ${esc(it.title)}">&#10003;</button>
-              <button type="button" class="cl-toggle cl-star" data-cl-act="star" data-cl-id="${esc(it.id)}" data-fk="star:${esc(it.id)}:f" aria-pressed="true" aria-label="In My Focus: ${esc(it.title)}">&#9733;</button>
+              <button type="button" class="cl-toggle cl-star" data-cl-act="star" data-cl-id="${esc(it.id)}" data-fk="star:${esc(it.id)}:f" aria-pressed="true" aria-label="Active cue (tap to move to backlog): ${esc(it.title)}">&#9733;</button>
             </div>
           </article>`;
       }
 
+      function clClubBadge(it) { return it.clubs === "driver" ? "Driver" : it.clubs === "irons" ? "Irons" : ""; }
       function clItemCard(it, today, focus) {
         const done = today.has(it.id);
+        const inBacklog = !focus.has(it.id) && (state.checklistBacklogIds || []).includes(it.id);
         const starred = focus.has(it.id);
         const open = clExpanded.has(it.id);
         const rows = [];
@@ -6815,10 +7124,10 @@
             <div class="cl-item-main">
               <button type="button" class="cl-toggle cl-check" data-cl-act="check" data-cl-id="${esc(it.id)}" data-fk="check:${esc(it.id)}:l" aria-pressed="${done}" aria-label="Checked today: ${esc(it.title)}">&#10003;</button>
               <div class="cl-text">
-                <h4 class="cl-title">${esc(it.title)}${it.custom ? `<span class="cl-badge">Custom</span>` : ""}</h4>
+                <h4 class="cl-title">${esc(it.title)}${it.preSwing ? `<span class="cl-badge pre">Pre-swing check</span>` : ""}${clClubBadge(it) ? `<span class="cl-badge club">${esc(clClubBadge(it))}</span>` : ""}${it.custom ? `<span class="cl-badge">Custom</span>` : ""}${inBacklog ? `<span class="cl-badge back">Backlog</span>` : ""}</h4>
                 ${it.cue ? `<p class="cl-cue">${esc(it.cue)}</p>` : ""}
               </div>
-              <button type="button" class="cl-toggle cl-star" data-cl-act="star" data-cl-id="${esc(it.id)}" data-fk="star:${esc(it.id)}:l" aria-pressed="${starred}" aria-label="In My Focus: ${esc(it.title)}">${starred ? "&#9733;" : "&#9734;"}</button>
+              <button type="button" class="cl-toggle cl-star" data-cl-act="star" data-cl-id="${esc(it.id)}" data-fk="star:${esc(it.id)}:l" aria-pressed="${starred}" aria-label="Active cue (max ${CL_MAX_CUES}): ${esc(it.title)}">${starred ? "&#9733;" : "&#9734;"}</button>
             </div>
             <button type="button" class="cl-more" data-cl-act="expand" data-cl-id="${esc(it.id)}" data-fk="expand:${esc(it.id)}" aria-expanded="${open}" aria-controls="cl-d-${esc(it.id)}">${open ? "Hide details &#9652;" : "Details &#9662;"}</button>
             <div class="cl-details ${open ? "" : "hidden"}" id="cl-d-${esc(it.id)}">
@@ -6863,8 +7172,12 @@
         const phases = clPhases();
         if (!clDraft.phase || !phases.some((p) => p.id === clDraft.phase)) clDraft.phase = (phases[0] && phases[0].id) || "";
 
+        const personalOn = clHasPersonal();
+        const refOpen = clUi.refOpen === null ? !personalOn : clUi.refOpen;
+        const club = clClub();
+        const consensus = visible.filter((it) => !it.personal);
         const phaseHtml = phases.map((p) => {
-          const items = visible.filter((it) => it.phase === p.id);
+          const items = consensus.filter((it) => it.phase === p.id);
           if (!items.length) return "";
           const doneN = items.filter((it) => today.has(it.id)).length;
           return `
@@ -6875,12 +7188,51 @@
             </section>`;
         }).join("");
 
+        const pPre = visible.filter((it) => it.personal && it.preSwing);
+        const pRest = visible.filter((it) => it.personal && !it.preSwing && !it.release);
+        const pRel = visible.filter((it) => it.personal && it.release);
+        const relCol = (label, list) => `<div class="cl-rel-col"><h4>${esc(label)}</h4>${list.length ? `<div class="cl-grid">${list.map((it) => clItemCard(it, today, focus)).join("")}</div>` : `<p class="cl-empty">No release feels for this club yet.</p>`}</div>`;
+        const personalHtml = personalOn ? `
+          <section class="panel cl-personal" aria-label="My Fundamentals">
+            <h3>🧭 My Fundamentals</h3>
+            <p class="cl-sub">Shared by every club. The first ones are your pre-swing check, run before every swing.</p>
+            <div class="cl-grid">${pPre.concat(pRest).map((it) => clItemCard(it, today, focus)).join("") || `<p class="cl-empty">Nothing for this club filter.</p>`}</div>
+          </section>
+          ${pRel.length ? `
+          <section class="panel cl-personal" aria-label="One system, two releases">
+            <h3>🎯 One system, two releases</h3>
+            <p class="cl-sub">Same fundamentals, different release timing for each club.</p>
+            <div class="cl-rel ${club === "all" ? "two" : ""}">
+              ${club === "all" ? relCol("Driver release", pRel.filter((it) => it.clubs === "driver")) + relCol("Irons release", pRel.filter((it) => it.clubs === "irons")) + (pRel.some((it) => it.clubs === "all") ? relCol("Any club", pRel.filter((it) => it.clubs === "all")) : "")
+                : relCol(club === "driver" ? "Driver release" : "Irons release", pRel)}
+            </div>
+          </section>` : ""}` : "";
+
+        const refHtml = personalOn ? `
+          <section class="cl-ref" aria-label="Reference: consensus fundamentals">
+            <button type="button" class="nav-btn cl-ref-btn" data-cl-act="ref" data-fk="ref" aria-expanded="${refOpen}" aria-controls="cl-ref-body">Reference: consensus fundamentals (${consensus.length}) ${refOpen ? "&#9652;" : "&#9662;"}</button>
+            <div id="cl-ref-body" class="${refOpen ? "" : "hidden"}">${phaseHtml || `<p class="cl-empty">Nothing to show for this filter.</p>`}</div>
+          </section>` : (phaseHtml || `<p class="cl-empty">Nothing to show. Star an item or turn off Focus only.</p>`);
+
+        const swapIt = clUi.swap ? clItemById(clUi.swap) : null;
+        if (clUi.swap && !swapIt) clUi.swap = null;
+        const swapHtml = swapIt ? `
+          <div class="cl-swap" role="group" aria-label="Choose a cue to un-star">
+            <p><strong>Two active cues is the max.</strong> To make "${esc(swapIt.title)}" active, un-star one first (it moves to your backlog):</p>
+            <div class="cl-swap-btns">
+              ${focusItems.map((it) => `<button type="button" class="nav-btn" data-cl-act="swap" data-cl-id="${esc(it.id)}" data-fk="swap:${esc(it.id)}">Un-star: ${esc(it.title)}</button>`).join("")}
+              <button type="button" class="nav-btn" data-cl-act="swapcancel" data-fk="swapcancel">Cancel</button>
+            </div>
+          </div>` : "";
+
+        const clubBtn = (v, label) => `<button type="button" class="nav-btn" data-cl-act="club" data-cl-club="${v}" data-fk="club:${v}" aria-pressed="${club === v}">${label}</button>`;
+
         el.innerHTML = `
           <section class="panel cl-head" aria-label="Checklist progress">
             <div class="cl-head-row">
               <div>
                 <h2>✅ Swing Checklist</h2>
-                <p class="cl-sub">Tick off the cues you actually worked on today. Star the few that matter most to build My Focus.</p>
+                <p class="cl-sub">Tick off the cues you actually worked on today. Keep just one or two active cues; everything else is backlog.</p>
               </div>
             </div>
             <div class="cl-stats">
@@ -6889,22 +7241,30 @@
             </div>
             <div class="cl-bar" aria-hidden="true"><span style="width:${pct}%"></span></div>
             <div class="cl-actions">
-              <button type="button" class="nav-btn" data-cl-act="focusonly" data-fk="focusonly" aria-pressed="${!!state.checklistFocusOnly}">Focus only</button>
+              <span class="cl-club-label" id="clClubLbl">Club</span>
+              <span class="cl-club" role="group" aria-labelledby="clClubLbl">${clubBtn("all", "All")}${clubBtn("driver", "Driver")}${clubBtn("irons", "Irons")}</span>
+              <button type="button" class="nav-btn" data-cl-act="focusonly" data-fk="focusonly" aria-pressed="${!!state.checklistFocusOnly}">Active cues only</button>
               <button type="button" class="nav-btn" data-cl-act="clear" data-fk="clear" ${today.size ? "" : "disabled"}>Clear today</button>
             </div>
           </section>
 
-          <section class="panel cl-focus" aria-label="My Focus">
+          ${feelStripHtml(false)}
+
+          <section class="panel cl-focus" aria-label="Active cues">
             <div class="cl-focus-head">
-              <h3>⭐ My Focus (${focusItems.length})</h3>
-              <button type="button" class="nav-btn primary" data-cl-act="cards" data-fk="cards" ${focusItems.length ? "" : "disabled"} title="Fullscreen cue cards, one per screen">🎴 Pre-shot cards</button>
+              <h3>⭐ Active cues (max ${CL_MAX_CUES}) <span class="cl-count">${focusItems.length} / ${CL_MAX_CUES}</span></h3>
+              <button type="button" class="nav-btn primary" data-cl-act="cards" data-fk="cards" ${clCueIds().length ? "" : "disabled"} title="Fullscreen cue cards, one per screen">🎴 Pre-shot cards</button>
             </div>
+            ${swapHtml}
             ${focusItems.length
               ? `<div class="cl-focus-grid">${focusItems.map((it) => clFocusCard(it, today)).join("")}</div>`
-              : `<p class="cl-empty">No starred items yet. Tap the star on any item below to add it to My Focus.</p>`}
+              : `<p class="cl-empty">No active cues yet. Tap the star on an item below (max ${CL_MAX_CUES}).</p>`}
+            ${(state.checklistBacklogIds || []).filter((id) => clItemById(id) && !focus.has(id)).length ? `<p class="cl-sub">Backlog: ${(state.checklistBacklogIds || []).filter((id) => clItemById(id) && !focus.has(id)).map((id) => esc(clItemById(id).title)).join(" &bull; ")}</p>` : ""}
           </section>
 
-          ${phaseHtml || `<p class="cl-empty">Nothing to show. Star an item or turn off Focus only.</p>`}
+          ${personalHtml}
+
+          ${refHtml}
 
           <section class="panel cl-add" aria-label="Add my own item">
             <h3 style="margin-top:0;">➕ Add my own item</h3>
@@ -6924,7 +7284,11 @@
         void ids;
 
         window.scrollTo(0, scrollY);
-        if (fk) {
+        if (clUi.focusSwap) {
+          clUi.focusSwap = false;
+          const first = el.querySelector(".cl-swap button");
+          if (first) { first.focus({ preventScroll: true }); first.scrollIntoView({ block: "nearest" }); }
+        } else if (fk) {
           const target = Array.from(el.querySelectorAll("[data-fk]")).find((n) => n.getAttribute("data-fk") === fk && !n.disabled);
           if (target) target.focus({ preventScroll: true });
         }
@@ -6934,6 +7298,8 @@
         const it = clItemById(id);
         if (!it) return;
         if (state.checklistFocusOnly && !clFocusSet().has(id)) state.checklistFocusOnly = false;
+        if (state.checklistClub !== "all" && !clClubMatch(it)) state.checklistClub = "all";
+        if (!it.personal) clUi.refOpen = true;
         clExpanded.add(id);
         saveState();
         renderChecklist();
@@ -6968,6 +7334,7 @@
         const logged = Object.keys(state.checklistLog).filter((d) => state.checklistLog[d].includes(id));
         state.checklistCustomItems.splice(idx, 1);
         state.checklistFocusIds = (state.checklistFocusIds || []).filter((x) => x !== id);
+        state.checklistBacklogIds = (state.checklistBacklogIds || []).filter((x) => x !== id);
         logged.forEach((d) => {
           state.checklistLog[d] = state.checklistLog[d].filter((x) => x !== id);
           if (!state.checklistLog[d].length) delete state.checklistLog[d];
@@ -6977,7 +7344,7 @@
         renderChecklist();
         showUndoToast(`Deleted "${removed.title}".`, () => {
           state.checklistCustomItems.splice(Math.min(idx, state.checklistCustomItems.length), 0, removed);
-          if (hadFocus) state.checklistFocusIds = (state.checklistFocusIds || []).concat([id]);
+          if (hadFocus && (state.checklistFocusIds || []).length < CL_MAX_CUES) state.checklistFocusIds = (state.checklistFocusIds || []).concat([id]);
           logged.forEach((d) => { state.checklistLog[d] = (state.checklistLog[d] || []).concat([id]); });
           saveState();
           if (state.activeView === "checklist") renderChecklist();
@@ -7009,7 +7376,7 @@
         clDraft.cue = "";
         saveState();
         renderChecklist();
-        showToast("Added your item. Star it to put it in My Focus.");
+        showToast("Added your item. Star it to make it an active cue.");
       }
 
       (function bindChecklist() {
@@ -7020,11 +7387,11 @@
           const act = btn.getAttribute("data-cl-act");
           const id = btn.getAttribute("data-cl-id");
           if (act === "check") { clToggleCheck(id); renderChecklist(); }
-          else if (act === "star") {
-            clToggleStar(id);
-            renderChecklist();
-            showToast(clFocusSet().has(id) ? "Added to My Focus." : "Removed from My Focus.");
-          }
+          else if (act === "star") clStar(id);
+          else if (act === "swap") clSwapWith(id);
+          else if (act === "swapcancel") { clUi.swap = null; renderChecklist(); }
+          else if (act === "club") { state.checklistClub = btn.getAttribute("data-cl-club"); saveState(); renderChecklist(); }
+          else if (act === "ref") { const cur = clUi.refOpen === null ? !clHasPersonal() : clUi.refOpen; clUi.refOpen = !cur; renderChecklist(); }
           else if (act === "expand") {
             if (clExpanded.has(id)) clExpanded.delete(id); else clExpanded.add(id);
             renderChecklist();
@@ -7045,13 +7412,29 @@
       })();
 
       // ---- Pre-shot cards: fullscreen, one starred item per screen ----
+      // Card order: the pre-swing checks, then the active cues, then the active feel's cue (the one on-course thought).
+      function clCueIds() {
+        const pre = clAllItems().filter((it) => it.preSwing && clClubMatch(it)).map((it) => it.id);
+        const act = clFocusItems().map((it) => it.id).filter((id) => !pre.includes(id));
+        const f = getActiveFeel();
+        return pre.concat(act, f && f.cue ? ["feel:" + f.id] : []);
+      }
+      function clCardById(id) {
+        if (String(id).indexOf("feel:") === 0) {
+          const f = feelById(String(id).slice(5));
+          return f ? { id, title: f.name, cue: f.cue, kicker: "Active feel: on-course thought", virtual: true } : null;
+        }
+        const it = clItemById(id);
+        if (!it) return null;
+        return { id, title: it.title, cue: it.cue, kicker: it.preSwing ? "Pre-swing check" : (it.personal ? "My fundamental" : clPhaseName(it.phase)) || "Active cue", virtual: false };
+      }
       function openCue() {
-        const items = clFocusItems();
+        const items = clCueIds();
         if (!items.length) { showToast("Star at least one item first."); return; }
         if (typeof mat !== "undefined" && mat.open) return;
         const ov = document.getElementById("cueOverlay");
         if (!clCue.open) clCue.returnFocus = document.activeElement;
-        clCue.ids = items.map((it) => it.id);
+        clCue.ids = items;
         clCue.idx = 0;
         clCue.open = true;
         ov.classList.remove("hidden");
@@ -7081,16 +7464,16 @@
       function renderCue() {
         const ov = document.getElementById("cueOverlay");
         // Drop any items that vanished (e.g. deleted) so the index stays valid.
-        clCue.ids = clCue.ids.filter((id) => clItemById(id));
+        clCue.ids = clCue.ids.filter((id) => clCardById(id));
         if (!clCue.ids.length) { closeCue(); return; }
         if (clCue.idx >= clCue.ids.length) clCue.idx = 0;
-        const it = clItemById(clCue.ids[clCue.idx]);
-        const done = clTodaySet().has(it.id);
+        const it = clCardById(clCue.ids[clCue.idx]);
+        const done = !it.virtual && clTodaySet().has(it.id);
         const act = document.activeElement && ov.contains(document.activeElement) ? document.activeElement.getAttribute("data-cue-act") : null;
         ov.innerHTML = `
           <div class="cue-top">
             <span class="cue-count">${clCue.idx + 1} / ${clCue.ids.length}</span>
-            <span class="cue-phase">${esc(clPhaseName(it.phase))}</span>
+            <span class="cue-phase">${esc(it.kicker)}</span>
             <button type="button" class="cue-btn" data-cue-act="close" aria-label="Close pre-shot cards">&#10005; Close</button>
           </div>
           <div class="cue-body" data-cue-body aria-live="polite">
@@ -7098,9 +7481,9 @@
             ${it.cue ? `<p class="cue-text">${esc(it.cue)}</p>` : ""}
           </div>
           <div class="cue-dots" aria-hidden="true">${clCue.ids.map((_, i) => `<i class="${i === clCue.idx ? "on" : ""}"></i>`).join("")}</div>
-          <div class="cue-nav">
+          <div class="cue-nav ${it.virtual ? "no-check" : ""}">
             <button type="button" class="cue-btn" data-cue-act="prev" aria-label="Previous card">&larr; Prev</button>
-            <button type="button" class="cue-btn" data-cue-act="check" aria-pressed="${done}">${done ? "&#10003; Done today" : "Mark done today"}</button>
+            ${it.virtual ? "" : `<button type="button" class="cue-btn" data-cue-act="check" aria-pressed="${done}">${done ? "&#10003; Done today" : "Mark done today"}</button>`}
             <button type="button" class="cue-btn" data-cue-act="next" aria-label="Next card">Next &rarr;</button>
           </div>
           <p class="cue-hint">Tap the card, swipe, or use the arrow keys to move on. Esc closes.</p>`;
@@ -7120,7 +7503,7 @@
             if (a === "close") closeCue();
             else if (a === "prev") stepCue(-1);
             else if (a === "next") stepCue(1);
-            else if (a === "check") { clToggleCheck(clCue.ids[clCue.idx]); renderCue(); }
+            else if (a === "check") { if (String(clCue.ids[clCue.idx]).indexOf("feel:") !== 0) clToggleCheck(clCue.ids[clCue.idx]); renderCue(); }
             return;
           }
           if (e.target.closest && e.target.closest("[data-cue-body]")) stepCue(1);
@@ -7157,20 +7540,873 @@
       })();
       // ============================== END SWING CHECKLIST ==============================
 
+      // =====================================================================================
+      // ===== COACH: feel library · test blocks · parking lot · dashboard strip =====
+      // State it owns: state.feelsUser, state.blocks {active, history, queued}, state.parkingLot.
+      // For other modules (e.g. a session log): getActiveFeel(), getActiveBlock() (.id / .feelId),
+      // activeBlockDay(), lastSessionNote(), allFeels(), feelById(id).
+      // =====================================================================================
+      const FL_DEF = { length: 7, test: "dispersion and strike vs baseline", rules: "switch only after 3 sessions with worse dispersion than baseline" };
+      const fl = {
+        club: "all", status: "all", mode: "library", profileOpen: false, parkFilter: "all", focusSel: null,
+        forms: { start: null, end: null, bt: null, feel: null, guard: null },
+        flash: { order: [], idx: 0, revealed: false }
+      };
+
+      function uid(prefix) { return prefix + "-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6); }
+      function normFeel(f) {
+        return {
+          id: f.id, name: f.name || "Untitled feel", cue: f.cue || "",
+          club: FEEL_CLUBS.includes(f.club) ? f.club : "all",
+          drillIds: Array.isArray(f.drillIds) ? f.drillIds : [],
+          intendedFlight: f.intendedFlight || "", failureMode: f.failureMode || "",
+          status: FEEL_STATUSES.includes(f.status) ? f.status : "candidate",
+          notes: f.notes || "", source: f.source || "", custom: !!f.custom
+        };
+      }
+      // Effective feels = PLAYER_DATA.feels with the user's overrides layered on top (user edits win),
+      // plus the user's own feels. Exactly one feel is ever "active": the running block's feel, else the first marked active.
+      function allFeels() {
+        const ov = state.feelsUser || {};
+        const out = [];
+        for (const f of pdArr("feels")) {
+          const o = ov[f.id];
+          if (o && o.deleted) continue;
+          out.push(normFeel(Object.assign({}, f, o || {}, { custom: false })));
+        }
+        for (const o of Object.values(ov)) if (o.custom && !o.deleted && !out.some((x) => x.id === o.id)) out.push(normFeel(o));
+        const blk = state.blocks.active;
+        let activeId = blk && out.some((f) => f.id === blk.feelId) ? blk.feelId : null;
+        if (!activeId) { const a = out.find((f) => f.status === "active"); activeId = a ? a.id : null; }
+        out.forEach((f) => { if (f.id === activeId) f.status = "active"; else if (f.status === "active") f.status = "parked"; });
+        return out;
+      }
+      function feelById(id) { return allFeels().find((f) => f.id === id) || null; }
+      function getActiveFeel() { return allFeels().find((f) => f.status === "active") || null; }
+      function getActiveBlock() { return state.blocks.active || null; }
+      function daysBetween(a, b) { return Math.round((Date.parse(b + "T12:00:00") - Date.parse(a + "T12:00:00")) / 86400000); }
+      function activeBlockDay() { const b = getActiveBlock(); return b ? Math.max(1, daysBetween(b.startDate, todayISO(0)) + 1) : 0; }
+      function lastSessionNote() {
+        const logs = state.deliveryLogs || {};
+        for (const d of Object.keys(logs).sort().reverse()) {
+          const n = logs[d] && typeof logs[d].notes === "string" ? logs[d].notes.trim() : "";
+          if (n) return { date: d, text: n };
+        }
+        return null;
+      }
+      function setFeelStatus(id, status) {
+        const o = state.feelsUser[id] || (state.feelsUser[id] = { id });
+        o.status = status;
+      }
+      function feelClubLabel(c) { return c === "driver" ? "Driver" : c === "irons" ? "Irons" : "All clubs"; }
+      function clipText(t, n) { t = String(t || ""); return t.length > n ? t.slice(0, n - 1) + "…" : t; }
+      function verdictLabel(v) { return { keep: "Keep", park: "Park", retire: "Retire", extend: "Extend", switched: "Switched early" }[v] || v; }
+
+      // ---- Dashboard strip (Feels tab, Checklist tab, compact banner on the Drill Deck) ----
+      function feelStripHtml(withLink) {
+        const f = getActiveFeel(), b = getActiveBlock();
+        const note = lastSessionNote();
+        const day = activeBlockDay();
+        const over = b && day > b.lengthDays;
+        const dayTxt = b ? `Day ${day} of ${b.lengthDays}${over ? " (block complete: end it with a verdict)" : ""}` : "No block running";
+        const q = state.blocks.queued && feelById(state.blocks.queued.feelId);
+        return `
+          <section class="fl-strip ${over ? "over" : ""}" aria-label="Active feel dashboard">
+            <div class="fl-strip-cell"><span class="fl-k">Active feel</span><strong>${f ? esc(f.name) : "None yet"}</strong></div>
+            <div class="fl-strip-cell"><span class="fl-k">Block</span><strong>${esc(dayTxt)}</strong>${q ? `<span class="fl-sub">Next up: ${esc(q.name)}</span>` : ""}</div>
+            <div class="fl-strip-cell wide"><span class="fl-k">On-course thought</span><strong>${f && f.cue ? esc(clipText(f.cue, 140)) : "Pick one active feel to carry to the course."}</strong></div>
+            <div class="fl-strip-cell wide"><span class="fl-k">Last session note${note ? " (" + esc(shortDateLabel(note.date)) + ")" : ""}</span><span>${note ? esc(clipText(note.text, 120)) : "No session note yet."}</span></div>
+            ${withLink ? `<button type="button" class="nav-btn" data-fl-banner="open">🧪 Feels &amp; Blocks</button>` : ""}
+          </section>`;
+      }
+      function renderFeelBanner() {
+        const el = document.getElementById("feelBanner");
+        if (!el) return;
+        const show = state.activeView === "deck" && (pdHas() || allFeels().length || state.blocks.history.length);
+        el.classList.toggle("hidden", !show);
+        el.innerHTML = show ? feelStripHtml(true) : "";
+      }
+
+      // ---- Block lifecycle ----
+      function newStartDraft(feelId) {
+        const q = state.blocks.queued;
+        const useQ = q && (!feelId || q.feelId === feelId);
+        const id = feelId || (useQ ? q.feelId : "");
+        const f = feelById(id);
+        return {
+          feelId: id,
+          length: useQ ? q.lengthDays : FL_DEF.length,
+          hypothesis: useQ && q.hypothesis ? q.hypothesis : "",
+          test: useQ && q.test ? q.test : FL_DEF.test,
+          rules: FL_DEF.rules,
+          baseline: "",
+          switchReason: "",
+          auto: f ? hypTemplate(f.name) : ""
+        };
+      }
+      function hypTemplate(name) { return `If I play ${name}, then ... because ...`; }
+      function flOpenStart(feelId) {
+        const cur = getActiveBlock();
+        fl.forms.guard = null;
+        fl.forms.start = newStartDraft(feelId);
+        if (!fl.forms.start.hypothesis && fl.forms.start.auto) fl.forms.start.hypothesis = fl.forms.start.auto;
+        fl.focusSel = "#flStartForm [data-fl-first]";
+        if (cur) fl.forms.start.switchReason = (cur.switchLog[cur.switchLog.length - 1] || {}).reason || "";
+        renderFeels();
+      }
+      // Entry point for "Start block" on a feel. Guards against switching mid-block.
+      function flRequestStart(feelId) {
+        const cur = getActiveBlock();
+        if (cur && cur.feelId === feelId) { showToast("That block is already running."); return; }
+        if (cur) {
+          if (activeBlockDay() > cur.lengthDays) {
+            showToast("The current block is complete. End it with a verdict first.");
+            flOpenEnd();
+            return;
+          }
+          fl.forms.start = null;
+          fl.forms.guard = { feelId, reason: "" };
+          fl.focusSel = "#flGuardForm [data-fl-keep]";
+          renderFeels();
+          return;
+        }
+        flOpenStart(feelId);
+      }
+      function flConfirmGuard() {
+        const g = fl.forms.guard, cur = getActiveBlock();
+        if (!g || !cur) return;
+        const reason = g.reason.trim();
+        if (reason.length < 5) { showToast("Write a real reason (a few words at least). It gets logged."); return; }
+        cur.switchLog.push({ date: todayISO(0), reason: reason.slice(0, 400), toFeelId: g.feelId });
+        saveState();
+        fl.forms.guard = null;
+        flOpenStart(g.feelId);
+        fl.forms.start.switchReason = reason;
+      }
+      function closeBlock(blk, verdict, notes, switchReason) {
+        const f = feelById(blk.feelId);
+        state.blocks.history.push(Object.assign({}, blk, {
+          feelName: f ? f.name : blk.feelName, endDate: todayISO(0), verdict,
+          notes: String(notes || "").slice(0, 800), switchReason: String(switchReason || "").slice(0, 400)
+        }));
+        state.blocks.history = state.blocks.history.slice(-300);
+        state.blocks.active = null;
+      }
+      function flSubmitStart() {
+        const d = fl.forms.start;
+        if (!d) return;
+        const feel = feelById(d.feelId);
+        if (!feel) { showToast("Pick a feel first."); return; }
+        const hyp = d.hypothesis.trim();
+        if (hyp.length < 8 || hyp === d.auto.trim()) { showToast("Fill in the hypothesis: If I play X, then Y because Z."); return; }
+        const length = Math.max(1, Math.min(60, Math.round(Number(d.length)) || FL_DEF.length));
+        const cur = getActiveBlock();
+        if (cur && cur.feelId === feel.id) { showToast("That block is already running."); return; }
+        const priorActive = allFeels().filter((f) => f.status === "active" && f.id !== feel.id).map((f) => f.id);
+        if (cur) {
+          closeBlock(cur, "switched", `Switched early to ${feel.name}.`, d.switchReason);
+        }
+        priorActive.forEach((id) => setFeelStatus(id, "parked"));
+        setFeelStatus(feel.id, "active");
+        state.blocks.active = {
+          id: uid("blk"), feelId: feel.id, feelName: feel.name, startDate: todayISO(0), lengthDays: length,
+          hypothesis: hyp.slice(0, 600), test: (d.test.trim() || FL_DEF.test).slice(0, 300),
+          switchRules: (d.rules.trim() || FL_DEF.rules).slice(0, 400), baseline: d.baseline.trim().slice(0, 600), switchLog: []
+        };
+        if (state.blocks.queued && state.blocks.queued.feelId === feel.id) state.blocks.queued = null;
+        fl.forms.start = null;
+        saveState();
+        renderAll();
+        showToast(`Block started: ${feel.name}, ${length} days. Previous active feel is parked.`);
+      }
+      function flOpenEnd() {
+        if (!getActiveBlock()) return;
+        fl.forms.guard = null; fl.forms.start = null;
+        fl.forms.end = { verdict: "", notes: "" };
+        fl.focusSel = "#flEndForm [data-fl-first]";
+        renderFeels();
+      }
+      function flSubmitEnd() {
+        const d = fl.forms.end, blk = getActiveBlock();
+        if (!d || !blk) return;
+        if (!BLOCK_VERDICTS.includes(d.verdict) || d.verdict === "switched") { showToast("Pick a verdict: keep, park, retire or extend."); return; }
+        if (d.notes.trim().length < 3) { showToast("Add a note on what you saw (data, not just feel)."); return; }
+        const feelName = (feelById(blk.feelId) || {}).name || blk.feelName;
+        closeBlock(blk, d.verdict, d.notes.trim(), "");
+        if (d.verdict === "keep") setFeelStatus(blk.feelId, "active");
+        else if (d.verdict === "park") setFeelStatus(blk.feelId, "parked");
+        else if (d.verdict === "retire") setFeelStatus(blk.feelId, "retired");
+        else if (d.verdict === "extend") {
+          setFeelStatus(blk.feelId, "active");
+          state.blocks.active = Object.assign({}, blk, { id: uid("blk"), startDate: todayISO(0), lengthDays: 7, switchLog: [] });
+        }
+        fl.forms.end = null;
+        saveState();
+        const q = state.blocks.queued && feelById(state.blocks.queued.feelId);
+        renderAll();
+        showToast(`Block ended for ${feelName}: ${verdictLabel(d.verdict)}.`);
+        if (q && d.verdict !== "extend") flOpenStart(q.id);
+      }
+
+      // ---- Breakthrough: "I think I found it" becomes a one-week hypothesis, never an instant swap ----
+      function flOpenBt() {
+        fl.forms.bt = { name: "", cue: "", hypothesis: "If I play ..., then ... because ...", test: FL_DEF.test, done: null };
+        fl.focusSel = "#flBtForm [data-fl-first]";
+        renderFeels();
+      }
+      function flSubmitBt() {
+        const d = fl.forms.bt;
+        if (!d) return;
+        if (!d.name.trim()) { showToast("Give the idea a short name."); return; }
+        if (d.hypothesis.trim().length < 12) { showToast("Write the hypothesis: If I play X, then Y because Z."); return; }
+        const id = uid("feel");
+        state.feelsUser[id] = {
+          id, custom: true, name: d.name.trim().slice(0, 120), cue: d.cue.trim().slice(0, 600), club: "all", drillIds: [],
+          intendedFlight: "", failureMode: "", status: "candidate", source: "Breakthrough",
+          notes: `Breakthrough ${todayISO(0)}. Hypothesis: ${d.hypothesis.trim()} Test: ${(d.test.trim() || FL_DEF.test)}`.slice(0, 800)
+        };
+        d.done = id;
+        d.savedHyp = d.hypothesis.trim();
+        d.savedTest = d.test.trim() || FL_DEF.test;
+        saveState();
+        fl.focusSel = "#flBtDone [data-fl-first]";
+        renderFeels();
+        showToast("Saved as a Candidate. Your active feel did not change.");
+      }
+      function flQueueBt() {
+        const d = fl.forms.bt;
+        if (!d || !d.done) return;
+        state.blocks.queued = { feelId: d.done, hypothesis: d.savedHyp, test: d.savedTest, lengthDays: 7 };
+        fl.forms.bt = null;
+        saveState();
+        renderAll();
+        showToast("Queued as your next block.");
+      }
+
+      // ---- Feel CRUD ----
+      function flOpenFeelForm(id) {
+        const f = id ? feelById(id) : null;
+        fl.forms.feel = f
+          ? { id: f.id, name: f.name, cue: f.cue, club: f.club, intendedFlight: f.intendedFlight, failureMode: f.failureMode, notes: f.notes, source: f.source }
+          : { id: null, name: "", cue: "", club: "all", intendedFlight: "", failureMode: "", notes: "", source: "" };
+        fl.focusSel = "#flFeelForm [data-fl-first]";
+        renderFeels();
+      }
+      function flSubmitFeel() {
+        const d = fl.forms.feel;
+        if (!d) return;
+        if (!d.name.trim()) { showToast("Give the feel a name."); return; }
+        if (!d.cue.trim()) { showToast("Add a cue: the words you will say to yourself."); return; }
+        const fields = sanitizeFeelFields({ name: d.name, cue: d.cue, club: d.club, intendedFlight: d.intendedFlight, failureMode: d.failureMode, notes: d.notes, source: d.source });
+        if (d.id) {
+          const o = state.feelsUser[d.id] || (state.feelsUser[d.id] = { id: d.id });
+          Object.assign(o, fields);
+          showToast("Feel updated.");
+        } else {
+          const id = uid("feel");
+          state.feelsUser[id] = Object.assign({ drillIds: [], status: "candidate" }, fields, { id, custom: true });
+          showToast("Feel added as a Candidate.");
+        }
+        fl.forms.feel = null;
+        saveState();
+        renderAll();
+      }
+      function flDeleteFeel(id) {
+        const f = feelById(id);
+        if (!f) return;
+        if (f.status === "active") { showToast("End the running block before deleting its feel."); return; }
+        const prev = state.feelsUser[id] ? JSON.parse(JSON.stringify(state.feelsUser[id])) : null;
+        if (f.custom) delete state.feelsUser[id];
+        else (state.feelsUser[id] || (state.feelsUser[id] = { id })).deleted = true;
+        const q = state.blocks.queued; const prevQ = q && q.feelId === id ? q : null;
+        if (prevQ) state.blocks.queued = null;
+        saveState();
+        renderFeels();
+        showUndoToast(`Deleted "${f.name}".`, () => {
+          if (prev) state.feelsUser[id] = prev; else delete state.feelsUser[id];
+          if (prevQ) state.blocks.queued = prevQ;
+          saveState();
+          if (state.activeView === "feels") renderFeels();
+        });
+      }
+      function flSetStatus(id, status) {
+        const f = feelById(id);
+        if (!f || !FEEL_STATUSES.includes(status) || status === "active") return;
+        if (f.status === "active") { showToast("End the running block to change its status."); renderFeels(); return; }
+        setFeelStatus(id, status);
+        if (state.blocks.queued && state.blocks.queued.feelId === id && status === "retired") state.blocks.queued = null;
+        saveState();
+        renderAll();
+        showToast(`${f.name}: ${status}.`);
+      }
+
+      // ---- Flashcards ----
+      function flStartFlash() {
+        const pool = allFeels().filter((f) => f.status !== "retired" && f.cue && (fl.club === "all" || f.club === "all" || f.club === fl.club));
+        if (!pool.length) { showToast("No feels to quiz yet. Add one first."); return; }
+        const ids = pool.map((f) => f.id);
+        for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
+        fl.flash = { order: ids, idx: 0, revealed: false };
+        fl.mode = "flash";
+        fl.focusSel = "[data-fl-act='flashreveal']";
+        renderFeels();
+      }
+      function flFlashStep(d) {
+        const n = fl.flash.order.length;
+        if (!n) return;
+        fl.flash.idx = (fl.flash.idx + d + n) % n;
+        fl.flash.revealed = false;
+        fl.focusSel = "[data-fl-act='flashreveal']";
+        renderFeels();
+      }
+
+      // ---- Parking lot ----
+      function parkAdd(text) {
+        const t = String(text || "").trim().slice(0, 300);
+        if (!t) return false;
+        state.parkingLot.push({ id: uid("park"), text: t, date: todayISO(0), status: "open", feelId: "" });
+        state.parkingLot = state.parkingLot.slice(-500);
+        saveState();
+        if (state.activeView === "feels") renderFeels();
+        return true;
+      }
+      function parkPromote(id) {
+        const it = state.parkingLot.find((p) => p.id === id);
+        if (!it) return;
+        const fid = uid("feel");
+        state.feelsUser[fid] = {
+          id: fid, custom: true, name: clipText(it.text, 50).replace(/…$/, ""), cue: it.text, club: "all", drillIds: [],
+          intendedFlight: "", failureMode: "", status: "candidate", source: "Parking lot", notes: `Promoted from the parking lot (${it.date}). Not tested yet.`
+        };
+        it.status = "promoted"; it.feelId = fid;
+        saveState(); renderFeels();
+        showToast("Promoted to a Candidate feel. It does not change your active feel.");
+      }
+      function parkSet(id, status) {
+        const it = state.parkingLot.find((p) => p.id === id);
+        if (!it) return;
+        it.status = status;
+        saveState(); renderFeels();
+      }
+      function parkDelete(id) {
+        const idx = state.parkingLot.findIndex((p) => p.id === id);
+        if (idx < 0) return;
+        const [removed] = state.parkingLot.splice(idx, 1);
+        saveState(); renderFeels();
+        showUndoToast("Deleted parked idea.", () => { state.parkingLot.splice(Math.min(idx, state.parkingLot.length), 0, removed); saveState(); if (state.activeView === "feels") renderFeels(); });
+      }
+
+      // ---- Rendering ----
+      function flList(arr) { return Array.isArray(arr) && arr.length ? `<ul>${arr.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>` : ""; }
+      function flProfileHtml() {
+        if (!pdHas()) {
+          return `
+            <section class="panel fl-profile" aria-label="Player profile">
+              <h3>🧑‍🏫 Add your player profile</h3>
+              <p>This hub works fine without one, but a profile lets it show your goals, gear, body notes, personal fundamentals and a library of feels.</p>
+              <ol>
+                <li>In the <code>drills</code> folder, copy <code>player_data.example.js</code> to <code>player_data.js</code>.</li>
+                <li>Edit it with your own details and feels.</li>
+                <li>Reload this page.</li>
+              </ol>
+              <p class="fl-sub">player_data.js is git-ignored, so personal details never get committed. Until then you can still add feels, run test blocks and use the parking lot below.</p>
+            </section>`;
+        }
+        const P = window.PLAYER_DATA || {}, pr = P.profile && typeof P.profile === "object" ? P.profile : {};
+        const dial = pr.driverDial && typeof pr.driverDial === "object" ? pr.driverDial : null;
+        const mt = P.metricTargets && typeof P.metricTargets === "object" ? P.metricTargets : null;
+        const metricHtml = mt ? Object.keys(mt).map((club) => {
+          const m = mt[club] && typeof mt[club] === "object" ? mt[club] : {};
+          return `<div class="fl-mt"><h5>${esc(club)}</h5><p>${Object.keys(m).map((k) => `<span class="chip-static">${esc(k)}: ${esc(m[k])}</span>`).join(" ")}</p></div>`;
+        }).join("") : "";
+        const body = fl.profileOpen ? `
+          <div class="fl-profile-body">
+            ${pr.diagnosis ? `<p>${esc(pr.diagnosis)}</p>` : ""}
+            ${pr.metaFault ? `<p><strong>Biggest meta-fault:</strong> ${esc(pr.metaFault)}</p>` : ""}
+            ${pr.pathNote ? `<p>${esc(pr.pathNote)}</p>` : ""}
+            ${Array.isArray(pr.goals) && pr.goals.length ? `<h4>Goals</h4>${flList(pr.goals)}` : ""}
+            ${Array.isArray(pr.constraints) && pr.constraints.length ? `<h4>Body constraints</h4>${flList(pr.constraints)}` : ""}
+            ${Array.isArray(pr.gear) && pr.gear.length ? `<h4>Setup</h4>${flList(pr.gear)}` : ""}
+            ${Array.isArray(pr.aids) && pr.aids.length ? `<h4>Training aids</h4><p>${pr.aids.map((a) => `<span class="chip-static">${esc(a)}</span>`).join(" ")}</p>` : ""}
+            ${pr.time ? `<p><strong>Time:</strong> ${esc(pr.time)}</p>` : ""}
+            ${dial ? `<div class="fl-dial"><h4>${esc(dial.title || "Driver miss dial")}</h4>${dial.intro ? `<p>${esc(dial.intro)}</p>` : ""}${dial.early ? `<p>${esc(dial.early)}</p>` : ""}${dial.stalled ? `<p>${esc(dial.stalled)}</p>` : ""}${dial.rule ? `<p><strong>${esc(dial.rule)}</strong></p>` : ""}</div>` : ""}
+            ${Array.isArray(P.practiceRules) && P.practiceRules.length ? `<h4>Practice rules</h4>${flList(P.practiceRules)}` : ""}
+            ${metricHtml ? `<h4>Long-term metric targets (reference only)</h4>${metricHtml}` : ""}
+            ${Array.isArray(P.feelModifiers) && P.feelModifiers.length ? `<h4>Modifiers (combine with any feel)</h4>${P.feelModifiers.filter((m) => m && typeof m === "object").map((m) => `<p><strong>${esc(m.name)}:</strong> ${esc(m.cue)}${m.caution ? ` <em>${esc(m.caution)}</em>` : ""}</p>`).join("")}` : ""}
+          </div>` : "";
+        return `
+          <section class="panel fl-profile" aria-label="Player profile">
+            <div class="fl-row"><h3>🧑‍🏫 My profile &amp; reference</h3>
+              <button type="button" class="nav-btn" data-fl-act="profile" data-fk="profile" aria-expanded="${fl.profileOpen}">${fl.profileOpen ? "Hide" : "Show"}</button></div>
+            ${pr.summary ? `<p>${esc(pr.summary)}</p>` : ""}
+            ${body}
+          </section>`;
+      }
+
+      function flBlockPanelHtml() {
+        const b = getActiveBlock();
+        if (!b) {
+          const q = state.blocks.queued && feelById(state.blocks.queued.feelId);
+          return `
+            <section class="panel fl-block" aria-label="Active block">
+              <h3>🧪 Active block</h3>
+              <p class="fl-sub">No block running. Pick one feel, state a hypothesis, and give it a full week of blocked practice before judging it.</p>
+              ${q ? `<p>Queued next: <strong>${esc(q.name)}</strong></p>` : ""}
+              <div class="fl-btns">
+                <button type="button" class="nav-btn primary" data-fl-act="startform" data-fk="startform">▶ Start a block${q ? " (queued: " + esc(clipText(q.name, 24)) + ")" : ""}</button>
+                <button type="button" class="nav-btn" data-fl-act="bt" data-fk="bt">💡 I think I found it</button>
+              </div>
+            </section>`;
+        }
+        const f = feelById(b.feelId);
+        const day = activeBlockDay();
+        const pct = Math.min(100, Math.round((Math.min(day, b.lengthDays) / b.lengthDays) * 100));
+        const over = day > b.lengthDays;
+        return `
+          <section class="panel fl-block" aria-label="Active block">
+            <h3>🧪 Active block: ${esc(f ? f.name : b.feelName)}</h3>
+            <p class="fl-day ${over ? "over" : ""}" role="status">Day ${day} of ${b.lengthDays}${over ? " - complete. End it with a verdict." : ""} <span class="fl-sub">(started ${esc(shortDateLabel(b.startDate))})</span></p>
+            <div class="cl-bar" aria-hidden="true"><span style="width:${pct}%"></span></div>
+            <dl class="fl-dl">
+              <dt>Hypothesis</dt><dd>${esc(b.hypothesis)}</dd>
+              <dt>Measurable test</dt><dd>${esc(b.test)}</dd>
+              <dt>Switching rules (set up front)</dt><dd>${esc(b.switchRules)}</dd>
+              ${b.baseline ? `<dt>Baseline</dt><dd>${esc(b.baseline)}</dd>` : ""}
+              ${b.switchLog.length ? `<dt>Switch attempts logged</dt><dd>${b.switchLog.map((s) => `${esc(shortDateLabel(s.date))}: ${esc(s.reason)}`).join("<br>")}</dd>` : ""}
+            </dl>
+            <div class="fl-btns">
+              <button type="button" class="nav-btn primary" data-fl-act="endform" data-fk="endform">⏹ End block…</button>
+              <button type="button" class="nav-btn" data-fl-act="bt" data-fk="bt">💡 I think I found it</button>
+            </div>
+          </section>`;
+      }
+
+      function flFormsHtml() {
+        const out = [];
+        const F = fl.forms;
+        const fld = (label, inner) => `<label>${label}${inner}</label>`;
+        if (F.guard) {
+          const cur = getActiveBlock();
+          const g = F.guard, to = feelById(g.feelId);
+          if (cur && to) {
+            out.push(`
+              <form class="panel fl-form fl-guard" id="flGuardForm" role="alertdialog" aria-labelledby="flGuardH" autocomplete="off">
+                <h3 id="flGuardH">Hold on: switching mid-block</h3>
+                <p>You are on <strong>day ${activeBlockDay()} of ${cur.lengthDays}</strong> of <strong>${esc((feelById(cur.feelId) || {}).name || cur.feelName)}</strong>. Starting <strong>${esc(to.name)}</strong> now is the feel-cycling pattern: a new idea feels better than the current one because it is new, and one good or bad session is not a verdict.</p>
+                <p><strong>The rules you wrote for this block:</strong> ${esc(cur.switchRules)}</p>
+                <p><strong>Your test:</strong> ${esc(cur.test)}</p>
+                ${fld("Why switch anyway? (required, gets logged)", `<textarea data-fl-bind="guard.reason" maxlength="400" required>${esc(g.reason)}</textarea>`)}
+                <div class="fl-btns">
+                  <button type="button" class="nav-btn primary" data-fl-act="guardkeep" data-fl-keep>Keep my current block</button>
+                  <button type="submit" class="nav-btn danger">Switch anyway</button>
+                </div>
+              </form>`);
+          }
+        }
+        if (F.start) {
+          const d = F.start, cur = getActiveBlock();
+          const opts = allFeels().filter((f) => f.status !== "retired" && !(cur && cur.feelId === f.id));
+          out.push(`
+            <form class="panel fl-form" id="flStartForm" aria-labelledby="flStartH" autocomplete="off">
+              <h3 id="flStartH">Start a test block</h3>
+              ${cur ? `<p class="fl-warn">This ends your current block early (logged as switched) and parks its feel.</p>` : ""}
+              <div class="fl-grid2">
+                ${fld("Feel", `<select data-fl-bind="start.feelId" data-fl-first required><option value="">Choose a feel…</option>${opts.map((f) => `<option value="${esc(f.id)}" ${d.feelId === f.id ? "selected" : ""}>${esc(f.name)} (${esc(feelClubLabel(f.club))})</option>`).join("")}</select>`)}
+                ${fld("Length (days)", `<input type="number" min="1" max="60" step="1" inputmode="numeric" data-fl-bind="start.length" value="${esc(d.length)}" />`)}
+              </div>
+              ${fld("Hypothesis: If I play X, then Y because Z", `<textarea data-fl-bind="start.hypothesis" id="flStartHyp" maxlength="600" required>${esc(d.hypothesis)}</textarea>`)}
+              ${fld("Measurable test", `<input type="text" data-fl-bind="start.test" maxlength="300" value="${esc(d.test)}" />`)}
+              ${fld("Switching rules (decide now, not mid-block)", `<textarea data-fl-bind="start.rules" maxlength="400">${esc(d.rules)}</textarea>`)}
+              ${fld("Baseline note (current dispersion, strike, anything to compare against)", `<textarea data-fl-bind="start.baseline" maxlength="600">${esc(d.baseline)}</textarea>`)}
+              <div class="fl-btns">
+                <button type="submit" class="nav-btn primary">▶ Start block</button>
+                <button type="button" class="nav-btn" data-fl-act="formclose" data-fl-form="start">Cancel</button>
+              </div>
+            </form>`);
+        }
+        if (F.end && getActiveBlock()) {
+          const d = F.end, b = getActiveBlock();
+          const v = (val, label, hint) => `<label class="fl-radio"><input type="radio" name="flVerdict" data-fl-bind="end.verdict" value="${val}" ${d.verdict === val ? "checked" : ""} ${val === "keep" ? "data-fl-first" : ""}/> <span><strong>${label}</strong> <span class="fl-sub">${hint}</span></span></label>`;
+          out.push(`
+            <form class="panel fl-form" id="flEndForm" aria-labelledby="flEndH" autocomplete="off">
+              <h3 id="flEndH">End block: ${esc((feelById(b.feelId) || {}).name || b.feelName)}</h3>
+              <p class="fl-sub">Day ${activeBlockDay()} of ${b.lengthDays}. Your test was: ${esc(b.test)}</p>
+              <fieldset class="fl-fieldset"><legend>Verdict (required)</legend>
+                ${v("keep", "Keep", "it won; stays your active feel")}
+                ${v("park", "Park", "set it aside; may come back")}
+                ${v("retire", "Retire", "it did not work; stop")}
+                ${v("extend", "Extend", "not enough data; another 7 days")}
+              </fieldset>
+              ${fld("What did the data and the strikes show? (required)", `<textarea data-fl-bind="end.notes" maxlength="800" required>${esc(d.notes)}</textarea>`)}
+              <div class="fl-btns">
+                <button type="submit" class="nav-btn primary">Save verdict</button>
+                <button type="button" class="nav-btn" data-fl-act="formclose" data-fl-form="end">Cancel</button>
+              </div>
+            </form>`);
+        }
+        if (F.bt && !F.bt.done) {
+          const d = F.bt;
+          out.push(`
+            <form class="panel fl-form" id="flBtForm" aria-labelledby="flBtH" autocomplete="off">
+              <h3 id="flBtH">💡 Breakthrough? Make it a one-week hypothesis</h3>
+              <p>Great. It does <strong>not</strong> replace your active feel. It is saved as a Candidate and you can schedule it as the next block.</p>
+              ${fld("Short name", `<input type="text" data-fl-bind="bt.name" data-fl-first maxlength="120" value="${esc(d.name)}" required />`)}
+              ${fld("The cue or feel (what you did)", `<textarea data-fl-bind="bt.cue" maxlength="600">${esc(d.cue)}</textarea>`)}
+              ${fld("Hypothesis: If I play X, then Y because Z", `<textarea data-fl-bind="bt.hypothesis" maxlength="600" required>${esc(d.hypothesis)}</textarea>`)}
+              ${fld("Measurable test", `<input type="text" data-fl-bind="bt.test" maxlength="300" value="${esc(d.test)}" />`)}
+              <div class="fl-btns">
+                <button type="submit" class="nav-btn primary">Save as Candidate</button>
+                <button type="button" class="nav-btn" data-fl-act="formclose" data-fl-form="bt">Cancel</button>
+              </div>
+            </form>`);
+        }
+        if (F.bt && F.bt.done) {
+          const nf = feelById(F.bt.done);
+          out.push(`
+            <section class="panel fl-form" id="flBtDone" aria-label="Breakthrough saved">
+              <h3>Saved: ${esc(nf ? nf.name : "your idea")} (Candidate)</h3>
+              <p>${getActiveBlock() ? `Your current block keeps running. Queue this idea to start when it ends?` : `Run it as a one-week block now?`}</p>
+              <div class="fl-btns">
+                <button type="button" class="nav-btn primary" data-fl-act="btqueue" data-fl-first>Schedule as next block</button>
+                ${getActiveBlock() ? "" : `<button type="button" class="nav-btn" data-fl-act="btstart">Start the block now</button>`}
+                <button type="button" class="nav-btn" data-fl-act="formclose" data-fl-form="bt">Not now</button>
+              </div>
+            </section>`);
+        }
+        if (F.feel) {
+          const d = F.feel;
+          out.push(`
+            <form class="panel fl-form" id="flFeelForm" aria-labelledby="flFeelH" autocomplete="off">
+              <h3 id="flFeelH">${d.id ? "Edit feel" : "Add a feel"}</h3>
+              <div class="fl-grid2">
+                ${fld("Name", `<input type="text" data-fl-bind="feel.name" data-fl-first maxlength="120" value="${esc(d.name)}" required />`)}
+                ${fld("Club", `<select data-fl-bind="feel.club">${FEEL_CLUBS.map((c) => `<option value="${c}" ${d.club === c ? "selected" : ""}>${esc(feelClubLabel(c))}</option>`).join("")}</select>`)}
+              </div>
+              ${fld("Cue (the words you say to yourself)", `<textarea data-fl-bind="feel.cue" maxlength="600" required>${esc(d.cue)}</textarea>`)}
+              ${fld("Intended ball flight", `<input type="text" data-fl-bind="feel.intendedFlight" maxlength="300" value="${esc(d.intendedFlight)}" />`)}
+              ${fld("Failure mode (what it does when it goes wrong)", `<input type="text" data-fl-bind="feel.failureMode" maxlength="300" value="${esc(d.failureMode)}" />`)}
+              ${fld("Notes", `<textarea data-fl-bind="feel.notes" maxlength="800">${esc(d.notes)}</textarea>`)}
+              ${fld("Source (coach, video, own idea)", `<input type="text" data-fl-bind="feel.source" maxlength="120" value="${esc(d.source)}" />`)}
+              <div class="fl-btns">
+                <button type="submit" class="nav-btn primary">${d.id ? "Save changes" : "Add feel"}</button>
+                <button type="button" class="nav-btn" data-fl-act="formclose" data-fl-form="feel">Cancel</button>
+              </div>
+            </form>`);
+        }
+        return out.join("");
+      }
+
+      function flFeelCardHtml(f) {
+        const drills = (f.drillIds || []).map((id) => drillById(id)).filter(Boolean);
+        const isActive = f.status === "active";
+        const statusSel = isActive
+          ? `<span class="fl-badge st-active">Active</span>`
+          : `<label class="fl-statuslbl">Status <select data-fl-status="${esc(f.id)}" aria-label="Status of ${esc(f.name)}">${["candidate", "parked", "retired"].map((s) => `<option value="${s}" ${f.status === s ? "selected" : ""}>${s}</option>`).join("")}</select></label>`;
+        return `
+          <article class="fl-card st-${esc(f.status)}">
+            <div class="fl-card-top"><h4>${esc(f.name)}</h4><span class="fl-badge club">${esc(feelClubLabel(f.club))}</span>${isActive ? "" : `<span class="fl-badge st-${esc(f.status)}">${esc(f.status)}</span>`}</div>
+            <p class="fl-cue">${esc(f.cue)}</p>
+            <dl class="fl-dl small">
+              ${f.intendedFlight ? `<dt>Intended flight</dt><dd>${esc(f.intendedFlight)}</dd>` : ""}
+              ${f.failureMode ? `<dt>Failure mode</dt><dd>${esc(f.failureMode)}</dd>` : ""}
+              ${f.notes ? `<dt>Notes</dt><dd>${esc(f.notes)}</dd>` : ""}
+              ${f.source ? `<dt>Source</dt><dd>${esc(f.source)}</dd>` : ""}
+            </dl>
+            ${drills.length ? `<div class="cl-chips">${drills.map((d) => `<button type="button" class="chip" data-fl-act="drill" data-fl-drill="${esc(d.id)}">${esc(d.title)}</button>`).join("")}</div>` : ""}
+            <div class="fl-btns">
+              ${isActive ? `<button type="button" class="nav-btn" data-fl-act="endform" data-fk="end:${esc(f.id)}">End block…</button>`
+                : `<button type="button" class="nav-btn primary" data-fl-act="feelstart" data-fl-id="${esc(f.id)}" data-fk="fstart:${esc(f.id)}" ${f.status === "retired" ? "disabled" : ""}>Start block</button>`}
+              <button type="button" class="nav-btn" data-fl-act="feeledit" data-fl-id="${esc(f.id)}" data-fk="fedit:${esc(f.id)}">Edit</button>
+              <button type="button" class="nav-btn danger" data-fl-act="feeldel" data-fl-id="${esc(f.id)}" data-fk="fdel:${esc(f.id)}">Delete</button>
+              ${statusSel}
+            </div>
+          </article>`;
+      }
+
+      function flLibraryHtml() {
+        const order = { active: 0, candidate: 1, parked: 2, retired: 3 };
+        const feels = allFeels().filter((f) => (fl.club === "all" || f.club === "all" || f.club === fl.club) && (fl.status === "all" || f.status === fl.status))
+          .sort((a, b) => order[a.status] - order[b.status]);
+        const chip = (act, val, label, cur) => `<button type="button" class="chip ${cur === val ? "active" : ""}" data-fl-act="${act}" data-fl-val="${val}" data-fk="${act}:${val}" aria-pressed="${cur === val}">${label}</button>`;
+        return `
+          <section class="panel fl-lib" aria-label="Feel library">
+            <div class="fl-row"><h3>📚 Feel library <span class="cl-count">${feels.length}</span></h3>
+              <span class="fl-btns"><button type="button" class="nav-btn" data-fl-act="flashstart" data-fk="flashstart">🃏 Flashcards</button>
+              <button type="button" class="nav-btn primary" data-fl-act="feeladd" data-fk="feeladd">➕ Add feel</button></span></div>
+            <div class="fl-filters">
+              <span class="fl-k" id="flClubLbl">Club</span><span class="fl-chips" role="group" aria-labelledby="flClubLbl">${chip("fclub", "all", "All", fl.club)}${chip("fclub", "driver", "Driver", fl.club)}${chip("fclub", "irons", "Irons", fl.club)}</span>
+              <span class="fl-k" id="flStLbl">Status</span><span class="fl-chips" role="group" aria-labelledby="flStLbl">${["all", "active", "candidate", "parked", "retired"].map((s) => chip("fstatus", s, s === "all" ? "All" : s, fl.status)).join("")}</span>
+            </div>
+            ${feels.length ? `<div class="fl-cards">${feels.map(flFeelCardHtml).join("")}</div>` : `<p class="cl-empty">No feels match these filters. Add one, or clear a filter.</p>`}
+          </section>`;
+      }
+
+      function flFlashHtml() {
+        const fs = fl.flash;
+        fs.order = fs.order.filter((id) => feelById(id));
+        if (!fs.order.length) { fl.mode = "library"; return flLibraryHtml(); }
+        if (fs.idx >= fs.order.length) fs.idx = 0;
+        const f = feelById(fs.order[fs.idx]);
+        return `
+          <section class="panel fl-flash" aria-label="Feel flashcards">
+            <div class="fl-row"><h3>🃏 Flashcards <span class="cl-count">${fs.idx + 1} / ${fs.order.length}</span></h3>
+              <button type="button" class="nav-btn" data-fl-act="flashexit" data-fk="flashexit">Back to library</button></div>
+            <div class="fl-flash-card" aria-live="polite">
+              <span class="fl-badge club">${esc(feelClubLabel(f.club))}</span>
+              <h2>${esc(f.name)}</h2>
+              ${fs.revealed ? `<p class="fl-flash-cue">${esc(f.cue)}</p>${f.intendedFlight ? `<p class="fl-sub">Intended flight: ${esc(f.intendedFlight)}</p>` : ""}` : `<p class="fl-sub">Say the cue out loud first, then reveal.</p>`}
+            </div>
+            <div class="fl-btns fl-flash-btns">
+              <button type="button" class="nav-btn" data-fl-act="flashprev" data-fk="flashprev">&larr; Prev</button>
+              ${fs.revealed ? "" : `<button type="button" class="nav-btn primary" data-fl-act="flashreveal" data-fk="flashreveal">Reveal cue</button>`}
+              <button type="button" class="nav-btn ${fs.revealed ? "primary" : ""}" data-fl-act="flashnext" data-fk="flashnext">Next &rarr;</button>
+            </div>
+          </section>`;
+      }
+
+      function flHistoryHtml() {
+        const h = state.blocks.history.slice().reverse();
+        return `
+          <section class="panel fl-hist" aria-label="Block history">
+            <h3>🗓 Block history <span class="cl-count">${h.length}</span></h3>
+            ${h.length ? h.map((b) => `
+              <article class="fl-hist-item">
+                <div class="fl-card-top"><strong>${esc(b.feelName || (feelById(b.feelId) || {}).name || b.feelId)}</strong>
+                  <span class="fl-badge v-${esc(b.verdict)}">${esc(verdictLabel(b.verdict))}</span>
+                  <span class="fl-sub">${esc(b.startDate)} to ${esc(b.endDate)} (${b.lengthDays}d planned)</span></div>
+                <p class="fl-hyp">${esc(b.hypothesis)}</p>
+                ${b.notes ? `<p><strong>Notes:</strong> ${esc(b.notes)}</p>` : ""}
+                ${b.switchReason ? `<p><strong>Why it switched:</strong> ${esc(b.switchReason)}</p>` : ""}
+              </article>`).join("") : `<p class="cl-empty">No finished blocks yet. A block lands here when you end it with a verdict.</p>`}
+          </section>`;
+      }
+
+      function flParkingHtml() {
+        const items = state.parkingLot.slice().reverse().filter((p) => fl.parkFilter === "all" || p.status === "open");
+        const nOpen = state.parkingLot.filter((p) => p.status === "open").length;
+        const chip = (val, label) => `<button type="button" class="chip ${fl.parkFilter === val ? "active" : ""}" data-fl-act="parkfilter" data-fl-val="${val}" data-fk="pf:${val}" aria-pressed="${fl.parkFilter === val}">${label}</button>`;
+        return `
+          <section class="panel fl-park" id="flParkSection" aria-label="Parking lot">
+            <div class="fl-row"><h3>🅿️ Parking lot <span class="cl-count">${nOpen} open</span></h3><span class="fl-chips">${chip("open", "Open")}${chip("all", "All")}</span></div>
+            <p class="fl-sub">Mid-session ideas go here so they do not trigger a switch. Review them between blocks.</p>
+            <form id="flParkForm" class="fl-parkform" autocomplete="off">
+              <input type="text" id="flParkInput" maxlength="300" placeholder="Park an idea, then press Enter" aria-label="Park an idea" />
+              <button type="submit" class="nav-btn primary">Park it</button>
+            </form>
+            ${items.length ? items.map((p) => `
+              <article class="fl-park-item st-${esc(p.status)}">
+                <div><span class="fl-sub">${esc(shortDateLabel(p.date))}</span> <span class="fl-badge pk-${esc(p.status)}">${p.status === "promoted" ? "promoted to candidate" : esc(p.status)}</span></div>
+                <p>${esc(p.text)}</p>
+                <div class="fl-btns">
+                  ${p.status === "open" ? `<button type="button" class="nav-btn" data-fl-act="parkpromote" data-fl-id="${esc(p.id)}" data-fk="pp:${esc(p.id)}">Promote to candidate</button><button type="button" class="nav-btn" data-fl-act="parkdismiss" data-fl-id="${esc(p.id)}" data-fk="pd:${esc(p.id)}">Dismiss</button>` : ""}
+                  ${p.status === "dismissed" ? `<button type="button" class="nav-btn" data-fl-act="parkreopen" data-fl-id="${esc(p.id)}" data-fk="pr:${esc(p.id)}">Reopen</button>` : ""}
+                  <button type="button" class="nav-btn danger" data-fl-act="parkdelete" data-fl-id="${esc(p.id)}" data-fk="px:${esc(p.id)}">Delete</button>
+                </div>
+              </article>`).join("") : `<p class="cl-empty">${state.parkingLot.length ? "Nothing open. Switch to All to see promoted and dismissed items." : "Nothing parked yet. Use the floating Park it button mid-session."}</p>`}
+          </section>`;
+      }
+
+      function flCriteriaHtml() {
+        return `
+          <section class="panel fl-crit" aria-label="Final pick criteria">
+            <h3>🏁 Final pick criteria</h3>
+            <p class="fl-sub">When blocks are done, choose by these, in order:</p>
+            <ol class="fl-crit-list"><li>Dispersion</li><li>Strike quality</li><li>Attack angle (hit down with irons)</li><li>Distance</li></ol>
+            <p><strong>Before you lock one in:</strong> have a pro review video of your top two feels. Your own sense of "this one feels best" is the weakest evidence you have.</p>
+          </section>`;
+      }
+
+      function renderFeels() {
+        const el = document.getElementById("view-feels");
+        if (!el) return;
+        const active = document.activeElement;
+        const fk = active && el.contains(active) ? active.getAttribute("data-fk") : null;
+        const scrollY = window.scrollY;
+        el.innerHTML = `
+          <section class="panel cl-head" aria-label="Feels and blocks">
+            <h2>🧪 Feels &amp; Blocks</h2>
+            <p class="cl-sub">One active feel at a time. Test it for a full block, judge it on data, and park everything else.</p>
+          </section>
+          ${feelStripHtml(false)}
+          ${flFormsHtml()}
+          ${flBlockPanelHtml()}
+          ${fl.mode === "flash" ? flFlashHtml() : flLibraryHtml()}
+          ${flHistoryHtml()}
+          ${flParkingHtml()}
+          ${flCriteriaHtml()}
+          ${flProfileHtml()}`;
+        window.scrollTo(0, scrollY);
+        if (fl.focusSel) {
+          const n = el.querySelector(fl.focusSel);
+          fl.focusSel = null;
+          if (n) {
+            n.focus({ preventScroll: true });
+            const calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+            n.scrollIntoView({ block: "center", behavior: calm ? "auto" : "smooth" });
+          }
+        } else if (fk) {
+          const t = Array.from(el.querySelectorAll("[data-fk]")).find((n) => n.getAttribute("data-fk") === fk && !n.disabled);
+          if (t) t.focus({ preventScroll: true });
+        }
+      }
+
+      (function bindFeels() {
+        const el = document.getElementById("view-feels");
+        function setBind(path, value) {
+          const dot = path.indexOf(".");
+          const a = path.slice(0, dot), b = path.slice(dot + 1);
+          if (fl.forms[a]) fl.forms[a][b] = value;
+        }
+        el.addEventListener("click", (e) => {
+          const btn = e.target.closest && e.target.closest("[data-fl-act]");
+          if (!btn || !el.contains(btn)) return;
+          const act = btn.getAttribute("data-fl-act");
+          const id = btn.getAttribute("data-fl-id");
+          const val = btn.getAttribute("data-fl-val");
+          if (act === "fclub") { fl.club = val; renderFeels(); }
+          else if (act === "fstatus") { fl.status = val; renderFeels(); }
+          else if (act === "profile") { fl.profileOpen = !fl.profileOpen; renderFeels(); }
+          else if (act === "startform") flOpenStart("");
+          else if (act === "feelstart") flRequestStart(id);
+          else if (act === "endform") flOpenEnd();
+          else if (act === "bt") flOpenBt();
+          else if (act === "btqueue") flQueueBt();
+          else if (act === "btstart") { const d = fl.forms.bt; if (d && d.done) { fl.forms.bt = null; flOpenStart(d.done); fl.forms.start.hypothesis = d.savedHyp; fl.forms.start.test = d.savedTest; fl.focusSel = "#flStartForm [data-fl-first]"; renderFeels(); } }
+          else if (act === "guardkeep") { fl.forms.guard = null; renderFeels(); showToast("Good call. Stay with the block."); }
+          else if (act === "formclose") { fl.forms[btn.getAttribute("data-fl-form")] = null; renderFeels(); }
+          else if (act === "feeladd") flOpenFeelForm(null);
+          else if (act === "feeledit") flOpenFeelForm(id);
+          else if (act === "feeldel") flDeleteFeel(id);
+          else if (act === "flashstart") flStartFlash();
+          else if (act === "flashexit") { fl.mode = "library"; renderFeels(); }
+          else if (act === "flashreveal") { fl.flash.revealed = true; fl.focusSel = "[data-fl-act='flashnext']"; renderFeels(); }
+          else if (act === "flashnext") flFlashStep(1);
+          else if (act === "flashprev") flFlashStep(-1);
+          else if (act === "drill") clOpenDrill(btn.getAttribute("data-fl-drill"));
+          else if (act === "parkfilter") { fl.parkFilter = val; renderFeels(); }
+          else if (act === "parkpromote") parkPromote(id);
+          else if (act === "parkdismiss") parkSet(id, "dismissed");
+          else if (act === "parkreopen") parkSet(id, "open");
+          else if (act === "parkdelete") parkDelete(id);
+        });
+        el.addEventListener("input", (e) => {
+          const p = e.target.getAttribute && e.target.getAttribute("data-fl-bind");
+          if (p && e.target.type !== "radio") setBind(p, e.target.value);
+        });
+        el.addEventListener("change", (e) => {
+          const t = e.target;
+          const p = t.getAttribute && t.getAttribute("data-fl-bind");
+          if (p) {
+            setBind(p, t.value);
+            if (p === "start.feelId" && fl.forms.start) {
+              const d = fl.forms.start, f = feelById(t.value);
+              if (f && (!d.hypothesis.trim() || d.hypothesis === d.auto)) {
+                d.auto = hypTemplate(f.name); d.hypothesis = d.auto;
+                const ta = document.getElementById("flStartHyp"); if (ta) ta.value = d.hypothesis;
+              }
+            }
+          }
+          const st = t.getAttribute && t.getAttribute("data-fl-status");
+          if (st) flSetStatus(st, t.value);
+        });
+        el.addEventListener("submit", (e) => {
+          e.preventDefault();
+          const id = e.target.id;
+          if (id === "flStartForm") flSubmitStart();
+          else if (id === "flEndForm") flSubmitEnd();
+          else if (id === "flBtForm") flSubmitBt();
+          else if (id === "flFeelForm") flSubmitFeel();
+          else if (id === "flGuardForm") flConfirmGuard();
+          else if (id === "flParkForm") {
+            const inp = document.getElementById("flParkInput");
+            if (inp && parkAdd(inp.value)) { showToast("Parked."); const n = document.getElementById("flParkInput"); if (n) n.focus({ preventScroll: true }); }
+          }
+        });
+        document.getElementById("feelBanner").addEventListener("click", (e) => {
+          if (e.target.closest && e.target.closest("[data-fl-banner]")) { state.activeView = "feels"; renderAll(); window.scrollTo(0, 0); }
+        });
+      })();
+
+      // ---- Floating "Park it" capture (Checklist, Feels and Mat views) ----
+      const pk = { open: false };
+      function parkFabVisible() {
+        const matOpen = typeof mat !== "undefined" && mat.open;
+        const cueOpen = clCue.open;
+        return !cueOpen && (matOpen || state.activeView === "checklist" || state.activeView === "feels");
+      }
+      function updateParkFab() {
+        const fab = document.getElementById("parkFab");
+        if (!fab) return;
+        const matOpen = typeof mat !== "undefined" && mat.open;
+        const vis = parkFabVisible();
+        fab.classList.toggle("hidden", !vis || matOpen); // in Mat mode the capture button lives in the mat top bar (#matPark)
+        if (!vis && pk.open) closePark(false);
+      }
+      function openPark() {
+        const panel = document.getElementById("parkPanel");
+        pk.open = true;
+        panel.classList.remove("hidden");
+        document.getElementById("parkFab").setAttribute("aria-expanded", "true");
+        const n = state.parkingLot.filter((p) => p.status === "open").length;
+        document.getElementById("parkCount").textContent = n + " open";
+        const lot = document.getElementById("parkOpenLot");
+        lot.classList.toggle("hidden", typeof mat !== "undefined" && mat.open);
+        const inp = document.getElementById("parkInput");
+        inp.value = "";
+        inp.focus();
+      }
+      function closePark(refocus) {
+        pk.open = false;
+        document.getElementById("parkPanel").classList.add("hidden");
+        const fab = document.getElementById("parkFab");
+        fab.setAttribute("aria-expanded", "false");
+        const mp = document.getElementById("matPark");
+        if (refocus && typeof mat !== "undefined" && mat.open && mp) mp.focus({ preventScroll: true });
+        else if (refocus && !fab.classList.contains("hidden")) fab.focus({ preventScroll: true });
+      }
+      (function bindPark() {
+        const fab = document.getElementById("parkFab");
+        fab.addEventListener("click", () => { if (pk.open) closePark(true); else openPark(); });
+        document.getElementById("parkForm").addEventListener("submit", (e) => {
+          e.preventDefault();
+          const inp = document.getElementById("parkInput");
+          if (parkAdd(inp.value)) { showToast("Parked. Keep your active feel."); closePark(true); }
+          else showToast("Type the idea first.");
+        });
+        document.getElementById("parkCancel").addEventListener("click", () => closePark(true));
+        document.getElementById("matOverlay").addEventListener("click", (e) => {
+          if (e.target.closest && e.target.closest("#matPark")) { if (pk.open) closePark(true); else openPark(); }
+        });
+        document.getElementById("parkOpenLot").addEventListener("click", () => {
+          closePark(false);
+          state.activeView = "feels"; fl.parkFilter = "all";
+          renderAll();
+          const s = document.getElementById("flParkSection");
+          if (s) s.scrollIntoView({ block: "start" });
+        });
+        // Mat mode and the cue overlay toggle body classes without calling renderAll; follow them.
+        new MutationObserver(updateParkFab).observe(document.body, { attributes: true, attributeFilter: ["class"] });
+        // Escape closes the panel (mat/cue handlers swallow Escape in capture phase when typing, so Cancel also works).
+        document.getElementById("parkPanel").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closePark(true); } });
+      })();
+      // ============================== END COACH ==============================
+
       function renderAll() {
         renderHeader();
         renderModeBar();
         renderViewTabs();
         renderFilterBar();
         renderTonightCard();
+        renderFeelBanner();
 
-        ["deck", "checklist", "browse", "tracker", "courses", "editor", "cadence", "bag"].forEach((v) => {
+        ["deck", "checklist", "feels", "browse", "tracker", "courses", "editor", "cadence", "bag"].forEach((v) => {
           const viewEl = document.getElementById(`view-${v}`);
           if (viewEl) viewEl.classList.toggle("hidden", state.activeView !== v);
         });
 
         if (state.activeView === "deck") renderDeck();
         else if (state.activeView === "checklist") renderChecklist();
+        else if (state.activeView === "feels") renderFeels();
         else if (state.activeView === "browse") renderBrowse();
         else if (state.activeView === "tracker") renderTracker();
         else if (state.activeView === "courses") renderCourses();
@@ -7178,6 +8414,7 @@
         else if (state.activeView === "cadence") renderCadence();
         else if (state.activeView === "bag") renderBag();
         enhanceA11y();
+        updateParkFab();
       }
 
       // Deck navigation listeners
@@ -7235,6 +8472,7 @@
       });
 
       renderAll();
+      if (coachMigrationMsg) { saveState(); setTimeout(() => showToast(coachMigrationMsg), 600); }
       loadShortsHandles();
       bridgeConnect();
       if (backupIsStale()) setTimeout(() => showToast("Reminder: " + backupStatusText() + " (Editor tab > Export Full Backup)"), 1200);

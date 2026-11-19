@@ -163,6 +163,54 @@ if (D.swingChecklist !== undefined) {
   }
 }
 
+// Coach taxonomy: faults, environments, sessionTemplates, and per-drill tags (all additive)
+{
+  const PHASES = ["setup", "takeaway", "top", "transition", "impact", "finish", "short-game", "putting", "mental-tempo"];
+  const KINDS = ["warmup", "cold", "block", "transfer", "putting", "speed", "log"];
+  const USES = ["full", "short-game", "putting"];
+  const faultIds = uniqueIds(D.faults, "faults");
+  (D.faults || []).forEach((f) => {
+    for (const k of ["name", "symptom", "rootCauseHint"]) if (!isStr(f[k])) err(`fault ${f.id}: missing ${k}`);
+    if (!PHASES.includes(f.swingPhase)) err(`fault ${f.id}: swingPhase "${f.swingPhase}" must be one of ${PHASES.join("/")}`);
+  });
+  const envIds = uniqueIds(D.environments, "environments");
+  (D.environments || []).forEach((e) => {
+    for (const k of ["name", "desc"]) if (!isStr(e[k])) err(`environment ${e.id}: missing ${k}`);
+  });
+  uniqueIds(D.sessionTemplates, "sessionTemplates");
+  (D.sessionTemplates || []).forEach((st) => {
+    const t = `sessionTemplate ${st.id}`;
+    if (!isStr(st.name)) err(`${t}: missing name`);
+    if (!isNum(st.minutes) || st.minutes <= 0) err(`${t}: minutes must be a positive number`);
+    if (!Array.isArray(st.blocks) || !st.blocks.length) { err(`${t}: blocks must be a non-empty array`); return; }
+    let sum = 0;
+    st.blocks.forEach((b, i) => {
+      if (!isStr(b.name)) err(`${t}: block ${i} missing name`);
+      if (!isNum(b.minutes) || b.minutes <= 0) err(`${t}: block ${i} minutes must be a positive number`);
+      else sum += b.minutes;
+      if (!KINDS.includes(b.kind)) err(`${t}: block ${i} kind "${b.kind}" must be one of ${KINDS.join("/")}`);
+      if (!isStr(b.note)) err(`${t}: block ${i} missing note`);
+    });
+    if (isNum(st.minutes) && Math.abs(sum - st.minutes) > 2) err(`${t}: blocks total ${sum} min but template is ${st.minutes} min (tolerance 2)`);
+  });
+  (D.cadencePresets || []).forEach((p) => {
+    if (p.use !== undefined && !USES.includes(p.use)) err(`cadence preset ${p.id}: use "${p.use}" must be one of ${USES.join("/")}`);
+  });
+  (D.drills || []).forEach((d) => {
+    const t = `drill ${d.id}`;
+    if (!Array.isArray(d.faultTags)) err(`${t}: faultTags must be an array`);
+    else d.faultTags.forEach((x) => { if (!faultIds.has(x)) err(`${t}: faultTags -> unknown fault "${x}"`); });
+    if (!Array.isArray(d.environments)) err(`${t}: environments must be an array`);
+    else d.environments.forEach((x) => { if (!envIds.has(x)) err(`${t}: environments -> unknown environment "${x}"`); });
+    if (!PHASES.includes(d.swingPhase)) err(`${t}: swingPhase "${d.swingPhase}" must be one of ${PHASES.join("/")}`);
+    if (!Array.isArray(d.equipment)) err(`${t}: equipment must be an array`);
+    if (!isStr(d.keyFeel)) err(`${t}: missing keyFeel`);
+    if (d.pacing !== undefined && !["block", "transfer", "either"].includes(d.pacing)) err(`${t}: pacing must be block/transfer/either`);
+    if (d.video) for (const k of ["startSec", "endSec"]) if (d.video[k] !== undefined && (!isNum(d.video[k]) || d.video[k] < 0)) err(`${t}: video.${k} must be a non-negative number`);
+    if (d.video && isNum(d.video.startSec) && isNum(d.video.endSec) && d.video.endSec <= d.video.startSec) err(`${t}: video.endSec must be after startSec`);
+  });
+}
+
 console.log(`Checked ${file}`);
 console.log(`  drills=${(D.drills || []).length} routines=${(D.routines || []).length} courses=${(D.courses || []).length} bag=${(D.bagMatrix || []).length}`);
 warnings.forEach((w) => console.log("WARN  " + w));
