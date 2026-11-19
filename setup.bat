@@ -44,6 +44,15 @@ if errorlevel 1 echo [SimWatch] WARNING: requirements-video.txt failed to instal
 :skipvideo
 
 echo.
+if exist "%~dp0config.local.json" goto :havelocal
+echo No config.local.json yet ^(per-machine exe paths / device IP, gitignored^).
+choice /C YN /M "Auto-detect GameChanger, GSPro, GSPconnect, FSX Pro, Kinovea and OBS paths and write config.local.json"
+if errorlevel 2 goto :havelocal
+"%VPY%" simwatch.py discover --write-local
+if errorlevel 1 echo [SimWatch] WARNING: auto-detect failed. Copy config.local.example.json to config.local.json and edit it.
+:havelocal
+
+echo.
 echo Running health check ...
 "%VPY%" simwatch.py doctor >"%TEMP%\simwatch_doctor.txt" 2>&1
 set "DRC=%errorlevel%"
@@ -66,6 +75,6 @@ call "%~dp0install_autostart.bat"
 :skipauto
 
 echo.
-echo Setup finished. See SETUP.md for first-run checks.
+echo Setup finished. Next: harden the Launch Pro link ^(python simwatch.py harden^), then see SETUP.md.
 pause
 exit /b 0

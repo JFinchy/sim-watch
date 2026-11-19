@@ -136,6 +136,8 @@ schtasks /Delete /TN "SimWatch" /F
 
 ## Video Coaching Rig: Kinovea 2x2 Grid, OBS Projector PiP & Swing Library
 
+> Camera placement, Kinovea 2025.2 install and one-time settings: see [SETUP-video.md](SETUP-video.md). Kinovea 2024.1 still works as a legacy fallback (`video.kinovea_backend`).
+
 SimWatch pairs with **Kinovea** and **OBS Studio** without USB camera conflicts: **Kinovea owns both USB cameras directly** (`DTL` and `FO` at full camera FPS), while **OBS captures Kinovea's LiveReplay window** when the projector is on.
 
 ### 2x2 TV Layout (Works With or Without Projector)
@@ -146,7 +148,7 @@ SimWatch pairs with **Kinovea** and **OBS Studio** without USB camera conflicts:
 When playing on the projector:
 1. Run `python simwatch.py obs-setup` once to generate `Swings/OBS_SimWatch_SceneCollection.json`.
 2. In OBS Studio: **Scene Collection › Import** `OBS_SimWatch_SceneCollection.json`, then right-click the preview › **Windowed Projector (Preview)**.
-3. Whenever a shot lands (via OpenConnect `:921` or Kinovea audio trigger), SimWatch pops the borderless OBS PiP onto the corner of your projector for **12 seconds** (`video.projector_pip.popup_seconds`) and then automatically hides it so your view is unobstructed when aiming. Press **`Alt+P`** anytime to bring it back and pin/unpin it.
+3. Whenever a shot lands (via OpenConnect `:921`; Kinovea 2025+ records on SimWatch's UDP trigger, the audio trigger is off), SimWatch pops the borderless OBS PiP onto the corner of your projector for **12 seconds** (`video.projector_pip.popup_seconds`) and then automatically hides it so your view is unobstructed when aiming. Press **`Alt+P`** anytime to bring it back and pin/unpin it.
 
 ### Single Organized Swing Library (`Swings/`)
 ```text
@@ -173,7 +175,7 @@ SimWatch automatically pairs captured DTL and FO clips (plus `My-Go-To/` clips) 
 
 - **DTL Suite:** **V-Slot** (`Shaft Plane` + parallel `Shoulder Plane` offset `+8°` from the ball), **Tush Line** (vertical pelvis depth wall), and **Spine & Head** (posture tilt & head height).
 - **FO Suite:** **Head Box** (sway circle), **Lead Hip Wall**, **Trail Hip Wall**, and **Ball Line** (vertical ball reference).
-- **Hybrid Drag Calibration + Custom Kinovea Tools:** SimWatch installs custom posture tools (`Golf_DTL_VPlane.xml` & `Golf_FO_Box.xml`) into `%APPDATA%\Kinovea\DrawingTools\Custom\` and `Swings/Workspaces/CustomTools/`, and lets you drag any endpoint directly inside Kinovea, save (`Ctrl+S`), and press **`Alt+Shift+L`** (or `python simwatch.py save-lines`) so future swings match your exact mat & camera setup.
+- **Hybrid Drag Calibration + Custom Kinovea Tools:** SimWatch installs custom posture tools (`Golf_DTL_VPlane.xml` & `Golf_FO_Box.xml`) into `<Kinovea install dir>\DrawingTools\Custom\` (needs admin once; SimWatch logs the exact step if it can't write there), and lets you drag any endpoint directly inside Kinovea, save (`Ctrl+S`), and press **`Alt+Shift+L`** (or `python simwatch.py save-lines`) so future swings match your exact mat & camera setup.
 
 ### Global Hotkeys & On-Screen Key Cheat Sheet
 | Hotkey (`config.json` → `video.hotkeys`) | Action |
@@ -258,7 +260,7 @@ You **do not** have to draw lines yourself from scratch. Whenever a DTL or FO `.
 With **`opencv-python`** installed (`detect_ball_in_mp4`), SimWatch reads Frame 0 of each new clip, finds the golf ball automatically, and snaps `Shaft Plane`, `Shoulder Plane`, and `Ball Line` onto the ball.
 
 - **What "drag and save (`Alt+Shift+L`)" means:** Because your posture lines (`Tush Line`, `Spine & Head`, `Head Box`, `Hip Walls`) are **already drawn on screen**, you only ever need to nudge an endpoint **once** if your fixed camera angle places your body slightly left or right of the default screen position. Open one recorded clip in Kinovea, drag the already-drawn handle onto your actual hip/head position, press **`Ctrl+S`** inside Kinovea, and press **`Alt+Shift+L`** (`python simwatch.py save-lines`). That updates `Swings/Workspaces/swing_lines_template.json` so every future clip spawns all lines in your exact stance spot automatically.
-- **1-Click Kinovea Toolbar Tools:** SimWatch also installs `Golf_DTL_VPlane.xml` and `Golf_FO_Box.xml` into Kinovea's Custom Drawing Tools (`%APPDATA%\Kinovea\DrawingTools\Custom\`) so you can stamp either template onto any ad-hoc clip in one click.
+- **1-Click Kinovea Toolbar Tools:** SimWatch also installs `Golf_DTL_VPlane.xml` and `Golf_FO_Box.xml` into Kinovea's Custom Drawing Tools (`<Kinovea install dir>\DrawingTools\Custom\`) so you can stamp either template onto any ad-hoc clip in one click.
 
 ---
 

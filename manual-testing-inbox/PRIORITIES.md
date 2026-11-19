@@ -4,9 +4,12 @@
 
 - [ ] Watchdog hardening - see `watchdog-hardening.md`
 - [ ] Setup & launcher hardening - see `setup-ops.md`
+- [ ] Watchdog recovery reliability (device debounce, backoff, PAUSE expiry, 72h task limit) - see `watchdog-reliability.md`
+- [ ] Doctor checks, `harden`, config.local.json - see `doctor-hardening.md`
 
 ## Important
 
+- [ ] Kinovea 2025 integration (UDP trigger, clip-ready, legacy fallback) - see `kinovea-2025.md`
 - [ ] Shot-data bridge (simwatch.py → drills hub) - see `shot-bridge.md`
 - [ ] Tonight's Session + Mat mode + live auto-scoring - see `tonights-session-mat-mode.md`
 - [ ] Drills content accuracy & safety (HackMotion, Gym-Sore, new drills) - see `drills-content-accuracy.md`

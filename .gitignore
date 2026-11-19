@@ -31,3 +31,13 @@ simwatch_status.json
 
 # Private player profile (personal data; never commit)
 drills/player_data.js
+
+# Per-machine config overrides (exe paths, device IP)
+config.local.json
+config.local.json.bak
+
+# Generated Kinovea files (machine-specific absolute paths; regenerated at runtime).
+# Already-tracked copies need a one-time: git rm --cached Swings/Workspaces/*.xml Swings/Workspaces/CustomTools/*.xml
+Swings/Workspaces/*.xml
+Swings/Workspaces/CustomTools/
+Swings/Workspaces/lines_state.json

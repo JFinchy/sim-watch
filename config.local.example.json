@@ -1,0 +1,17 @@
+{
+  "_note": "Copy to config.local.json (gitignored) and keep only what differs on this PC. It is deep-merged over config.json at load; apps are matched by key, so you can override just exe. Or run: python simwatch.py discover --write-local",
+  "device": {
+    "ip": "169.254.6.44",
+    "host_ip": "169.254.6.1"
+  },
+  "apps": [
+    { "key": "integrator", "exe": "C:\\SimTools\\GameChanger\\GameChanger.exe" },
+    { "key": "gspro_connect", "exe": "C:\\GSProV1\\Core\\GSPC\\GSPconnect.exe" },
+    { "key": "gspro", "exe": "C:\\GSProV1\\Core\\GSP\\GSPro.exe" },
+    { "key": "fs_connector", "exe": "C:\\Program Files (x86)\\FSX Pro\\FSX Pro.exe" }
+  ],
+  "video": {
+    "kinovea_exe": "C:\\Program Files\\Kinovea\\Kinovea.exe",
+    "obs_exe": "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe"
+  }
+}

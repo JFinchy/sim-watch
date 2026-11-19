@@ -23,7 +23,10 @@ Commands:
   python simwatch.py save-lines [club]     save manually dragged Kinovea lines as your default template
   python simwatch.py drills                open the local Golf Drills, Routines & Daily Delivery Hub
   python simwatch.py doctor                validate config + environment; PASS/WARN/FAIL table, exit 1 on FAIL
+  python simwatch.py harden [adapter] [--apply]  print (or run, elevated) Launch Pro link/firewall/power hardening
+  python simwatch.py discover --write-local      detect app exe paths and write config.local.json
   python simwatch.py bridge [--demo]       run only the shot-data bridge (http://127.0.0.1:8765) + :921 sniffer
+  python simwatch.py clip-ready <file> DTL Kinovea 2025 post-recording command: link + library + replay copy
 
 Run from an ADMIN terminal if any sim app runs as admin (Windows blocks clicks & raw sockets otherwise).
 """
@@ -258,6 +261,10 @@ def validate_config(cfg: dict, check_paths: bool | None = None) -> list[tuple[st
                     for req in CHECK_REQUIRED.get(ctype, ()):
                         opts = req if isinstance(req, tuple) else (req,)
                         if not any(o in chk for o in opts):
+                            # A device check without its own ip inherits device.ip (one place to change it,
+                            # e.g. from config.local.json).
+                            if req == "ip" and chk.get("device") and (cfg.get("device") or {}).get("ip"):
+                                continue
                             err(f"check {name!r} (type {ctype}): missing {' or '.join(map(repr, opts))}")
                 if "app" in chk:
                     referenced.add(chk["app"])
@@ -320,13 +327,18 @@ def apply_config_defaults(cfg: dict) -> None:
 
 
 def load_config(path: Path, command: str | None = None) -> dict:
-    """Load + validate config.json. For `watch`/`startup`, config errors abort with a clear message."""
+    """Load + validate config.json (with config.local.json deep-merged over it, if present).
+    For `watch`/`startup`, config errors abort with a clear message."""
     try:
-        cfg = json.loads(Path(path).read_text(encoding="utf-8"))
+        cfg, local_path = read_config_layers(Path(path))
     except FileNotFoundError:
         raise SystemExit(f"Config file not found: {path}")
+    except LocalConfigError as e:
+        raise SystemExit(f"Local config overlay error: {e}")
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise SystemExit(f"Config file {path} is not valid JSON: {e}")
+    if local_path:
+        LOG.info("config: merged local overrides from %s", local_path)
     issues = validate_config(cfg)
     for sev, msg in issues:
         (LOG.error if sev == "error" else LOG.warning)("config %s: %s", sev, msg)
@@ -342,6 +354,66 @@ def load_config(path: Path, command: str | None = None) -> dict:
     cfg.setdefault("checks", [])
     cfg.setdefault("recovery", [])
     return cfg
+
+
+# --------------------------------------------------------------------------- config.local.json overlay
+
+class LocalConfigError(ValueError):
+    """config.local.json exists but is unusable (bad JSON / not an object)."""
+
+
+def local_config_path(path: Path) -> Path:
+    """config.json -> config.local.json in the same folder (gitignored, per-machine overrides)."""
+    p = Path(path)
+    return p.with_name(f"{p.stem}.local{p.suffix or '.json'}")
+
+
+def _jcopy(v):
+    return json.loads(json.dumps(v))
+
+
+def _keyed_list(v) -> bool:
+    return isinstance(v, list) and all(isinstance(x, dict) and "key" in x for x in v)
+
+
+def deep_merge_config(base, over):
+    """Return `base` with `over` merged in (inputs are not modified). Dicts merge recursively; lists of dicts
+    that all carry a "key" (like `apps`) merge item-by-item on that key, so an overlay can change just one
+    app's `exe` (unknown keys are appended); anything else in `over` replaces the base value."""
+    if isinstance(base, dict) and isinstance(over, dict):
+        out = _jcopy(base)
+        for k, v in over.items():
+            out[k] = deep_merge_config(base[k], v) if k in base else _jcopy(v)
+        return out
+    if _keyed_list(base) and _keyed_list(over):
+        out = _jcopy(base)
+        idx = {x["key"]: i for i, x in enumerate(out)}
+        for item in over:
+            if item["key"] in idx:
+                out[idx[item["key"]]] = deep_merge_config(out[idx[item["key"]]], item)
+            else:
+                idx[item["key"]] = len(out)
+                out.append(_jcopy(item))
+        return out
+    return _jcopy(over)
+
+
+def read_config_layers(path: Path) -> tuple:
+    """(config, local_path|None): config.json parsed, with config.local.json deep-merged over it when present.
+    Base-file errors propagate as FileNotFoundError / json.JSONDecodeError; overlay errors as LocalConfigError."""
+    base = json.loads(Path(path).read_text(encoding="utf-8"))
+    lp = local_config_path(path)
+    if not lp.exists():
+        return base, None
+    try:
+        over = json.loads(lp.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
+        raise LocalConfigError(f"{lp} is not valid JSON: {e}") from e
+    if not isinstance(over, dict):
+        raise LocalConfigError(f"{lp} must be a JSON object")
+    if not isinstance(base, dict):
+        return base, lp  # validate_config reports the broken base
+    return deep_merge_config(base, over), lp
 
 
 def stop_other_simwatch_instances() -> int:
@@ -1379,7 +1451,7 @@ def evaluate_checks(cfg, verbose=True) -> dict:
     if ping_ignored:
         device_failing = [n for n in device_failing if n not in ping_failing]
         failing = [n for n in failing if n not in ping_failing]
-        all_ok = not failing or all(f.endswith(" (error)") for f in failing)
+        all_ok = not (device_failing or non_device_failing)
         if all_ok:
             level = None
 
@@ -1479,23 +1551,86 @@ def recover(cfg, level: int) -> None:
     if not (0 <= level < len(cfg["recovery"])):
         LOG.error("recover: no recovery level %d (have %d)", level, len(cfg["recovery"]))
         return
-    step = cfg["recovery"][level]
+    _run_recovery_step(cfg, cfg["recovery"][level], f"recovery level {level}")
+
+
+DEVICE_RECOVERY_DEFAULT = {"name": "restart GameChanger (device session only)", "restart": ["integrator"],
+                           "backoff_sec": [300, 900, 1800]}
+
+
+def device_recovery_cfg(cfg) -> dict:
+    out = dict(DEVICE_RECOVERY_DEFAULT)
+    if isinstance(cfg.get("device_recovery"), dict):
+        out.update(cfg["device_recovery"])
+    return out
+
+
+def device_backoff_sec(cfg, attempts: int) -> float:
+    """Wait after the `attempts`-th device-only recovery (1-based): 5 -> 15 -> 30 min, capped at the last."""
+    sched = [float(s) for s in (device_recovery_cfg(cfg).get("backoff_sec") or [300]) if float(s) >= 0] or [300.0]
+    return sched[min(max(attempts, 1), len(sched)) - 1]
+
+
+def recover_device(cfg) -> None:
+    """Device-only failure (Launch Pro reachable, GameChanger has no session): restart GameChanger only."""
+    _run_recovery_step(cfg, device_recovery_cfg(cfg), "device recovery")
+
+
+def release_fsx_for_recovery(cfg) -> None:
+    """Automated recovery must never move the real mouse (fsx_disconnect clicks): if FSX Pro is holding
+    the Launch Pro session, just close FSX Pro. The explicit reconnect/release-device commands still click."""
+    app = cfg.get("apps_by_key", {}).get("fs_connector")
+    if not app:
+        return
+    try:
+        held = fsx_session(cfg) is not None
+    except Exception as e:
+        log_throttled("fsx-session", f"could not inspect FSX Pro session: {e}")
+        return
+    if held:
+        LOG.warning("  FSX Pro is holding the Launch Pro - closing FSX Pro so GameChanger can connect")
+        kill_app(app)
+
+
+def wait_device_sockets_clear(cfg, timeout: float = 10.0) -> bool:
+    """After killing GameChanger, wait (bounded) until no ESTABLISHED/TIME_WAIT socket to the Launch Pro
+    ports remains, so the relaunched GameChanger doesn't find the device still 'busy'."""
+    ports = _device_ports(cfg.get("device", {})) or {9970, 9971}
+    busy = (psutil.CONN_ESTABLISHED, getattr(psutil, "CONN_TIME_WAIT", "TIME_WAIT"))
+    end = time.time() + timeout
+    while True:
+        try:
+            lingering = [c for c in psutil.net_connections(kind="tcp")
+                         if c.status in busy and c.raddr and c.raddr.port in ports]
+        except (psutil.Error, OSError):
+            return False
+        if not lingering:
+            return True
+        if time.time() >= end:
+            LOG.info("  %d socket(s) to the Launch Pro still open after %.0fs; relaunching anyway",
+                     len(lingering), timeout)
+            return False
+        time.sleep(0.5)
+
+
+def _run_recovery_step(cfg, step: dict, label: str) -> None:
     keys = list(step.get("restart", []))
     unknown = [k for k in keys if k not in cfg["apps_by_key"]]
     if unknown:
-        LOG.error("recovery level %d references unknown app key(s) %s; skipping them", level, unknown)
+        LOG.error("%s references unknown app key(s) %s; skipping them", label, unknown)
         keys = [k for k in keys if k in cfg["apps_by_key"]]
     if "gspro" in keys and _is_gspro_healthy(cfg):
         LOG.info("  gspro already healthy and listening on :9050 - skipping GSPro restart")
         keys = [k for k in keys if k != "gspro"]
-    LOG.warning(">>> recovery level %d: %s", level, step["name"])
+    LOG.warning(">>> %s: %s", label, step.get("name", "?"))
     for key in reversed(keys):          # stop downstream first
         kill_app(cfg["apps_by_key"][key])
     if keys:
         time.sleep(2)
+    if "integrator" in keys:
+        release_fsx_for_recovery(cfg)   # safety net before GameChanger starts (never moves the mouse)
+        wait_device_sockets_clear(cfg, float(cfg.get("device", {}).get("socket_clear_sec", 10)))
     for key in keys:
-        if key == "integrator":
-            fsx_disconnect(cfg)         # safety net right before GameChanger starts
         launch_app(cfg, cfg["apps_by_key"][key], 45)
     time.sleep(cfg.get("settle_sec", 15))
 
@@ -1511,6 +1646,8 @@ def alert(msg: str) -> None:
 
 def club_category(club: str | None) -> str:
     c = (club or "").strip().upper()
+    if c in ("PT", "PUTTER", "PUTT"):
+        return "Putter"  # never "Iron": putts must not be treated as a full swing for video capture
     if c in ("PW", "GW", "AW", "SW", "LW", "WEDGE", "48", "50", "52", "54", "56", "58", "60"):
         return "Wedge"
     if c in ("DR", "DRIVER", "1W", "W1", "3W", "5W", "WOOD") or c.endswith("W"):
@@ -1610,14 +1747,28 @@ def _set_xml_text(parent: ET.Element, tag: str, text: str) -> ET.Element:
 
 
 def sync_kinovea_instance_prefs(cfg, layout: dict) -> None:
-    """Keep user's camera settings while pointing Capture into today's session & keeping lines visible."""
+    """Legacy (2024.1) per-instance prefs: keep user's camera settings while pointing Capture into today's
+    session & keeping lines visible. (2025.x has one shared Preferences.xml - see setup_video_rig_2025.)"""
+    if resolve_kinovea_backend(cfg) == "2025":
+        return
     kdir = _kinovea_appdata_dir()
     if not kdir:
         return
     base_prefs = kdir / "Preferences.xml"
     if not base_prefs.exists():
         return
+    running, total = kinovea_running_instances()
+    if total:
+        LOG.info("Kinovea is running; legacy preference files are only rewritten for stopped instances")
+    else:
+        # Named instances only read Preferences.<name>.xml when the BASE file says InstancesOwnPreferences.
+        try:
+            write_text_if_changed(base_prefs, patch_kinovea_prefs_legacy_general(base_prefs.read_bytes()))
+        except (OSError, ET.ParseError) as e:
+            log_throttled("kprefs:general", f"could not set InstancesOwnPreferences in {base_prefs}: {e}")
     for inst in ("LiveReplay", "Reference"):
+        if inst in running:
+            continue
         dst = kdir / f"Preferences.{inst}.xml"
         if not dst.exists():
             try:
@@ -1639,6 +1790,8 @@ def sync_kinovea_instance_prefs(cfg, layout: dict) -> None:
             except Exception as e:
                 log_throttled(f"kprefs:{inst}", f"sync_kinovea_instance_prefs ({inst}) failed: {e}")
     cap_prefs = kdir / "Preferences.Capture.xml"
+    if "Capture" in running:
+        return
     try:
         tree = ET.parse(base_prefs)
         root = tree.getroot()
@@ -1660,8 +1813,11 @@ def sync_kinovea_instance_prefs(cfg, layout: dict) -> None:
         if auto_cfg is None:
             auto_cfg = ET.SubElement(cap_node, "CaptureAutomationConfiguration")
         vcfg = cfg.get("video", {})
-        rec_sec = max(1.0, float(vcfg.get("pre_trigger_sec", 1.5)) + float(vcfg.get("post_trigger_sec", 1.5)))
-        _set_xml_text(auto_cfg, "EnableAudioTrigger", "true")
+        rec_sec = max(1.0, float(vcfg.get("pre_trigger_sec", 3.0)) + float(vcfg.get("post_trigger_sec", 1.5)))
+        # Toggle mode (default): SimWatch starts the recording and RecordingSeconds stops it, so the audio
+        # trigger must be OFF or a club strike would start a second, overlapping recording.
+        audio = str(vcfg.get("legacy_trigger", "toggle")).lower() == "audio"
+        _set_xml_text(auto_cfg, "EnableAudioTrigger", "true" if audio else "false")
         _set_xml_text(auto_cfg, "AudioTriggerThreshold", "0.15")
         _set_xml_text(auto_cfg, "RecordingSeconds", f"{rec_sec:.1f}")
         _set_xml_text(auto_cfg, "AudioQuietPeriod", "2.0")
@@ -1901,8 +2057,21 @@ def _close_kinovea_pid(pid: int) -> None:
     # every live Kinovea instance (Capture / LiveReplay / Reference) and wiping it can break the others.
 
 
-def launch_kinovea_instance(cfg, name: str, workspace_xml: Path, force_reload: bool = False) -> int | None:
-    """Ensure a named Kinovea instance is running with the specified workspace XML."""
+def kinovea_launch_args(exe: Path, name: str, workspace_xml: Path | None) -> list[str]:
+    """Command line for a named Kinovea instance.
+
+    2025.x (workspace_xml=None): `-name <WindowName>` reloads the saved window descriptor
+    (%APPDATA%\\Kinovea\\Windows\\<id>.xml). 2025's parser returns as soon as it sees -name, so
+    -hideExplorer/-stretch would be ignored; the descriptor's ExplorerVisible/Stretch carry that instead.
+    Legacy 2024.1: `-name <instance> -workspace <xml> -hideExplorer -stretch`.
+    """
+    if workspace_xml is None:
+        return [str(exe), "-name", name]
+    return [str(exe), "-name", name, "-workspace", str(workspace_xml), "-hideExplorer", "-stretch"]
+
+
+def launch_kinovea_instance(cfg, name: str, workspace_xml: Path | None, force_reload: bool = False) -> int | None:
+    """Ensure a named Kinovea instance is running (legacy: with workspace XML; 2025: workspace_xml=None)."""
     vcfg = cfg.get("video", {})
     exe = Path(vcfg.get("kinovea_exe", r"C:\Program Files\Kinovea\Kinovea.exe"))
     if not exe.exists():
@@ -1914,13 +2083,687 @@ def launch_kinovea_instance(cfg, name: str, workspace_xml: Path, force_reload: b
     if existing_pid and force_reload:
         _close_kinovea_pid(existing_pid)
     flags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
-    args = [str(exe), "-name", name, "-workspace", str(workspace_xml), "-hideExplorer", "-stretch"]
+    args = kinovea_launch_args(exe, name, workspace_xml)
     try:
         proc = subprocess.Popen(args, cwd=str(exe.parent), creationflags=flags)
         return proc.pid
     except OSError as e:
         LOG.error("Failed to start Kinovea (%s): %s", name, e)
         return None
+
+
+# --------------------------------------------------------------------------- Kinovea 2025.x backend
+# Element names / formats below are taken from the Kinovea 2025.2 source:
+#   Kinovea.Services/Window/WindowDescriptor.cs, ScreenDescriptorCapture.cs, ScreenDescriptorPlayback.cs,
+#   Types/UserCommand.cs, Types/CaptureFolder.cs, Types/CapturePathConfiguration.cs,
+#   Types/CaptureAutomationConfiguration.cs (TriggerQuietPeriod is serialized as <AudioQuietPeriod>),
+#   ScreenManager/CaptureScreen/CaptureScreen.cs (post-recording command: run as `cmd.exe /C <line>` after
+#   the file is closed; its variables are only filepath, folderpath, filename.ext, filename, ext, kva +
+#   date/time - NOT camalias, which only exists in the file-name context).
+
+KINOVEA_DEFAULT_EXE = r"C:\Program Files\Kinovea\Kinovea.exe"
+KINOVEA_WINDOW_NAMES = ("Capture", "LiveReplay", "Reference")
+KINOVEA_DEFAULT_UDP_PORT = 8875
+KINOVEA_OLD_DATE = "2000-01-01T00:00:00.0000000Z"  # LastSave: never become the "last closed window"
+_KINOVEA_BACKEND_CACHE: dict[str, str] = {}
+
+
+def kinovea_file_version(exe: Path) -> tuple[int, int, int, int] | None:
+    """Kinovea.exe file version (e.g. (2025, 2, 0, 0)) via GetFileVersionInfo; None if unavailable."""
+    if not IS_WINDOWS:
+        return None
+    try:
+        import win32api
+        info = win32api.GetFileVersionInfo(str(exe), "\\")
+        ms, ls = int(info["FileVersionMS"]), int(info["FileVersionLS"])
+        return (ms >> 16, ms & 0xFFFF, ls >> 16, ls & 0xFFFF)
+    except Exception as e:
+        log_throttled("kinovea-version", f"could not read Kinovea.exe version ({exe}): {e}", every_sec=3600)
+        return None
+
+
+def kinovea_backend_for_version(version, setting: str | None = "auto", hint: str | None = None) -> str:
+    """'2025' or 'legacy'. Explicit setting wins; auto: major >= 2025 -> 2025; unknown -> hint or 2025."""
+    s = str(setting or "auto").strip().lower()
+    if s in ("2025", "legacy"):
+        return s
+    if version:
+        return "2025" if int(version[0]) >= 2025 else "legacy"
+    return hint if hint in ("2025", "legacy") else "2025"
+
+
+def resolve_kinovea_backend(cfg: dict) -> str:
+    """Pick the Kinovea backend from config + Kinovea.exe version (cached per exe/setting, logged once)."""
+    vcfg = cfg.get("video", {}) or {}
+    setting = vcfg.get("kinovea_backend", "auto")
+    exe = Path(vcfg.get("kinovea_exe") or KINOVEA_DEFAULT_EXE)
+    key = f"{exe}|{setting}"
+    if key in _KINOVEA_BACKEND_CACHE:
+        return _KINOVEA_BACKEND_CACHE[key]
+    ver = kinovea_file_version(exe) if exe.exists() else None
+    hint = None
+    if ver is None:
+        kdir = _kinovea_appdata_dir()
+        if kdir and (kdir / "Windows").is_dir():
+            hint = "2025"  # the Windows\ descriptor folder only exists since 2025.1
+        elif kdir and (kdir / "Preferences.xml").exists():
+            hint = "legacy"
+    backend = kinovea_backend_for_version(ver, setting, hint)
+    ver_s = ".".join(str(x) for x in ver) if ver else "unknown"
+    LOG.info("Kinovea %s (%s) -> %s backend (video.kinovea_backend=%s)", ver_s, exe, backend, setting)
+    if backend == "legacy":
+        LOG.warning("Kinovea %s is a legacy version: using the 2024.1 fallback (toggle trigger, workspace XML). "
+                    "Install Kinovea 2025.2 for the UDP trigger + clip-ready post-recording command.", ver_s)
+    _KINOVEA_BACKEND_CACHE[key] = backend
+    return backend
+
+
+def kinovea_guid(tag: str) -> str:
+    """Stable GUID for SimWatch-managed Kinovea objects (windows, screens, capture folders, commands)."""
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"simwatch/kinovea/{tag}"))
+
+
+def kinovea_settings_dir(create: bool = False) -> Path | None:
+    """%APPDATA%\\Kinovea (Software.SettingsDirectory), optionally created."""
+    appdata = os.environ.get("APPDATA")
+    if not appdata:
+        return None
+    p = Path(appdata) / "Kinovea"
+    if create:
+        try:
+            (p / "Windows").mkdir(parents=True, exist_ok=True)
+        except OSError:
+            return None
+    return p if p.exists() else None
+
+
+def _xb(v) -> str:
+    return "true" if v else "false"
+
+
+def _xf(v) -> str:
+    """Float the way XmlHelper.WriteFloat (InvariantCulture "{0}") writes it: 3 -> '3', 4.5 -> '4.5'."""
+    return f"{float(v):g}"
+
+
+def kinovea_capture_root(cfg: dict) -> Path:
+    """Local (non-OneDrive) folder Kinovea records raw clips into (video.capture_root)."""
+    raw = (cfg.get("video", {}) or {}).get("capture_root") or ""
+    if raw:
+        p = Path(os.path.expandvars(str(raw)))
+        return p if p.is_absolute() else HERE / p
+    base = os.environ.get("LOCALAPPDATA")
+    return (Path(base) if base else Path.home() / ".simwatch") / "SimWatch" / "Captures"
+
+
+def kinovea_capture_folders(cfg: dict, layout: dict) -> dict[str, dict]:
+    """The 4 SimWatch capture folders (stable ids): raw DTL/FO recordings + replay DTL/FO (watched by LiveReplay).
+
+    Paths use Kinovea's %date% variable so they roll over daily without rewriting anything.
+    """
+    root = kinovea_capture_root(cfg)
+    sessions = layout["sessions"]
+    out = {}
+    for angle in ("DTL", "FO"):
+        out[angle] = {"id": kinovea_guid(f"capture-folder/{angle}"), "short": f"SimWatch {angle}",
+                      "path": str(root / "%date%" / angle)}
+        out[f"replay_{angle}"] = {"id": kinovea_guid(f"capture-folder/replay/{angle}"),
+                                  "short": f"SimWatch Replay {angle}",
+                                  "path": str(sessions / "%date%" / angle)}
+    return out
+
+
+def kinovea_clip_ready_instruction(angle: str, python_exe: str | None = None, script: str | None = None) -> str:
+    """Post-recording command line. Kinovea runs `cmd.exe /C <line>`; with >2 quotes cmd strips the first
+    and last quote, so the whole line is wrapped in one extra pair. %filepath% is Kinovea's variable; the
+    angle is literal because %camalias% is not available in the post-recording context."""
+    py = python_exe or sys.executable or "python"
+    scr = script or str(HERE / "simwatch.py")
+    return f'""{py}" "{scr}" clip-ready "%filepath%" {angle}"'
+
+
+def kinovea_capture_screen(cfg: dict, angle: str, camera: str, folder_id: str) -> dict:
+    vcfg = cfg.get("video", {}) or {}
+    pre = float(vcfg.get("pre_trigger_sec", 3.0))
+    post = float(vcfg.get("post_trigger_sec", 1.5))
+    fname = "%camalias%_%date%_%time%" if camera.upper() == angle.upper() else f"{angle}_%camalias%_%date%_%time%"
+    return {
+        "type": "capture", "id": kinovea_guid(f"screen/capture/{angle}"), "camera_name": camera,
+        "autostream": True, "delay": pre, "delayed_display": bool(vcfg.get("capture_delayed_display", False)),
+        "max_duration": max(0.5, pre + post), "capture_folder": folder_id, "file_name": fname,
+        "enable_command": bool(vcfg.get("clip_ready_command", True)),
+        "command_id": kinovea_guid(f"command/clip-ready/{angle}"),
+        "instructions": [kinovea_clip_ready_instruction(angle)],
+    }
+
+
+def build_kinovea_window_xml(name: str, screens: list[dict], explorer_visible: bool = False) -> bytes:
+    """A 2025.x window descriptor (<KinoveaWindow>) with StartupMode=ScreenList so Kinovea never replaces
+    our screens on close (WindowDescriptor.WriteXML order is kept so Kinovea's own re-save is equivalent)."""
+    root = ET.Element("KinoveaWindow")
+    ET.SubElement(root, "Id").text = kinovea_guid(f"window/{name}")
+    ET.SubElement(root, "Name").text = name
+    ET.SubElement(root, "LastSave").text = KINOVEA_OLD_DATE
+    ET.SubElement(root, "StartupMode").text = "ScreenList"
+    sl = ET.SubElement(root, "ScreenList")
+    for scr in screens:
+        if scr["type"] == "capture":
+            el = ET.SubElement(sl, "ScreenDescriptorCapture")
+            ET.SubElement(el, "Id").text = scr["id"]
+            ET.SubElement(el, "CameraName").text = str(scr["camera_name"])
+            ET.SubElement(el, "Autostream").text = _xb(scr.get("autostream", True))
+            ET.SubElement(el, "Delay").text = _xf(scr.get("delay", 0))
+            ET.SubElement(el, "DelayedDisplay").text = _xb(scr.get("delayed_display", False))
+            ET.SubElement(el, "MaxDuration").text = _xf(scr.get("max_duration", 0))
+            ET.SubElement(el, "CaptureFolder").text = scr["capture_folder"]
+            ET.SubElement(el, "FileName").text = scr.get("file_name", "")
+            ET.SubElement(el, "EnableCommand").text = _xb(scr.get("enable_command", False))
+            if scr.get("instructions"):
+                uc = ET.SubElement(el, "UserCommand")
+                ET.SubElement(uc, "Id").text = scr["command_id"]
+                ins = ET.SubElement(uc, "Instructions")
+                for line in scr["instructions"]:
+                    ET.SubElement(ins, "Instruction").text = line
+            ET.SubElement(el, "CapturedFilesPanelForceCollapsed").text = "true"
+        else:
+            el = ET.SubElement(sl, "ScreenDescriptorPlayback")
+            ET.SubElement(el, "FullPath").text = str(scr["full_path"])
+            ET.SubElement(el, "Autoplay").text = _xb(scr.get("autoplay", True))
+            ET.SubElement(el, "SpeedPercentage").text = _xf(scr.get("speed", 50))
+            ET.SubElement(el, "Stretch").text = _xb(scr.get("stretch", True))
+            ET.SubElement(el, "IsReplayWatcher").text = _xb(scr.get("is_watcher", False))
+            ET.SubElement(el, "SidePanelSplitterRatio").text = "0.8"
+            ET.SubElement(el, "SidePanelVisible").text = "false"
+            ET.SubElement(el, "KeyframePanelForceCollapsed").text = "true"
+    ET.SubElement(root, "ExplorerVisible").text = _xb(explorer_visible)
+    ET.SubElement(root, "ExplorerSplitterRatio").text = "0.2"
+    ET.SubElement(root, "DualScreenVerticalLayout").text = "false"
+    ET.SubElement(root, "DualScreenSplitterRatio").text = "0.5"
+    ET.indent(root, space="  ")
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def _xml_canon(el: ET.Element | None) -> tuple:
+    if el is None:
+        return ()
+    return (el.tag, (el.text or "").strip(), tuple(_xml_canon(c) for c in el))
+
+
+def kinovea_window_signature(xml_bytes: bytes | str | None) -> tuple:
+    """What SimWatch manages in a window descriptor (Name/StartupMode/ScreenList/ExplorerVisible); ignores
+    LastSave, WindowRectangle and splitter ratios that Kinovea rewrites on every close."""
+    if not xml_bytes:
+        return ()
+    try:
+        root = ET.fromstring(xml_bytes)
+    except ET.ParseError:
+        return ()
+    return tuple(_xml_canon(root.find(t)) for t in ("Id", "Name", "StartupMode", "ScreenList", "ExplorerVisible"))
+
+
+def _xml_child(parent: ET.Element, tag: str) -> ET.Element:
+    node = parent.find(tag)
+    if node is None:
+        node = ET.SubElement(parent, tag)
+    return node
+
+
+def patch_kinovea_prefs_2025(xml_text: bytes | str | None, folders: list[dict], udp_port: int = KINOVEA_DEFAULT_UDP_PORT,
+                             quiet_period: float = 3.0, memory_buffer_mb: int = 0) -> bytes:
+    """Edit only SimWatch's nodes in a 2025 Preferences.xml (<KinoveaPreferences>), keeping everything else.
+
+    Adds/updates our <CaptureFolder> entries by Id (user folders untouched), sets Delay recording mode,
+    raises (never lowers) <MemoryBuffer>, and configures <CaptureAutomationConfiguration> for the UDP trigger.
+    """
+    root = ET.fromstring(xml_text) if xml_text else ET.Element("KinoveaPreferences")
+    if root.tag != "KinoveaPreferences":
+        raise ValueError(f"not a Kinovea preferences file (root <{root.tag}>)")
+    if root.find("FormatVersion") is None:
+        fv = ET.Element("FormatVersion")
+        fv.text = "3.0"
+        root.insert(0, fv)
+    cap = _xml_child(root, "Capture")
+    cpc = _xml_child(cap, "CapturePathConfiguration")
+    cff = _xml_child(cpc, "CaptureFolders")
+    by_id = {(cf.findtext("Id") or "").strip().lower(): cf for cf in cff.findall("CaptureFolder")}
+    for f in folders:
+        node = by_id.get(f["id"].lower())
+        if node is None:
+            node = ET.SubElement(cff, "CaptureFolder")
+        _set_xml_text(node, "Id", f["id"])
+        _set_xml_text(node, "ShortName", f["short"])
+        _set_xml_text(node, "Path", f["path"])
+    _set_xml_text(cap, "CaptureRecordingMode", "Delay")
+    if memory_buffer_mb:
+        try:
+            cur = int((cap.findtext("MemoryBuffer") or "0").strip())
+        except ValueError:
+            cur = 0
+        if cur < int(memory_buffer_mb):
+            _set_xml_text(cap, "MemoryBuffer", str(int(memory_buffer_mb)))
+    auto = _xml_child(cap, "CaptureAutomationConfiguration")
+    _set_xml_text(auto, "EnableAudioTrigger", "false")
+    _set_xml_text(auto, "EnableUDPTrigger", "true")
+    _set_xml_text(auto, "UDPPort", str(int(udp_port)))
+    _set_xml_text(auto, "AudioQuietPeriod", f"{float(quiet_period):.3f}")
+    _set_xml_text(auto, "TriggerAction", "RecordVideo")
+    _set_xml_text(auto, "DefaultTriggerArmed", "true")
+    player = root.find("Player")
+    if player is not None:  # keep swing lines visible on every frame (PlayerPreferences > InfoFading)
+        fading = _xml_child(player, "InfoFading")
+        _set_xml_text(fading, "Enabled", "true")
+        _set_xml_text(fading, "AlwaysVisible", "true")
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def patch_kinovea_prefs_legacy_general(xml_text: bytes | str) -> bytes:
+    """2024.1: InstancesOwnPreferences (and AllowMultipleInstances) must be true in the BASE Preferences.xml,
+    otherwise named instances ignore Preferences.<name>.xml (Software.PreferencesFile / Program.cs)."""
+    root = ET.fromstring(xml_text)
+    gen = _xml_child(root, "General")
+    _set_xml_text(gen, "AllowMultipleInstances", "true")
+    _set_xml_text(gen, "InstancesOwnPreferences", "true")
+    return ET.tostring(root, encoding="utf-8", xml_declaration=True)
+
+
+def kinovea_running_instances() -> tuple[set[str], int]:
+    """(names of running `-name` Kinovea instances, total Kinovea.exe processes)."""
+    names: set[str] = set()
+    total = 0
+    for p in psutil.process_iter(["name", "cmdline"]):
+        try:
+            if (p.info["name"] or "").lower() != "kinovea.exe":
+                continue
+            total += 1
+            cmd = p.info["cmdline"] or []
+            for i, arg in enumerate(cmd):
+                if arg.lower() == "-name" and i + 1 < len(cmd):
+                    names.add(cmd[i + 1])
+        except psutil.Error:
+            pass
+    return names, total
+
+
+def _trash_duplicate_kinovea_windows(windows_dir: Path, name: str, keep_id: str) -> None:
+    """Move other descriptors with the same Name to Windows\\trash (Kinovea picks the first match by name)."""
+    for f in windows_dir.glob("*.xml"):
+        if f.stem.lower() == keep_id.lower():
+            continue
+        try:
+            root = ET.parse(f).getroot()
+        except (ET.ParseError, OSError):
+            continue
+        if root.tag == "KinoveaWindow" and (root.findtext("Name") or "") == name:
+            trash = windows_dir / "trash"
+            try:
+                trash.mkdir(exist_ok=True)
+                shutil.move(str(f), str(unique_path(trash / f.name)))
+                LOG.info("Moved duplicate Kinovea window '%s' (%s) to %s", name, f.name, trash)
+            except OSError as e:
+                log_throttled(f"kwin-dup:{f}", f"could not move duplicate Kinovea window {f}: {e}")
+
+
+def _close_kinovea_instance(name: str) -> None:
+    pid = find_kinovea_instance_pid(name)
+    if pid:
+        _close_kinovea_pid(pid)  # WM_CLOSE: Kinovea saves its descriptor, then we overwrite it
+
+
+def setup_video_rig_2025(cfg: dict, layout: dict, ref_name: str | None, club: str | None,
+                         launch: bool, reload_ref: bool) -> dict:
+    """Kinovea 2025.x: global prefs (UDP trigger + capture folders) + named window descriptors."""
+    vcfg = cfg.get("video", {}) or {}
+    folders = kinovea_capture_folders(cfg, layout)
+    cap_root = kinovea_capture_root(cfg)
+    if "onedrive" in str(cap_root).lower():
+        LOG.warning("video.capture_root %s is inside OneDrive: sync locks can corrupt or delay clips", cap_root)
+    for angle in ("DTL", "FO"):
+        try:
+            (cap_root / time.strftime("%Y-%m-%d") / angle).mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            log_throttled("kcap-root", f"could not create capture folder under {cap_root}: {e}")
+    speed = vcfg.get("replay_speed_pct", 50)
+    windows: dict[str, bytes] = {
+        "Capture": build_kinovea_window_xml("Capture", [
+            kinovea_capture_screen(cfg, "DTL", vcfg.get("dtl_camera", "DTL"), folders["DTL"]["id"]),
+            kinovea_capture_screen(cfg, "FO", vcfg.get("fo_camera", "FO"), folders["FO"]["id"]),
+        ]),
+        "LiveReplay": build_kinovea_window_xml("LiveReplay", [
+            {"type": "playback", "full_path": folders["replay_DTL"]["id"], "speed": speed, "is_watcher": True},
+            {"type": "playback", "full_path": folders["replay_FO"]["id"], "speed": speed, "is_watcher": True},
+        ]),
+    }
+    active_ref = ref_name or vcfg.get("default_reference", "My-Go-To")
+    ref_dtl, ref_fo = resolve_reference_clips(cfg, active_ref, club)
+    ref_screens = [{"type": "playback", "full_path": str(p), "speed": speed, "is_watcher": False}
+                   for p in (ref_dtl, ref_fo) if p]
+    if not ref_screens:
+        ref_screens = [dict(s) for s in (
+            {"type": "playback", "full_path": folders["replay_DTL"]["id"], "speed": speed, "is_watcher": True},
+            {"type": "playback", "full_path": folders["replay_FO"]["id"], "speed": speed, "is_watcher": True})]
+    windows["Reference"] = build_kinovea_window_xml("Reference", ref_screens)
+
+    pids: dict = {}
+    kdir = kinovea_settings_dir(create=True)
+    if kdir is None:
+        LOG.warning("Kinovea settings folder (%%APPDATA%%\\Kinovea) unavailable; cannot configure Kinovea 2025")
+        return {"layout": layout, "workspaces": {}, "pids": pids, "reference": active_ref,
+                "ref_clips": (ref_dtl, ref_fo), "backend": "2025"}
+    running, total = kinovea_running_instances()
+
+    # --- global preferences (shared by every 2025 instance)
+    prefs_path = kdir / "Preferences.xml"
+    try:
+        old = prefs_path.read_bytes() if prefs_path.exists() else None
+        new = patch_kinovea_prefs_2025(
+            old, list(folders.values()), udp_port=int(vcfg.get("udp_trigger_port", KINOVEA_DEFAULT_UDP_PORT)),
+            quiet_period=float(vcfg.get("trigger_quiet_period_sec", 3.0)),
+            memory_buffer_mb=int(vcfg.get("kinovea_memory_buffer_mb", 2048)))
+        if old is None or ET.tostring(ET.fromstring(old)) != ET.tostring(ET.fromstring(new)):
+            if total and launch:
+                for name in KINOVEA_WINDOW_NAMES:
+                    if name in running:
+                        _close_kinovea_instance(name)
+                running, total = kinovea_running_instances()
+            if total:
+                LOG.warning("Kinovea is running (%d window(s) not started by SimWatch): close all Kinovea windows "
+                            "and restart SimWatch video so it can enable the UDP trigger / capture folders.", total)
+            else:
+                write_text_if_changed(prefs_path, new)
+                LOG.info("Updated Kinovea preferences (UDP trigger, capture folders) in %s", prefs_path)
+    except (OSError, ET.ParseError, ValueError) as e:
+        LOG.warning("Could not update Kinovea preferences %s: %s", prefs_path, e)
+
+    # --- window descriptors
+    wdir = kdir / "Windows"
+    paths = {}
+    for name, xml in windows.items():
+        wid = kinovea_guid(f"window/{name}")
+        path = wdir / f"{wid}.xml"
+        paths[name] = path
+        try:
+            cur = path.read_bytes() if path.exists() else None
+        except OSError:
+            cur = None
+        if kinovea_window_signature(cur) == kinovea_window_signature(xml):
+            continue
+        if name in running:
+            if not launch or (name == "Reference" and not reload_ref and cur is not None):
+                LOG.info("Kinovea window %s changed; it will apply on its next restart", name)
+                continue
+            _close_kinovea_instance(name)
+            running.discard(name)
+        try:
+            _trash_duplicate_kinovea_windows(wdir, name, wid)
+            write_text_if_changed(path, xml, backup=False)
+            LOG.info("Wrote Kinovea window descriptor %s -> %s", name, path)
+        except OSError as e:
+            LOG.warning("Could not write Kinovea window %s: %s", path, e)
+    if launch:
+        for name in KINOVEA_WINDOW_NAMES:
+            pids[name] = launch_kinovea_instance(cfg, name, None)
+    return {"layout": layout, "workspaces": paths, "pids": pids, "reference": active_ref,
+            "ref_clips": (ref_dtl, ref_fo), "backend": "2025"}
+
+
+def send_udp_trigger(port: int = KINOVEA_DEFAULT_UDP_PORT, host: str = "127.0.0.1", payload: bytes = b"simwatch") -> bool:
+    """Fire Kinovea's UDP trigger (UDPMonitor accepts any datagram). Never raises."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.sendto(payload, (host, int(port)))
+        return True
+    except OSError as e:
+        log_throttled("udp-trigger", f"UDP trigger to {host}:{port} failed: {e}")
+        return False
+
+
+def is_putt(club: str | None, ball_speed=None, vla=None) -> bool:
+    """Putter, or an unlabelled roll (no club, < 20 mph and launch < 5 deg) - no video capture for these."""
+    if club_category(club) == "Putter":
+        return True
+    if (club or "").strip():
+        return False
+    spd, ang = _num(ball_speed), _num(vla)
+    return spd is not None and spd < 20.0 and (ang is None or ang < 5.0)
+
+
+def file_ready_for_copy(path: Path, size_stable_sec: float, min_stable_sec: float = 1.5) -> bool:
+    """A recording is complete when its size has been stable >= min_stable_sec AND (Windows) it can be
+    opened with no sharing (Kinovea/OneDrive no longer hold it)."""
+    if size_stable_sec < min_stable_sec:
+        return False
+    try:
+        if path.stat().st_size <= 0:
+            return False
+    except OSError:
+        return False
+    return _can_open_exclusive(path)
+
+
+def _can_open_exclusive(path: Path) -> bool:
+    if not IS_WINDOWS:
+        return True
+    try:
+        k32 = ctypes.windll.kernel32
+        k32.CreateFileW.restype = ctypes.c_void_p
+        h = k32.CreateFileW(str(path), 0x80000000, 0, None, 3, 0x80, None)  # GENERIC_READ, share none
+        if h in (None, ctypes.c_void_p(-1).value):
+            return False
+        k32.CloseHandle(ctypes.c_void_p(h))
+        return True
+    except Exception:
+        return False
+
+
+def wait_file_ready(path: Path, timeout: float = 8.0, stable_sec: float = 0.6) -> bool:
+    """Block until `path` has a stable size for stable_sec and opens exclusively (used by clip-ready)."""
+    deadline = time.time() + timeout
+    last, since = -1, time.time()
+    while time.time() < deadline:
+        try:
+            size = path.stat().st_size
+        except OSError:
+            size = -1
+        if size != last:
+            last, since = size, time.time()
+        elif size > 0 and file_ready_for_copy(path, time.time() - since, stable_sec):
+            return True
+        time.sleep(0.15)
+    return False
+
+
+# --------------------------------------------------------------------------- clip-ready (Kinovea post-recording)
+
+CLIP_EVENTS_DIR = ".clip-events"  # <today>/.clip-events/*.json: clip-ready -> running watchdog notifications
+
+
+def angle_from_camalias(camalias: str | None, path: Path | None = None, cfg: dict | None = None) -> str:
+    """'DTL'/'FO' from the command's angle/alias argument, else from the file name / folder."""
+    vcfg = (cfg or {}).get("video", {}) or {}
+    a = (camalias or "").strip().strip('"')
+    if a and "%" not in a:
+        if a.upper() in ("FO", str(vcfg.get("fo_camera", "FO")).upper()):
+            return "FO"
+        if a.upper() in ("DTL", str(vcfg.get("dtl_camera", "DTL")).upper()):
+            return "DTL"
+    if path is not None:
+        text = f"{path.parent.name}/{path.name}"
+        if re.search(r"(?:^|[_\-\s/\\])FO(?:$|[_\-\s.])", text, re.I):
+            return "FO"
+    return "DTL"
+
+
+def _shot_epoch(shot: dict) -> float | None:
+    try:
+        return datetime.fromisoformat(str(shot.get("ts"))).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def clip_library_name(shot: dict | None, angle: str, ext: str, number: int | None = None) -> str:
+    """Existing naming scheme: NNN_<club>[_<carry>y][_<speed>mph][_D-<drill>]_<ANGLE>.<ext>."""
+    ext = ext.lower() if ext.startswith(".") else f".{ext.lower()}"
+    if not shot:
+        return f"{int(number or 1):03d}_Swing_{angle}{ext}"
+    ball = shot.get("ball") or {}
+    club = str(shot.get("club") or "Swing").replace(" ", "")
+    carry, speed = _num(ball.get("carry")), _num(ball.get("speed"))
+    carry_part = f"_{int(round(carry))}y" if carry else ""
+    speed_part = f"_{int(round(speed))}mph" if speed else ""
+    n = shot.get("shot_num") or number or 1
+    return f"{int(n):03d}_{club}{carry_part}{speed_part}{drill_filename_tag(shot.get('drill_id'))}_{angle}{ext}"
+
+
+def _has_angle_clip(folder: Path, number: int, angle: str) -> bool:
+    rx = re.compile(rf"^{int(number):03d}_.*_{angle}(?:-\d+)?\.[A-Za-z0-9]+$", re.I)
+    return any(rx.match(p.name) for p in folder.glob(f"{int(number):03d}_*") if p.suffix.lower() in VIDEO_EXTS)
+
+
+def find_shot_for_clip(shots: list[dict], clip_time: float, angle: str, library_dir: Path,
+                       window_sec: float = 20.0) -> dict | None:
+    """Most recent shot within window_sec before the clip finished that has no `angle` clip yet."""
+    best = None
+    for s in shots:
+        t = _shot_epoch(s)
+        if t is None or not (clip_time - window_sec <= t <= clip_time + 2.0):
+            continue
+        if is_putt(s.get("club"), (s.get("ball") or {}).get("speed"), (s.get("ball") or {}).get("vla")):
+            continue
+        if s.get("shot_num") is not None and _has_angle_clip(library_dir, int(s["shot_num"]), angle):
+            continue
+        if best is None or t > _shot_epoch(best):
+            best = s
+    return best
+
+
+class _FileLock:
+    """Tiny cross-process lock (O_EXCL lock file, stale after `stale_sec`). Serializes clip-ready runs
+    (Kinovea fires DTL and FO commands at nearly the same moment)."""
+
+    def __init__(self, path: Path, timeout: float = 10.0, stale_sec: float = 30.0):
+        self.path, self.timeout, self.stale_sec = path, timeout, stale_sec
+        self.fd = None
+
+    def __enter__(self):
+        deadline = time.time() + self.timeout
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        while True:
+            try:
+                self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+                os.write(self.fd, str(os.getpid()).encode())
+                return self
+            except FileExistsError:
+                try:
+                    if time.time() - self.path.stat().st_mtime > self.stale_sec:
+                        self.path.unlink(missing_ok=True)
+                        continue
+                except OSError:
+                    pass
+                if time.time() >= deadline:
+                    raise TimeoutError(f"lock busy: {self.path}")
+                time.sleep(0.1)
+
+    def __exit__(self, *exc):
+        try:
+            if self.fd is not None:
+                os.close(self.fd)
+            self.path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def clip_ready(cfg: dict, src: Path, camalias: str | None, now: float | None = None, wait: bool = True) -> dict:
+    """Organize one finished Kinovea recording: link to its shot, copy into the swing library + replay
+    folder with .kva swing lines, and drop a notification for the running watchdog. Idempotent per source."""
+    src = Path(src)
+    angle = angle_from_camalias(camalias, src, cfg)
+    if not src.exists() or src.suffix.lower() not in VIDEO_EXTS:
+        return {"status": "skipped", "reason": f"not a video file: {src}"}
+    if wait and not wait_file_ready(src):
+        LOG.warning("clip-ready: %s still locked/growing after timeout; continuing anyway", src.name)
+    layout = ensure_swings_layout(cfg)
+    vcfg = cfg.get("video", {}) or {}
+    bcfg = bridge_config(cfg)
+    raw = Path(str(bcfg.get("sessions_dir") or BRIDGE_DEFAULTS["sessions_dir"]))
+    store = ShotStore(raw if raw.is_absolute() else HERE / raw)
+    try:
+        clip_time = src.stat().st_mtime if now is None else now
+    except OSError:
+        clip_time = time.time()
+    date_str = datetime.fromtimestamp(clip_time).strftime("%Y-%m-%d")
+    lib = layout["sessions"] / date_str
+    lib.mkdir(parents=True, exist_ok=True)
+    ledger_path = lib / "clip_ready_ledger.json"
+    with _FileLock(lib / ".clip-ready.lock"):
+        try:
+            ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            ledger = {}
+        key = str(src.resolve()).lower()
+        prev = ledger.get(key)
+        if prev and (lib / prev["clip"]).exists():
+            return {"status": "duplicate", **prev}
+        shots = store.read(date_str)
+        shot = find_shot_for_clip(shots, clip_time, angle, lib, float(vcfg.get("clip_link_window_sec", 20.0)))
+        number = None
+        if not shot:
+            other = "FO" if angle == "DTL" else "DTL"
+            nums = [int(m.group(1)) for p in lib.glob("*") if (m := re.match(r"^(\d{3})_", p.name))]
+            number = max(nums, default=0) + 1
+            for p in sorted(lib.glob(f"*_{other}.*"), key=lambda q: q.stat().st_mtime, reverse=True)[:1]:
+                m = re.match(r"^(\d{3})_", p.name)
+                if m and abs(p.stat().st_mtime - clip_time) < 15 and not _has_angle_clip(lib, int(m.group(1)), angle):
+                    number = int(m.group(1))
+        name = clip_library_name(shot, angle, src.suffix, number)
+        dest = unique_path(lib / name)
+        club = (shot or {}).get("club")
+        kva_xml = None
+        if bool(vcfg.get("swing_lines", {}).get("enabled", True)):
+            try:
+                kva_xml = build_swing_kva_xml(angle, club, cfg, video_path=src)
+            except Exception as e:
+                LOG.warning("clip-ready: swing lines failed for %s: %s", src.name, e)
+        if kva_xml:
+            dest.with_suffix(".kva").write_text(kva_xml, encoding="utf-8")
+        shutil.copy2(src, dest)
+        # Replay folder (watched by LiveReplay): .kva first, then the video, so the observer finds both.
+        replay = unique_path(layout["sessions"] / date_str / angle / dest.name)
+        replay.parent.mkdir(parents=True, exist_ok=True)
+        if kva_xml:
+            replay.with_suffix(".kva").write_text(kva_xml, encoding="utf-8")
+        shutil.copyfile(src, replay)
+        linked = False
+        if shot and shot.get("ts") and (angle == "DTL" or not shot.get("clip")):
+            try:
+                linked = store.set_clip(shot["ts"], dest.name)
+            except OSError as e:
+                LOG.warning("clip-ready: could not link clip to shot: %s", e)
+        result = {"status": "ok", "clip": dest.name, "angle": angle, "ts": (shot or {}).get("ts"),
+                  "linked": linked, "src": str(src), "replay": str(replay)}
+        ledger[key] = {"clip": dest.name, "angle": angle, "ts": result["ts"]}
+        write_text_if_changed(ledger_path, json.dumps(ledger, indent=1), backup=False)
+        ev_dir = lib / CLIP_EVENTS_DIR
+        ev_dir.mkdir(exist_ok=True)
+        write_text_if_changed(ev_dir / f"{time.time_ns()}_{angle}.json", json.dumps(result), backup=False)
+    LOG.info("clip-ready: %s -> %s (shot %s, linked=%s)", src.name, dest.name, result["ts"], linked)
+    return result
+
+
+def cmd_clip_ready(config_path: Path, path: str | None, camalias: str | None) -> int:
+    """`simwatch.py clip-ready <path> <angle>` - Kinovea's post-recording command. Always exits 0."""
+    try:
+        if not path:
+            LOG.error("clip-ready: no file path given")
+            return 0
+        try:
+            cfg = load_config(Path(config_path), command="clip-ready")
+        except SystemExit as e:
+            LOG.error("clip-ready: config problem (%s); using defaults", e)
+            cfg = {"video": {}, "bridge": {}}
+        clip_ready(cfg, Path(path.strip('"')), camalias)
+    except BaseException as e:  # never fail Kinovea's command
+        LOG.error("clip-ready failed for %s: %s", path, e, exc_info=not isinstance(e, (SystemExit, KeyboardInterrupt)))
+    return 0
 
 
 def get_primary_work_area() -> tuple[int, int, int, int]:
@@ -2542,10 +3385,9 @@ def save_lines_template_from_kva(cfg: dict, club_override: str | None = None) ->
 def install_kinovea_custom_golf_tools(cfg: dict) -> list[Path]:
     """Write linked Custom Kinovea Posture tools (Golf_DTL_VPlane.xml & Golf_FO_Box.xml)."""
     layout = ensure_swings_layout(cfg)
+    # Kinovea only loads custom tools from <install dir>\DrawingTools\Custom (Software.CustomToolsDirectory);
+    # Swings/Workspaces/CustomTools is a gitignored staging copy for manual install.
     targets = [layout["workspaces"] / "CustomTools"]
-    kdir = _kinovea_appdata_dir()
-    if kdir:
-        targets.append(kdir / "DrawingTools" / "Custom")
 
     dtl_tool_xml = """<?xml version="1.0" encoding="utf-8"?>
 <KinoveaPostureTool>
@@ -2624,9 +3466,19 @@ def install_kinovea_custom_golf_tools(cfg: dict) -> list[Path]:
         try:
             install_custom.mkdir(parents=True, exist_ok=True)
             for fname, xml_src in (("Golf_DTL_VPlane.xml", dtl_tool_xml), ("Golf_FO_Box.xml", fo_tool_xml)):
-                (install_custom / fname).write_text(xml_src, encoding="utf-8")
+                dst = install_custom / fname
+                if not dst.exists() or dst.read_text(encoding="utf-8", errors="replace") != xml_src:
+                    dst.write_text(xml_src, encoding="utf-8")
+                written.append(dst)
         except OSError as e:
-            log_throttled("ktools-install", f"install_kinovea_custom_golf_tools (install dir) failed: {e}")
+            staged = layout["workspaces"] / "CustomTools"
+            log_throttled(
+                "ktools-install",
+                f"Kinovea custom golf tools not installed ({e}). One-time fix: copy {staged}\\*.xml into "
+                f"{install_custom} from an Administrator Explorer/terminal (Program Files is admin-only), "
+                f"or run `python simwatch.py lines apply` once from an Administrator terminal.",
+                every_sec=3600,
+            )
     return written
 
 
@@ -2654,10 +3506,13 @@ def setup_video_rig(cfg, ref_name: str | None = None, club: str | None = None,
     """Generate Swing folders, Kinovea workspaces, custom golf tools & optionally launch the 2x2 Kinovea instances."""
     vcfg = cfg.get("video", {})
     layout = ensure_swings_layout(cfg)
-    sync_kinovea_instance_prefs(cfg, layout)
     install_kinovea_custom_golf_tools(cfg)
     apply_swing_lines_to_active_clips(cfg, club=club, overwrite=False)
+    if resolve_kinovea_backend(cfg) == "2025":
+        return setup_video_rig_2025(cfg, layout, ref_name, club, launch, reload_ref)
+    sync_kinovea_instance_prefs(cfg, layout)
 
+    # Legacy workspaces are machine-specific (absolute paths): generated at runtime, gitignored.
     cap_xml = layout["workspaces"] / "Capture.xml"
     live_xml = layout["workspaces"] / "LiveReplay.xml"
     ref_xml = layout["workspaces"] / "Reference.xml"
@@ -2667,14 +3522,14 @@ def setup_video_rig(cfg, ref_name: str | None = None, club: str | None = None,
             "type": "capture",
             "camera_name": vcfg.get("dtl_camera", "DTL"),
             "autostream": True,
-            "delay": vcfg.get("pre_trigger_sec", 1.5),
+            "delay": vcfg.get("pre_trigger_sec", 3.0),
             "delayed_display": True,
         },
         {
             "type": "capture",
             "camera_name": vcfg.get("fo_camera", "FO"),
             "autostream": True,
-            "delay": vcfg.get("pre_trigger_sec", 1.5),
+            "delay": vcfg.get("pre_trigger_sec", 3.0),
             "delayed_display": True,
         },
     ])
@@ -2732,6 +3587,7 @@ def setup_video_rig(cfg, ref_name: str | None = None, club: str | None = None,
         "pids": pids,
         "reference": active_ref,
         "ref_clips": (ref_dtl, ref_fo),
+        "backend": "legacy",
     }
 
 
@@ -2954,8 +3810,43 @@ class ProjectorPiPController:
         return self.cfg.get("video", {}).get("projector_pip", {})
 
     def _find_window(self) -> int | None:
-        rx = self._pip_cfg().get("window_title_re", r"^Windowed Projector")
-        return WindowSpec(rx)._find()
+        """The OBS projector window. Cached and searched INCLUDING hidden windows (we SW_HIDE it between
+        shots, and a visible-only search could never find it again), restricted to OBS processes so an
+        unrelated window titled 'Windowed Projector...' is never restyled."""
+        import win32gui
+        import win32process
+        rx = re.compile(self._pip_cfg().get("window_title_re", r"^Windowed Projector"))
+        h = getattr(self, "_hwnd", None)
+        try:
+            if h and win32gui.IsWindow(h) and rx.search(win32gui.GetWindowText(h) or ""):
+                return h
+        except Exception:
+            pass
+        obs_pids = set()
+        for p in psutil.process_iter(["pid", "name"]):
+            try:
+                if re.match(r"^obs(64|32)?\.exe$", (p.info["name"] or ""), re.I):
+                    obs_pids.add(p.info["pid"])
+            except psutil.Error:
+                pass
+        found: list[int] = []
+
+        def cb(hwnd, _):
+            try:
+                t = win32gui.GetWindowText(hwnd) or ""
+                if t and rx.search(t) and win32process.GetWindowThreadProcessId(hwnd)[1] in obs_pids:
+                    found.append(hwnd)
+            except Exception:
+                pass
+            return True
+
+        if obs_pids:
+            try:
+                win32gui.EnumWindows(cb, None)
+            except Exception:
+                pass
+        self._hwnd = found[0] if found else None
+        return self._hwnd
 
     def _target_rect(self) -> tuple[int, int, int, int] | None:
         _, disp, projector_on = choose_display(self.cfg)
@@ -4392,7 +5283,8 @@ class SwingSessionManager:
             self.current_club = club
             new_cat = club_category(club)
             LOG.info("Active club changed -> %s (%s)", club, new_cat)
-            if new_cat != prev_cat:
+            # Putter: no capture and no reference swap; keep whatever full-swing reference is loaded.
+            if new_cat != prev_cat and "Putter" not in (new_cat, prev_cat):
                 setup_video_rig(self.cfg, ref_name=self.active_reference, club=club, launch=True, reload_ref=True)
                 tile_video_windows(self.cfg, wait_sec=4.0)
 
@@ -4409,20 +5301,38 @@ class SwingSessionManager:
             "Shot detected on :921 (club=%s, speed=%.1f mph, carry=%s)",
             info.get("club") or "-", info.get("ball_speed") or 0.0, info.get("carry"),
         )
+        shot_rec = info.get("shot") if isinstance(info.get("shot"), dict) else {}
+        vla = (shot_rec.get("ball") or {}).get("vla") if shot_rec else None
+        if is_putt(info.get("club") or self.current_club, info.get("ball_speed"), vla):
+            LOG.info("Putt - skipping video capture")
+            return
         self.trigger_capture()
         self.pip.show_for_shot()
 
     def trigger_capture(self) -> None:
+        """2025: one UDP datagram (Kinovea's Delay/MaxDuration/quiet period do the rest).
+        Legacy: one ToggleRecording to start; RecordingSeconds (= pre + post) stops it - no stop toggle."""
         with self._lock:
             now = time.time()
             post_sec = float(self.vcfg.get("post_trigger_sec", 1.5))
-            pre_sec = float(self.vcfg.get("pre_trigger_sec", 1.5))
+            pre_sec = float(self.vcfg.get("pre_trigger_sec", 3.0))
+            if resolve_kinovea_backend(self.cfg) == "2025":
+                if now - getattr(self, "_last_udp_trigger", 0.0) < 1.0:
+                    return
+                self._last_udp_trigger = now
+                port = int(self.vcfg.get("udp_trigger_port", KINOVEA_DEFAULT_UDP_PORT))
+                if send_udp_trigger(port):
+                    LOG.info("Sent Kinovea UDP trigger to 127.0.0.1:%d (pre=%.1fs, post=%.1fs)", port, pre_sec, post_sec)
+                return
+            if str(self.vcfg.get("legacy_trigger", "toggle")).lower() == "audio":
+                return  # Kinovea's own audio trigger records; toggling too would double-trigger
             if self._stop_capture_at > now:
-                self._stop_capture_at = now + max(0.5, post_sec)
-                LOG.debug("Capture already active; extended stop timer by %.1fs", post_sec)
+                LOG.debug("Kinovea legacy recording still in progress; trigger ignored")
                 return
             if kinovea_send_command("Capture", "CaptureScreen.ToggleRecording"):
-                self._stop_capture_at = now + max(0.5, post_sec)
+                # Assumed recording until RecordingSeconds elapses (+ margin); never toggle in that window,
+                # or we would stop it early / start a second recording.
+                self._stop_capture_at = now + max(1.0, pre_sec + post_sec) + 0.75
                 LOG.info("Triggered Kinovea Capture recording (pre=%.1fs, post=%.1fs)", pre_sec, post_sec)
 
     def trigger_manual_shot(self) -> None:
@@ -4448,6 +5358,43 @@ class SwingSessionManager:
             return "FO"
         return "DTL"
 
+    def _consume_clip_events(self) -> None:
+        """2025 backend: pick up `clip-ready` notifications (<today>/.clip-events/*.json) - remember the last
+        clips, push the SSE `clip` event via the hub (its set_clip rewrite is a no-op by then) and pop the PiP.
+        Kinovea's LiveReplay already loads the clip from the replay folder by itself."""
+        ev_dir = ensure_swings_layout(self.cfg)["today"] / CLIP_EVENTS_DIR
+        if not ev_dir.is_dir():
+            return
+        got = False
+        for f in sorted(ev_dir.glob("*.json")):
+            try:
+                ev = json.loads(f.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                ev = None
+            try:
+                f.unlink()
+            except OSError:
+                continue
+            if not isinstance(ev, dict) or not ev.get("clip"):
+                continue
+            got = True
+            clip_path = ev_dir.parent / str(ev["clip"])
+            if ev.get("angle") == "FO":
+                self.last_saved_fo = clip_path
+            else:
+                self.last_saved_dtl = clip_path
+            if self.hub and ev.get("ts") and ev.get("linked"):
+                try:
+                    self.hub.set_clip(ev["ts"], str(ev["clip"]))
+                except OSError as e:
+                    log_throttled("bridge-clip", f"could not broadcast clip link: {e}")
+            LOG.info("Swing clip ready: %s", ev["clip"])
+        if got:
+            self.pip.show_for_shot()
+            if not self._retiled_on_first_clip:
+                self._retiled_on_first_clip = True
+                tile_video_windows(self.cfg, wait_sec=2.0)
+
     def _poll_new_recordings(self) -> None:
         with self._lock:
             now = time.time()
@@ -4465,7 +5412,8 @@ class SwingSessionManager:
                             cur_size = p.stat().st_size
                         except OSError:
                             continue
-                        if cur_size == prev_size and cur_size > 0 and (now - first_seen) >= 0.4:
+                        # Complete = size stable >= 1.5s AND exclusively openable (Kinovea closed it).
+                        if cur_size == prev_size and file_ready_for_copy(p, now - first_seen, 1.5):
                             if not re.match(r"^\d{3}_", p.name):
                                 ready.append(p)
                         elif cur_size != prev_size:
@@ -4673,21 +5621,14 @@ class SwingSessionManager:
         """
         with self._lock:
             try:
+                # Legacy: Kinovea stops on its own (RecordingSeconds); this only expires the busy marker.
                 if self._stop_capture_at and time.time() >= self._stop_capture_at:
-                    if kinovea_send_command("Capture", "CaptureScreen.ToggleRecording"):
-                        self._stop_capture_at = 0.0
-                        self._stop_capture_failures = 0
-                    else:
-                        # Keep _stop_capture_at set so the next tick retries; give up eventually.
-                        self._stop_capture_failures += 1
-                        log_throttled("stop-capture", "Kinovea stop-recording command failed; will retry")
-                        if self._stop_capture_failures >= 20:
-                            LOG.error("Giving up stopping Kinovea capture after %d attempts; "
-                                      "check the Capture window manually", self._stop_capture_failures)
-                            self._stop_capture_at = 0.0
-                            self._stop_capture_failures = 0
+                    self._stop_capture_at = 0.0
                 if allow_new_work:
-                    self._poll_new_recordings()
+                    if resolve_kinovea_backend(self.cfg) == "2025":
+                        self._consume_clip_events()
+                    else:
+                        self._poll_new_recordings()
                 self.pip.tick()
             except Exception:
                 log_throttled("video-tick", "SwingSessionManager.tick error", exc_info=True)
@@ -4708,6 +5649,56 @@ def _sleep_with_video(seconds: float, video_mgr: SwingSessionManager | None, all
         time.sleep(min(0.5, max(0.05, end - time.time())))
 
 
+# --------------------------------------------------------------------------- PAUSE file (with expiry)
+
+PAUSE_PATH = HERE / "PAUSE"
+_PAUSE_TS_RE = re.compile(r"paused_at:\s*(\S+)")
+
+
+def write_pause(reason: str = "") -> None:
+    """Create PAUSE with an ISO timestamp so a forgotten PAUSE expires (see pause_active)."""
+    PAUSE_PATH.write_text(f"paused_at: {datetime.now().astimezone().isoformat(timespec='seconds')}\n{reason}\n",
+                          encoding="utf-8")
+
+
+def pause_age_sec(path: Path | None = None) -> float | None:
+    """Seconds since the PAUSE was created (timestamp inside the file, else its mtime); None if absent."""
+    p = path or PAUSE_PATH
+    try:
+        text = p.read_text(encoding="utf-8", errors="replace")
+        mtime = p.stat().st_mtime
+    except OSError:
+        return None
+    m = _PAUSE_TS_RE.search(text)
+    if m:
+        try:
+            ts = datetime.fromisoformat(m.group(1))
+            created = ts.timestamp() if ts.tzinfo else time.mktime(ts.timetuple())
+            return max(0.0, time.time() - created)
+        except ValueError:
+            pass
+    return max(0.0, time.time() - mtime)
+
+
+def pause_active(cfg: dict | None = None, path: Path | None = None) -> bool:
+    """True while a PAUSE file exists and is younger than `pause_max_hours` (default 4). A stale PAUSE
+    (e.g. reconnect run and release-device forgotten) is logged and removed so the watchdog resumes."""
+    p = path or PAUSE_PATH
+    age = pause_age_sec(p)
+    if age is None:
+        return False
+    max_h = float((cfg or {}).get("pause_max_hours", 4) or 0)
+    if max_h > 0 and age > max_h * 3600:
+        LOG.warning("PAUSE file is %.1f h old (limit %g h); ignoring and removing it - watchdog resumes.",
+                    age / 3600, max_h)
+        try:
+            p.unlink(missing_ok=True)
+        except OSError as e:
+            log_throttled("pause-unlink", f"could not remove stale PAUSE: {e}")
+        return False
+    return True
+
+
 class _WatchState:
     """Mutable state of the watch loop, kept on an object so one iteration can be a plain function."""
 
@@ -4718,9 +5709,13 @@ class _WatchState:
         self.gate_running = False
         self.grace_until = grace_until
         self.last_cfg_attempt = 0.0
+        self.offline_ticks = 0        # consecutive ticks with ping AND device_tcp both failing
+        self.device_attempts = 0      # device-only (GameChanger-only) recoveries since the device was last healthy
+        self.device_next_at = 0.0     # earliest time the next device-only recovery may run
 
     def reset(self) -> None:
         self.fails, self.level, self.last_status, self.gate_running = 0, 0, None, False
+        self.offline_ticks = 0
 
 
 def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> None:
@@ -4730,7 +5725,7 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
     grace_sec = float(cfg.get("post_recover_grace_sec", 35))
     gate = cfg.get("only_when_running")
 
-    paused = (HERE / "PAUSE").exists()
+    paused = pause_active(cfg)
     gate_up = (not gate) or bool(find_procs(gate))
     if paused or not gate_up:
         if video_mgr and not gate_up:
@@ -4762,6 +5757,13 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
 
     res = evaluate_checks(cfg, verbose=False)
     state = "unknown"
+    # Debounce "device offline": ping AND device_tcp must both fail on N consecutive ticks (default 3).
+    offline_need = max(1, int(cfg.get("device", {}).get("offline_ticks", 3)))
+    st.offline_ticks = st.offline_ticks + 1 if res.get("device_offline_raw") else 0
+    device_offline = st.offline_ticks >= offline_need
+    device_suspect = bool(res.get("device_offline_raw")) and not device_offline
+    if not res.get("device_failing"):
+        st.device_attempts, st.device_next_at = 0, 0.0   # device side healthy: reset device-only backoff
     if res["all_ok"]:
         if not res["any_unknown"] and st.last_status is not True:
             LOG.info("All green.")
@@ -4769,59 +5771,73 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
         suppress_background_focus(cfg)
         st.fails, st.level, st.last_status = 0, 0, True
         state = "healthy"
-    elif res["device_ping_failed"]:
-        if st.last_status != "device_offline":
-            LOG.warning("Launch Pro unreachable (off or asleep); waiting for hardware without restarting apps.")
-        st.fails, st.level, st.last_status = 0, 0, "device_offline"
-        state = "device_offline"
+    elif not res.get("non_device_failing") and (device_offline or device_suspect):
+        # Only device checks fail and the Launch Pro looks off/asleep: wait for hardware, restart nothing.
+        if device_offline:
+            if st.last_status != "device_offline":
+                LOG.warning("Launch Pro unreachable (off or asleep); waiting for hardware without restarting apps.")
+            state = "device_offline"
+        else:
+            state = "device_check"
+        st.fails, st.last_status = 0, state
     elif res["only_device_failed"] and time.time() < st.grace_until:
         if st.last_status != "discovery_grace":
             LOG.info("Waiting for GameChanger auto-discovery grace period (%ds remaining)...", int(max(0, st.grace_until - time.time())))
         st.last_status = "discovery_grace"
         state = "discovery_grace"
-    else:
+    elif res["only_device_failed"]:
+        # Launch Pro reachable but GameChanger has no session: restart GameChanger ONLY, with backoff.
         st.fails += 1
         st.last_status = False
         state = "degraded"
         if st.fails >= threshold:
-            max_needed_level = res["level"] or 0
+            st.fails = 0
+            if time.time() >= st.device_next_at:
+                state = "recovering"
+                write_status(state, failing=res["failing"], level=st.level, device_attempt=st.device_attempts + 1,
+                             skipped_checks=res["skipped"])
+                recover_device(cfg)
+                st.device_attempts += 1
+                wait = device_backoff_sec(cfg, st.device_attempts)
+                st.device_next_at = time.time() + wait
+                st.grace_until = time.time() + grace_sec
+                LOG.warning("Device-only recovery #%d done; if still failing, next GameChanger restart in >= %d min.",
+                            st.device_attempts, int(wait // 60))
+            else:
+                state = "device_backoff"
+                log_throttled("device-backoff",
+                              f"Device-side check(s) still failing ({', '.join(res['failing']) or '?'}); "
+                              f"next GameChanger-only restart in {int(st.device_next_at - time.time())}s",
+                              every_sec=120.0)
+    else:
+        # A non-device link (GSPconnect, :9050, :921, a hung app) is failing: escalate even if the Launch
+        # Pro is offline - then device checks are ignored when choosing the level.
+        st.fails += 1
+        st.last_status = False
+        state = "degraded"
+        if st.fails >= threshold:
+            if device_offline or device_suspect:
+                max_needed_level = res.get("non_device_level") or 0
+                LOG.warning("Launch Pro looks offline, but %s failing - recovering that chain anyway.",
+                            ", ".join(res.get("non_device_failing") or []) or "?")
+            else:
+                max_needed_level = res["level"] or 0
             state = "recovering"
             write_status(state, failing=res["failing"], level=st.level, fails=st.fails, skipped_checks=res["skipped"])
-            if res["only_device_failed"]:
-                if st.level == 0:
-                    recover(cfg, 0)
-                    st.grace_until = time.time() + grace_sec
-                    st.level = 1
-                else:
-                    backoff = cfg.get("giveup_backoff_sec", 300)
-                    try:
-                        gspro_ok = _is_gspro_healthy(cfg)
-                    except Exception:
-                        gspro_ok = False
-                    LOG.warning(
-                        "Device-side check(s) still failing (%s) after recovery; GSPro :9050 %s; "
-                        "backing off %ss without restarting GSPro.",
-                        ", ".join(res["failing"]) or "?",
-                        "is healthy" if gspro_ok else "is NOT confirmed healthy", backoff,
-                    )
-                    write_status("backoff", failing=res["failing"], level=st.level, backoff_sec=backoff)
-                    _sleep_with_video(backoff, video_mgr)
-                    st.level = 0
+            st.level = max(st.level, max_needed_level)
+            if st.level >= len(cfg["recovery"]):
+                alert(
+                    "All recovery levels failed. Check the hardware (power, USB, Wi-Fi). "
+                    f"Backing off {cfg.get('giveup_backoff_sec', 300)}s."
+                )
+                write_status("gave_up", failing=res["failing"], level=st.level,
+                             backoff_sec=cfg.get("giveup_backoff_sec", 300))
+                _sleep_with_video(cfg.get("giveup_backoff_sec", 300), video_mgr)
+                st.level = 0
             else:
-                st.level = max(st.level, max_needed_level)
-                if st.level >= len(cfg["recovery"]):
-                    alert(
-                        "All recovery levels failed. Check the hardware (power, USB, Wi-Fi). "
-                        f"Backing off {cfg.get('giveup_backoff_sec', 300)}s."
-                    )
-                    write_status("gave_up", failing=res["failing"], level=st.level,
-                                 backoff_sec=cfg.get("giveup_backoff_sec", 300))
-                    _sleep_with_video(cfg.get("giveup_backoff_sec", 300), video_mgr)
-                    st.level = 0
-                else:
-                    recover(cfg, st.level)
-                    st.grace_until = time.time() + grace_sec
-                    st.level += 1
+                recover(cfg, st.level)
+                st.grace_until = time.time() + grace_sec
+                st.level += 1
             st.fails = 0
     _bridge_note_health(state, res)
     write_status(state, failing=res["failing"], level=st.level, fails=st.fails,
@@ -4833,6 +5849,7 @@ def watch(cfg, initial_grace: bool = False) -> None:
     if not acquire_singleton_lock():
         LOG.warning("Another SimWatch instance is already running; exiting.")
         return
+    pause_active(cfg)  # clear a stale PAUSE at startup (logged)
 
     interval = cfg.get("interval_sec", 5)
     grace_sec = float(cfg.get("post_recover_grace_sec", 35))
@@ -4895,6 +5912,39 @@ def wait_until(cfg, check_names, timeout: float) -> bool:
     return False
 
 
+def device_link_iface() -> str | None:
+    """Name of an UP network interface holding a link-local 169.254.* IPv4 address (the wired Launch Pro
+    link: Windows only assigns APIPA once the adapter has link and DHCP gave up), else None."""
+    try:
+        addrs, stats = psutil.net_if_addrs(), psutil.net_if_stats()
+    except (psutil.Error, OSError):
+        return None
+    for nic, al in addrs.items():
+        if any(a.family == socket.AF_INET and str(a.address).startswith("169.254.") for a in al):
+            s = stats.get(nic)
+            if s is not None and s.isup:
+                return nic
+    return None
+
+
+def wait_device_link(cfg, timeout: float) -> bool:
+    """Startup only: wait (bounded, never fatal) for the wired device adapter to come up. Skipped unless
+    the configured device IP is link-local (Wi-Fi setups have no such adapter)."""
+    if not str(cfg.get("device", {}).get("ip") or "").startswith("169.254.") or timeout <= 0:
+        return True
+    end = time.time() + timeout
+    while True:
+        nic = device_link_iface()
+        if nic:
+            LOG.info("Device network adapter %r is up (link-local address present).", nic)
+            return True
+        if time.time() >= end:
+            LOG.warning("No link-local (169.254.*) adapter came up within %ds; continuing (Wi-Fi or cable out?).",
+                        int(timeout))
+            return False
+        time.sleep(2)
+
+
 def startup(cfg) -> None:
     """Cold start after a PC reboot: bring the whole chain up in order, then watch it."""
     if not acquire_singleton_lock():
@@ -4903,15 +5953,19 @@ def startup(cfg) -> None:
     st = cfg.get("startup")
     if not st or not st.get("order"):
         raise SystemExit("config.json has no 'startup.order'; cannot run `startup`")
+    pause_active(cfg)  # logs + removes a stale PAUSE left over from before the reboot
     time.sleep(st.get("boot_delay_sec", 20))
-    wait_until(cfg, st.get("wait_for", []), st.get("wait_timeout_sec", 180))
+    total = float(st.get("wait_timeout_sec", 180))
+    end = time.time() + total
+    wait_device_link(cfg, min(total, float(st.get("wait_link_sec", 60))))
+    wait_until(cfg, st.get("wait_for", []), max(15.0, end - time.time()))
     for key in st["order"]:
         app = cfg["apps_by_key"].get(key)
         if app is None:
             LOG.error("startup.order: unknown app key %r; skipping", key)
             continue
         if key == "integrator":
-            fsx_disconnect(cfg)
+            release_fsx_for_recovery(cfg)  # unattended: close FSX Pro if it holds the device, never click
         launch_app(cfg, app, 60)
     time.sleep(cfg.get("settle_sec", 15))
     LOG.info("Startup done:")
@@ -5001,7 +6055,7 @@ def cmd_video(cfg: dict) -> None:
     LOG.info("Standalone video mode running (Ctrl+C to stop).")
     try:
         while True:
-            if (HERE / "PAUSE").exists():
+            if pause_active(cfg):
                 time.sleep(1)
                 continue
             mgr.tick()
@@ -5017,6 +6071,7 @@ def cmd_video(cfg: dict) -> None:
 # --------------------------------------------------------------------------- doctor
 
 PASS, WARN, FAIL = "PASS", "WARN", "FAIL"
+SKIP, INFO = "SKIP", "INFO"
 
 
 def _port_state(port: int) -> str:
@@ -5068,18 +6123,27 @@ def doctor_report(config_path: Path) -> list[tuple[str, str, str]]:
         add(PASS, "HERE writable (log/status)", str(HERE))
     else:
         add(FAIL, "HERE writable (log/status)", f"{HERE} is not writable")
-    if (HERE / "PAUSE").exists():
-        add(WARN, "PAUSE file", "present - watchdog is paused")
 
-    # config
+    # config (+ config.local.json overlay)
     try:
-        cfg_raw = json.loads(Path(config_path).read_text(encoding="utf-8"))
+        cfg_raw, local_path = read_config_layers(Path(config_path))
     except FileNotFoundError:
         add(FAIL, "config", f"not found: {config_path}")
+        return rows
+    except LocalConfigError as e:
+        add(FAIL, "config.local.json", f"{e} -> fix: correct or delete it")
         return rows
     except (json.JSONDecodeError, UnicodeDecodeError) as e:
         add(FAIL, "config", f"invalid JSON: {e}")
         return rows
+    add(PASS if local_path else INFO, "config.local.json",
+        f"merged over {Path(config_path).name}" if local_path else
+        "not present (optional per-machine exe/device overrides; setup.bat or `discover --write-local` creates it)")
+    # PAUSE: same age/limit logic as the watchdog (pause_age_sec + pause_max_hours) but read-only
+    # (pause_active() would delete a stale file).
+    pause_row = pause_file_row(pause_age_sec(), cfg_raw.get("pause_max_hours", 4) if isinstance(cfg_raw, dict) else 4)
+    if pause_row:
+        add(*pause_row)
     issues = validate_config(cfg_raw, check_paths=False)
     if not issues:
         add(PASS, "config validation", "no issues")
@@ -5126,17 +6190,8 @@ def doctor_report(config_path: Path) -> list[tuple[str, str, str]]:
             {"none": "not listening / no session (fine if the sim is not running)",
              "unknown": "could not enumerate sockets (try an admin shell)"}.get(st, st))
 
-    # scheduled task
-    if IS_WINDOWS:
-        try:
-            r = subprocess.run(["schtasks", "/Query", "/TN", "SimWatch"], capture_output=True, text=True,
-                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0), timeout=15)
-            add(PASS if r.returncode == 0 else WARN, "scheduled task 'SimWatch'",
-                "registered" if r.returncode == 0 else "not found (run install_autostart.bat for start-at-sign-in)")
-        except (OSError, subprocess.SubprocessError) as e:
-            add(WARN, "scheduled task 'SimWatch'", f"could not query: {e}")
-    else:
-        add(WARN, "scheduled task 'SimWatch'", "skipped (not Windows)")
+    # scheduled task, sniffer, firewall, device adapter, power, ... (Windows only; SKIP elsewhere)
+    rows.extend(doctor_system_rows(cfg_raw))
     return rows
 
 
@@ -5147,9 +6202,827 @@ def run_doctor(config_path: Path) -> int:
     print(f"{'-' * 6}  {'-' * w_item}  {'-' * 40}")
     for status, item, detail in rows:
         print(f"{status:<6}  {item:<{w_item}}  {detail}")
-    counts = {k: sum(1 for r in rows if r[0] == k) for k in (PASS, WARN, FAIL)}
-    print(f"\n{counts[PASS]} passed, {counts[WARN]} warning(s), {counts[FAIL]} failure(s)")
+    counts = {k: sum(1 for r in rows if r[0] == k) for k in (PASS, WARN, FAIL, SKIP, INFO)}
+    print(f"\n{counts[PASS]} passed, {counts[WARN]} warning(s), {counts[FAIL]} failure(s)"
+          + (f", {counts[SKIP]} skipped" if counts[SKIP] else ""))
+    if counts[FAIL] or counts[WARN]:
+        print("Most network/power/firewall fixes: `python simwatch.py harden` (dry run) then `harden --apply` as Administrator.")
     return 1 if counts[FAIL] else 0
+
+
+# --------------------------------------------------------------------------- doctor: system checks (Windows)
+
+HARDEN_HINT = "python simwatch.py harden --apply (as Administrator)"
+HIGH_PERF_GUID = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"
+ULTIMATE_GUID = "e9a42b02-d5df-448d-aa00-03f14749eb61"
+USB_SS = ("2a737441-1930-4402-8d77-b2bebba308a3", "48e6b7a6-50f5-4782-a5d4-53bb8f07e226")
+PCIE_ASPM = ("501a4d13-42af-4429-9fd1-a8218c268e20", "ee12f906-d277-404b-b6da-e5fa1a576df5")
+HOST_LINK_IP = "169.254.6.1"
+PAUSE_STALE_SEC = 4 * 3600
+KINOVEA_MIN_VERSION = (2025, 1)
+DOCTOR_SYSTEM_CHECKS = ("scheduled task 'SimWatch'", "sniffer raw socket", "firewall", "GameChanger exe",
+                        "device adapter", "device ping", "power", "FSX Pro device hold", "Kinovea version",
+                        "GameChanger OpenConnect target")
+
+
+def _run_cmd(args: list, timeout: float = 20) -> tuple[int, str]:
+    """Run a console command; (returncode, stdout [+stderr on failure]). Never raises; rc -1 on error/timeout."""
+    try:
+        r = subprocess.run(args, capture_output=True, text=True, errors="replace", timeout=timeout,
+                           creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        return r.returncode, (r.stdout or "") + ("" if r.returncode == 0 else (r.stderr or ""))
+    except subprocess.TimeoutExpired:
+        return -1, f"timed out after {timeout:.0f}s"
+    except (OSError, subprocess.SubprocessError) as e:
+        return -1, str(e)
+
+
+def _ps(script: str, timeout: float = 30) -> tuple[int, str]:
+    return _run_cmd(["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass",
+                     "-Command", script], timeout)
+
+
+def _ps_json(script: str, timeout: float = 30):
+    rc, out = _ps(script, timeout)
+    if rc != 0 or not out.strip():
+        return None
+    try:
+        return json.loads(out.strip())
+    except ValueError:
+        return None
+
+
+def _psq(s) -> str:
+    """PowerShell single-quoted literal."""
+    return "'" + str(s).replace("'", "''") + "'"
+
+
+def _is_admin() -> bool:
+    if not IS_WINDOWS:
+        return False
+    try:
+        return bool(ctypes.windll.shell32.IsUserAnAdmin())
+    except Exception:
+        return False
+
+
+def _norm_win_path(p) -> str:
+    return os.path.expandvars(str(p)).replace("/", "\\").strip().rstrip("\\").lower()
+
+
+def _cfg_app(cfg: dict, key: str, process: str) -> dict | None:
+    for a in cfg.get("apps") or []:
+        if isinstance(a, dict) and (a.get("key") == key or str(a.get("process", "")).lower() == process.lower()):
+            return a
+    return None
+
+
+def _python_exes() -> dict[str, str]:
+    """label -> path for the interpreter(s) that own the sniffer socket (a venv python.exe re-launches the base one)."""
+    out: dict[str, str] = {}
+    seen = set()
+    for label, p in (("python.exe (venv)", sys.executable),
+                     ("python.exe (base)", str(Path(sys.base_prefix) / "python.exe"))):
+        n = _norm_win_path(p)
+        if n not in seen and (Path(p).exists() or not IS_WINDOWS):
+            seen.add(n)
+            out[label] = str(p)
+    return out
+
+
+def firewall_programs(cfg: dict) -> dict[str, list[str]]:
+    """label -> program paths that need inbound Allow (and no Block) rules."""
+    progs: dict[str, list[str]] = {"python.exe (sniffer)": list(_python_exes().values())}
+    for key, proc in (("integrator", "GameChanger.exe"), ("gspro_connect", "GSPconnect.exe"),
+                      ("fs_connector", "FSX Pro.exe")):
+        a = _cfg_app(cfg, key, proc)
+        if a and a.get("exe"):
+            progs[a.get("process") or proc] = [a["exe"]]
+    return progs
+
+
+def pause_file_row(age_sec: float | None, max_hours=4):
+    """Doctor row for the PAUSE file given its age (pause_age_sec()) and config pause_max_hours."""
+    if age_sec is None:
+        return None
+    try:
+        max_h = float(max_hours or 0)
+    except (TypeError, ValueError):
+        max_h = PAUSE_STALE_SEC / 3600
+    if max_h > 0 and age_sec > max_h * 3600:
+        return (WARN, "PAUSE file", f"stale ({age_sec / 3600:.1f} h old, limit {max_h:g} h) - the watchdog will "
+                                    "ignore and delete it -> fix: run release_device.bat or delete PAUSE")
+    return (WARN, "PAUSE file", f"present ({age_sec / 60:.0f} min old) - watchdog is paused")
+
+
+# ---- pure parsers / evaluators (unit-tested off Windows)
+
+def parse_powercfg_ac_index(text: str) -> int | None:
+    m = re.search(r"Current AC Power Setting Index:\s*0x([0-9a-f]+)", text or "", re.I)
+    return int(m.group(1), 16) if m else None
+
+
+def parse_active_scheme(text: str) -> tuple[str | None, str | None]:
+    m = re.search(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\s*(?:\(([^)]*)\))?", text or "", re.I)
+    if not m:
+        return None, None
+    return m.group(1).lower(), ((m.group(2) or "").strip() or None)
+
+
+def is_performance_scheme(guid: str | None, name: str | None) -> bool:
+    return guid in (HIGH_PERF_GUID, ULTIMATE_GUID) or bool(name and re.search(r"high perf|ultimate", name, re.I))
+
+
+def evaluate_power(scheme_text: str, usb_idx: int | None, standby_idx: int | None, aspm_idx: int | None,
+                   hibernate: int | None, hiberboot: int | None) -> list[tuple[str, str, str]]:
+    rows = []
+    guid, name = parse_active_scheme(scheme_text)
+    rows.append((PASS, "power plan", name or guid) if is_performance_scheme(guid, name) else
+                (WARN, "power plan", f"active plan is {name or guid or 'unknown'} -> fix: {HARDEN_HINT} (High performance)"))
+    if usb_idx is None:
+        rows.append((WARN, "USB selective suspend (AC)", "could not read setting"))
+    else:
+        rows.append((PASS, "USB selective suspend (AC)", "disabled") if usb_idx == 0 else
+                    (WARN, "USB selective suspend (AC)", f"enabled - Windows may suspend the Launch Pro USB NIC "
+                                                         f"-> fix: {HARDEN_HINT}"))
+    if standby_idx is None:
+        rows.append((WARN, "sleep after (AC)", "could not read setting"))
+    else:
+        rows.append((PASS, "sleep after (AC)", "never") if standby_idx == 0 else
+                    (WARN, "sleep after (AC)", f"{standby_idx // 60} min -> fix: powercfg /change standby-timeout-ac 0"))
+    if aspm_idx is not None:
+        rows.append((PASS, "PCIe link power mgmt (AC)", "off") if aspm_idx == 0 else
+                    (WARN, "PCIe link power mgmt (AC)", f"level {aspm_idx} -> fix: {HARDEN_HINT}"))
+    on = [n for n, v in (("hibernate", hibernate), ("fast startup", hiberboot)) if v]
+    rows.append((PASS, "hibernate / fast startup", "off") if not on else
+                (WARN, "hibernate / fast startup", f"{' + '.join(on)} on - restores stale USB NIC state "
+                                                   "-> fix: powercfg /hibernate off"))
+    return rows
+
+
+def parse_task_xml(xml_text: str) -> dict:
+    """Settings of a `schtasks /Query /XML` export that matter for a forever-running watchdog.
+    Missing elements get Task Scheduler's defaults (PT72H limit, AC-only)."""
+    text = re.sub(r"^\s*<\?xml[^>]*\?>", "", (xml_text or "").lstrip("\ufeff"))
+    root = ET.fromstring(text)
+    for el in root.iter():
+        if isinstance(el.tag, str):
+            el.tag = el.tag.split("}", 1)[-1]
+
+    def val(path, default):
+        el = root.find(path)
+        return el.text.strip() if el is not None and el.text else default
+
+    def flag(path, default):
+        return val(path, "true" if default else "false").lower() == "true"
+
+    return {
+        "execution_time_limit": val("Settings/ExecutionTimeLimit", "PT72H"),
+        "disallow_on_batteries": flag("Settings/DisallowStartIfOnBatteries", True),
+        "stop_on_batteries": flag("Settings/StopIfGoingOnBatteries", True),
+        "enabled": flag("Settings/Enabled", True),
+        "run_level": val("Principals/Principal/RunLevel", "LeastPrivilege"),
+    }
+
+
+def evaluate_task(info: dict) -> tuple[str, str, str]:
+    item = "scheduled task 'SimWatch'"
+    problems = []
+    if not info.get("enabled", True):
+        problems.append("disabled")
+    if info.get("execution_time_limit") != "PT0S":
+        problems.append(f"ExecutionTimeLimit {info.get('execution_time_limit')} (task is killed after that)")
+    if info.get("disallow_on_batteries") or info.get("stop_on_batteries"):
+        problems.append("AC-only (won't start/keeps stopping on battery or UPS)")
+    if info.get("run_level") != "HighestAvailable":
+        problems.append("not run with highest privileges")
+    if not problems:
+        return (PASS, item, "registered, no time limit, runs on battery, highest privileges")
+    return (WARN, item, "; ".join(problems) + f" -> fix: {HARDEN_HINT}")
+
+
+def exe_location_issue(path: str) -> str | None:
+    p = "\\" + str(path).replace("/", "\\").lower()
+    if "\\downloads\\" in p:
+        return "under Downloads"
+    if "\\temp\\" in p or "\\tmp\\" in p:
+        return "under a Temp folder"
+    return None
+
+
+def evaluate_gamechanger_exe(path: str | None, exists: bool, zone: bool, version: str | None) -> tuple[str, str, str]:
+    item = "GameChanger exe"
+    if not path:
+        return (WARN, item, "integrator exe not configured")
+    if not exists:
+        return (FAIL, item, f"not found: {path} -> fix: set apps[integrator].exe in config.local.json")
+    issues = [i for i in (exe_location_issue(path), "has Zone.Identifier (downloaded/blocked)" if zone else None) if i]
+    ver = f"v{version}" if version else "version unknown"
+    if issues:
+        return (WARN, item, f"{ver}; {', '.join(issues)} -> fix: move folder to C:\\SimTools\\GameChanger, "
+                            "Get-ChildItem C:\\SimTools\\GameChanger -Recurse | Unblock-File, update config.local.json")
+    return (PASS, item, f"{ver}; {path}")
+
+
+def parse_version(s: str | None) -> tuple[int, ...]:
+    return tuple(int(n) for n in re.findall(r"\d+", s or "")[:4])
+
+
+def evaluate_kinovea(path: str | None, exists: bool, version: str | None) -> tuple[str, str, str]:
+    item = "Kinovea version"
+    if not path:
+        return (INFO, item, "video.kinovea_exe not configured")
+    if not exists:
+        return (WARN, item, f"not found: {path} -> fix: install Kinovea 2025.1+ or set video.kinovea_exe")
+    v = parse_version(version)
+    if not v:
+        return (INFO, item, f"version unknown: {path}")
+    if v < KINOVEA_MIN_VERSION:
+        return (WARN, item, f"v{version} is older than 2025.1 (legacy capture backend) -> fix: upgrade Kinovea")
+    return (PASS, item, f"v{version}")
+
+
+def evaluate_firewall(rules: list, programs: dict[str, list[str]]) -> list[tuple[str, str, str]]:
+    """rules: [{Program, Name, Direction, Action, Enabled}] for the programs of interest (from PowerShell)."""
+    rows = []
+    for label, paths in programs.items():
+        wanted = {_norm_win_path(p) for p in paths if p}
+        mine = [r for r in rules or [] if isinstance(r, dict) and _norm_win_path(r.get("Program", "")) in wanted
+                and str(r.get("Enabled", "True")).lower() in ("true", "1")]
+        blocks = [r for r in mine if str(r.get("Action", "")).lower() == "block"]
+        allows = [r for r in mine if str(r.get("Action", "")).lower() == "allow"
+                  and str(r.get("Direction", "")).lower() == "inbound"]
+        item = f"firewall: {label}"
+        if blocks:
+            names = ", ".join(sorted({str(r.get("Name", "?")) for r in blocks}))[:80]
+            rows.append((FAIL, item, f"Block rule(s): {names} -> fix: {HARDEN_HINT} (or delete them in wf.msc)"))
+        elif allows:
+            rows.append((PASS, item, "inbound Allow rule present"))
+        else:
+            rows.append((WARN, item, f"no inbound Allow rule -> fix: {HARDEN_HINT}"))
+    return rows
+
+
+def evaluate_adapter(info: dict | None, device_ip: str) -> list[tuple[str, str, str]]:
+    """info: route/adapter facts for the device IP (see _adapter_info). Device off/unplugged -> WARN, not FAIL."""
+    item = "device adapter"
+    if not info or not info.get("Name"):
+        return [(WARN, item, f"no route to {device_ip} (Launch Pro off or USB cable unplugged?)")]
+    src = str(info.get("Source") or "")
+    if not src.startswith("169.254."):
+        return [(WARN, item, f"route to {device_ip} goes via {info['Name']} (src {src or '?'}), not the Launch Pro "
+                             "USB adapter - is the Launch Pro on and cabled?")]
+    name = f"{info['Name']} ({info.get('Desc', '')})".replace(" ()", "")
+    rows = []
+    if str(info.get("Status", "")).lower() != "up":
+        rows.append((FAIL, item, f"{name} is {info.get('Status')} -> fix: enable it in ncpa.cpl / replug the cable"))
+        return rows
+    rows.append((PASS, item, f"{name} Up, src {src}"))
+    dhcp = str(info.get("Dhcp", "")).lower()
+    rows.append((PASS, "adapter IP", "static") if dhcp == "disabled" else
+                (WARN, "adapter IP", f"DHCP/APIPA (~60 s to get an address after replug) -> fix: {HARDEN_HINT} "
+                                     f"(static {HOST_LINK_IP}/16)"))
+    route32 = bool(info.get("Route32"))
+    try:
+        metric = int(info.get("Metric"))
+    except (TypeError, ValueError):
+        metric = None
+    if route32 and metric is not None and metric <= 5:
+        rows.append((PASS, "adapter route/metric", f"/32 route to device, metric {metric}"))
+    else:
+        rows.append((WARN, "adapter route/metric", f"{'' if route32 else 'no /32 route to device; '}metric {metric} "
+                                                   f"-> fix: {HARDEN_HINT}"))
+    prof = str(info.get("Profile") or "none")
+    rows.append((PASS, "adapter network profile", prof) if prof in ("Private", "DomainAuthenticated") else
+                (WARN, "adapter network profile", f"{prof} -> fix: {HARDEN_HINT} (Private)"))
+    sleep = str(info.get("AllowSleep") or "")
+    rows.append((WARN, "adapter power mgmt", f"Windows may turn off the adapter -> fix: {HARDEN_HINT}")
+                if sleep.lower() == "enabled" else (PASS, "adapter power mgmt", sleep or "n/a"))
+    return rows
+
+
+_HOSTPORT_RE = re.compile(r"(localhost|::1|\d{1,3}(?:\.\d{1,3}){3})\]?\s*[:,]\s*\"?(\d{2,5})\b", re.I)
+_HOSTKEY_RE = re.compile(r"(?:host|ip|address|server)\w*\"?\s*[:=]\s*\"?(localhost|::1|\d{1,3}(?:\.\d{1,3}){3})", re.I)
+_PORTKEY_RE = re.compile(r"port\w*\"?\s*[:=]\s*\"?(\d{2,5})\b", re.I)
+
+
+def find_openconnect_targets(text: str) -> list[tuple[str, int]]:
+    """Best-effort (host, port) pairs pointing at OpenConnect (:921) in a settings file's text."""
+    text = text or ""
+    out = [(h.lower(), int(p)) for h, p in _HOSTPORT_RE.findall(text) if int(p) == GSPRO_PORT]
+    if not out and any(int(p) == GSPRO_PORT for p in _PORTKEY_RE.findall(text)):
+        out = [(h.lower(), GSPRO_PORT) for h in _HOSTKEY_RE.findall(text)]
+    return out
+
+
+def evaluate_openconnect_targets(found: list[tuple[str, str, int]]) -> tuple[str, str, str]:
+    """found: [(file, host, port)]."""
+    item = "GameChanger OpenConnect target"
+    if not found:
+        return (INFO, item, "settings not located - make sure GameChanger targets 127.0.0.1:921 (not localhost)")
+    bad = [(f, h) for f, h, _ in found if h != "127.0.0.1"]
+    if bad:
+        f, h = bad[0]
+        return (WARN, item, f"{h}:921 in {Path(f).name} - the :921 sniffer only sees IPv4 loopback "
+                            "-> fix: set the GameChanger OpenConnect host to 127.0.0.1")
+    return (PASS, item, f"127.0.0.1:921 ({Path(found[0][0]).name})")
+
+
+# ---- Windows probes
+
+def sniffer_probe() -> tuple[bool, str]:
+    """Can this process open the :921 sniffer (raw IPv4 socket + SIO_RCVALL on 127.0.0.1)? Closed immediately."""
+    if not hasattr(socket, "SIO_RCVALL"):
+        return False, "SIO_RCVALL unavailable on this platform"
+    s = None
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_RAW, socket.IPPROTO_IP)
+        s.bind(("127.0.0.1", 0))
+        s.ioctl(socket.SIO_RCVALL, socket.RCVALL_ON)
+        s.ioctl(socket.SIO_RCVALL, socket.RCVALL_OFF)
+        return True, "raw socket + SIO_RCVALL on 127.0.0.1 OK"
+    except OSError as e:
+        if isinstance(e, PermissionError) or getattr(e, "winerror", None) == 10013:
+            return False, "access denied -> fix: run as Administrator (the scheduled task already does)"
+        return False, f"{e} -> fix: run as Administrator; check firewall/AV"
+    finally:
+        if s is not None:
+            try:
+                s.close()
+            except OSError:
+                pass
+
+
+def file_version(path) -> str | None:
+    try:
+        import win32api  # pywin32
+        info = win32api.GetFileVersionInfo(str(path), "\\")
+        ms, ls = info["FileVersionMS"], info["FileVersionLS"]
+        return f"{ms >> 16}.{ms & 0xFFFF}.{ls >> 16}.{ls & 0xFFFF}"
+    except Exception:
+        pass
+    if IS_WINDOWS:
+        rc, out = _ps(f"(Get-Item -LiteralPath {_psq(path)}).VersionInfo.FileVersion", 15)
+        if rc == 0 and out.strip():
+            return out.strip()
+    return None
+
+
+def has_zone_identifier(path) -> bool:
+    try:
+        with open(f"{path}:Zone.Identifier", "rb"):
+            return True
+    except OSError:
+        return False
+
+
+def _adapter_info(device_ip: str) -> dict | None:
+    script = f"""$ErrorActionPreference='SilentlyContinue'
+$ip={_psq(device_ip)}
+$r = Find-NetRoute -RemoteIPAddress $ip
+if (-not $r) {{ exit 0 }}
+$idx = ($r | Select-Object -First 1).InterfaceIndex
+$src = ($r | Where-Object {{ $_.IPAddress }} | Select-Object -First 1).IPAddress
+$a = Get-NetAdapter -InterfaceIndex $idx
+$i = Get-NetIPInterface -InterfaceIndex $idx -AddressFamily IPv4
+$p = Get-NetConnectionProfile -InterfaceIndex $idx
+$pm = if ($a) {{ Get-NetAdapterPowerManagement -Name $a.Name }}
+$r32 = Get-NetRoute -DestinationPrefix "$ip/32"
+[pscustomobject]@{{Name=$a.Name; Desc=$a.InterfaceDescription; Status=[string]$a.Status; Index=$idx; Source=$src;
+ Dhcp=[string]$i.Dhcp; Metric=$i.InterfaceMetric; Profile=[string]$p.NetworkCategory;
+ AllowSleep=[string]$pm.AllowComputerToTurnOffDevice; Route32=[bool]$r32}} | ConvertTo-Json -Compress"""
+    info = _ps_json(script, 30)
+    return info if isinstance(info, dict) else None
+
+
+def _firewall_rules(paths: list[str]) -> list | None:
+    plist = ",".join(_psq(p) for p in paths)
+    script = f"""$ErrorActionPreference='SilentlyContinue'
+$p=@({plist})
+$out = foreach ($f in (Get-NetFirewallApplicationFilter -PolicyStore ActiveStore |
+    Where-Object {{ $p -contains [Environment]::ExpandEnvironmentVariables($_.Program) }})) {{
+  foreach ($r in ($f | Get-NetFirewallRule)) {{
+    [pscustomobject]@{{Program=[Environment]::ExpandEnvironmentVariables($f.Program); Name=$r.DisplayName;
+      Direction=[string]$r.Direction; Action=[string]$r.Action; Enabled=[string]$r.Enabled}} }} }}
+ConvertTo-Json -InputObject @($out) -Compress"""
+    res = _ps_json(script, 60)
+    if isinstance(res, dict):
+        res = [res]
+    return res if isinstance(res, list) else None
+
+
+def _reg_hklm_dword(subkey: str, value: str) -> int | None:
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, subkey) as k:
+            return int(winreg.QueryValueEx(k, value)[0])
+    except (OSError, ImportError, ValueError, TypeError):
+        return None
+
+
+def _gamechanger_settings_files(exe: str | None) -> list[Path]:
+    dirs: list[Path] = []
+    if exe:
+        dirs.append(Path(exe).parent)
+    for env in ("APPDATA", "LOCALAPPDATA", "USERPROFILE"):
+        base = os.environ.get(env)
+        if not base:
+            continue
+        b = Path(base)
+        for pat in ("GameChanger*", "*/GameChanger*", "Documents/GameChanger*"):
+            try:
+                dirs += [d for d in b.glob(pat) if d.is_dir()]
+            except OSError:
+                pass
+    exts = {".json", ".ini", ".cfg", ".config", ".xml", ".txt", ".settings", ".yaml", ".yml"}
+    files: list[Path] = []
+    for d in dict.fromkeys(dirs):
+        for depth_pat in ("*", "*/*", "*/*/*"):
+            try:
+                for f in d.glob(depth_pat):
+                    if (f.suffix.lower() in exts and f.is_file() and f.stat().st_size < 512_000
+                            and not f.name.lower().endswith((".deps.json", ".runtimeconfig.json"))):
+                        files.append(f)
+            except OSError:
+                pass
+            if len(files) > 300:
+                break
+    return files[:300]
+
+
+def _doc_task(cfg):
+    rc, out = _run_cmd(["schtasks", "/Query", "/TN", "SimWatch", "/XML"], 15)
+    if rc != 0:
+        return [(WARN, "scheduled task 'SimWatch'", "not found -> fix: run install_autostart.bat for start-at-sign-in")]
+    try:
+        return [evaluate_task(parse_task_xml(out))]
+    except ET.ParseError as e:
+        return [(WARN, "scheduled task 'SimWatch'", f"registered, but XML unreadable: {e}")]
+
+
+def _doc_sniffer(cfg):
+    ok, msg = sniffer_probe()
+    return [(PASS if ok else FAIL, "sniffer raw socket", msg)]
+
+
+def _doc_firewall(cfg):
+    progs = firewall_programs(cfg)
+    paths = [os.path.expandvars(p) for ps in progs.values() for p in ps]
+    rules = _firewall_rules(paths)
+    if rules is None:
+        return [(WARN, "firewall", "could not query rules (Get-NetFirewallApplicationFilter failed)")]
+    return evaluate_firewall(rules, progs)
+
+
+def _doc_gamechanger(cfg):
+    a = _cfg_app(cfg, "integrator", "GameChanger.exe") or {}
+    exe = a.get("exe")
+    exists = bool(exe) and Path(exe).exists()
+    return [evaluate_gamechanger_exe(exe, exists, exists and has_zone_identifier(exe),
+                                     file_version(exe) if exists else None)]
+
+
+def _doc_device(cfg):
+    ip = (cfg.get("device") or {}).get("ip")
+    if not ip:
+        return [(WARN, "device adapter", "device.ip not configured")]
+    rows = evaluate_adapter(_adapter_info(ip), ip)
+    rc, out = _run_cmd(["ping", "-n", "2", "-w", "1000", ip], 10)
+    rows.append((PASS, "device ping", f"{ip} replies") if _ping_ok(rc, out) else
+                (WARN, "device ping", f"{ip} no reply (Launch Pro off/asleep, or adapter issue above)"))
+    return rows
+
+
+def _doc_power(cfg):
+    _, scheme = _run_cmd(["powercfg", "/getactivescheme"], 10)
+    q = lambda sub, setting: parse_powercfg_ac_index(_run_cmd(["powercfg", "/query", "SCHEME_CURRENT", sub, setting], 10)[1])
+    return evaluate_power(
+        scheme, q(*USB_SS), q("SUB_SLEEP", "STANDBYIDLE"), q(*PCIE_ASPM),
+        _reg_hklm_dword(r"SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled"),
+        _reg_hklm_dword(r"SYSTEM\CurrentControlSet\Control\Session Manager\Power", "HiberbootEnabled"),
+    )
+
+
+def _doc_fsx_hold(cfg):
+    a = _cfg_app(cfg, "fs_connector", "FSX Pro.exe")
+    if not a:
+        return []
+    dev = cfg.get("device") or {}
+    pids = {p.pid for p in find_procs(a.get("process") or "FSX Pro.exe")}
+    try:
+        sess = _find_device_tcp_session(pids, dev.get("ip"), _device_ports(dev)) if pids else None
+    except (psutil.Error, OSError, TypeError, ValueError):
+        sess = None
+    if sess:
+        ra = f"{sess.raddr.ip}:{sess.raddr.port}" if getattr(sess, "raddr", None) else "device"
+        return [(FAIL, "FSX Pro device hold", f"FSX Pro holds {ra} - GameChanger can't connect "
+                                              "-> fix: release_device.bat (or close FSX Pro)")]
+    return [(PASS, "FSX Pro device hold", "not holding the Launch Pro" if pids else "FSX Pro not running")]
+
+
+def _doc_kinovea(cfg):
+    path = (cfg.get("video") or {}).get("kinovea_exe") if isinstance(cfg.get("video"), dict) else None
+    exists = bool(path) and Path(path).exists()
+    return [evaluate_kinovea(path, exists, file_version(path) if exists else None)]
+
+
+def _doc_oc_target(cfg):
+    exe = (_cfg_app(cfg, "integrator", "GameChanger.exe") or {}).get("exe")
+    found = []
+    for f in _gamechanger_settings_files(exe):
+        try:
+            text = f.read_text(encoding="utf-8", errors="replace")
+        except OSError:
+            continue
+        found += [(str(f), h, p) for h, p in find_openconnect_targets(text)]
+    return [evaluate_openconnect_targets(found)]
+
+
+def doctor_system_rows(cfg: dict) -> list[tuple[str, str, str]]:
+    """Read-only Windows environment checks (each PASS/WARN/FAIL/INFO with a one-line fix). SKIP off Windows."""
+    if not IS_WINDOWS:
+        return [(SKIP, name, "Windows only") for name in DOCTOR_SYSTEM_CHECKS]
+    rows: list[tuple[str, str, str]] = []
+    for name, fn in zip(DOCTOR_SYSTEM_CHECKS, (_doc_task, _doc_sniffer, _doc_firewall, _doc_gamechanger, _doc_device,
+                                               None, _doc_power, _doc_fsx_hold, _doc_kinovea, _doc_oc_target)):
+        if fn is None:  # "device ping" is produced by _doc_device
+            continue
+        try:
+            rows.extend(fn(cfg))
+        except Exception as e:  # a broken probe must never take down the whole report
+            rows.append((WARN, name, f"check crashed: {type(e).__name__}: {e}"))
+    return rows
+
+
+# --------------------------------------------------------------------------- discover --write-local
+
+DISCOVER_TARGETS = {
+    "gspro": ("GSPro.exe", r"^GSPro", [r"C:\GSProV1\Core\GSP\GSPro.exe"]),
+    "gspro_connect": ("GSPconnect.exe", r"^GSPro", [r"C:\GSProV1\Core\GSPC\GSPconnect.exe"]),
+    "fs_connector": ("FSX Pro.exe", r"FSX ?Pro", [r"%ProgramFiles(x86)%\FSX Pro\FSX Pro.exe",
+                                                  r"%ProgramFiles%\FSX Pro\FSX Pro.exe"]),
+    "integrator": ("GameChanger.exe", r"Game ?Changer", [
+        r"C:\SimTools\GameChanger\GameChanger.exe", r"C:\SimTools\GameChanger*\GameChanger.exe",
+        r"%ProgramFiles%\GameChanger*\GameChanger.exe", r"%ProgramFiles(x86)%\GameChanger*\GameChanger.exe",
+        r"%LOCALAPPDATA%\Programs\GameChanger*\GameChanger.exe", r"%USERPROFILE%\Desktop\GameChanger*\GameChanger.exe",
+        r"%USERPROFILE%\Downloads\GameChanger*\GameChanger.exe",
+        r"%USERPROFILE%\Downloads\GameChanger*\*\GameChanger.exe"]),
+    "video.kinovea_exe": ("Kinovea.exe", r"^Kinovea", [r"%ProgramFiles%\Kinovea\Kinovea.exe",
+                                                       r"%LOCALAPPDATA%\Programs\Kinovea\Kinovea.exe",
+                                                       r"%ProgramFiles%\Kinovea*\Kinovea.exe"]),
+    "video.obs_exe": ("obs64.exe", r"^OBS Studio", [r"%ProgramFiles%\obs-studio\bin\64bit\obs64.exe"]),
+}
+
+
+def _registry_install_dirs(name_re: str) -> list[Path]:
+    """InstallLocation / DisplayIcon folders of HKLM+HKCU Uninstall entries whose DisplayName matches."""
+    try:
+        import winreg
+    except ImportError:
+        return []
+    out: list[Path] = []
+    roots = [(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+             (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+             (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall")]
+    for hive, sub in roots:
+        try:
+            root = winreg.OpenKey(hive, sub)
+        except OSError:
+            continue
+        with root:
+            for i in range(winreg.QueryInfoKey(root)[0]):
+                try:
+                    with winreg.OpenKey(root, winreg.EnumKey(root, i)) as k:
+                        def q(v):
+                            try:
+                                return str(winreg.QueryValueEx(k, v)[0] or "")
+                            except OSError:
+                                return ""
+                        if not re.search(name_re, q("DisplayName"), re.I):
+                            continue
+                        for v in (q("InstallLocation"), q("DisplayIcon").split(",")[0].strip('"')):
+                            if v:
+                                p = Path(v)
+                                out.append(p.parent if p.suffix.lower() == ".exe" else p)
+                except OSError:
+                    continue
+    return out
+
+
+def discover_exe_paths() -> dict[str, str]:
+    """target -> exe path, from (1) running processes, (2) common install dirs, (3) Uninstall registry entries."""
+    import glob as _glob
+    found: dict[str, str] = {}
+    running: dict[str, str] = {}
+    for p in psutil.process_iter(["name", "exe"]):
+        try:
+            if p.info["name"] and p.info["exe"]:
+                running.setdefault(p.info["name"].lower(), p.info["exe"])
+        except psutil.Error:
+            pass
+    for target, (exe_name, reg_re, patterns) in DISCOVER_TARGETS.items():
+        hit = running.get(exe_name.lower())
+        if not hit:
+            for pat in patterns:
+                matches = sorted(_glob.glob(os.path.expandvars(pat)), reverse=True)
+                if matches:
+                    hit = matches[0]
+                    break
+        if not hit:
+            for d in _registry_install_dirs(reg_re):
+                for pat in (exe_name, f"*/{exe_name}", f"*/*/{exe_name}", f"*/*/*/{exe_name}"):
+                    try:
+                        m = next(iter(d.glob(pat)), None)
+                    except OSError:
+                        m = None
+                    if m:
+                        hit = str(m)
+                        break
+                if hit:
+                    break
+        if hit:
+            found[target] = hit
+    return found
+
+
+def build_local_overlay(found: dict[str, str], cfg: dict | None = None) -> dict:
+    """config.local.json content for discovered paths; skips paths identical to what `cfg` already has."""
+    cfg = cfg or {}
+    apps_by_key = {a.get("key"): a for a in cfg.get("apps") or [] if isinstance(a, dict)}
+    video = cfg.get("video") if isinstance(cfg.get("video"), dict) else {}
+    over: dict = {}
+    for target, path in found.items():
+        if target.startswith("video."):
+            k = target.split(".", 1)[1]
+            if _norm_win_path(video.get(k, "")) != _norm_win_path(path):
+                over.setdefault("video", {})[k] = path
+        elif _norm_win_path((apps_by_key.get(target) or {}).get("exe", "")) != _norm_win_path(path):
+            over.setdefault("apps", []).append({"key": target, "exe": path})
+    return over
+
+
+def cmd_discover_write_local(config_path: Path) -> int:
+    if not IS_WINDOWS:
+        print("discover --write-local only works on Windows (it probes install folders and the registry).")
+        return 1
+    try:
+        cfg, _ = read_config_layers(config_path)
+    except (OSError, ValueError) as e:
+        print(f"Cannot read {config_path}: {e}")
+        return 1
+    found = discover_exe_paths()
+    print("Detected executables:")
+    for target in DISCOVER_TARGETS:
+        print(f"  {target:<18} {found.get(target, '(not found - set it by hand in config.local.json)')}")
+    over = build_local_overlay(found, cfg)
+    lp = local_config_path(config_path)
+    if not over:
+        print(f"\nNothing to change: {config_path.name}{' + ' + lp.name if lp.exists() else ''} already has these paths.")
+        return 0
+    existing = {}
+    if lp.exists():
+        try:
+            existing = json.loads(lp.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            print(f"{lp} is unreadable ({e}); not overwriting it.")
+            return 1
+    merged = deep_merge_config(existing if isinstance(existing, dict) else {}, over)
+    write_text_if_changed(lp, json.dumps(merged, indent=2) + "\n", backup=True)
+    print(f"\nWrote {lp} (previous copy kept as {lp.name}.bak if it existed). Review it, then run `simwatch.py doctor`.")
+    return 0
+
+
+# --------------------------------------------------------------------------- harden
+
+def harden_steps(ctx: dict) -> list[tuple[str, str, bool]]:
+    """[(description, PowerShell command, needs_adapter)] that harden this PC for the Launch Pro link.
+    ctx: adapter, device_ip, host_ip, programs {label: path}, ultimate_active, task_exists."""
+    alias = ctx.get("adapter") or "<ADAPTER>"
+    a = _psq(alias)
+    dev = ctx.get("device_ip")
+    host = ctx.get("host_ip") or HOST_LINK_IP
+    if dev and host == dev:
+        host = "169.254.6.2"
+    steps: list[tuple[str, str, bool]] = []
+    if dev:
+        steps.append((f"Static IP {host}/16 on '{alias}' (no ~60 s APIPA wait after a replug)",
+                      f"Set-NetIPInterface -InterfaceAlias {a} -AddressFamily IPv4 -Dhcp Disabled; "
+                      f"Get-NetIPAddress -InterfaceAlias {a} -AddressFamily IPv4 -ErrorAction SilentlyContinue | "
+                      f"Remove-NetIPAddress -Confirm:$false; "
+                      f"New-NetIPAddress -InterfaceAlias {a} -IPAddress {host} -PrefixLength 16", True))
+        steps.append((f"Persistent /32 route to the Launch Pro {dev} via '{alias}'",
+                      f"Remove-NetRoute -DestinationPrefix '{dev}/32' -Confirm:$false -ErrorAction SilentlyContinue; "
+                      f"New-NetRoute -DestinationPrefix '{dev}/32' -InterfaceAlias {a} -NextHop 0.0.0.0 -RouteMetric 1",
+                      True))
+    steps.append((f"Interface metric 5 on '{alias}'",
+                  f"Set-NetIPInterface -InterfaceAlias {a} -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric 5",
+                  True))
+    steps.append((f"Network profile Private on '{alias}' (if it errors for an 'Unidentified network', set "
+                  "secpol.msc > Network List Manager Policies > Unidentified Networks > Private)",
+                  f"Set-NetConnectionProfile -InterfaceAlias {a} -NetworkCategory Private", True))
+    programs = ctx.get("programs") or {}
+    for label, path in programs.items():
+        name = _psq(f"SimWatch allow {label}")
+        steps.append((f"Firewall inbound Allow for {label}",
+                      f"Get-NetFirewallRule -DisplayName {name} -ErrorAction SilentlyContinue | Remove-NetFirewallRule; "
+                      f"New-NetFirewallRule -DisplayName {name} -Direction Inbound -Action Allow "
+                      f"-Program {_psq(path)} -Profile Any", False))
+    if programs:
+        plist = ",".join(_psq(p) for p in programs.values())
+        steps.append(("Remove firewall Block rules for those programs (created when a firewall prompt was cancelled)",
+                      f"$p=@({plist}); Get-NetFirewallApplicationFilter | Where-Object "
+                      "{ $p -contains [Environment]::ExpandEnvironmentVariables($_.Program) } | Get-NetFirewallRule | "
+                      "Where-Object { $_.Action -eq 'Block' } | Remove-NetFirewallRule", False))
+    steps.append((f"Stop Windows powering off '{alias}' (adapter restarts briefly)",
+                  f"Disable-NetAdapterPowerManagement -Name {a}", True))
+    if not ctx.get("ultimate_active"):
+        steps.append(("Activate the High performance power plan (restores it if hidden)",
+                      f"powercfg /setactive {HIGH_PERF_GUID}; if ($LASTEXITCODE -ne 0) "
+                      f"{{ powercfg -duplicatescheme {HIGH_PERF_GUID} {HIGH_PERF_GUID}; powercfg /setactive {HIGH_PERF_GUID} }}",
+                      False))
+    steps.append(("USB selective suspend off (AC)",
+                  f"powercfg /setacvalueindex SCHEME_CURRENT {USB_SS[0]} {USB_SS[1]} 0; powercfg /setactive SCHEME_CURRENT",
+                  False))
+    steps.append(("PCIe link state power management off (AC)",
+                  f"powercfg /setacvalueindex SCHEME_CURRENT {PCIE_ASPM[0]} {PCIE_ASPM[1]} 0; "
+                  "powercfg /setactive SCHEME_CURRENT", False))
+    steps.append(("Never sleep on AC", "powercfg /change standby-timeout-ac 0", False))
+    steps.append(("Hibernate + fast startup off", "powercfg /hibernate off", False))
+    if ctx.get("task_exists"):
+        steps.append(("Scheduled task 'SimWatch': no time limit, runs on battery/UPS",
+                      "$t = Get-ScheduledTask -TaskName 'SimWatch'; $s = $t.Settings; $s.ExecutionTimeLimit = 'PT0S'; "
+                      "$s.DisallowStartIfOnBatteries = $false; $s.StopIfGoingOnBatteries = $false; "
+                      "Set-ScheduledTask -TaskName 'SimWatch' -Settings $s", False))
+    return steps
+
+
+def _detect_device_adapter(device_ip: str | None) -> str | None:
+    if not IS_WINDOWS:
+        return None
+    if device_ip:
+        info = _adapter_info(device_ip)
+        if info and info.get("Name") and str(info.get("Source") or "").startswith("169.254."):
+            return info["Name"]
+    rc, out = _ps("Get-NetAdapter | Where-Object { $_.Status -ne 'Disabled' -and $_.InterfaceDescription -match "
+                  "'RNDIS|Remote NDIS|USB' } | Select-Object -First 1 -ExpandProperty Name", 20)
+    return (out.strip() or None) if rc == 0 else None
+
+
+def harden_context(cfg: dict, adapter: str | None = None) -> dict:
+    dev = cfg.get("device") if isinstance(cfg.get("device"), dict) else {}
+    programs = dict(_python_exes())
+    for label, paths in firewall_programs(cfg).items():
+        if not label.startswith("python.exe"):
+            programs[label] = paths[0]
+    ctx = {"adapter": adapter or _detect_device_adapter(dev.get("ip")), "device_ip": dev.get("ip"),
+           "host_ip": dev.get("host_ip"), "programs": programs, "ultimate_active": False, "task_exists": False}
+    if IS_WINDOWS:
+        ctx["ultimate_active"] = parse_active_scheme(_run_cmd(["powercfg", "/getactivescheme"], 10)[1])[0] == ULTIMATE_GUID
+        ctx["task_exists"] = _run_cmd(["schtasks", "/Query", "/TN", "SimWatch"], 15)[0] == 0
+    return ctx
+
+
+def cmd_harden(cfg: dict, apply: bool = False, adapter: str | None = None) -> int:
+    ctx = harden_context(cfg, adapter)
+    steps = harden_steps(ctx)
+    no_adapter = not ctx.get("adapter")
+    print(f"SimWatch hardening plan ({'APPLY' if apply else 'dry run - nothing is changed'})")
+    print(f"  device adapter: {ctx.get('adapter') or '<not detected>'}   Launch Pro: {ctx.get('device_ip')}")
+    if no_adapter:
+        print("  Adapter not detected (Launch Pro off/unplugged?). Plug it in and rerun, or pass the name:\n"
+              "    python simwatch.py harden \"Ethernet 3\"     (names: Get-NetAdapter)")
+    for i, (desc, cmd, _) in enumerate(steps, 1):
+        print(f"\n[{i}] {desc}\n    {cmd}")
+    if not apply:
+        print("\nPaste these into an Administrator PowerShell, or run: python simwatch.py harden --apply (elevated).")
+        return 0
+    if not IS_WINDOWS:
+        print("\n--apply only works on Windows.")
+        return 1
+    if not _is_admin():
+        print("\nNot elevated. Open Start > type PowerShell > right-click > Run as administrator, then:\n"
+              f"  cd \"{HERE}\"\n  \"{sys.executable}\" simwatch.py harden --apply")
+        return 1
+    failed = 0
+    for i, (desc, cmd, needs_adapter) in enumerate(steps, 1):
+        if needs_adapter and no_adapter:
+            print(f"\n[{i}] SKIPPED (no adapter): {desc}")
+            continue
+        try:
+            ans = input(f"\n[{i}/{len(steps)}] {desc}\n    {cmd}\n  Run it? [y]es / [n]o / [q]uit: ").strip().lower()
+        except EOFError:
+            ans = "q"
+        if ans.startswith("q"):
+            break
+        if not ans.startswith("y"):
+            LOG.info("harden step %d skipped: %s", i, desc)
+            continue
+        rc, out = _ps(cmd, 120)
+        LOG.info("harden step %d rc=%s: %s | %s", i, rc, desc, out.strip()[-500:])
+        print(f"  {'OK' if rc == 0 else f'FAILED (rc {rc})'}" + (f": {out.strip()[-300:]}" if out.strip() else ""))
+        failed += rc != 0
+    print(f"\nDone ({failed} failed; details in simwatch.log). Replug the Launch Pro, then run: python simwatch.py doctor")
+    return 1 if failed else 0
 
 
 # --------------------------------------------------------------------------- main
@@ -5186,18 +7059,25 @@ def main() -> None:
             "discover", "dump", "calibrate", "check", "recover", "watch", "startup", "stop",
             "displays", "reconnect", "release-device",
             "video", "bookmark", "reference", "obs-setup", "hotkeys", "drills", "lines", "save-lines",
-            "doctor", "bridge",
+            "doctor", "bridge", "harden", "clip-ready",
         ],
     )
     ap.add_argument("arg", nargs="?")
+    ap.add_argument("arg2", nargs="?", help="clip-ready: camera angle/alias (DTL or FO)")
     ap.add_argument("--config", default=str(HERE / "config.json"))
     ap.add_argument("--demo", action="store_true", help="bridge: emit a synthetic shot every few seconds (no rig needed)")
     ap.add_argument("--demo-interval", type=float, default=4.0, help="bridge --demo: seconds between synthetic shots")
     ap.add_argument("--port", type=int, default=None, help="bridge: override bridge.port from config.json")
+    ap.add_argument("--write-local", action="store_true",
+                    help="discover: detect app exe paths and write them to config.local.json")
+    ap.add_argument("--apply", action="store_true",
+                    help="harden: run the commands (Administrator, asks before each); default is a dry run")
     a = ap.parse_args()
 
     _configure_logging()
 
+    if a.command == "clip-ready":  # Kinovea post-recording command: light, never fails (exit 0)
+        sys.exit(cmd_clip_ready(Path(a.config), a.arg, a.arg2))
     if a.command == "stop":
         stopped = stop_other_simwatch_instances()
         print(f"Stopped {stopped} running SimWatch background instance(s).")
@@ -5211,7 +7091,11 @@ def main() -> None:
     if a.command == "doctor":
         sys.exit(run_doctor(Path(a.config)))
     if a.command == "discover":
+        if a.write_local:
+            sys.exit(cmd_discover_write_local(Path(a.config)))
         return discover()
+    if a.command == "harden":
+        sys.exit(cmd_harden(load_config(Path(a.config), command="harden"), apply=a.apply, adapter=a.arg))
     if a.command == "dump":
         return dump(a.arg or ".*")
     if a.command == "calibrate":
@@ -5247,7 +7131,7 @@ def main() -> None:
             f"{'windowed' if cfg.get('gspro_display', {}).get('windowed') else 'full screen'}"
         )
     elif a.command == "reconnect":
-        (HERE / "PAUSE").write_text("Paused by simwatch reconnect while FSX Pro connects.\n", encoding="utf-8")
+        write_pause("Paused by simwatch reconnect while FSX Pro connects.")
         LOG.info("Created PAUSE file so background watchdog lets FSX Pro hold Launch Pro.")
         app = cfg["apps_by_key"]["fs_connector"]
         if not find_procs(app["process"]):

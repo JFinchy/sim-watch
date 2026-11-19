@@ -4,6 +4,7 @@
   "settle_sec": 15,
   "post_recover_grace_sec": 35,
   "giveup_backoff_sec": 300,
+  "pause_max_hours": 4,
   "only_when_running": "GSPro.exe",
   "device": {
     "_note": "Launch Pro. GameChanger auto-discovers and holds this connection itself during play - no clicking needed, it just needs the port free. FSX Pro is for setup/testing only: in its own Settings > Devices, turn OFF 'Auto connect with solo device' (one-time) so it never grabs the port on its own. `reconnect` drives FSX Pro's own connection by hand (wired first, then Wi-Fi) for that testing - it is NOT used by automatic recovery.",
@@ -13,7 +14,9 @@
     "retry_sec": 60,
     "max_attempts": 5,
     "allow_wifi": true,
-    "close_settings": false
+    "close_settings": false,
+    "offline_ticks": 3,
+    "socket_clear_sec": 10
   },
   "projector": {
     "_note": "Projector on = Windows reports a 2nd display. GSPro then goes to the leftmost one, otherwise Display 1. Set match_regex (matched against the monitor's PnP id/name, e.g. \"BNQ|EPS|OPT\") if a second real monitor is ever attached.",
@@ -32,11 +35,19 @@
     "enabled": true,
     "swings_dir": "Swings",
     "kinovea_exe": "C:\\Program Files\\Kinovea\\Kinovea.exe",
+    "_kinovea_note": "kinovea_backend: auto (reads Kinovea.exe version: 2025.x -> UDP trigger + clip-ready post-recording command; 2024.1 -> legacy toggle) | 2025 | legacy. capture_root: LOCAL non-OneDrive folder for raw recordings (empty = %LOCALAPPDATA%\\SimWatch\\Captures). legacy_trigger: toggle | audio. See SETUP-video.md.",
+    "kinovea_backend": "auto",
+    "capture_root": "",
+    "udp_trigger_port": 8875,
+    "trigger_quiet_period_sec": 3.0,
+    "kinovea_memory_buffer_mb": 2048,
+    "clip_link_window_sec": 20,
+    "legacy_trigger": "toggle",
     "obs_exe": "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe",
     "dtl_camera": "DTL",
     "fo_camera": "FO",
     "replay_speed_pct": 50,
-    "pre_trigger_sec": 1.5,
+    "pre_trigger_sec": 3.0,
     "post_trigger_sec": 1.5,
     "default_reference": "My-Go-To",
     "pros": [
@@ -142,7 +153,6 @@
     {
       "name": "Launch Pro reachable",
       "type": "device_ping",
-      "ip": "169.254.6.44",
       "device": true,
       "recovery_level": 0
     },
@@ -150,7 +160,6 @@
       "name": "GameChanger device session",
       "type": "device_tcp",
       "app": "integrator",
-      "ip": "169.254.6.44",
       "port": 9970,
       "ports": [
         9970,
@@ -203,13 +212,22 @@
       ]
     }
   ],
+  "device_recovery": {
+    "_note": "Used when ONLY device checks fail while the Launch Pro is reachable (GameChanger lost its session). Restarts GameChanger only; waits backoff_sec[n] between attempts (5 -> 15 -> 30 min, last value repeats), reset once the device session is healthy.",
+    "name": "restart GameChanger (device session only)",
+    "restart": [
+      "integrator"
+    ],
+    "backoff_sec": [300, 900, 1800]
+  },
   "startup": {
     "_note": "Order after a reboot. GSPro spawns GSPconnect itself when it starts; gspro_connect is only launched if that didn't happen. GameChanger goes last so GSPro/GSPconnect are already up for its OpenAPI side, and so it (not FSX Pro) claims the Launch Pro connection.",
     "boot_delay_sec": 20,
     "wait_for": [
       "Launch Pro reachable"
     ],
-    "wait_timeout_sec": 90,
+    "wait_timeout_sec": 180,
+    "wait_link_sec": 60,
     "order": [
       "gspro",
       "gspro_connect",
