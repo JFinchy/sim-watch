@@ -418,12 +418,19 @@ def read_config_layers(path: Path) -> tuple:
 
 def stop_other_simwatch_instances() -> int:
     """Terminate any other background `simwatch.py` daemon (`watch`/`startup`/`video`) processes."""
-    my_pid = os.getpid()
+    # Never stop ourselves or our own ancestors: on Windows a venv's Scripts\python.exe is a
+    # launcher stub that runs the real interpreter as a child with the *same* command line,
+    # so the parent looks exactly like a "prior" SimWatch (killing it exits the launcher with 15).
+    my_pids = {os.getpid()}
+    try:
+        my_pids.update(a.pid for a in psutil.Process().parents())
+    except psutil.Error:
+        pass
     daemon_cmds = {"watch", "startup", "video"}
     victims = []
     for p in psutil.process_iter(["pid", "name", "cmdline"]):
         try:
-            if p.info["pid"] == my_pid:
+            if p.info["pid"] in my_pids:
                 continue
             name = (p.info["name"] or "").lower()
             if not name.startswith("python"):

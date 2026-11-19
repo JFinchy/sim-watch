@@ -255,3 +255,36 @@ def test_device_checks_inherit_device_ip_from_config():
     ping = next(c for c in dev_checks if c["type"] == "device_ping")
     simwatch._DEVICE_RUNTIME.pop("learned_ip", None)
     assert simwatch.device_ping_target(ping, cfg) == "169.254.9.9"
+
+
+def test_stop_other_instances_skips_own_venv_launcher_parent(monkeypatch):
+    """Windows venv launcher: parent process has the same simwatch cmdline and must not be killed."""
+    import simwatch
+
+    killed = []
+
+    class FakeProc:
+        def __init__(self, pid, cmdline):
+            self.pid = pid
+            self.info = {"pid": pid, "name": "python.exe", "cmdline": cmdline}
+
+        def terminate(self):
+            killed.append(self.pid)
+
+        def kill(self):
+            killed.append(self.pid)
+
+    me, launcher, stale = 200, 100, 300
+    cmd = ["python.exe", "simwatch.py", "startup"]
+    procs = [FakeProc(launcher, cmd), FakeProc(me, cmd), FakeProc(stale, cmd)]
+
+    class FakeSelf:
+        def parents(self):
+            return [FakeProc(launcher, cmd)]
+
+    monkeypatch.setattr(simwatch.os, "getpid", lambda: me)
+    monkeypatch.setattr(simwatch.psutil, "process_iter", lambda attrs=None: iter(procs))
+    monkeypatch.setattr(simwatch.psutil, "Process", lambda *a, **k: FakeSelf())
+    monkeypatch.setattr(simwatch.psutil, "wait_procs", lambda ps, timeout=None: (ps, []))
+    assert simwatch.stop_other_simwatch_instances() == 1
+    assert killed == [stale]
