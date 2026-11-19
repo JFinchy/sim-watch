@@ -134,6 +134,18 @@ window.DEFAULT_DRILLS_DATA = {
       "summary": "When DOMS hits from squats/deadlifts/push day, stack clean motor patterns with low joint stress so you still hit Daily Delivery. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion.",
       "hackmotionPrescription": "Wrist Mobility Flow: 15 slow unloaded wrist circles + slow P1-P6 checkpoint pauses. No loaded or pressed wrist-flexion holds.",
       "cadenceTarget": "30/10 (Deliberate Slow-Mo) • Zero strain"
+    },
+    {
+      "id": "gym-speed",
+      "title": "Gym: Speed & Strength",
+      "fullTitle": "Gym Day: Speed & Strength (no ball striking)",
+      "focus": "Hip Drive, Rotational Power & Speed Training",
+      "recommendedModes": [
+        "real"
+      ],
+      "summary": "Off-range strength and speed work for club speed. Keep it on its own day or well away from ball-striking blocks; skip it when you are already sore, and stop on sharp or joint pain.",
+      "hackmotionPrescription": "None: no club data on gym days. If you test speed afterward, stop if smash drops below about 1.40.",
+      "cadenceTarget": "N/A (gym work, no metronome)"
     }
   ],
   "drills": [
@@ -186,6 +198,53 @@ window.DEFAULT_DRILLS_DATA = {
         "real": "Do this 5-minute flow before hitting your first 7i on GSPro to wake up rotation.",
         "almost": "Skip dynamic jumps—keep breathing nasal and silent while loosening upper back.",
         "sore": "CORE DRILL ON GYM-SORE DAYS: Extend to 2 rounds at 6/10 effort; stop short of muscle strain. Safety: muscular soreness 3/10 or less only. Stop on sharp or joint pain. After heavy pull/deadlift days skip loaded rotation and wrist flexion."
+      }
+    },
+    {
+      "id": "grip-pressure-ladder",
+      "title": "Grip Pressure Ladder (8 / 5 / 3 out of 10)",
+      "section": "Mobility & Setup Calibration",
+      "focus": "Grip Pressure & Arm Tension",
+      "faultTags": ["grip-tension","low-speed","face-control"],
+      "environments": ["sim","range","mirror"],
+      "swingPhase": "setup",
+      "equipment": ["Launch monitor"],
+      "keyFeel": "Hold the club like a tube of toothpaste you do not want to squeeze out: about 3-4 out of 10, light enough that the wrists stay free.",
+      "pacing": "block",
+      "days": [
+        "daily-calibration",
+        "kids-asleep"
+      ],
+      "modes": [
+        "real",
+        "almost"
+      ],
+      "duration": "8 min",
+      "reps": "3 balls each at 8/10, 5/10 and 3/10",
+      "clubs": [
+        "7 Iron"
+      ],
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "posture",
+        "keyFrameCue": "Same swing, three grip pressures: compare club speed and strike, then settle at 3-4 out of 10."
+      },
+      "why": "Most players grip far tighter than they think. White-knuckle pressure locks the wrists and forearms, costs speed and leaves the face open at impact. Hitting the same shot at three pressures makes the difference measurable instead of a guess.",
+      "instructions": [
+        "Rate your normal grip pressure: 10/10 is white-knuckle, 1/10 is about to drop the club. Squeeze the club to 8/10 and hit 3 balls with a normal, smooth swing.",
+        "Drop to 5/10 and hit 3 balls, then to 3/10 and hit 3 balls. Keep the swing speed and tempo the same each time.",
+        "Compare club speed, smash factor and strike location (or foam-ball spray) across the three rungs.",
+        "Settle at the lowest pressure that keeps the club under control, about 3-4 out of 10, and hit 3 more at that pressure. Re-check your grip pressure at the top of the backswing, not just at address.",
+        "If the club slips or twists at impact, go up one notch: light is not loose."
+      ],
+      "checkpoints": {
+        "dtl": "Wrists stay free through the turn; no clamped, rigid forearms at the top.",
+        "fo": "Forearms and shoulders look relaxed, not shrugged, at address and at the top."
+      },
+      "modePlans": {
+        "real": "Log club speed and smash for each rung of the ladder; the lighter grip should hold or beat the tight grip on both.",
+        "almost": "Judge by face-spray strike marks and feel: foam balls hide speed and carry, so use contact quality and arm tension to compare the rungs."
       }
     },
     {
@@ -1487,7 +1546,8 @@ window.DEFAULT_DRILLS_DATA = {
       "focus": "Elbow Separation & Out-to-In Handle",
       "faultTags": [
         "over-the-top",
-        "trail-elbow-flying"
+        "trail-elbow-flying",
+        "grip-tension"
       ],
       "environments": [
         "mirror",
@@ -2817,7 +2877,7 @@ window.DEFAULT_DRILLS_DATA = {
     {
       "id": "gym-kettlebell-swings",
       "title": "Kettlebell Swings (Speed Prep)",
-      "section": "Driver Launch & Start Line",
+      "section": "Speed & Strength (Gym)",
       "focus": "Hip Drive & Ground Force",
       "faultTags": [
         "low-speed",
@@ -2833,7 +2893,7 @@ window.DEFAULT_DRILLS_DATA = {
       "keyFeel": "Snap the hips and let the bell float; the power comes from the glutes, not the arms.",
       "pacing": "block",
       "days": [
-        "day-5-driver"
+        "gym-speed"
       ],
       "modes": [
         "real"
@@ -2865,7 +2925,7 @@ window.DEFAULT_DRILLS_DATA = {
     {
       "id": "gym-cable-chops",
       "title": "Cable Chops (Rotational Power)",
-      "section": "Driver Launch & Start Line",
+      "section": "Speed & Strength (Gym)",
       "focus": "Rotation & Core Sequencing",
       "faultTags": [
         "low-speed",
@@ -2881,7 +2941,7 @@ window.DEFAULT_DRILLS_DATA = {
       "keyFeel": "Rotate from the hips first, then the chest, and keep the arms long.",
       "pacing": "block",
       "days": [
-        "day-5-driver"
+        "gym-speed"
       ],
       "modes": [
         "real"
@@ -2913,7 +2973,7 @@ window.DEFAULT_DRILLS_DATA = {
     {
       "id": "gym-jump-training",
       "title": "Jump Training (Ground Force)",
-      "section": "Driver Launch & Start Line",
+      "section": "Speed & Strength (Gym)",
       "focus": "Explosive Lower Body",
       "faultTags": [
         "low-speed",
@@ -2929,7 +2989,7 @@ window.DEFAULT_DRILLS_DATA = {
       "keyFeel": "Push into the ground and jump high; land softly and reset between reps.",
       "pacing": "block",
       "days": [
-        "day-5-driver"
+        "gym-speed"
       ],
       "modes": [
         "real"
@@ -2961,7 +3021,7 @@ window.DEFAULT_DRILLS_DATA = {
     {
       "id": "gym-overload-underload-swings",
       "title": "Overload / Underload Swing Training",
-      "section": "Driver Launch & Start Line",
+      "section": "Speed & Strength (Gym)",
       "focus": "Club Head Speed Training",
       "faultTags": [
         "low-speed"
@@ -2980,7 +3040,7 @@ window.DEFAULT_DRILLS_DATA = {
       "keyFeel": "Alternate heavy and light swings, max effort with balance, and stop when contact or smash fades.",
       "pacing": "block",
       "days": [
-        "day-5-driver"
+        "gym-speed"
       ],
       "modes": [
         "real"

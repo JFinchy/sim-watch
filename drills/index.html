@@ -1683,6 +1683,79 @@
     body.mat-open .park-panel { bottom: auto; top: 70px; left: auto; right: 12px; }
     @media (max-width: 520px) { .fl-parkform { flex-direction: column; } .park-panel { left: 8px; right: 8px; } }
     @media (prefers-reduced-motion: reduce) { .park-fab, .nav-btn { transition: none; } .nav-btn:hover:not(:disabled) { transform: none; } }
+
+    /* ===== WAVE 3: recommender, pacing timer, cue repeater, tone profiles, clips ===== */
+    .rec-panel { background: var(--bg-card); border: 2px solid var(--border, #334155); border-radius: 14px; margin-bottom: 14px; }
+    .rec-panel > summary { cursor: pointer; list-style: none; min-height: 52px; display: flex; align-items: center; flex-wrap: wrap; gap: 6px 12px; padding: 10px 16px; font-weight: 800; font-size: 1.05rem; }
+    .rec-panel > summary::-webkit-details-marker { display: none; }
+    .rec-panel > summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; border-radius: 12px; }
+    .rec-panel[open] > summary { border-bottom: 1px solid var(--border, #334155); }
+    .rec-sum { font-weight: 600; font-size: 0.9rem; color: #7dd3fc; overflow-wrap: anywhere; }
+    .rec-body { padding: 12px 16px 16px; }
+    .rec-h { margin: 12px 0 6px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: #cbd5e1; }
+    .rec-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
+    .rec-chip, .w3-chip { background: var(--bg-elev); color: #f1f5f9; border: 2px solid #475569; border-radius: 12px; min-height: 44px; min-width: 44px; padding: 6px 14px; font-size: 0.95rem; font-weight: 700; cursor: pointer; max-width: 100%; text-align: left; overflow-wrap: anywhere; font-family: inherit; }
+    .rec-chip:hover, .w3-chip:hover { background: var(--bg-hover); }
+    .rec-chip[aria-pressed="true"], .w3-chip[aria-pressed="true"] { background: #0c4a6e; border-color: #38bdf8; color: #fff; }
+    .rec-chip:focus-visible, .w3-chip:focus-visible, .w3-btn:focus-visible { outline: 3px solid #38bdf8; outline-offset: 2px; }
+    .w3-btn { background: var(--bg-elev); color: #f1f5f9; border: 2px solid #475569; border-radius: 12px; min-height: 48px; padding: 8px 16px; font-size: 1rem; font-weight: 800; cursor: pointer; font-family: inherit; }
+    .w3-btn.primary { background: #14532d; border-color: #22c55e; }
+    .w3-btn.danger { background: #450a0a; border-color: #ef4444; }
+    .w3-btn.on, .w3-btn[aria-pressed="true"] { border-color: #38bdf8; background: #0c4a6e; }
+    .rec-fault-box { background: rgba(56,189,248,0.08); border: 1px solid rgba(56,189,248,0.35); border-radius: 12px; padding: 10px 14px; margin: 10px 0; }
+    .rec-fault-box p { margin: 4px 0; font-size: 0.95rem; }
+    .rec-list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; gap: 10px; }
+    .rec-drill { background: #0f172a; border: 2px solid #334155; border-radius: 12px; padding: 10px 14px; }
+    .rec-drill.other { opacity: 0.85; border-style: dashed; }
+    .rec-dt { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+    .rec-meta { font-size: 0.8rem; color: #94a3b8; }
+    .rec-feel { margin: 6px 0; font-size: 1rem; }
+    .rec-eq { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+    .rec-eq .badge.env { background: rgba(129,140,248,0.15); border-color: rgba(129,140,248,0.4); color: #c7d2fe; }
+    .rec-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+    .w3-warn { background: #422006; border: 2px solid #f59e0b; border-radius: 10px; padding: 8px 12px; margin: 8px 0; color: #fde68a; font-weight: 600; font-size: 0.92rem; }
+    .w3-sub { color: #94a3b8; font-size: 0.85rem; margin: 4px 0 8px; }
+    .w3-grp { margin: 14px 0 4px; font-size: 1rem; color: #e2e8f0; }
+    .w3-queue { background: rgba(16,185,129,0.08); border: 1px solid rgba(16,185,129,0.35); border-radius: 12px; padding: 10px 14px; margin: 10px 0; }
+    .w3-queue ul { margin: 6px 0; padding-left: 20px; }
+    .w3-queue li { margin: 4px 0; overflow-wrap: anywhere; }
+    .problem-row { align-items: center; }
+    .problem-row select { background: var(--bg-elev); color: #f1f5f9; border: 2px solid #475569; border-radius: 10px; min-height: 44px; padding: 6px 10px; font-size: 0.95rem; max-width: 100%; font-family: inherit; }
+    .w3-panel { background: var(--bg-card); border: 2px solid var(--border, #334155); border-radius: 14px; padding: 14px 16px; }
+    .w3-panel h3 { margin: 0 0 6px; }
+    .w3-ctl { display: grid; grid-template-columns: 1fr; gap: 4px; margin: 10px 0; font-size: 0.95rem; font-weight: 700; color: #cbd5e1; }
+    .w3-ctl input[type=range] { width: 100%; min-height: 36px; accent-color: #38bdf8; }
+    .w3-ctl select { background: #020617; color: #f1f5f9; border: 2px solid #475569; border-radius: 10px; min-height: 44px; padding: 6px 10px; font-size: 1rem; max-width: 100%; font-family: inherit; }
+    .w3-check { display: flex; align-items: center; gap: 10px; min-height: 44px; font-weight: 600; cursor: pointer; overflow-wrap: anywhere; }
+    .w3-check input { width: 24px; height: 24px; flex: 0 0 auto; }
+    .pace-card { background: #0f172a; border: 2px solid #334155; border-radius: 16px; padding: 12px 16px; margin: 12px 0; text-align: center; }
+    .pace-card.hit { border-color: #22c55e; background: #052e16; }
+    .pace-digits { font-size: clamp(96px, 30vw, 220px); font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; color: #fde68a; margin: 6px 0; }
+    .pace-label { font-size: clamp(22px, 6vw, 40px); font-weight: 800; line-height: 1.2; min-height: 1.3em; overflow-wrap: anywhere; }
+    .pace-card.hit .pace-label { color: #86efac; }
+    .pace-meta { color: #94a3b8; font-size: 0.95rem; margin: 6px 0; }
+    .pace-card .rec-row, .pace-card .w3-ctl { text-align: left; justify-content: center; }
+    .w3-ctl-wide { text-align: left; }
+    .cr-badge { position: fixed; left: 12px; bottom: 12px; z-index: 1100; background: #052e16; color: #fff; border: 3px solid #22c55e; border-radius: 14px; min-height: 52px; padding: 8px 16px; font-size: 1rem; font-weight: 800; cursor: pointer; max-width: calc(100vw - 24px); font-family: inherit; }
+    body.mat-open .cr-badge, body.cue-open .cr-badge, body.sr-open .cr-badge { display: none; } /* those overlays carry their own voice toggle */
+    .cr-badge:focus-visible { outline: 4px solid #38bdf8; outline-offset: 2px; }
+    .cr-flash { position: fixed; inset: 0; z-index: 1090; background: rgba(0,0,0,0.92); color: #fde68a; display: flex; flex-direction: column; gap: 0.5em; align-items: center; justify-content: center; text-align: center; padding: 24px; font-size: clamp(2rem, 9vw, 5rem); font-weight: 900; line-height: 1.2; overflow-wrap: anywhere; pointer-events: none; }
+    .cr-flash.hidden { display: none; }
+    .cr-flash span { display: block; }
+    .clip-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 0 0 8px; }
+    .clip-time { background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.45); color: #bae6fd; border-radius: 999px; padding: 4px 12px; font-weight: 800; font-variant-numeric: tabular-nums; font-size: 0.95rem; }
+    .keyfeel-card { background: #422006; border: 2px solid #f59e0b; border-radius: 12px; padding: 10px 14px; margin: 10px 0 0; color: #fef3c7; }
+    .keyfeel-card b { display: block; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; color: #fcd34d; margin-bottom: 2px; }
+    .keyfeel-card strong { font-size: 1.1rem; line-height: 1.35; overflow-wrap: anywhere; }
+    .sr-tpls { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px; margin: 6px 0; }
+    .sr-chip.sr-tpl { text-align: left; font-weight: 600; font-size: 15px; padding: 10px 12px; }
+    .sr-tpl-h { display: block; font-size: 18px; font-weight: 900; }
+    .sr-tpl-b { display: block; font-size: 14px; color: #cbd5e1; margin-top: 2px; overflow-wrap: anywhere; }
+    .sr-qdrills { margin: 4px 0 4px 20px; padding: 0; font-size: 15px; }
+    .sr-drillbtn { display: block; width: 100%; text-align: left; margin: 6px 0; }
+    .sr-drillbtn .sr-sub { display: block; margin: 2px 0 0; }
+    @media (max-width: 600px) { .rec-acts .w3-btn { flex: 1 1 100%; } .cr-badge { left: 8px; right: 8px; bottom: 8px; max-width: none; } }
+    @media (prefers-reduced-motion: reduce) { .rec-panel *, .pace-card *, .cr-flash, .cr-badge { transition: none !important; animation: none !important; } }
   </style>
 
 </head>
@@ -1728,10 +1801,12 @@
     <section class="filter-card" id="filterCard">
       <div class="filter-row" id="routinePills"></div>
       <div class="filter-row" id="sectionPills"></div>
+      <div class="filter-row problem-row" id="problemPills"></div>
     </section>
 
     <!-- VIEW 1: DRILL DECK PLAYER -->
     <main id="view-deck" role="tabpanel">
+      <div id="recPanel"></div>
       <div class="deck-nav-bar">
         <div style="display:flex; gap:8px; flex-wrap:wrap;">
           <button class="nav-btn" id="btnPrevSection" title="Previous Section (Up Arrow)">&laquo; Prev Section</button>
@@ -1755,6 +1830,7 @@
         <span><kbd>Space</kbd> Play / Pause Video Short</span>
         <span><kbd>T</kbd> Toggle Cadence Metronome</span>
         <span><kbd>M</kbd> Mark Drill Completed Today</span>
+        <span><kbd>V</kbd> Spoken Cue Repeater</span>
       </div>
     </main>
 
@@ -1789,6 +1865,10 @@
 
   <!-- PRE-SHOT CARDS (fullscreen starred-cue overlay from the Swing Checklist, rendered by renderCue) -->
   <div id="cueOverlay" class="cue-overlay hidden" role="dialog" aria-modal="true" aria-label="Pre-shot cards" tabindex="-1"></div>
+
+  <!-- SPOKEN CUE REPEATER: visual fallback flash + always-visible "on" badge (stops the loop) -->
+  <div id="crFlash" class="cr-flash hidden" role="status" aria-live="assertive"></div>
+  <button type="button" id="crBadge" class="cr-badge hidden" data-w3="cr-toggle" data-owner="badge" aria-label="Stop the spoken cue repeater">&#128266; Cue voice on. Tap or press V to stop</button>
 
   <!-- PARK IT: floating quick capture (Checklist, Feels and Mat views) -->
   <button type="button" id="parkFab" class="park-fab hidden" aria-haspopup="dialog" aria-expanded="false" title="Park a mid-session idea without switching feels">🅿️ Park it</button>
@@ -2240,7 +2320,8 @@
           kind: SR_KINDS.includes(b.kind) ? b.kind : "block", note: pdStr(b.note, 300),
           secs: Math.max(0, Math.min(86400, Math.round(Number(b.secs)) || 0)),
           hit: Math.max(0, Math.min(999, Math.round(Number(b.hit)) || 0)), miss: Math.max(0, Math.min(999, Math.round(Number(b.miss)) || 0)),
-          cluster: srNum(b.cluster, 0, 999) === null ? null : Math.round(srNum(b.cluster, 0, 999))
+          cluster: srNum(b.cluster, 0, 999) === null ? null : Math.round(srNum(b.cluster, 0, 999)),
+          drillIds: srStrList(b.drillIds, 8), curDrill: Math.max(0, Math.min(7, Math.round(Number(b.curDrill)) || 0))
         }));
       }
       function srStrList(v, max) {
@@ -2287,6 +2368,41 @@
         };
       }
 
+      // ---- Wave 3 sanitizers (function declarations only: loadState() runs before the WAVE 3 section) ----
+      function w3PhaseIds() { return ["setup", "takeaway", "top", "transition", "impact", "finish", "short-game", "putting", "mental-tempo"]; }
+      function w3Clamp(v, lo, hi, def) { const n = typeof v === "number" && isFinite(v) ? v : def; return Math.max(lo, Math.min(hi, n)); }
+      function sanitizeRecEnvs(v) {
+        if (!Array.isArray(v)) return null; // null = default from the player's gear, else every environment
+        const ok = (DEFAULTS.environments || []).map((e) => e.id);
+        return Array.from(new Set(v.filter((x) => typeof x === "string" && ok.includes(x))));
+      }
+      function sanitizeFaultId(v) { return typeof v === "string" && (DEFAULTS.faults || []).some((f) => f.id === v) ? v : ""; }
+      function sanitizeFaultFilter(v) { return sanitizeFaultId(v) || "all"; }
+      function sanitizePhaseFilter(v) { return typeof v === "string" && w3PhaseIds().includes(v) ? v : "all"; }
+      function sanitizeSessionQueue(v) {
+        return Array.isArray(v) ? Array.from(new Set(v.filter((x) => typeof x === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(x)))).slice(0, 12) : [];
+      }
+      function sanitizePacing(v) {
+        v = v && typeof v === "object" && !Array.isArray(v) ? v : {};
+        return {
+          mode: ["auto", "block", "transfer"].includes(v.mode) ? v.mode : "auto",
+          blockSec: Math.round(w3Clamp(v.blockSec, 2, 5, 4) * 2) / 2,
+          transferSec: Math.round(w3Clamp(v.transferSec, 15, 20, 18)),
+          speak: v.speak === true
+        };
+      }
+      function sanitizeCueRepeater(v) {
+        v = v && typeof v === "object" && !Array.isArray(v) ? v : {};
+        return {
+          everySec: Math.round(w3Clamp(v.everySec, 5, 20, 10)),
+          rate: Math.round(w3Clamp(v.rate, 0.6, 1.5, 1) * 100) / 100,
+          volume: Math.round(w3Clamp(v.volume, 0, 1, 1) * 100) / 100,
+          voiceURI: typeof v.voiceURI === "string" ? v.voiceURI.slice(0, 200) : "",
+          includeIds: Array.isArray(v.includeIds) ? Array.from(new Set(v.includeIds.filter((x) => typeof x === "string" && /^[A-Za-z0-9_:-]{1,90}$/.test(x)))).slice(0, 10) : null
+        };
+      }
+      function sanitizeToneProfile(v) { return v === "wood" || v === "thud" ? v : "crisp"; }
+
       function loadState() {
         const base = {
           activeView: "deck",
@@ -2327,7 +2443,15 @@
           parkingLot: [],
           checklistLog: {},        // { "YYYY-MM-DD": [checkedItemIds] }
           checklistCustomItems: [],// [{ id, phase, title, cue }]
-          checklistFocusOnly: false
+          checklistFocusOnly: false,
+          recEnvs: null,           // recommender environment filter: null = from PLAYER_DATA gear (else all); [] = all
+          recFaultId: "",          // fault picked in "What's going wrong?"
+          sessionQueue: [],        // drill ids queued for the next coached session
+          pacing: sanitizePacing(null),
+          cueRepeater: sanitizeCueRepeater(null),
+          toneProfile: "crisp",    // "crisp" | "wood" | "thud"
+          activeFault: "all",      // deck filter: "Problem solved"
+          activePhase: "all"       // deck filter: swing phase
         };
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
@@ -2351,6 +2475,14 @@
             base.checklistLog = sanitizeChecklistLog(saved.checklistLog);
             base.checklistCustomItems = sanitizeChecklistCustom(saved.checklistCustomItems);
             if (typeof saved.checklistFocusOnly === "boolean") base.checklistFocusOnly = saved.checklistFocusOnly;
+            base.recEnvs = sanitizeRecEnvs(saved.recEnvs);
+            base.recFaultId = sanitizeFaultId(saved.recFaultId);
+            base.sessionQueue = sanitizeSessionQueue(saved.sessionQueue);
+            base.pacing = sanitizePacing(saved.pacing);
+            base.cueRepeater = sanitizeCueRepeater(saved.cueRepeater);
+            base.toneProfile = sanitizeToneProfile(saved.toneProfile);
+            base.activeFault = sanitizeFaultFilter(saved.activeFault);
+            base.activePhase = sanitizePhaseFilter(saved.activePhase);
             if (Array.isArray(saved.drills) && saved.drills.length) base.drills = saved.drills;
             if (Array.isArray(saved.deletedDrillIds)) base.deletedDrillIds = saved.deletedDrillIds.filter((x) => typeof x === "string");
             if (typeof saved.lastBackupAt === "string") base.lastBackupAt = saved.lastBackupAt;
@@ -2402,7 +2534,7 @@
       }
 
       const activeOscillators = new Set();
-      function playToneAt(freq, durationSec, type = "sine", gainVal = 0.3, when = 0) {
+      function playToneAt(freq, durationSec, type = "sine", gainVal = 0.3, when = 0, track = null) {
         try {
           const ctx = getAudioContext();
           if (!ctx) return;
@@ -2416,8 +2548,10 @@
           osc.connect(gain);
           gain.connect(ctx.destination);
           activeOscillators.add(osc);
+          if (track) track.add(osc);
           osc.onended = () => {
             activeOscillators.delete(osc);
+            if (track) track.delete(osc);
             try { osc.disconnect(); gain.disconnect(); } catch (e) { /* ignore */ }
           };
           osc.start(t0);
@@ -2439,6 +2573,81 @@
         } else {
           playTone(220, 0.25, "sawtooth", 0.25);
         }
+      }
+
+      // ---- Tone profiles for the metronome, pacing chimes and cue chimes (HackMotion biofeedback keeps its own tones) ----
+      const TONE_PROFILES = [
+        { id: "crisp", name: "Crisp strike", desc: "The original clean beeps. Cuts through sim noise." },
+        { id: "wood", name: "Woodblock", desc: "A short wooden click: filtered noise burst through resonant band-pass filters." },
+        { id: "thud", name: "Soft thud", desc: "A low, quiet thump with a fast decay, for late-night indoor use." }
+      ];
+      // f = crisp frequency, d = crisp duration, t = crisp wave, g = gain, th = thud pitch
+      const TONE_KINDS = {
+        takeaway: { f: 520, d: 0.12, t: "sine", g: 0.4, th: 120 },
+        top: { f: 680, d: 0.12, t: "sine", g: 0.45, th: 150 },
+        impact: { f: 880, d: 0.18, t: "triangle", g: 0.55, th: 190 },
+        chime: { f: 784, d: 0.14, t: "triangle", g: 0.5, th: 170 },
+        hit: { f: 988, d: 0.3, t: "triangle", g: 0.6, th: 220 },
+        soft: { f: 660, d: 0.22, t: "sine", g: 0.2, th: 140 }
+      };
+      let noiseBuf = null;
+      function getNoiseBuffer(ctx) {
+        if (!noiseBuf || noiseBuf.sampleRate !== ctx.sampleRate) {
+          noiseBuf = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * 0.06)), ctx.sampleRate);
+          const ch = noiseBuf.getChannelData(0);
+          for (let i = 0; i < ch.length; i++) ch[i] = Math.random() * 2 - 1;
+        }
+        return noiseBuf;
+      }
+      // kind: takeaway | top | impact | chime | hit | soft. `track` (optional Set) lets a caller stop only its own tones.
+      function playProfileTone(kind, when, track, profOverride) {
+        const prof = profOverride || state.toneProfile;
+        const k = TONE_KINDS[kind] || TONE_KINDS.chime;
+        if (prof !== "wood" && prof !== "thud") { playToneAt(k.f, k.d, k.t, k.g, when || 0, track || null); return; }
+        try {
+          const ctx = getAudioContext();
+          if (!ctx) return;
+          const vol = numOr(state.cadenceVolume, 0.7);
+          const t0 = Math.max(when || 0, ctx.currentTime);
+          const reg = (node, extra) => {
+            activeOscillators.add(node);
+            if (track) track.add(node);
+            node.onended = () => {
+              activeOscillators.delete(node);
+              if (track) track.delete(node);
+              try { node.disconnect(); extra.forEach((n) => n.disconnect()); } catch (e) { /* ignore */ }
+            };
+          };
+          if (prof === "wood") {
+            const src = ctx.createBufferSource();
+            src.buffer = getNoiseBuffer(ctx);
+            const g = ctx.createGain();
+            const peak = Math.min(2.5, k.g * vol * 7);
+            g.gain.setValueAtTime(peak, t0);
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.09);
+            const bpA = ctx.createBiquadFilter(), bpB = ctx.createBiquadFilter();
+            bpA.type = "bandpass"; bpA.frequency.value = k.f * 2.2; bpA.Q.value = 14;
+            bpB.type = "bandpass"; bpB.frequency.value = k.f * 3.4; bpB.Q.value = 9;
+            const gB = ctx.createGain(); gB.gain.value = 0.6;
+            src.connect(bpA); bpA.connect(g);
+            src.connect(bpB); bpB.connect(gB); gB.connect(g);
+            g.connect(ctx.destination);
+            reg(src, [bpA, bpB, gB, g]);
+            src.start(t0);
+            src.stop(t0 + 0.1);
+          } else {
+            const osc = ctx.createOscillator(), g = ctx.createGain();
+            osc.type = "sine";
+            osc.frequency.setValueAtTime(k.th, t0);
+            osc.frequency.exponentialRampToValueAtTime(k.th * 0.55, t0 + 0.12);
+            g.gain.setValueAtTime(Math.min(1, k.g * vol * 1.9), t0);
+            g.gain.exponentialRampToValueAtTime(0.0001, t0 + (kind === "hit" ? 0.24 : 0.16));
+            osc.connect(g); g.connect(ctx.destination);
+            reg(osc, [g]);
+            osc.start(t0);
+            osc.stop(t0 + 0.28);
+          }
+        } catch (err) { console.warn("Audio error:", err); }
       }
 
       const cadenceState = {
@@ -2484,9 +2693,9 @@
       // Schedule one full swing cycle (3 tones + visual events) at absolute audio time t. Returns cycle length.
       function scheduleCadenceCycle(t) {
         const { backSec, downSec, delaySec } = getCadenceTiming();
-        playToneAt(520, 0.12, "sine", 0.4, t);
-        playToneAt(680, 0.12, "sine", 0.45, t + backSec);
-        playToneAt(880, 0.18, "triangle", 0.55, t + backSec + downSec);
+        playProfileTone("takeaway", t);
+        playProfileTone("top", t + backSec);
+        playProfileTone("impact", t + backSec + downSec);
         cadenceState.events.push(
           { t, phase: "takeaway" },
           { t: t + backSec, phase: "top" },
@@ -2681,7 +2890,7 @@
       }
 
       // ---- Backup / import helpers ----
-      const SCHEMA_VERSION = 6; // v6: coached sessions (sessionLogs / sessionRun); // v3: sessions / sessionPrefs / activeSession (mat mode); v4: swing checklist; v5: coach layer (feelsUser / blocks / parkingLot / checklistBacklogIds / checklistClub); all additive
+      const SCHEMA_VERSION = 7; // v7: wave 3 (recEnvs / recFaultId / sessionQueue / pacing / cueRepeater / toneProfile / activeFault / activePhase; block drillIds inside sessionRun); v6: coached sessions (sessionLogs / sessionRun); // v3: sessions / sessionPrefs / activeSession (mat mode); v4: swing checklist; v5: coach layer (feelsUser / blocks / parkingLot / checklistBacklogIds / checklistClub); all additive
       function buildPersistObject() {
         return {
           schemaVersion: SCHEMA_VERSION,
@@ -2717,7 +2926,15 @@
           cadenceDelaySec: state.cadenceDelaySec,
           cadenceVolume: state.cadenceVolume,
           simTemp: state.simTemp,
-          simAltitude: state.simAltitude
+          simAltitude: state.simAltitude,
+          recEnvs: state.recEnvs,
+          recFaultId: state.recFaultId,
+          sessionQueue: state.sessionQueue,
+          pacing: state.pacing,
+          cueRepeater: state.cueRepeater,
+          toneProfile: state.toneProfile,
+          activeFault: state.activeFault,
+          activePhase: state.activePhase
         };
       }
 
@@ -2817,6 +3034,14 @@
           parts.push(`${Object.keys(state.checklistLog).length} checklist days`);
         }
         if (typeof parsed.checklistFocusOnly === "boolean") state.checklistFocusOnly = parsed.checklistFocusOnly;
+        if (parsed.recEnvs !== undefined) state.recEnvs = sanitizeRecEnvs(parsed.recEnvs);
+        if (parsed.recFaultId !== undefined) state.recFaultId = sanitizeFaultId(parsed.recFaultId);
+        if (Array.isArray(parsed.sessionQueue)) { state.sessionQueue = sanitizeSessionQueue(parsed.sessionQueue); if (state.sessionQueue.length) parts.push(`${state.sessionQueue.length} queued session drills`); }
+        if (isPlainObj(parsed.pacing)) state.pacing = sanitizePacing(parsed.pacing);
+        if (isPlainObj(parsed.cueRepeater)) state.cueRepeater = sanitizeCueRepeater(parsed.cueRepeater);
+        if (parsed.toneProfile !== undefined) state.toneProfile = sanitizeToneProfile(parsed.toneProfile);
+        if (parsed.activeFault !== undefined) state.activeFault = sanitizeFaultFilter(parsed.activeFault);
+        if (parsed.activePhase !== undefined) state.activePhase = sanitizePhaseFilter(parsed.activePhase);
         const bag = objs(parsed.bagMatrix, (b) => str(b.id) || str(b.club));
         if (bag && bag.length) { state.bagMatrix = mergeBagMatrix(bag); parts.push(`${bag.length} bag clubs`); }
         if (typeof parsed.cadencePresetId === "string") state.cadencePresetId = parsed.cadencePresetId;
@@ -2843,6 +3068,10 @@
           Object.keys(state.feelsUser || {}).length > 0 ||
           !!(state.blocks && (state.blocks.active || (state.blocks.history || []).length)) ||
           (state.parkingLot || []).length > 0 ||
+          (state.sessionQueue || []).length > 0 ||
+          state.recEnvs !== null || !!state.recFaultId || state.toneProfile !== "crisp" ||
+          JSON.stringify(state.pacing) !== JSON.stringify(sanitizePacing(null)) ||
+          JSON.stringify(state.cueRepeater) !== JSON.stringify(sanitizeCueRepeater(null)) ||
           Object.values(state.drillNotes || {}).some((v) => v) ||
           (state.courses || []).some((c) => c.custom || c.favorite || c.userNotes || c.rating);
       }
@@ -2899,11 +3128,14 @@
         return state.deliveryLogs[iso];
       }
 
-      function getFilteredDrills(ignoreSection = false) {
+      // skip (optional): { fault: true, phase: true } leaves that dimension out (used to build the filter chips).
+      function getFilteredDrills(ignoreSection = false, skip = null) {
         return state.drills.filter((d) => {
           if (state.activeMode !== "all" && !(d.modes || []).includes(state.activeMode)) return false;
           if (state.activeRoutine !== "all" && !(d.days || []).includes(state.activeRoutine)) return false;
           if (!ignoreSection && state.activeSection !== "all" && d.section !== state.activeSection) return false;
+          if (!(skip && skip.fault) && state.activeFault !== "all" && !(d.faultTags || []).includes(state.activeFault)) return false;
+          if (!(skip && skip.phase) && state.activePhase !== "all" && d.swingPhase !== state.activePhase) return false;
           return true;
         });
       }
@@ -2933,7 +3165,7 @@
         return /^https?:\/\//i.test(s) ? s : `https://${s}`;
       }
 
-      function parseYoutubeEmbedUrl(rawUrl) {
+      function parseYoutubeEmbedUrl(rawUrl, startSec, endSec) {
         const normalized = normalizeExternalUrl(rawUrl);
         if (!normalized) return null;
         try {
@@ -2951,7 +3183,9 @@
             id = u.searchParams.get("v");
           }
           if (!id) return null;
-          return `https://www.youtube.com/embed/${encodeURIComponent(id)}?rel=0&playsinline=1`;
+          const st = typeof startSec === "number" && isFinite(startSec) && startSec >= 0 ? Math.floor(startSec) : null;
+          const en = typeof endSec === "number" && isFinite(endSec) && endSec >= 0 ? Math.floor(endSec) : null;
+          return `https://www.youtube.com/embed/${encodeURIComponent(id)}?rel=0&playsinline=1${st !== null ? "&start=" + st : ""}${en !== null && (st === null || en > st) ? "&end=" + en : ""}`;
         } catch {
           return null;
         }
@@ -3222,6 +3456,54 @@
             renderAll();
           };
         });
+
+        // "Problem solved" taxonomy: filter by swing phase and by fault, next to the day / section filters.
+        const pRow = document.getElementById("problemPills");
+        if (pRow) {
+          const faultList = Array.isArray(DEFAULTS.faults) ? DEFAULTS.faults : [];
+          const forFault = getFilteredDrills(true, { fault: true });
+          const forPhase = getFilteredDrills(true, { phase: true });
+          const faultCount = {};
+          forFault.forEach((d) => (d.faultTags || []).forEach((t) => { faultCount[t] = (faultCount[t] || 0) + 1; }));
+          const phaseCount = {};
+          forPhase.forEach((d) => { if (d.swingPhase) phaseCount[d.swingPhase] = (phaseCount[d.swingPhase] || 0) + 1; });
+          let reset = false;
+          if (state.activeFault !== "all" && !faultCount[state.activeFault]) { state.activeFault = "all"; reset = true; }
+          if (state.activePhase !== "all" && !phaseCount[state.activePhase]) { state.activePhase = "all"; reset = true; }
+          if (reset) saveState();
+          if (!faultList.length) { pRow.innerHTML = ""; }
+          else {
+            pRow.innerHTML = `<span class="filter-label">Swing phase</span>` +
+              `<button class="chip ${state.activePhase === "all" ? "active" : ""}" data-phase="all" aria-pressed="${state.activePhase === "all"}">All phases</button>` +
+              w3PhaseIds().filter((p) => phaseCount[p]).map((p) => `<button class="chip ${state.activePhase === p ? "active" : ""}" data-phase="${esc(p)}" aria-pressed="${state.activePhase === p}">${esc(w3PhaseName(p))} (${phaseCount[p]})</button>`).join("") +
+              `<span class="filter-label">Problem solved</span>` +
+              `<select id="faultFilter" aria-label="Filter drills by the fault they fix"><option value="all">All faults</option>` +
+              w3PhaseIds().map((p) => {
+                const opts = faultList.filter((f) => f.swingPhase === p && faultCount[f.id]);
+                return opts.length ? `<optgroup label="${esc(w3PhaseName(p))}">${opts.map((f) => `<option value="${esc(f.id)}" ${state.activeFault === f.id ? "selected" : ""}>${esc(f.name)} (${faultCount[f.id]})</option>`).join("")}</optgroup>` : "";
+              }).join("") + `</select>`;
+            pRow.querySelectorAll("[data-phase]").forEach((btn) => {
+              btn.onclick = () => {
+                const v = btn.getAttribute("data-phase");
+                state.activePhase = state.activePhase === v ? "all" : v;
+                state.activeSection = "all";
+                const filtered = getFilteredDrills();
+                if (filtered.length) state.selectedDrillId = filtered[0].id;
+                saveState();
+                renderAll();
+              };
+            });
+            const fsel = document.getElementById("faultFilter");
+            if (fsel) fsel.onchange = () => {
+              state.activeFault = sanitizeFaultFilter(fsel.value);
+              state.activeSection = "all";
+              const filtered = getFilteredDrills();
+              if (filtered.length) state.selectedDrillId = filtered[0].id;
+              saveState();
+              renderAll();
+            };
+          }
+        }
       }
 
       function jumpDrill(delta) {
@@ -3277,6 +3559,8 @@
             state.activeMode = "all";
             state.activeRoutine = "all";
             state.activeSection = "all";
+            state.activeFault = "all";
+            state.activePhase = "all";
             saveState();
             renderAll();
           };
@@ -3308,7 +3592,8 @@
         });
 
         const isDoneToday = todayLog.completedDrills.includes(drill.id);
-        const embedUrl = parseYoutubeEmbedUrl(drill.video && drill.video.youtubeUrl);
+        const clip = w3ClipRange(drill);
+        const embedUrl = parseYoutubeEmbedUrl(drill.video && drill.video.youtubeUrl, clip && clip.s, clip && clip.e);
         const openYtUrl = normalizeExternalUrl(drill.video && drill.video.youtubeUrl);
         const rawLocalPath = (drill.video && drill.video.localPath) || "";
         const cleanLocalPath = rawLocalPath.trim() === "shorts/" ? "" : rawLocalPath.trim();
@@ -3326,6 +3611,7 @@
           <div class="drill-stage">
             <!-- LEFT COLUMN: SHORT VIDEO / VISUAL & MODE PLANS -->
             <div class="panel">
+              ${showYt && clip ? `<div class="clip-row"><span class="clip-time" aria-label="Clip plays ${esc(clip.s !== null ? w3FmtTime(clip.s) : "from the start")}${clip.e !== null ? " to " + esc(w3FmtTime(clip.e)) : ""}">&#9654; ${clip.s !== null && clip.e !== null ? `${esc(w3FmtTime(clip.s))}&ndash;${esc(w3FmtTime(clip.e))}` : clip.s !== null ? `from ${esc(w3FmtTime(clip.s))}` : `to ${esc(w3FmtTime(clip.e))}`}</span></div>` : ""}
               <div class="media-frame" id="mediaFrame">
                 ${showYt ? `<iframe id="ytIframe" src="${esc(embedUrl)}" allowfullscreen></iframe>` : ""}
                 ${showVideo ? `
@@ -3345,6 +3631,7 @@
                 </div>
               </div>
 
+              ${drill.keyFeel ? `<div class="keyfeel-card" role="note"><b>Key takeaway</b><strong>${esc(drill.keyFeel)}</strong></div>` : ""}
               <div class="media-toolbar">
                 <div class="media-toolbar-left">
                   <button class="btn-sm" id="btnToggleDiagram">👁️ Toggle Diagram / Video</button>
@@ -5430,30 +5717,16 @@
               </div>
             </div>
 
-            <!-- PRESETS SELECTOR BENTO -->
-            <div class="panel">
-              <h3 style="margin-top:0; margin-bottom:12px;">🎵 Select Cadence Rhythm Preset</h3>
-              <div class="cadence-presets-grid">
-                ${presets.map((p) => {
-                  const isAct = p.id === state.cadencePresetId;
-                  return `
-                    <div class="cadence-card ${isAct ? "active" : ""}" data-pick-cadence="${esc(p.id)}">
-                      <div>
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                          <span class="badge ${p.type === "full-swing" ? "real" : "almost"}">${esc(p.ratio)} Ratio</span>
-                          <span style="font-size:0.78rem; font-weight:700; color:var(--muted);">${p.bpm} BPM</span>
-                        </div>
-                        <h4 style="margin:4px 0 6px;">${esc(p.name)}</h4>
-                        <p style="font-size:0.8rem; color:var(--muted); margin:0;">${esc(p.desc)}</p>
-                      </div>
-                      <div style="margin-top:12px; font-size:0.75rem; color:#7dd3fc; border-top:1px solid rgba(255,255,255,0.06); padding-top:6px;">
-                        ⭐ ${esc(p.proExamples.split(",")[0])}
-                      </div>
-                    </div>
-                  `;
-                }).join("")}
-              </div>
+            ${w3TonePanelHtml()}
+
+            <div class="w3-panel"><h3>&#9202; Pacing timer: block vs transfer reps</h3>
+              <p class="w3-sub">Block reps (2-5 s) groove a feel. Transfer reps (15-20 s) rehearse the full pre-shot routine. Auto uses the selected drill's pacing.</p>
+              ${paceCardHtml("cadence", "", state.selectedDrillId)}
             </div>
+
+            ${crPanelHtml("view")}
+
+            ${w3PresetsHtml(presets)}
 
             <!-- HACKMOTION & CADENCE BIOMECHANICS SYNC GUIDE -->
             <div class="panel" style="background:linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(17,24,39,0.95) 100%); border-color:rgba(16,185,129,0.3);">
@@ -5856,6 +6129,14 @@
                 <label>YouTube Short / Video URL (optional)</label>
                 <input id="edYoutubeUrl" value="${esc((d.video && d.video.youtubeUrl) || "")}" placeholder="https://youtube.com/shorts/..." />
               </div>
+              <div class="field">
+                <label>Clip start (m:ss or seconds, optional)</label>
+                <input id="edStartSec" value="${esc(d.video && typeof d.video.startSec === "number" ? w3FmtTime(d.video.startSec) : "")}" placeholder="0:42" autocomplete="off" />
+              </div>
+              <div class="field">
+                <label>Clip end (m:ss or seconds, optional)</label>
+                <input id="edEndSec" value="${esc(d.video && typeof d.video.endSec === "number" ? w3FmtTime(d.video.endSec) : "")}" placeholder="1:08" autocomplete="off" />
+              </div>
             </div>
 
             <div class="form-grid" style="margin-top:12px;">
@@ -5972,6 +6253,10 @@
             showToast("Please give the drill a title!");
             return;
           }
+          const clipStart = w3ParseTime(document.getElementById("edStartSec").value);
+          const clipEnd = w3ParseTime(document.getElementById("edEndSec").value);
+          if (Number.isNaN(clipStart) || Number.isNaN(clipEnd)) { showToast("Clip start / end must look like 0:42 or 42 (seconds)."); return; }
+          if (clipStart !== null && clipEnd !== null && clipEnd <= clipStart) { showToast("Clip end must be after the clip start."); return; }
           const modes = [];
           if (document.getElementById("edModeReal").checked) modes.push("real");
           if (document.getElementById("edModeAlmost").checked) modes.push("almost");
@@ -6007,6 +6292,8 @@
             }
           };
 
+          if (clipStart !== null) obj.video.startSec = clipStart;
+          if (clipEnd !== null) obj.video.endSec = clipEnd;
           obj.userEdited = true;
           if (existing) {
             for (const k of Object.keys(existing)) if (!(k in obj)) obj[k] = existing[k];
@@ -6313,7 +6600,8 @@
         const modeRoutine = mode === "almost" ? "kids-asleep" : mode === "sore" ? "gym-sore" : null;
         const pool = state.drills
           .map((d, i) => ({ d, i, min: parseDurationMin(d.duration) }))
-          .filter((x) => (x.d.modes || []).includes(mode));
+          .filter((x) => (x.d.modes || []).includes(mode))
+          .filter((x) => !((x.d.environments || []).length && (x.d.environments || []).every((e) => e === "gym"))); // gym work is not a ball-striking drill
         const rateCache = {};
         const rate = (x) => {
           if (!(x.d.id in rateCache)) { const r = recentRate(x.d.id); rateCache[x.d.id] = r === null ? 0.6 : r; }
@@ -6685,6 +6973,7 @@
         if (s) { postActiveDrill(null); saveState(); }
         mat.open = false;
         mat.confirm = false;
+        crStopIfOwner("mat");
         if (mat.tick) { clearInterval(mat.tick); mat.tick = null; }
         const ov = document.getElementById("matOverlay");
         ov.classList.add("hidden");
@@ -6813,6 +7102,7 @@
             <span class="sim-pill" data-sim-pill></span>
             <div class="mat-top-btns">
               <button type="button" class="mat-small-btn ${tempoOn ? "active" : ""}" id="matTempo" title="Start/stop the cadence metronome${tempoPreset ? ` at ${esc(tempoPreset.name)}` : ""} (T)">Tempo ${tempoOn ? "❚❚" : "▶"} ${esc(tempoPreset ? tempoPreset.name.split(" ")[0] : "")}</button>
+              ${crBtnHtml("mat", "mat-small-btn")}
               <button type="button" class="mat-small-btn" id="matPark" title="Park an idea without switching feels" aria-label="Park an idea">🅿️ Park</button>
               <button type="button" class="mat-small-btn" id="matFull" title="Full screen">⛶</button>
             </div>
@@ -6841,7 +7131,7 @@
             <button type="button" class="mat-btn" id="matNext">${isLast ? "Finish" : "Next ›"}<small>PgDn · →</small></button>
             <button type="button" class="mat-btn end" id="matEnd">End<small>Esc</small></button>
           </div>
-          <div class="mat-keys">Presenter clicker: PgDn = next · PgUp = prev · T = tempo · Shots from the sim are logged automatically when it is live.</div>
+          <div class="mat-keys">Presenter clicker: PgDn = next · PgUp = prev · T = tempo · V = cue voice · Shots from the sim are logged automatically when it is live.</div>
           ${mat.confirm ? `<div class="mat-confirm" role="alertdialog" aria-modal="true" aria-labelledby="matConfirmTitle">
             <div class="mat-confirm-box">
               <h2 id="matConfirmTitle">End session?</h2>
@@ -7033,6 +7323,7 @@
         else if (k === "m" || k === "M" || k === "x" || k === "X" || k === "2") { handled(); if (!e.repeat) logRep(false); }
         else if (k === "Backspace" || k === "u" || k === "U") { handled(); undoRep(); }
         else if (k === "t" || k === "T") { handled(); if (!e.repeat) toggleSessionTempo(); }
+        else if (k === "v" || k === "V") { handled(); if (!e.repeat) crToggle("mat"); }
         else if (k === "Escape") { handled(); requestEndSession(); }
         else if (k === "ArrowUp" || k === "ArrowDown" || k === "b" || k === "B" || k === ".") { handled(); } // clicker "blank" keys etc.: swallow
       }, true);
@@ -7610,6 +7901,7 @@
       function closeCue() {
         if (!clCue.open) return;
         clCue.open = false;
+        crStopIfOwner("cue");
         const ov = document.getElementById("cueOverlay");
         ov.classList.add("hidden");
         ov.innerHTML = "";
@@ -7638,6 +7930,7 @@
           <div class="cue-top">
             <span class="cue-count">${clCue.idx + 1} / ${clCue.ids.length}</span>
             <span class="cue-phase">${esc(it.kicker)}</span>
+            ${crBtnHtml("cue", "cue-btn")}
             <button type="button" class="cue-btn" data-cue-act="close" aria-label="Close pre-shot cards">&#10005; Close</button>
           </div>
           <div class="cue-body" data-cue-body aria-live="polite">
@@ -7690,6 +7983,7 @@
           const k = e.key;
           const tgt = e.target || {};
           if (k === "Escape") { e.preventDefault(); closeCue(); }
+          else if (k === "v" || k === "V") { e.preventDefault(); if (!e.repeat) crToggle("cue"); }
           else if (k === "Tab") {
             const btns = Array.from(ov.querySelectorAll("button"));
             if (!btns.length) { e.preventDefault(); return; }
@@ -8623,6 +8917,7 @@
         const b = run && run.idx >= 0 ? run.blocks[run.idx] : null;
         return {
           session_id: run ? srId(run.id) : null, feel_id: run ? srId(run.feelId) : null, block_id: run ? srId(run.blockId) : null,
+          drill_id: srCurDrillId(b),
           phase: b ? SR_PHASE[b.kind] || null : null,
           cluster: run && run.cluster >= 0 ? Math.min(999, run.cluster) : null
         };
@@ -8722,6 +9017,8 @@
         if (!sr.tick) sr.tick = setInterval(srTickClock, 1000);
       }
       function srClose() {
+        paceStopIfOwner("sr");
+        crStopIfOwner("sr");
         sr.open = false;
         if (sr.tick) { clearInterval(sr.tick); sr.tick = null; }
         const ov = document.getElementById("srOverlay");
@@ -8755,11 +9052,13 @@
         if (!tpl) { showToast("No session templates available."); return; }
         const f = getActiveFeel(), blk = getActiveBlock();
         const now = new Date();
+        const asg = srAssignQueue(tpl.blocks, w3Queue());
+        state.sessionQueue = asg.unplaced;
         state.sessionRun = {
           id: "cs-" + now.getTime().toString(36), date: todayISO(0), startedAt: now.toISOString(), templateId: tpl.id, minutes: tpl.minutes,
           feelId: f ? f.id : "", feelName: f ? f.name : "", blockId: blk ? blk.id : "", body: srCleanBody(su.body),
           idx: -1, cluster: -1, enteredAt: null, dialCheck: su.dialCheck || "",
-          blocks: srCleanBlocks(tpl.blocks.map((b) => ({ name: b.name, minutes: b.minutes, kind: b.kind, note: b.note })))
+          blocks: srCleanBlocks(tpl.blocks.map((b, i) => ({ name: b.name, minutes: b.minutes, kind: b.kind, note: b.note, drillIds: asg.per[i] })))
         };
         sr.run = state.sessionRun; sr.live = []; sr.fetched = null; sr.statsP = null; sr.tpl = tpl.id;
         sr.view = "run";
@@ -8768,6 +9067,7 @@
       function srEnter(i) {
         const run = state.sessionRun;
         if (!run || i < 0 || i >= run.blocks.length) return;
+        paceStopIfOwner("sr");
         srFlush(run);
         run.idx = i;
         run.cluster = Math.min(999, run.cluster + 1);
@@ -8783,13 +9083,14 @@
       function srFinish() {
         const run = state.sessionRun;
         if (!run) return;
+        paceStopIfOwner("sr");
         srFlush(run); run.enteredAt = null;
         saveState();
         srClearContext(); // later shots must not be tagged with this session
         const f = run.feelId ? feelById(run.feelId) : null;
         const todayMat = (state.sessions || []).filter((s) => s.date === run.date).flatMap((s) => s.blocks.filter((b) => b.done).map((b) => b.drillId));
         const clubs = srStrList(sr.live.map((s) => srClubChip(s.club)).filter(Boolean), 12);
-        const drills = srStrList(todayMat, 40).filter((id) => drillById(id));
+        const drills = srStrList(todayMat.concat(run.blocks.flatMap((b) => b.drillIds || [])), 40).filter((id) => drillById(id));
         sr.draft = {
           summary: "", findings: "", takeaway: "", nextStep: "", faultTags: [], clubs, drillIds: drills,
           feelId: f ? f.id : "", feelRating: 0, dial: null, promote: false
@@ -8883,6 +9184,7 @@
         if (e.key === "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
         if (e.key === "Escape") { e.preventDefault(); if (sr.confirmDiscard) { sr.confirmDiscard = false; srRender(); } else srClose(); return; }
         if (typing || sr.view !== "run") return;
+        if (e.key === "v" || e.key === "V") { e.preventDefault(); if (!e.repeat) crToggle("sr"); return; }
         if (e.key === "ArrowRight" || e.key === "PageDown") { e.preventDefault(); if (!e.repeat) srNext(); }
         else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); if (!e.repeat) srPrev(); }
       }, true);
@@ -8963,8 +9265,8 @@
         return `<div class="sr-wrap">
           <div class="sr-top"><h1 class="sr-h1">Coached session</h1><button type="button" class="sr-btn small" data-sr-act="close" data-fk="close">Close</button></div>
           <section class="sr-card"><h2>Length</h2>
-            <div class="sr-row" role="group" aria-label="Session length">${srTemplates().map((t) => srChip("tpl", t.id, esc(t.minutes + " min") + (t.minutes === 30 ? " (typical)" : ""), su.tpl === t.id)).join("")}</div>
-            ${(() => { const t = srTemplate(su.tpl); return t ? `<ol class="sr-plan">${t.blocks.map((b) => `<li><strong>${esc(b.name)}</strong> <span class="sr-sub">${esc(b.minutes)} min &middot; ${esc(SR_KIND_LABEL[b.kind] || b.kind)}</span></li>`).join("")}</ol>` : ""; })()}
+            <div class="sr-tpls" role="group" aria-label="Session length">${srTemplates().map((t) => `<button type="button" class="sr-chip sr-tpl" data-sr-act="tpl" data-sr-val="${esc(t.id)}" data-fk="tpl:${esc(t.id)}" aria-pressed="${su.tpl === t.id ? "true" : "false"}"><span class="sr-tpl-h">${esc(t.minutes)} min${t.minutes === 30 ? " (typical)" : ""}</span>${t.blocks.map((b) => `<span class="sr-tpl-b">${esc(b.name)} &middot; ${esc(b.minutes)} min</span>`).join("")}</button>`).join("")}</div>
+            ${srTemplatePlanHtml(su.tpl)}
           </section>
           <section class="sr-card"><h2>Feel in focus</h2>
             ${f ? `<p class="sr-big">${esc(f.name)}</p>${f.cue ? `<p>${esc(f.cue)}</p>` : ""}` : `<p>No active feel. Start a block in Feels &amp; Blocks to give the data a feel to judge. You can still run the session.</p>`}
@@ -9017,6 +9319,7 @@
             <div class="sr-clock"><small>Block</small> <span id="srBlockClock"></span></div>
             <div class="sr-clock"><small>Total</small> <span id="srTotalClock"></span></div>
             <span class="sim-pill" data-sim-pill></span>
+            ${crBtnHtml("sr", "sr-btn small")}
             <button type="button" class="sr-btn small" data-sr-act="close" data-fk="close" title="Hide this screen; the session keeps running (Esc)">Hide</button>
           </div>
           <div class="sr-sub" id="srCtx" role="status"></div>
@@ -9028,6 +9331,9 @@
           ${b.kind === "speed" ? `<p class="sr-note">Speed work only while contact holds: stop if smash drops under 1.40.</p>` : ""}
           ${f && (b.kind === "block" || b.kind === "transfer" || b.kind === "cold") ? `<p><strong>${esc(f.name)}:</strong> ${esc(clipText(f.cue, 220))}</p>` : ""}
           ${cues.length && b.kind !== "log" ? `<ul class="sr-cues">${cues.map((c) => `<li>${esc(c.title)}</li>`).join("")}</ul>` : ""}
+          ${srBlockDrillsHtml(b)}
+          ${b.kind === "block" || b.kind === "transfer" ? paceCardHtml("sr", b.kind, srCurDrillId(b)) : ""}
+          <details class="sr-card"><summary style="cursor:pointer;min-height:44px;font-weight:800;">Cue voice settings</summary>${crPanelHtml("sr")}</details>
           <div id="srLive" class="sr-live">${srLiveHtml(run)}</div>
           <div class="sr-score">
             <button type="button" class="sr-btn hit" data-sr-act="hit" data-fk="hit">&#10003; Hit <small>${esc(b.hit)}</small></button>
@@ -9111,6 +9417,7 @@
         ov.scrollTop = st;
         updateSimPills();
         srTickClock(); srRefreshCtxBadge();
+        w3AfterSrRender();
         if (sr.view === "log") srRefreshDialHint();
         if (sr.focusSel) { const n = ov.querySelector(sr.focusSel); sr.focusSel = null; if (n) n.focus({ preventScroll: true }); }
         else if (fk) { const t = Array.from(ov.querySelectorAll("[data-fk]")).find((n) => n.getAttribute("data-fk") === fk && !n.disabled); if (t) t.focus({ preventScroll: true }); }
@@ -9128,6 +9435,7 @@
         else if (act === "prev") srPrev();
         else if (act === "finish") srFinish();
         else if (act === "hit" || act === "miss") { const b = run && run.blocks[run.idx]; if (b) { b[act] = Math.min(999, b[act] + 1); saveState(); srRender(); } }
+        else if (act === "curdrill") { const cb = run && run.blocks[run.idx]; if (cb && cb.drillIds && cb.drillIds.length) { cb.curDrill = Math.max(0, Math.min(cb.drillIds.length - 1, Number(val) || 0)); saveState(); srPostContext(srCtxFor(run)); srRender(); } }
         else if (act === "rest") { sr.restUntil = Date.now() + 25000; const n = document.getElementById("srRest"); if (n) n.classList.add("on"); srTickClock(); }
         else if (act === "discard") { sr.confirmDiscard = true; sr.focusSel = "[data-sr-act='discardno']"; srRender(); }
         else if (act === "discardno") { sr.confirmDiscard = false; srRender(); }
@@ -9334,6 +9642,7 @@
         else if (state.activeView === "bag") renderBag();
         enhanceA11y();
         updateParkFab();
+        w3OnRenderAll();
       }
 
       // Deck navigation listeners
@@ -9355,6 +9664,13 @@
           e.preventDefault();
           if (e.repeat) return; // holding T must not flap the metronome on/off
           toggleCadenceMetronome();
+          return;
+        }
+        // Spoken cue repeater (V); the overlays handle V themselves in their own capture handlers
+        if (e.key === "v" || e.key === "V") {
+          e.preventDefault();
+          if (e.repeat) return;
+          crToggle("view");
           return;
         }
 
@@ -9389,6 +9705,660 @@
           }
         }
       });
+
+      // =====================================================================================
+      // ===== WAVE 3: fault recommender / session queue · pacing timer · spoken cue repeater · tone profiles · clips =====
+      // State it owns: state.recEnvs, recFaultId, sessionQueue, pacing, cueRepeater, toneProfile, activeFault, activePhase.
+      // Hotkey: V toggles the spoken cue repeater (T = metronome, M = mark done, H/X/Space are Mat mode scoring keys).
+      // Audio uses the shared AudioContext (playProfileTone); speech uses speechSynthesis, feature-detected at call time.
+      // =====================================================================================
+      const W3_MAX_QUEUE = 12;
+      const rec = { open: false };
+      const pace = { on: false, owner: "", mode: "block", timer: null, nextT: 0, events: [], cycleStart: 0, cycleLen: 0, count: 0, phase: "", flashT: -9, blockIdx: -1, tones: new Set() };
+      const cr = { on: false, owner: "", view: "", timer: null, seq: 0, t0: 0 };
+      const w3 = { pausedMsg: "" };
+
+      function w3PhaseName(id) {
+        const m = { setup: "Setup", takeaway: "Takeaway", top: "Top of swing", transition: "Transition", impact: "Impact", finish: "Finish", "short-game": "Short game", putting: "Putting", "mental-tempo": "Mental & tempo" };
+        return m[id] || id;
+      }
+      function w3EnvName(id) { const e = (DEFAULTS.environments || []).find((x) => x.id === id); return e ? e.name : id; }
+      function w3FaultName(id) { const f = (DEFAULTS.faults || []).find((x) => x.id === id); return f ? f.name : id; }
+      function w3DaysAgo(iso) {
+        const a = Date.parse(todayISO(0) + "T12:00:00"), b = Date.parse(iso + "T12:00:00");
+        return isNaN(a) || isNaN(b) ? null : Math.max(0, Math.round((a - b) / 86400000));
+      }
+      function w3FmtTime(sec) {
+        sec = Math.max(0, Math.floor(sec));
+        const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
+        return h ? `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${m}:${String(s).padStart(2, "0")}`;
+      }
+      // Accepts "42", "0:42", "1:08", "1:02:03". Returns seconds, null for empty, NaN for garbage.
+      function w3ParseTime(v) {
+        const s = String(v == null ? "" : v).trim();
+        if (!s) return null;
+        if (/^\d+(\.\d+)?$/.test(s)) return Math.round(parseFloat(s));
+        const m = /^(?:(\d+):)?(\d{1,2}):(\d{2})$/.exec(s);
+        if (!m || Number(m[3]) > 59 || (m[1] && Number(m[2]) > 59)) return NaN;
+        return (m[1] ? Number(m[1]) * 3600 : 0) + Number(m[2]) * 60 + Number(m[3]);
+      }
+      function w3ClipRange(d) {
+        const v = (d && d.video) || {};
+        const s = typeof v.startSec === "number" && isFinite(v.startSec) && v.startSec >= 0 ? Math.floor(v.startSec) : null;
+        const e = typeof v.endSec === "number" && isFinite(v.endSec) && v.endSec >= 0 ? Math.floor(v.endSec) : null;
+        if (s === null && e === null) return null;
+        if (s !== null && e !== null && e <= s) return { s, e: null };
+        return { s, e };
+      }
+
+      // ---------------------------------------------------------------- wake lock (separate from Mat mode's)
+      const auxWake = { keys: new Set(), lock: null };
+      async function auxWakeAcquire(key) {
+        auxWake.keys.add(key);
+        try {
+          if (navigator.wakeLock && !auxWake.lock) {
+            const lock = await navigator.wakeLock.request("screen");
+            if (!auxWake.keys.size) { lock.release(); return; }
+            auxWake.lock = lock;
+            lock.addEventListener("release", () => { if (auxWake.lock === lock) auxWake.lock = null; });
+          }
+        } catch (e) { auxWake.lock = null; }
+      }
+      function auxWakeRelease(key) {
+        auxWake.keys.delete(key);
+        if (!auxWake.keys.size && auxWake.lock) { try { auxWake.lock.release(); } catch (e) { /* ignore */ } auxWake.lock = null; }
+      }
+
+      // ---------------------------------------------------------------- recommender
+      function recDefaultEnvs() {
+        if (!pdHas()) return null;
+        const p = window.PLAYER_DATA.profile || {};
+        const txt = [].concat(Array.isArray(p.gear) ? p.gear : [], Array.isArray(p.aids) ? p.aids : []).filter((x) => typeof x === "string").join(" | ").toLowerCase();
+        const got = [];
+        if (/\bsim\b|launch (pro|monitor)|gspro|garage/.test(txt)) got.push("sim");
+        if (/putt[^|]*\bmat\b|putting mat/.test(txt)) got.push("putting-mat");
+        if (/mirror/.test(txt)) got.push("mirror");
+        if (/\bgym\b|kettlebell|cable machine|dumbbell|squat rack/.test(txt)) got.push("gym");
+        return got.length ? got : null;
+      }
+      // null = every environment.
+      function recEnvSet() {
+        const e = state.recEnvs;
+        if (Array.isArray(e)) return e.length ? new Set(e) : null;
+        const d = recDefaultEnvs();
+        return d ? new Set(d) : null;
+      }
+      function recLastUsed() {
+        const m = {};
+        const mark = (id, date) => { if (typeof id === "string" && isIsoDate(date) && (!m[id] || date > m[id])) m[id] = date; };
+        (state.sessionLogs || []).forEach((l) => (l.drillIds || []).forEach((id) => mark(id, l.date)));
+        (state.sessions || []).forEach((s) => (s.blocks || []).forEach((b) => { if (b.done) mark(b.drillId, s.date); }));
+        Object.keys(state.deliveryLogs || {}).forEach((k) => ((state.deliveryLogs[k] || {}).completedDrills || []).forEach((id) => mark(id, k)));
+        return m;
+      }
+      // Ranking: fault tag match (required), environment match first, then least recently used (never-logged first).
+      function recRank(faultId) {
+        const envs = recEnvSet(), used = recLastUsed();
+        const list = state.drills.map((d, i) => ({ d, i })).filter((x) => (x.d.faultTags || []).includes(faultId));
+        const envOk = (d) => !envs || !(d.environments || []).length || (d.environments || []).some((e) => envs.has(e));
+        list.forEach((x) => { x.env = envOk(x.d); x.last = used[x.d.id] || ""; });
+        list.sort((a, b) => Number(b.env) - Number(a.env) || (a.last < b.last ? -1 : a.last > b.last ? 1 : 0) || a.i - b.i);
+        return { items: list, used };
+      }
+      function w3EquipKey(e) { return String(e || "").toLowerCase().replace(/\(.*?\)/g, "").replace(/\s+/g, " ").trim(); }
+      function w3EquipOf(ids) {
+        const seen = new Map();
+        ids.forEach((id) => { const d = drillById(id); if (d) (d.equipment || []).forEach((e) => { const k = w3EquipKey(e); if (k && !seen.has(k)) seen.set(k, String(e).replace(/\s*\(.*?\)\s*/g, "").trim()); }); });
+        return Array.from(seen.values());
+      }
+      function w3EquipWarnHtml(label, ids) {
+        const eq = w3EquipOf(ids);
+        if (eq.length <= 3) return "";
+        return `<p class="w3-warn" role="status">${esc(label)} needs ${eq.length} different training aids (${esc(eq.join(", "))}). Practice rule: pick 2-3 aids per block, not all of them. Drop or swap a drill.</p>`;
+      }
+      function w3Queue() { return (state.sessionQueue || []).filter((id) => drillById(id)); }
+      // Which session block kind a drill naturally belongs to.
+      function w3KindOf(d) {
+        const env = d.environments || [];
+        if (env.length && env.every((e) => e === "gym")) return "speed";
+        if (d.swingPhase === "putting" || /putt/i.test(String(d.section || "")) || (env.length && env.every((e) => e === "putting-mat"))) return "putting";
+        if (d.pacing === "transfer" || d.swingPhase === "mental-tempo") return "transfer";
+        if (isPureWarm(d)) return "warmup";
+        return "block";
+      }
+      // Spread queued drills over the template's blocks of the matching kind. Unmatched drills stay queued.
+      function srAssignQueue(blocks, queue) {
+        const per = blocks.map(() => []), unplaced = [];
+        const idxOf = (k) => blocks.map((b, i) => (b.kind === k ? i : -1)).filter((i) => i >= 0);
+        queue.forEach((id) => {
+          const d = drillById(id);
+          if (!d) return;
+          const kind = w3KindOf(d);
+          let cand = idxOf(kind);
+          if (!cand.length && (kind === "transfer" || kind === "warmup")) cand = idxOf("block");
+          if (!cand.length) { unplaced.push(id); return; }
+          cand.sort((a, b) => per[a].length - per[b].length || a - b);
+          if (per[cand[0]].length < 8) per[cand[0]].push(id); else unplaced.push(id);
+        });
+        return { per, unplaced };
+      }
+      function w3QueueToggle(id) {
+        if (!drillById(id)) return;
+        const q = state.sessionQueue || [];
+        const i = q.indexOf(id);
+        if (i >= 0) { q.splice(i, 1); showToast("Removed from today's session."); }
+        else if (q.length >= W3_MAX_QUEUE) { showToast(`Session queue is full (${W3_MAX_QUEUE}). Remove one first.`); return; }
+        else { q.push(id); showToast("Added. It will be listed in the matching block of your next coached session."); }
+        state.sessionQueue = q;
+        saveState();
+        renderRec();
+        if (sr.open && sr.view === "setup") srRender();
+      }
+      function recOpenDrill(id) {
+        if (!drillById(id)) { showToast("That drill is no longer in your deck."); return; }
+        state.activeMode = "all"; state.activeRoutine = "all"; state.activeSection = "all";
+        state.activeFault = "all"; state.activePhase = "all";
+        state.selectedDrillId = id;
+        state.activeView = "deck";
+        saveState();
+        renderAll();
+        const st = document.getElementById("drillStageContainer");
+        if (st) st.scrollIntoView({ block: "start" });
+      }
+      // Promote a drill's keyFeel to an active cue through the existing 2-cue cap chooser.
+      function recPromote(drillId) {
+        const d = drillById(drillId);
+        if (!d || !d.keyFeel) { showToast("This drill has no key feel to promote."); return; }
+        const phases = clPhases().map((p) => p.id);
+        const alias = { transition: "downswing", takeaway: "backswing" };
+        const phase = phases.includes(d.swingPhase) ? d.swingPhase : phases.includes(alias[d.swingPhase]) ? alias[d.swingPhase] : (phases[0] || "");
+        const cue = String(d.keyFeel).slice(0, 400);
+        const title = clipText(d.keyFeel, 100).replace(/…$/, "");
+        let item = (state.checklistCustomItems || []).find((it) => it.cue === cue && it.title === title);
+        if (!item) { item = { id: uid("cue"), phase, title, cue }; state.checklistCustomItems.push(item); }
+        if (clFocusIds().includes(item.id)) { showToast("That key feel is already an active cue."); return; }
+        if (clFocusIds().length >= CL_MAX_CUES) {
+          clUi.swap = item.id; clUi.focusSwap = true;
+          saveState();
+          state.activeView = "checklist";
+          renderAll();
+          window.scrollTo(0, 0);
+          showToast(`You already have ${CL_MAX_CUES} active cues. Choose which one to replace.`);
+        } else {
+          clSetStar(item.id, true);
+          saveState();
+          showToast("Key feel added to your active cues.");
+          renderRec();
+        }
+      }
+      function recDrillCardHtml(x, used) {
+        const d = x.d, last = used[d.id];
+        const ago = last ? w3DaysAgo(last) : null;
+        const queued = (state.sessionQueue || []).includes(d.id);
+        const eq = d.equipment || [];
+        return `<li class="rec-drill ${x.env ? "" : "other"}">
+          <div class="rec-dt"><strong>${esc(d.title)}</strong><span class="rec-meta">${esc(d.duration || "")} &middot; ${last ? (ago === 0 ? "used today" : esc(ago) + " d ago") : "never logged"}</span></div>
+          <p class="rec-feel"><strong>Key feel:</strong> ${esc(d.keyFeel || d.focus || "")}</p>
+          <div class="rec-eq">${eq.length ? eq.map((e) => `<span class="badge">${esc(e)}</span>`).join("") : `<span class="badge">No equipment</span>`}${(d.environments || []).map((e) => `<span class="badge env">${esc(w3EnvName(e))}</span>`).join("")}</div>
+          <div class="rec-acts">
+            <button type="button" class="w3-btn" data-w3="rec-open" data-val="${esc(d.id)}" data-fk="open:${esc(d.id)}">Open in deck</button>
+            <button type="button" class="w3-btn ${queued ? "on" : ""}" data-w3="rec-add" data-val="${esc(d.id)}" data-fk="add:${esc(d.id)}" aria-pressed="${queued}">${queued ? "&#10003; In today's session (tap to remove)" : "Add to today's session"}</button>
+            ${d.keyFeel ? `<button type="button" class="w3-btn" data-w3="rec-promote" data-val="${esc(d.id)}" data-fk="promote:${esc(d.id)}">Promote keyFeel to active cue</button>` : ""}
+          </div></li>`;
+      }
+      function recQueueHtml() {
+        const q = w3Queue();
+        if (!q.length) return "";
+        const groups = {};
+        q.forEach((id) => { const k = w3KindOf(drillById(id)); (groups[k] = groups[k] || []).push(id); });
+        const warns = Object.keys(groups).map((k) => w3EquipWarnHtml(`${SR_KIND_LABEL[k] || k} drills`, groups[k])).join("");
+        return `<div class="w3-queue"><strong>Queued for your next coached session (${q.length})</strong>
+          <ul>${q.map((id) => { const d = drillById(id); return `<li>${esc(d.title)} <span class="rec-meta">(${esc(SR_KIND_LABEL[w3KindOf(d)] || "")})</span> <button type="button" class="w3-chip" data-w3="rec-rmq" data-val="${esc(id)}" data-fk="rmq:${esc(id)}" aria-label="Remove ${esc(d.title)} from the queue">Remove</button></li>`; }).join("")}</ul>
+          ${warns}
+          <div class="rec-acts"><button type="button" class="w3-btn" data-w3="rec-clearq" data-fk="clearq">Clear queue</button>
+          <button type="button" class="w3-btn primary" data-w3="rec-startsession" data-fk="startsession">Start coached session</button></div></div>`;
+      }
+      function renderRec() {
+        const host = document.getElementById("recPanel");
+        if (!host || state.activeView !== "deck") return;
+        const faults = DEFAULTS.faults || [], envs = DEFAULTS.environments || [];
+        if (!faults.length) { host.innerHTML = ""; return; }
+        const active = document.activeElement && host.contains(document.activeElement) ? document.activeElement.getAttribute("data-fk") : null;
+        const sel = faults.find((f) => f.id === state.recFaultId) || null;
+        const envSet = recEnvSet(), defEnv = recDefaultEnvs();
+        const q = w3Queue();
+        const groups = w3PhaseIds().map((p) => ({ p, list: faults.filter((f) => f.swingPhase === p) })).filter((g) => g.list.length);
+        let result = "";
+        if (sel) {
+          const r = recRank(sel.id);
+          const inEnv = r.items.filter((x) => x.env), other = r.items.filter((x) => !x.env);
+          result = `<div class="rec-fault-box" role="region" aria-label="${esc(sel.name)}">
+              <p><strong>${esc(sel.name)}</strong> &middot; ${esc(w3PhaseName(sel.swingPhase))}</p>
+              <p><strong>What you see:</strong> ${esc(sel.symptom)}</p>
+              <p><strong>Likely root cause:</strong> ${esc(sel.rootCauseHint)}</p>
+            </div>
+            ${r.items.length ? "" : `<p class="w3-sub">No drills are tagged for this fault yet.</p>`}
+            ${inEnv.length ? `<h3 class="rec-h">Ranked drills (${inEnv.length}): your environments first, least recently used first</h3><ul class="rec-list">${inEnv.map((x) => recDrillCardHtml(x, r.used)).join("")}</ul>` : (r.items.length ? `<p class="w3-sub">No drill for this fault fits your selected environments. Other options are below.</p>` : "")}
+            ${other.length ? `<h3 class="rec-h">Needs other setup (${other.length})</h3><ul class="rec-list">${other.map((x) => recDrillCardHtml(x, r.used)).join("")}</ul>` : ""}`;
+        }
+        host.innerHTML = `<details class="rec-panel" id="recDetails" ${rec.open ? "open" : ""}>
+          <summary>&#129658; What's going wrong? <span class="rec-sum">${sel ? esc(sel.name) : "Pick a fault to get ranked drills"}${q.length ? ` &middot; ${q.length} queued` : ""}</span></summary>
+          <div class="rec-body">
+            <h3 class="rec-h">Where can you practice? (environment filter)</h3>
+            <div class="rec-row" role="group" aria-label="Environment filter">
+              <button type="button" class="rec-chip" data-w3="rec-env" data-val="__all" data-fk="env:__all" aria-pressed="${envSet === null}">All</button>
+              ${defEnv ? `<button type="button" class="rec-chip" data-w3="rec-env" data-val="__mine" data-fk="env:__mine" aria-pressed="${state.recEnvs === null}">My setup</button>` : ""}
+              ${envs.map((e) => `<button type="button" class="rec-chip" data-w3="rec-env" data-val="${esc(e.id)}" data-fk="env:${esc(e.id)}" title="${esc(e.desc)}" aria-pressed="${!!envSet && envSet.has(e.id)}">${esc(e.name)}</button>`).join("")}
+            </div>
+            <h3 class="rec-h">Pick the fault</h3>
+            ${groups.map((g) => `<div class="rec-row" role="group" aria-label="${esc(w3PhaseName(g.p))} faults"><span class="w3-sub" style="flex:0 0 100%;margin:6px 0 0;">${esc(w3PhaseName(g.p))}</span>${g.list.map((f) => `<button type="button" class="rec-chip" data-w3="rec-fault" data-val="${esc(f.id)}" data-fk="fault:${esc(f.id)}" aria-pressed="${state.recFaultId === f.id}">${esc(f.name)}</button>`).join("")}</div>`).join("")}
+            ${result}
+            ${recQueueHtml()}
+          </div></details>`;
+        if (active) { const t = Array.from(host.querySelectorAll("[data-fk]")).find((n) => n.getAttribute("data-fk") === active); if (t) t.focus({ preventScroll: true }); }
+      }
+      document.addEventListener("toggle", (e) => { if (e.target && e.target.id === "recDetails") rec.open = e.target.open; }, true);
+
+      // ---------------------------------------------------------------- tone profile UI
+      function w3ToneChipsHtml() {
+        return `<div class="rec-row" role="group" aria-label="Tone profile">${TONE_PROFILES.map((p) => `<button type="button" class="w3-chip" data-w3="tone" data-val="${esc(p.id)}" data-fk="tone:${esc(p.id)}" aria-pressed="${state.toneProfile === p.id}" title="${esc(p.desc)}">${esc(p.name)}</button>`).join("")}</div>`;
+      }
+      function w3TonePanelHtml() {
+        const cur = TONE_PROFILES.find((p) => p.id === state.toneProfile) || TONE_PROFILES[0];
+        return `<div class="w3-panel"><h3>&#128266; Tone profile</h3>
+          <p class="w3-sub">Used by the metronome, the pacing timer and the cue chimes. Tap a profile to hear it. ${esc(cur.desc)}</p>
+          ${w3ToneChipsHtml()}
+          <div class="rec-acts"><button type="button" class="w3-btn" data-w3="tone-test" data-fk="tonetest">&#9654; Play current tone</button></div></div>`;
+      }
+      function w3PreviewTone(profId) {
+        const ctx = getAudioContext();
+        if (!ctx) { showToast("Web Audio is not available in this browser."); return; }
+        const t = ctx.currentTime + 0.05;
+        playProfileTone("takeaway", t, null, profId);
+        playProfileTone("top", t + 0.45, null, profId);
+        playProfileTone("impact", t + 0.75, null, profId);
+        playProfileTone("hit", t + 1.4, null, profId);
+      }
+      function w3PresetsHtml(presets) {
+        const groups = [["full", "Full swing 3:1", "Backswing three times the downswing. Use for driver, woods and irons."], ["short-game", "Short game 2:1", "Wedges and pitch shots: a shorter, calmer swing."], ["putting", "Putting 2:1", "Stroke tempo for the putter."]];
+        const known = new Set(groups.map((g) => g[0]));
+        const other = presets.filter((p) => !known.has(p.use));
+        const card = (p) => {
+          const isAct = p.id === state.cadencePresetId;
+          return `<div class="cadence-card ${isAct ? "active" : ""}" data-pick-cadence="${esc(p.id)}">
+              <div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                  <span class="badge ${p.type === "full-swing" ? "real" : "almost"}">${esc(p.ratio)} Ratio</span>
+                  <span style="font-size:0.78rem; font-weight:700; color:var(--muted);">${esc(p.bpm)} BPM</span>
+                </div>
+                <h4 style="margin:4px 0 6px;">${esc(p.name)}</h4>
+                <p style="font-size:0.8rem; color:var(--muted); margin:0;">${esc(p.desc)}</p>
+              </div>
+              <div style="margin-top:12px; font-size:0.75rem; color:#7dd3fc; border-top:1px solid rgba(255,255,255,0.06); padding-top:6px;">&#11088; ${esc(String(p.proExamples || "").split(",")[0])}</div>
+            </div>`;
+        };
+        const sect = (title, sub, list) => list.length ? `<h4 class="w3-grp">${esc(title)}</h4>${sub ? `<p class="w3-sub">${esc(sub)}</p>` : ""}<div class="cadence-presets-grid">${list.map(card).join("")}</div>` : "";
+        return `<div class="panel">
+            <h3 style="margin-top:0; margin-bottom:6px;">&#127925; Select Cadence Rhythm Preset</h3>
+            <p class="w3-sub"><strong>Rule of thumb: 3:1 for full swings, 2:1 for wedges and putting.</strong> Pick the group that matches the club in your hands.</p>
+            ${groups.map((g) => sect(g[1], g[2], presets.filter((p) => p.use === g[0]))).join("")}
+            ${sect("Other", "", other)}
+          </div>`;
+      }
+
+      // ---------------------------------------------------------------- pacing timer
+      function paceResolveMode(kind, drillId) {
+        const m = state.pacing.mode;
+        if (m === "block" || m === "transfer") return m;
+        const d = drillId ? drillById(drillId) : null;
+        if (d && (d.pacing === "block" || d.pacing === "transfer")) return d.pacing;
+        return kind === "transfer" ? "transfer" : "block";
+      }
+      function paceStart(owner, mode) {
+        const ctx = getAudioContext();
+        if (!ctx) { showToast("Web Audio is not available in this browser."); return; }
+        if (pace.on) paceStop(true);
+        pace.on = true; pace.owner = owner; pace.mode = mode === "transfer" ? "transfer" : "block";
+        pace.events = []; pace.count = 0; pace.phase = "Get ready"; pace.flashT = -9;
+        pace.cycleStart = ctx.currentTime; pace.cycleLen = 0;
+        pace.nextT = ctx.currentTime + 0.15;
+        pace.blockIdx = owner === "sr" && state.sessionRun ? state.sessionRun.idx : -1;
+        paceTick();
+        pace.timer = setInterval(paceTick, 25);
+        auxWakeAcquire("pace");
+        showToast(pace.mode === "block" ? `Block reps: chime every ${state.pacing.blockSec} s.` : `Transfer reps: ${state.pacing.transferSec} s cycle, one chime when it is time to hit.`);
+        w3Rerender();
+      }
+      function paceStop(quiet) {
+        const was = pace.on;
+        pace.on = false;
+        if (pace.timer) clearInterval(pace.timer);
+        pace.timer = null; pace.events = [];
+        for (const n of Array.from(pace.tones)) {
+          try { n.onended = null; n.stop(0); n.disconnect(); } catch (e) { /* already stopped */ }
+          activeOscillators.delete(n);
+        }
+        pace.tones.clear();
+        auxWakeRelease("pace");
+        if (was && !cr.on && speechOK() && state.pacing.speak) { try { window.speechSynthesis.cancel(); } catch (e) { /* ignore */ } }
+        if (was) { paceRenderLive(); if (!quiet) showToast("Pacing timer stopped."); w3Rerender(); }
+      }
+      function paceSchedule(t) {
+        if (pace.mode === "block") {
+          const n = state.pacing.blockSec;
+          playProfileTone("chime", t + n, pace.tones);
+          pace.events.push({ t, k: "cycle", len: n }, { t: t + n, k: "rep" });
+          return n;
+        }
+        const c = state.pacing.transferSec;
+        const steps = [[0, "Step behind the ball"], [0.22, "Pick a target"], [0.44, "Rehearse"], [0.78, "Hit one committed shot"]];
+        playProfileTone("hit", t + c * 0.78, pace.tones);
+        pace.events.push({ t, k: "cycle", len: c });
+        steps.forEach((s, i) => pace.events.push({ t: t + c * s[0], k: "step", label: s[1], hit: i === 3 }));
+        return c;
+      }
+      function paceTick() {
+        if (!pace.on || !audioCtx) return;
+        const now = audioCtx.currentTime;
+        while (pace.nextT < now + 0.25) pace.nextT += paceSchedule(pace.nextT);
+        while (pace.events.length && pace.events[0].t <= now) paceApply(pace.events.shift());
+        paceRenderLive();
+      }
+      function paceApply(ev) {
+        if (ev.k === "cycle") { pace.cycleStart = ev.t; pace.cycleLen = ev.len; if (pace.mode === "block") pace.phase = "Next rep on the chime"; }
+        else if (ev.k === "rep") { pace.count++; pace.flashT = ev.t; pace.phase = "Swing now"; }
+        else if (ev.k === "step") {
+          pace.phase = ev.label;
+          if (ev.hit) { pace.count++; pace.flashT = ev.t; }
+          if (state.pacing.speak) crSpeak(ev.label);
+        }
+      }
+      function paceRenderLive() {
+        const roots = document.querySelectorAll("[data-pace-root]");
+        if (!roots.length) return;
+        const now = pace.on && audioCtx ? audioCtx.currentTime : 0;
+        const flash = pace.on && now - pace.flashT < 0.8;
+        const left = pace.on && pace.cycleLen ? Math.max(0, Math.ceil(pace.cycleStart + pace.cycleLen - now - 0.001)) : null;
+        const digits = !pace.on ? "–" : left === null ? "…" : String(left);
+        const label = !pace.on ? "Press start" : flash ? (pace.mode === "block" ? "SWING" : "HIT IT") : pace.phase;
+        roots.forEach((r) => {
+          const d = r.querySelector("[data-pace-digits]"), l = r.querySelector("[data-pace-label]"), c = r.querySelector("[data-pace-count]");
+          if (d && d.textContent !== digits) d.textContent = digits;
+          if (l && l.textContent !== label) l.textContent = label;
+          if (c && c.textContent !== String(pace.count)) c.textContent = String(pace.count);
+          r.classList.toggle("hit", !!flash);
+        });
+      }
+      function paceCardHtml(owner, kind, drillId) {
+        const p = state.pacing, mode = paceResolveMode(kind, drillId);
+        const running = pace.on && pace.owner === owner;
+        const d = drillId ? drillById(drillId) : null;
+        const why = p.mode !== "auto" ? "set by you" : d && (d.pacing === "block" || d.pacing === "transfer") ? "from this drill" : kind === "transfer" ? "from the block type" : "default for practice blocks";
+        const fmt = (n) => (Math.round(n * 10) / 10).toString();
+        return `<section class="pace-card" data-pace-root aria-label="Pacing timer">
+          <h2 style="font-size:20px;margin:0 0 4px;">Pacing timer</h2>
+          <div class="rec-row" role="group" aria-label="Pacing mode" style="justify-content:center;">
+            ${[["auto", "Auto"], ["block", "Block reps"], ["transfer", "Transfer reps"]].map((m) => `<button type="button" class="w3-chip" data-w3="pace-mode" data-val="${m[0]}" data-fk="pmode:${m[0]}" aria-pressed="${p.mode === m[0]}">${m[1]}</button>`).join("")}
+          </div>
+          <p class="pace-meta">${mode === "block" ? `Block reps (${esc(why)}): chime every ${esc(fmt(p.blockSec))} s for grooving.` : `Transfer reps (${esc(why)}): ${esc(p.transferSec)} s cycle, full routine, one chime when it is time to hit.`}</p>
+          <div class="pace-digits" data-pace-digits aria-hidden="true">–</div>
+          <div class="pace-label" data-pace-label role="status" aria-live="polite">Press start</div>
+          <p class="pace-meta">Reps this run: <strong data-pace-count>0</strong></p>
+          <label class="w3-ctl">${mode === "block" ? `Seconds between reps: <span data-w3-val="pace-block">${esc(fmt(p.blockSec))} s</span>` : `Seconds per rep cycle: <span data-w3-val="pace-transfer">${esc(p.transferSec)} s</span>`}
+            ${mode === "block" ? `<input type="range" min="2" max="5" step="0.5" value="${esc(p.blockSec)}" data-w3-range="pace-block" aria-label="Seconds between block reps" />` : `<input type="range" min="15" max="20" step="1" value="${esc(p.transferSec)}" data-w3-range="pace-transfer" aria-label="Seconds per transfer cycle" />`}
+          </label>
+          ${mode === "transfer" ? `<label class="w3-check"><input type="checkbox" data-w3="pace-speak" ${p.speak ? "checked" : ""} ${speechOK() ? "" : "disabled"} /> Speak the prompts${speechOK() ? "" : " (speech not available here)"}</label>` : ""}
+          <div class="w3-ctl-wide"><div class="w3-sub">Tone</div>${w3ToneChipsHtml()}</div>
+          <div class="rec-acts" style="justify-content:center;"><button type="button" class="w3-btn ${running ? "danger" : "primary"}" data-w3="pace-toggle" data-owner="${esc(owner)}" data-kind="${esc(kind || "")}" data-drill="${esc(drillId || "")}" data-fk="ptoggle" style="min-width:200px;min-height:60px;font-size:1.2rem;">${running ? "&#10074;&#10074; Stop timer" : "&#9654; Start timer"}</button></div>
+        </section>`;
+      }
+
+      // ---------------------------------------------------------------- spoken cue repeater
+      function speechOK() {
+        try { return !!(window.speechSynthesis && typeof window.SpeechSynthesisUtterance === "function"); } catch (e) { return false; }
+      }
+      function crVoices() { try { return speechOK() ? (window.speechSynthesis.getVoices() || []) : []; } catch (e) { return []; } }
+      function crOptions() {
+        const ids = clFocusItems().map((it) => it.id), f = getActiveFeel();
+        return ids.concat(f && f.cue ? ["feel:" + f.id] : []);
+      }
+      // Default selection = the active cues (max 2). The feel's cue is opt-in so the loop respects the 1-2 cue rule.
+      function crSelected() {
+        const opts = crOptions(), inc = state.cueRepeater.includeIds;
+        if (Array.isArray(inc)) return opts.filter((id) => inc.includes(id));
+        const act = opts.filter((id) => id.indexOf("feel:") !== 0);
+        return act.length ? act : opts;
+      }
+      function crPhrases() {
+        return crSelected().map((id) => clCardById(id)).filter(Boolean).map((c) => ({ id: c.id, title: c.title, text: c.cue && c.cue.length <= 140 ? c.cue : c.title }));
+      }
+      function crJoin(ph) { return ph.map((p) => String(p.text).trim().replace(/[.!?;,\s]+$/, "")).join(". ") + "."; }
+      function crSpeak(text, onend) {
+        if (!speechOK() || !text) return false;
+        try {
+          const s = window.speechSynthesis, u = new window.SpeechSynthesisUtterance(String(text));
+          const c = state.cueRepeater;
+          u.rate = c.rate; u.volume = c.volume;
+          const v = c.voiceURI ? crVoices().find((x) => x.voiceURI === c.voiceURI) : null;
+          if (v) { u.voice = v; if (v.lang) u.lang = v.lang; }
+          if (onend) { u.onend = onend; u.onerror = onend; }
+          s.cancel();
+          s.speak(u);
+          return true;
+        } catch (e) { return false; }
+      }
+      function crFlash(lines) {
+        const el = document.getElementById("crFlash");
+        if (!el) return;
+        el.innerHTML = lines.map((t) => `<span>${esc(t)}</span>`).join("");
+        el.classList.remove("hidden");
+      }
+      function crHideFlash() { const el = document.getElementById("crFlash"); if (el) { el.classList.add("hidden"); el.innerHTML = ""; } }
+      function crCycle() {
+        if (!cr.on) return;
+        const phrases = crPhrases();
+        if (!phrases.length) { crStop(); showToast("No cues selected to speak."); return; }
+        const seq = ++cr.seq;
+        cr.t0 = Date.now();
+        const ctx = getAudioContext();
+        if (ctx) playProfileTone("soft", ctx.currentTime + 0.02);
+        cr.timer = setTimeout(() => {
+          if (!cr.on || seq !== cr.seq) return;
+          const ok = crSpeak(crJoin(phrases), () => crAfter(seq));
+          if (!ok) crFlash(phrases.map((p) => p.text));
+          cr.timer = setTimeout(() => crAfter(seq), ok ? 20000 : Math.max(1500, Math.min(4000, state.cueRepeater.everySec * 1000 - 800)));
+        }, 700);
+      }
+      function crAfter(seq) {
+        if (!cr.on || seq !== cr.seq) return;
+        clearTimeout(cr.timer);
+        crHideFlash();
+        cr.timer = setTimeout(crCycle, Math.max(600, state.cueRepeater.everySec * 1000 - (Date.now() - cr.t0)));
+      }
+      function crStart(owner) {
+        if (cr.on) return;
+        if (!crPhrases().length) { showToast("No cues to speak. Star 1-2 cues in the Swing Checklist first."); return; }
+        cr.on = true; cr.owner = owner || "view"; cr.view = state.activeView;
+        auxWakeAcquire("cr");
+        showToast(speechOK() ? `Cue voice on, every ${state.cueRepeater.everySec} s. Press V to stop.` : "Speech is not available here: cues will flash on screen instead. Press V to stop.");
+        crSyncUi();
+        crCycle();
+      }
+      function crStop(quiet) {
+        const was = cr.on;
+        cr.on = false; cr.seq++;
+        if (cr.timer) clearTimeout(cr.timer);
+        cr.timer = null;
+        if (speechOK()) { try { window.speechSynthesis.cancel(); } catch (e) { /* ignore */ } }
+        crHideFlash();
+        auxWakeRelease("cr");
+        crSyncUi();
+        if (was && !quiet) showToast("Cue voice off.");
+      }
+      function crToggle(owner) { if (cr.on) crStop(); else crStart(owner); }
+      function crStopIfOwner(owner) { if (cr.on && cr.owner === owner) crStop(true); }
+      function crBtnLabel() { return cr.on ? "🔊 Voice on (V)" : "🔈 Cue voice (V)"; }
+      function crBtnHtml(owner, cls) {
+        return `<button type="button" class="${esc(cls)} w3-crbtn ${cr.on ? "on" : ""}" data-w3="cr-toggle" data-owner="${esc(owner)}" data-fk="crtoggle" aria-pressed="${cr.on}" title="Speak your active cues on a loop, hands-free (V)">${crBtnLabel()}</button>`;
+      }
+      function crSyncUi() {
+        const b = document.getElementById("crBadge");
+        if (b) b.classList.toggle("hidden", !cr.on);
+        document.querySelectorAll('[data-w3="cr-toggle"]').forEach((n) => {
+          if (n.id === "crBadge") return;
+          n.setAttribute("aria-pressed", String(cr.on));
+          n.classList.toggle("on", cr.on);
+          n.textContent = crBtnLabel();
+        });
+      }
+      function crVoiceOptionsHtml() {
+        const vs = crVoices(), cur = state.cueRepeater.voiceURI;
+        return `<option value="">System default voice</option>` + vs.map((v) => `<option value="${esc(v.voiceURI)}" ${v.voiceURI === cur ? "selected" : ""}>${esc(v.name)}${v.lang ? " (" + esc(v.lang) + ")" : ""}</option>`).join("");
+      }
+      function crRefreshVoices() {
+        document.querySelectorAll("select[data-w3-voice]").forEach((s) => { s.innerHTML = crVoiceOptionsHtml(); });
+      }
+      function crPanelHtml(owner) {
+        const c = state.cueRepeater, opts = crOptions(), sel = new Set(crSelected());
+        const ok = speechOK();
+        return `<div class="w3-panel"><h3>&#128483; Spoken cue repeater (hands-free)</h3>
+          <p class="w3-sub">${ok ? "Speaks your cues on a loop with a soft chime before each. Hotkey: V." : "Speech is not available in this browser, so your cues flash full screen on the same loop. Hotkey: V."}</p>
+          <div class="rec-acts">${crBtnHtml(owner, "w3-btn")}<button type="button" class="w3-btn" data-w3="cr-test" data-fk="crtest">Test voice</button></div>
+          <label class="w3-ctl">Repeat every: <span data-w3-val="cr-every">${esc(c.everySec)} s</span><input type="range" min="5" max="20" step="1" value="${esc(c.everySec)}" data-w3-range="cr-every" aria-label="Seconds between spoken cues" /></label>
+          ${ok ? `<label class="w3-ctl">Speech rate: <span data-w3-val="cr-rate">${esc(c.rate.toFixed(2))}x</span><input type="range" min="0.6" max="1.5" step="0.05" value="${esc(c.rate)}" data-w3-range="cr-rate" aria-label="Speech rate" /></label>
+          <label class="w3-ctl">Volume: <span data-w3-val="cr-vol">${esc(Math.round(c.volume * 100))}%</span><input type="range" min="0" max="1" step="0.05" value="${esc(c.volume)}" data-w3-range="cr-vol" aria-label="Speech volume" /></label>
+          <label class="w3-ctl">Voice<select data-w3-voice aria-label="Voice">${crVoiceOptionsHtml()}</select></label>` : ""}
+          <div class="w3-sub">Cues to include (default: your active cues, max ${CL_MAX_CUES})</div>
+          ${opts.length ? opts.map((id) => { const card = clCardById(id); return card ? `<label class="w3-check"><input type="checkbox" data-w3="cr-cue" data-val="${esc(id)}" ${sel.has(id) ? "checked" : ""} /> ${esc(card.title)}${card.virtual ? " (active feel)" : ""}</label>` : ""; }).join("") : `<p class="w3-sub">No active cues yet. Star 1-2 items in the Swing Checklist.</p>`}
+          ${sel.size > CL_MAX_CUES ? `<p class="w3-warn" role="status">${sel.size} cues selected. Practice rule: 1-2 active cues at a time.</p>` : ""}
+        </div>`;
+      }
+
+      // ---------------------------------------------------------------- shared wiring
+      function w3Rerender() {
+        if (sr.open && sr.view === "run") srRender();
+        if (state.activeView === "cadence") renderCadence();
+        enhanceA11y();
+      }
+      function w3CueToggle(id, on) {
+        let cur = crSelected();
+        cur = on ? cur.concat([id]) : cur.filter((x) => x !== id);
+        state.cueRepeater.includeIds = Array.from(new Set(cur));
+        saveState();
+        w3Rerender();
+      }
+      function w3Act(act, val, node) {
+        if (act === "rec-fault") { state.recFaultId = state.recFaultId === val ? "" : val; saveState(); rec.open = true; renderRec(); }
+        else if (act === "rec-env") {
+          if (val === "__all") state.recEnvs = [];
+          else if (val === "__mine") state.recEnvs = null;
+          else {
+            const cur = recEnvSet() ? Array.from(recEnvSet()) : (DEFAULTS.environments || []).map((e) => e.id);
+            const s = new Set(cur);
+            if (s.has(val)) s.delete(val); else s.add(val);
+            state.recEnvs = s.size === (DEFAULTS.environments || []).length ? [] : Array.from(s);
+          }
+          saveState(); renderRec();
+        }
+        else if (act === "rec-open") recOpenDrill(val);
+        else if (act === "rec-add") w3QueueToggle(val);
+        else if (act === "rec-rmq") w3QueueToggle(val);
+        else if (act === "rec-promote") recPromote(val);
+        else if (act === "rec-clearq") { state.sessionQueue = []; saveState(); renderRec(); if (sr.open && sr.view === "setup") srRender(); showToast("Session queue cleared."); }
+        else if (act === "rec-startsession") srOpen();
+        else if (act === "tone") { state.toneProfile = val; saveState(); w3PreviewTone(val); w3Rerender(); if (state.activeView === "deck") renderRec(); }
+        else if (act === "tone-test") w3PreviewTone(state.toneProfile);
+        else if (act === "pace-mode") {
+          state.pacing.mode = val; saveState();
+          const root = node.closest("[data-pace-root]"), tog = root && root.querySelector('[data-w3="pace-toggle"]');
+          if (pace.on && tog) paceStart(pace.owner, paceResolveMode(tog.getAttribute("data-kind"), tog.getAttribute("data-drill")));
+          else w3Rerender();
+        }
+        else if (act === "pace-toggle") {
+          const owner = node.getAttribute("data-owner");
+          if (pace.on && pace.owner === owner) paceStop();
+          else paceStart(owner, paceResolveMode(node.getAttribute("data-kind"), node.getAttribute("data-drill")));
+        }
+        else if (act === "pace-speak") { state.pacing.speak = !!node.checked; saveState(); }
+        else if (act === "cr-toggle") crToggle(node.getAttribute("data-owner") || "view");
+        else if (act === "cr-test") {
+          const ph = crPhrases();
+          const text = ph.length ? crJoin(ph) : "Cue voice test";
+          getAudioContext();
+          if (!crSpeak(text)) { crFlash([text]); setTimeout(crHideFlash, 2500); }
+        }
+        else if (act === "cr-cue") w3CueToggle(val, !!node.checked);
+      }
+      document.addEventListener("click", (e) => {
+        const n = e.target.closest && e.target.closest("[data-w3]");
+        if (n && !n.disabled) w3Act(n.getAttribute("data-w3"), n.getAttribute("data-val"), n);
+      });
+      document.addEventListener("input", (e) => {
+        const k = e.target.getAttribute && e.target.getAttribute("data-w3-range");
+        if (!k) return;
+        const v = parseFloat(e.target.value);
+        if (!isFinite(v)) return;
+        const set = (name, text) => { const s = document.querySelectorAll(`[data-w3-val="${name}"]`); s.forEach((n) => { n.textContent = text; }); };
+        if (k === "pace-block") { state.pacing.blockSec = Math.max(2, Math.min(5, Math.round(v * 2) / 2)); set(k, state.pacing.blockSec + " s"); }
+        else if (k === "pace-transfer") { state.pacing.transferSec = Math.max(15, Math.min(20, Math.round(v))); set(k, state.pacing.transferSec + " s"); }
+        else if (k === "cr-every") { state.cueRepeater.everySec = Math.max(5, Math.min(20, Math.round(v))); set(k, state.cueRepeater.everySec + " s"); }
+        else if (k === "cr-rate") { state.cueRepeater.rate = Math.max(0.6, Math.min(1.5, v)); set(k, state.cueRepeater.rate.toFixed(2) + "x"); }
+        else if (k === "cr-vol") { state.cueRepeater.volume = Math.max(0, Math.min(1, v)); set(k, Math.round(state.cueRepeater.volume * 100) + "%"); }
+        saveState();
+      });
+      document.addEventListener("change", (e) => {
+        if (e.target.getAttribute && e.target.hasAttribute("data-w3-voice")) { state.cueRepeater.voiceURI = String(e.target.value || "").slice(0, 200); saveState(); }
+      });
+      if (speechOK()) { try { window.speechSynthesis.addEventListener("voiceschanged", crRefreshVoices); } catch (e) { /* ignore */ } }
+      // Hidden page: stop everything that makes sound or speech. The user restarts it when they come back.
+      document.addEventListener("visibilitychange", () => {
+        if (document.hidden) {
+          const names = [];
+          if (cr.on) { crStop(true); names.push("Cue voice"); }
+          if (pace.on) { paceStop(true); names.push("Pacing timer"); }
+          if (names.length) w3.pausedMsg = names.join(" and ") + " stopped while the page was hidden. Start it again when you are back.";
+        } else if (w3.pausedMsg) { const m = w3.pausedMsg; w3.pausedMsg = ""; showToast(m); }
+      });
+      // Called from renderAll: stop things that belong to a view the user has left.
+      function w3OnRenderAll() {
+        if (pace.on && pace.owner === "cadence" && state.activeView !== "cadence") paceStop(true);
+        if (cr.on && cr.owner === "view" && cr.view !== state.activeView) crStop(true);
+        if (state.activeView === "deck") renderRec();
+        crSyncUi();
+      }
+      // Called after the session runner re-renders.
+      function w3AfterSrRender() {
+        const run = state.sessionRun;
+        if (pace.on && pace.owner === "sr" && (!sr.open || sr.view !== "run" || !run || run.idx !== pace.blockIdx)) paceStop(true);
+        paceRenderLive();
+        crSyncUi();
+      }
+      // ============================== END WAVE 3 ==============================
+
+      function paceStopIfOwner(owner) { if (pace.on && pace.owner === owner) paceStop(true); }
+      function srCurDrillId(b) {
+        return b && b.drillIds && b.drillIds.length ? srId(b.drillIds[Math.min(b.curDrill || 0, b.drillIds.length - 1)]) : null;
+      }
+      function srTemplatePlanHtml(tplId) {
+        const t = srTemplate(tplId);
+        if (!t) return "";
+        const q = w3Queue(), a = srAssignQueue(t.blocks, q);
+        return `<ol class="sr-plan">${t.blocks.map((b, i) => `<li><strong>${esc(b.name)}</strong> <span class="sr-sub">${esc(b.minutes)} min &middot; ${esc(SR_KIND_LABEL[b.kind] || b.kind)}</span>${a.per[i].length ? `<ul class="sr-qdrills">${a.per[i].map((id) => `<li>${esc((drillById(id) || {}).title || id)}</li>`).join("")}</ul>${w3EquipWarnHtml(b.name, a.per[i])}` : ""}</li>`).join("")}</ol>
+          ${a.unplaced.length ? `<p class="sr-note-inline">${esc(a.unplaced.length)} queued drill${a.unplaced.length === 1 ? " has" : "s have"} no matching block in this session length and stay${a.unplaced.length === 1 ? "s" : ""} queued: ${esc(a.unplaced.map((id) => (drillById(id) || {}).title || id).join(", "))}.</p>` : ""}
+          ${q.length ? `<button type="button" class="sr-chip" data-w3="rec-clearq" data-fk="clearq">Clear queued drills (${esc(q.length)})</button>` : ""}`;
+      }
+      function srBlockDrillsHtml(b) {
+        const ids = (b.drillIds || []).filter((id) => drillById(id));
+        if (!ids.length) return "";
+        const cur = Math.min(b.curDrill || 0, ids.length - 1), d = drillById(ids[cur]);
+        const eq = (d.equipment || []).join(", ");
+        return `<section class="sr-card"><h2>Drills in this block</h2>
+          <div role="group" aria-label="Drills in this block">${ids.map((id, i) => { const x = drillById(id); return `<button type="button" class="sr-chip sr-drillbtn" data-sr-act="curdrill" data-sr-val="${i}" data-fk="curdrill:${i}" aria-pressed="${i === cur ? "true" : "false"}">${esc(x.title)}<span class="sr-sub">${esc(x.duration || "")}${x.pacing === "block" || x.pacing === "transfer" ? " &middot; " + esc(x.pacing) + " pacing" : ""}</span></button>`; }).join("")}</div>
+          <div class="keyfeel-card" role="note"><b>Key takeaway</b><strong>${esc(d.keyFeel || d.focus || "")}</strong></div>
+          ${eq ? `<p class="sr-sub">Equipment: ${esc(eq)}</p>` : ""}
+          ${w3EquipWarnHtml("This block", ids)}
+        </section>`;
+      }
 
       renderAll();
       if (coachMigrationMsg) { saveState(); setTimeout(() => showToast(coachMigrationMsg), 600); }

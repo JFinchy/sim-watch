@@ -214,6 +214,28 @@ if (D.swingChecklist !== undefined) {
   });
 }
 
+// Fault coverage and gym drill placement (wave 3)
+{
+  const faultList = Array.isArray(D.faults) ? D.faults : [];
+  const MUST_HAVE = new Set(["grip-tension"]);
+  faultList.forEach((f) => {
+    const n = (D.drills || []).filter((d) => Array.isArray(d.faultTags) && d.faultTags.includes(f.id)).length;
+    if (n >= 1) return;
+    if (MUST_HAVE.has(f.id)) err(`fault ${f.id}: no drill is tagged with it (must have at least 1)`);
+    else warn(`fault ${f.id}: no drill is tagged with it`);
+  });
+  const sectionNames = new Set((D.drills || []).map((d) => d.section));
+  (D.drills || []).filter((d) => Array.isArray(d.environments) && d.environments.length && d.environments.every((e) => e === "gym")).forEach((d) => {
+    const t = `gym drill ${d.id}`;
+    if (!sectionNames.has(d.section) || !isStr(d.section)) err(`${t}: section "${d.section}" does not resolve`);
+    if (/driver launch|impact|transition|backswing|wedge/i.test(String(d.section))) warn(`${t}: filed under ball-striking section "${d.section}"`);
+    (d.days || []).forEach((x) => {
+      if (!routineIds.has(x)) err(`${t}: routine "${x}" does not resolve`);
+      else if (/^day-\d+/.test(x)) warn(`${t}: listed on ball-hitting routine "${x}"`);
+    });
+  });
+}
+
 // Optional private profile (git-ignored): validated only when the file exists.
 {
   const pdFile = path.join(path.dirname(file), "player_data.js");
