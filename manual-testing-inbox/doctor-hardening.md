@@ -33,3 +33,17 @@ commands work and don't break the Launch Pro link.
 - `harden --apply` steps succeed (or fail with a clear message) and the Launch Pro still connects after a replug and
   a reboot.
 - The overlay changes paths without touching `config.json`.
+
+## Rig run 2026-11-19 follow-ups
+
+Branch: `feature/coach-system` (working tree). After `harden --apply` on the onboard 'Ethernet' (Intel I219-V),
+`doctor` still showed profile Public, fast startup on, adapter power mgmt on, and GameChanger had no session.
+
+1. Elevated: `simwatch.py harden --apply`, answering `y` to all. Check that the power-management step (now also
+   clears MSPower_DeviceEnable) and the new "Unidentified networks default to Private" policy step run before the
+   "Network profile Private" step. With GameChanger running, expect a "Restart GameChanger now?" prompt at the end.
+   Answer `y` and expect `device_tcp: OK`.
+2. Elevated `doctor`: `adapter network profile` Private, `hibernate / fast startup` PASS ("off" or "hibernation
+   disabled, so fast startup can't run"), `adapter power mgmt` PASS showing `MSPower_DeviceEnable=False`.
+3. Reboot, then run `doctor` again. The profile must still be Private (the policy key persists).
+4. Dry run `simwatch.py harden` prints the GameChanger restart note.

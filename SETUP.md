@@ -60,7 +60,8 @@ Most dropped connections come from Windows power-saving the USB NIC, the APIPA a
       **dry run**: it prints the exact PowerShell for your PC, with the adapter detected automatically:
       - a static `169.254.6.1/16` on the device adapter
       - a persistent `/32` route to the device
-      - interface metric 5 and the Private network profile
+      - interface metric 5 and the Private network profile, plus the Unidentified Networks = Private policy (a
+        direct-cabled link is an 'Unidentified network' that otherwise comes back Public after an adapter restart)
       - firewall Allow rules for python.exe, GameChanger, GSPconnect and FSX Pro, and removal of any matching Block rules
       - adapter power management off
       - USB selective suspend off and PCIe ASPM off
@@ -70,7 +71,8 @@ Most dropped connections come from Windows power-saving the USB NIC, the APIPA a
 - [ ] Apply it from an **Administrator** terminal with `simwatch.py harden --apply`. It asks before each command and
       logs to `simwatch.log`. If the adapter isn't detected, pass its name from `Get-NetAdapter`:
       `simwatch.py harden "Ethernet 3" --apply`.
-- [ ] Unplug and replug the Launch Pro afterwards.
+- [ ] Unplug and replug the Launch Pro afterwards. If GameChanger was running, `--apply` offers to restart it (it
+      loses its Launch Pro session when the adapter changes).
 
 ## 6. Run as Administrator
 

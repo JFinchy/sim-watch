@@ -6218,6 +6218,9 @@ ULTIMATE_GUID = "e9a42b02-d5df-448d-aa00-03f14749eb61"
 USB_SS = ("2a737441-1930-4402-8d77-b2bebba308a3", "48e6b7a6-50f5-4782-a5d4-53bb8f07e226")
 PCIE_ASPM = ("501a4d13-42af-4429-9fd1-a8218c268e20", "ee12f906-d277-404b-b6da-e5fa1a576df5")
 HOST_LINK_IP = "169.254.6.1"
+# Network List Manager policy key for "Unidentified Networks" (what secpol.msc writes): Category 1 = Private.
+NLM_UNIDENTIFIED_KEY = (r"HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\NetworkList\Signatures"
+                        r"\010103000F0000F0010000000F0000F0C967A3643C3AD745950DA7859209176EF5B87C875FA20DF21951640E807D7C24")
 PAUSE_STALE_SEC = 4 * 3600
 KINOVEA_MIN_VERSION = (2025, 1)
 DOCTOR_SYSTEM_CHECKS = ("scheduled task 'SimWatch'", "sniffer raw socket", "firewall", "GameChanger exe",
@@ -6353,8 +6356,12 @@ def evaluate_power(scheme_text: str, usb_idx: int | None, standby_idx: int | Non
     if aspm_idx is not None:
         rows.append((PASS, "PCIe link power mgmt (AC)", "off") if aspm_idx == 0 else
                     (WARN, "PCIe link power mgmt (AC)", f"level {aspm_idx} -> fix: {HARDEN_HINT}"))
-    on = [n for n, v in (("hibernate", hibernate), ("fast startup", hiberboot)) if v]
-    rows.append((PASS, "hibernate / fast startup", "off") if not on else
+    if hibernate == 0:  # fast startup needs the hiberfile: with hibernation off it can't run, whatever HiberbootEnabled says
+        on = []
+    else:
+        on = [n for n, v in (("hibernate", hibernate), ("fast startup", hiberboot)) if v]
+    rows.append((PASS, "hibernate / fast startup", "off" if hibernate != 0 or not hiberboot else
+                 "off (hibernation disabled, so fast startup can't run)") if not on else
                 (WARN, "hibernate / fast startup", f"{' + '.join(on)} on - restores stale USB NIC state "
                                                    "-> fix: powercfg /hibernate off"))
     return rows
@@ -6494,11 +6501,32 @@ def evaluate_adapter(info: dict | None, device_ip: str) -> list[tuple[str, str, 
                                                    f"-> fix: {HARDEN_HINT}"))
     prof = str(info.get("Profile") or "none")
     rows.append((PASS, "adapter network profile", prof) if prof in ("Private", "DomainAuthenticated") else
-                (WARN, "adapter network profile", f"{prof} -> fix: {HARDEN_HINT} (Private)"))
-    sleep = str(info.get("AllowSleep") or "")
-    rows.append((WARN, "adapter power mgmt", f"Windows may turn off the adapter -> fix: {HARDEN_HINT}")
-                if sleep.lower() == "enabled" else (PASS, "adapter power mgmt", sleep or "n/a"))
+                (WARN, "adapter network profile",
+                 f"{prof} -> fix: {HARDEN_HINT} (Private profile + Unidentified Networks policy = Private; a direct "
+                 "link is an 'Unidentified network' that Windows re-creates as Public after an adapter restart)"))
+    rows.append(evaluate_adapter_power(info.get("AllowSleep"), info.get("WmiPower")))
     return rows
+
+
+def evaluate_adapter_power(allow_sleep, wmi_enable) -> tuple[str, str, str]:
+    """allow_sleep: Get-NetAdapterPowerManagement AllowComputerToTurnOffDevice (Enabled/Disabled/Unsupported/'').
+    wmi_enable: root/wmi MSPower_DeviceEnable.Enable for the adapter ('True'/'False'/'' if unreadable) - this is the
+    Device Manager 'Allow the computer to turn off this device' checkbox, i.e. what actually lets Windows power it
+    off, so it wins when readable. Without it, only AllowComputerToTurnOffDevice=Enabled means 'may turn off'."""
+    item = "adapter power mgmt"
+    allow = str(allow_sleep or "").strip()
+    wmi = str(wmi_enable or "").strip().lower()
+    detail = f"AllowComputerToTurnOffDevice={allow or '?'}, MSPower_DeviceEnable={wmi_enable if wmi else '?'}"
+    fix = f"-> fix: {HARDEN_HINT}"
+    if wmi == "true":
+        return (WARN, item, f"Windows may turn off the adapter (Device Manager power checkbox on; {detail}) {fix}")
+    if wmi == "false":
+        return (PASS, item, f"off ({detail})")
+    if allow.lower() == "enabled":
+        return (WARN, item, f"Windows may turn off the adapter ({detail}) {fix}")
+    if allow.lower() == "disabled":
+        return (PASS, item, f"off ({detail})")
+    return (INFO, item, f"can't confirm ({detail}; run doctor as Administrator to read the WMI flag)")
 
 
 _HOSTPORT_RE = re.compile(r"(localhost|::1|\d{1,3}(?:\.\d{1,3}){3})\]?\s*[:,]\s*\"?(\d{2,5})\b", re.I)
@@ -6588,9 +6616,12 @@ $i = Get-NetIPInterface -InterfaceIndex $idx -AddressFamily IPv4
 $p = Get-NetConnectionProfile -InterfaceIndex $idx
 $pm = if ($a) {{ Get-NetAdapterPowerManagement -Name $a.Name }}
 $r32 = Get-NetRoute -DestinationPrefix "$ip/32"
+$w = if ($a -and $a.PnPDeviceID) {{ Get-CimInstance -Namespace root/wmi -ClassName MSPower_DeviceEnable |
+  Where-Object {{ $_.InstanceName -like "$($a.PnPDeviceID)*" }} | Select-Object -First 1 }}
 [pscustomobject]@{{Name=$a.Name; Desc=$a.InterfaceDescription; Status=[string]$a.Status; Index=$idx; Source=$src;
  Dhcp=[string]$i.Dhcp; Metric=$i.InterfaceMetric; Profile=[string]$p.NetworkCategory;
- AllowSleep=[string]$pm.AllowComputerToTurnOffDevice; Route32=[bool]$r32}} | ConvertTo-Json -Compress"""
+ AllowSleep=[string]$pm.AllowComputerToTurnOffDevice; WmiPower=$(if ($w) {{ [string]$w.Enable }} else {{ '' }});
+ Route32=[bool]$r32}} | ConvertTo-Json -Compress"""
     info = _ps_json(script, 30)
     return info if isinstance(info, dict) else None
 
@@ -6693,12 +6724,24 @@ def _doc_device(cfg):
     return rows
 
 
+def parse_powercfg_a_hibernate(text: str) -> int | None:
+    """`powercfg /a` -> 0 if it says hibernation is off/unavailable, 1 if Hibernate is listed as available, else None."""
+    t = text or ""
+    if re.search(r"Hibernation has not been enabled|Hibernation is not available", t, re.I):
+        return 0
+    avail = re.split(r"not available", t, maxsplit=1, flags=re.I)[0]
+    return 1 if re.search(r"^\s*Hibernate\s*$", avail, re.I | re.M) else None
+
+
 def _doc_power(cfg):
     _, scheme = _run_cmd(["powercfg", "/getactivescheme"], 10)
     q = lambda sub, setting: parse_powercfg_ac_index(_run_cmd(["powercfg", "/query", "SCHEME_CURRENT", sub, setting], 10)[1])
+    hib = _reg_hklm_dword(r"SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled")
+    if hib is None:
+        hib = parse_powercfg_a_hibernate(_run_cmd(["powercfg", "/a"], 10)[1])
     return evaluate_power(
         scheme, q(*USB_SS), q("SUB_SLEEP", "STANDBYIDLE"), q(*PCIE_ASPM),
-        _reg_hklm_dword(r"SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled"),
+        hib,
         _reg_hklm_dword(r"SYSTEM\CurrentControlSet\Control\Session Manager\Power", "HiberbootEnabled"),
     )
 
@@ -6917,8 +6960,25 @@ def harden_steps(ctx: dict) -> list[tuple[str, str, bool]]:
     steps.append((f"Interface metric 5 on '{alias}'",
                   f"Set-NetIPInterface -InterfaceAlias {a} -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric 5",
                   True))
-    steps.append((f"Network profile Private on '{alias}' (if it errors for an 'Unidentified network', set "
-                  "secpol.msc > Network List Manager Policies > Unidentified Networks > Private)",
+    # Adapter-restarting steps (static IP above, power management here) must run BEFORE the profile steps:
+    # a restarted direct link comes back as an 'Unidentified network', which Windows re-creates as Public.
+    steps.append((f"Stop Windows powering off '{alias}' (adapter restarts briefly; also clears the Device Manager "
+                  "'Allow the computer to turn off this device' checkbox, which some drivers e.g. Intel I219-V ignore "
+                  "the cmdlet for)",
+                  f"Disable-NetAdapterPowerManagement -Name {a}; "
+                  f"$id = (Get-NetAdapter -Name {a}).PnPDeviceID; "
+                  "if ($id) { Get-CimInstance -Namespace root/wmi -ClassName MSPower_DeviceEnable | "
+                  "Where-Object { $_.InstanceName -like \"$id*\" } | Set-CimInstance -Property @{Enable=$false} }",
+                  True))
+    steps.append(("Unidentified networks default to Private (Network List Manager policy, same as secpol.msc > "
+                  "Network List Manager Policies > Unidentified Networks > Location type: Private; survives "
+                  "adapter restarts)",
+                  f"New-Item -Path {_psq(NLM_UNIDENTIFIED_KEY)} -Force | Out-Null; "
+                  f"New-ItemProperty -Path {_psq(NLM_UNIDENTIFIED_KEY)} -Name Category -PropertyType DWord -Value 1 "
+                  "-Force | Out-Null; "
+                  f"New-ItemProperty -Path {_psq(NLM_UNIDENTIFIED_KEY)} -Name CategoryReadOnly -PropertyType DWord "
+                  "-Value 0 -Force | Out-Null", False))
+    steps.append((f"Network profile Private on '{alias}' (after the adapter restarts above)",
                   f"Set-NetConnectionProfile -InterfaceAlias {a} -NetworkCategory Private", True))
     programs = ctx.get("programs") or {}
     for label, path in programs.items():
@@ -6933,8 +6993,6 @@ def harden_steps(ctx: dict) -> list[tuple[str, str, bool]]:
                       f"$p=@({plist}); Get-NetFirewallApplicationFilter | Where-Object "
                       "{ $p -contains [Environment]::ExpandEnvironmentVariables($_.Program) } | Get-NetFirewallRule | "
                       "Where-Object { $_.Action -eq 'Block' } | Remove-NetFirewallRule", False))
-    steps.append((f"Stop Windows powering off '{alias}' (adapter restarts briefly)",
-                  f"Disable-NetAdapterPowerManagement -Name {a}", True))
     if not ctx.get("ultimate_active"):
         steps.append(("Activate the High performance power plan (restores it if hidden)",
                       f"powercfg /setactive {HIGH_PERF_GUID}; if ($LASTEXITCODE -ne 0) "
@@ -6947,7 +7005,10 @@ def harden_steps(ctx: dict) -> list[tuple[str, str, bool]]:
                   f"powercfg /setacvalueindex SCHEME_CURRENT {PCIE_ASPM[0]} {PCIE_ASPM[1]} 0; "
                   "powercfg /setactive SCHEME_CURRENT", False))
     steps.append(("Never sleep on AC", "powercfg /change standby-timeout-ac 0", False))
-    steps.append(("Hibernate + fast startup off", "powercfg /hibernate off", False))
+    steps.append(("Hibernate + fast startup off",
+                  "powercfg /hibernate off; New-ItemProperty -Path "
+                  "'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name HiberbootEnabled "
+                  "-PropertyType DWord -Value 0 -Force | Out-Null", False))
     if ctx.get("task_exists"):
         steps.append(("Scheduled task 'SimWatch': no time limit, runs on battery/UPS",
                       "$t = Get-ScheduledTask -TaskName 'SimWatch'; $s = $t.Settings; $s.ExecutionTimeLimit = 'PT0S'; "
@@ -6994,6 +7055,9 @@ def cmd_harden(cfg: dict, apply: bool = False, adapter: str | None = None) -> in
     for i, (desc, cmd, _) in enumerate(steps, 1):
         print(f"\n[{i}] {desc}\n    {cmd}")
     if not apply:
+        if any(n for _, _, n in steps):
+            print("\nNote: the adapter steps drop GameChanger's Launch Pro session; --apply offers to restart "
+                  "GameChanger afterwards (or restart it yourself).")
         print("\nPaste these into an Administrator PowerShell, or run: python simwatch.py harden --apply (elevated).")
         return 0
     if not IS_WINDOWS:
@@ -7004,6 +7068,7 @@ def cmd_harden(cfg: dict, apply: bool = False, adapter: str | None = None) -> in
               f"  cd \"{HERE}\"\n  \"{sys.executable}\" simwatch.py harden --apply")
         return 1
     failed = 0
+    adapter_touched = False
     for i, (desc, cmd, needs_adapter) in enumerate(steps, 1):
         if needs_adapter and no_adapter:
             print(f"\n[{i}] SKIPPED (no adapter): {desc}")
@@ -7021,8 +7086,43 @@ def cmd_harden(cfg: dict, apply: bool = False, adapter: str | None = None) -> in
         LOG.info("harden step %d rc=%s: %s | %s", i, rc, desc, out.strip()[-500:])
         print(f"  {'OK' if rc == 0 else f'FAILED (rc {rc})'}" + (f": {out.strip()[-300:]}" if out.strip() else ""))
         failed += rc != 0
+        adapter_touched |= needs_adapter
+    if adapter_touched:
+        harden_offer_integrator_restart(cfg)
     print(f"\nDone ({failed} failed; details in simwatch.log). Replug the Launch Pro, then run: python simwatch.py doctor")
     return 1 if failed else 0
+
+
+def harden_offer_integrator_restart(cfg: dict, wait_sec: float = 30.0) -> bool | None:
+    """After harden changed the device adapter, GameChanger keeps a dead Launch Pro session and doesn't reconnect.
+    If it's running, offer to restart it (kill, wait for device sockets to clear, relaunch) and report device_tcp.
+    None = not running/not configured or declined; else whether a device session came back."""
+    app = (cfg.get("apps_by_key") or {}).get("integrator") or _cfg_app(cfg, "integrator", "GameChanger.exe")
+    if not app or not app.get("process") or not find_procs(app["process"]):
+        return None
+    try:
+        ans = input(f"\nThe adapter changed, so GameChanger has lost its Launch Pro session.\n"
+                    f"  Restart GameChanger now? [y]es / [n]o: ").strip().lower()
+    except EOFError:
+        ans = "n"
+    if not ans.startswith("y"):
+        print("  Skipped - restart GameChanger yourself before hitting balls.")
+        return None
+    app = dict(app, key=app.get("key") or "integrator")
+    kill_app(app)
+    time.sleep(2)
+    wait_device_sockets_clear(cfg, float((cfg.get("device") or {}).get("socket_clear_sec", 10)))
+    launch_app(cfg, app, 45)
+    run_cfg = dict(cfg, apps_by_key=dict(cfg.get("apps_by_key") or {}, **{app["key"]: app}))
+    end = time.time() + wait_sec
+    while True:
+        ok, msg = check_device_tcp({"app": app["key"]}, run_cfg)
+        if ok or time.time() >= end:
+            break
+        time.sleep(2)
+    LOG.info("harden: GameChanger restarted; device_tcp %s: %s", "OK" if ok else "FAIL", msg)
+    print(f"  device_tcp: {'OK' if ok else 'FAIL'} - {msg}")
+    return ok
 
 
 # --------------------------------------------------------------------------- main
