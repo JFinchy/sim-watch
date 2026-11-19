@@ -15,6 +15,7 @@
 - [ ] Feels, test blocks & personalized checklist - see `feels-and-blocks.md`
 - [ ] Bridge session context + session stats - see `bridge-session-context.md`
 - [ ] Drill library expansion (faults, environments, templates) - see `drill-library-expansion.md`
+- [ ] Session runner, structured log, miss dial & weekly review - see `session-log-and-review.md`
 
 ## Minor
 

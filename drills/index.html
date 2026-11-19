@@ -1434,6 +1434,72 @@
       .mat-flash { animation: none; }
       .mat-overlay *, .tonight-card * { transition: none !important; animation: none !important; }
     }
+
+    /* ===== Coached sessions: runner overlay, stats card, miss dial, weekly review ===== */
+    body.sr-open { overflow: hidden; }
+    .sr-overlay { z-index: 905; align-items: center; }
+    .sr-wrap { width: 100%; max-width: 760px; margin: 0 auto; padding-bottom: 24px; font-size: 18px; }
+    .sr-top { display: flex; align-items: center; justify-content: space-between; gap: 10px 16px; flex-wrap: wrap; }
+    .sr-prog { font-size: 30px; font-weight: 900; color: #fde68a; }
+    .sr-clock { font-variant-numeric: tabular-nums; font-size: 24px; font-weight: 700; }
+    .sr-clock small { font-size: 14px; color: #cbd5e1; }
+    .sr-clock .over { color: #fbbf24; }
+    .sr-h1 { font-size: clamp(28px, 6vw, 52px); font-weight: 900; line-height: 1.1; margin: 10px 0 4px; }
+    .sr-kind { color: #94a3b8; margin: 0 0 8px; }
+    .sr-big { font-size: clamp(20px, 4.4vw, 30px); font-weight: 700; color: #fde68a; line-height: 1.25; margin: 6px 0; }
+    .sr-sub { color: #94a3b8; font-size: 15px; margin: 8px 0 4px; }
+    .sr-note { background: #422006; border: 2px solid #f59e0b; border-radius: 12px; padding: 10px 14px; margin: 8px 0; color: #fde68a; font-weight: 600; }
+    .sr-note-inline { background: rgba(245, 158, 11, 0.12); border-left: 4px solid #f59e0b; padding: 8px 12px; border-radius: 6px; margin: 8px 0; }
+    .sr-card { background: #0f172a; border: 2px solid #334155; border-radius: 16px; padding: 12px 16px; margin: 12px 0; }
+    .sr-card.sr-warn { border-color: #f59e0b; }
+    .sr-card h2 { font-size: 20px; margin: 0 0 8px; }
+    .sr-card h3, .sr-panel h4 { font-size: 16px; margin: 14px 0 6px; }
+    .sr-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 6px 0; }
+    .sr-chip { background: #111827; color: #fff; border: 2px solid #475569; border-radius: 12px; min-height: 48px; min-width: 48px; padding: 6px 14px; font-size: 17px; font-weight: 700; cursor: pointer; max-width: 100%; }
+    .sr-chip[aria-pressed="true"] { border-color: #38bdf8; background: #0c4a6e; }
+    .sr-chip.wide { width: 100%; text-align: left; margin-top: 8px; }
+    .sr-btn { background: #0f172a; color: #fff; border: 3px solid #475569; border-radius: 16px; min-height: 60px; padding: 6px 18px; font-size: 20px; font-weight: 800; cursor: pointer; }
+    .sr-btn.small { min-height: 48px; font-size: 16px; padding: 4px 14px; }
+    .sr-btn.primary { background: #14532d; border-color: #22c55e; }
+    .sr-btn.hit { background: #14532d; border-color: #22c55e; flex: 1; }
+    .sr-btn.miss { background: #450a0a; border-color: #ef4444; flex: 1; }
+    .sr-btn.danger { border-color: #ef4444; }
+    .sr-btn small { display: block; font-size: 14px; color: #cbd5e1; }
+    .sr-btn.on { border-color: #38bdf8; }
+    .sr-btn:disabled { opacity: 0.4; cursor: default; }
+    .sr-btn:focus-visible, .sr-chip:focus-visible { outline: 4px solid #38bdf8; outline-offset: 2px; }
+    .sr-score { display: flex; gap: 10px; margin: 12px 0; }
+    .sr-score .sr-btn { min-height: 76px; }
+    .sr-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+    .sr-actions .sr-btn.primary { flex: 1 1 200px; }
+    .sr-actions.sticky { position: sticky; bottom: -22px; background: #000; padding: 8px 0 12px; }
+    .sr-field { display: block; margin: 10px 0; font-weight: 700; font-size: 15px; color: #cbd5e1; }
+    .sr-field textarea, .sr-field select { display: block; width: 100%; margin-top: 4px; background: #020617; color: #fff; border: 2px solid #475569; border-radius: 12px; padding: 10px 12px; font-size: 17px; font-family: inherit; }
+    .sr-plan, .sr-cues { margin: 6px 0; padding-left: 22px; }
+    .sr-modal { position: fixed; inset: 0; background: rgba(0,0,0,0.88); display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 3; }
+    .sr-modal-box { background: #0f172a; border: 3px solid #f59e0b; border-radius: 18px; padding: 22px; max-width: 520px; width: 100%; }
+    .sr-table { width: 100%; border-collapse: collapse; font-size: 15px; margin: 6px 0; }
+    .sr-table th { text-align: left; font-size: 12px; color: #94a3b8; text-transform: uppercase; padding: 4px 6px; border-bottom: 2px solid #334155; }
+    .sr-table td { padding: 6px; border-bottom: 1px solid #1e293b; }
+    .sr-table td.good { color: #4ade80; font-weight: 800; } .sr-table td.bad { color: #f87171; font-weight: 800; }
+    .sr-bars, .sr-dial { width: 100%; max-width: 420px; height: auto; display: block; }
+    .sr-dial.small { max-width: 300px; }
+    .sr-dial-t { font: 700 11px "Segoe UI", sans-serif; }
+    .sr-svg-t { font: 600 10px "Segoe UI", sans-serif; fill: #cbd5e1; }
+    .sr-key { display: inline-block; width: 12px; height: 12px; border-radius: 3px; margin: 0 4px 0 8px; vertical-align: middle; }
+    .sr-key.a { background: #f59e0b; } .sr-key.b { background: #38bdf8; }
+    .sr-mech { margin: 6px 0; font-size: 15px; }
+    .sr-read { font-weight: 700; margin: 4px 0; }
+    .sr-fix ul { margin: 4px 0; padding-left: 20px; }
+    .sr-hist { border: 1px solid #334155; border-radius: 10px; margin: 6px 0; padding: 4px 10px; }
+    .sr-hist summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; }
+    .sr-panel .sr-chip { color: inherit; }
+    .view .sr-panel .sr-card, .sr-panel .sr-dialbox { color: inherit; }
+    .sr-panel .sr-chip { background: var(--bg-elev); border-color: var(--border, #475569); }
+    .sr-panel .sr-chip[aria-pressed="true"] { background: #0c4a6e; border-color: #38bdf8; color: #fff; }
+    .sr-panel .sr-svg-t { fill: #94a3b8; }
+    @media (max-width: 600px) { .sr-wrap { font-size: 17px; } .sr-overlay { padding: 12px 14px 18px; } }
+    @media (prefers-reduced-motion: reduce) { .sr-overlay *, .sr-panel * { transition: none !important; animation: none !important; } }
     /* ===== SWING CHECKLIST view + Pre-shot cards overlay ===== */
     .cl-head { margin-bottom: 14px; }
     .cl-head-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px; }
@@ -1718,6 +1784,7 @@
   </div>
 
   <!-- MAT MODE (full-screen session overlay, rendered by renderMat) -->
+  <div id="srOverlay" class="mat-overlay sr-overlay hidden" role="dialog" aria-modal="true" aria-label="Coached session" tabindex="-1"></div>
   <div id="matOverlay" class="mat-overlay hidden" role="dialog" aria-modal="true" aria-label="Mat mode practice session" tabindex="-1"></div>
 
   <!-- PRE-SHOT CARDS (fullscreen starred-cue overlay from the Swing Checklist, rendered by renderCue) -->
@@ -2141,6 +2208,85 @@
         return out.slice(-500);
       }
 
+      // ---- Coached session log / runner sanitizers (function declarations + consts: used by loadState()) ----
+      const SR_JOINT = ["ok", "sore", "flare"];
+      const SR_DIAL_CHECKS = ["", "yes", "no", "unsure"];
+      const SR_KINDS = ["warmup", "cold", "block", "transfer", "putting", "speed", "log"];
+      function srId(v) { return typeof v === "string" && /^[A-Za-z0-9_-]{1,80}$/.test(v) ? v : null; }
+      function srNum(v, lo, hi) { const n = typeof v === "number" ? v : NaN; return isFinite(n) ? Math.max(lo, Math.min(hi, n)) : null; }
+      function srClean(v, depth) {
+        if (typeof v === "number") return isFinite(v) ? v : null;
+        if (typeof v === "string") return v.slice(0, 80);
+        if (v === null || depth > 5) return null;
+        if (Array.isArray(v)) return v.slice(0, 60).map((x) => srClean(x, depth + 1));
+        if (typeof v === "object") {
+          const o = {};
+          for (const k of Object.keys(v).slice(0, 60)) if (k.length <= 40) o[k] = srClean(v[k], depth + 1);
+          return o;
+        }
+        return null;
+      }
+      function srCleanBody(b) {
+        b = b && typeof b === "object" ? b : {};
+        return {
+          tight: srNum(b.tight, 0, 3) === null ? 0 : Math.round(srNum(b.tight, 0, 3)),
+          joint: SR_JOINT.includes(b.joint) ? b.joint : "ok",
+          energy: srNum(b.energy, 1, 5) === null ? 3 : Math.round(srNum(b.energy, 1, 5))
+        };
+      }
+      function srCleanBlocks(arr, withKinds) {
+        return (Array.isArray(arr) ? arr : []).slice(0, 30).filter((b) => b && typeof b === "object").map((b) => ({
+          name: pdStr(b.name, 80) || "Block", minutes: Math.max(0, Math.min(240, Math.round(Number(b.minutes)) || 0)),
+          kind: SR_KINDS.includes(b.kind) ? b.kind : "block", note: pdStr(b.note, 300),
+          secs: Math.max(0, Math.min(86400, Math.round(Number(b.secs)) || 0)),
+          hit: Math.max(0, Math.min(999, Math.round(Number(b.hit)) || 0)), miss: Math.max(0, Math.min(999, Math.round(Number(b.miss)) || 0)),
+          cluster: srNum(b.cluster, 0, 999) === null ? null : Math.round(srNum(b.cluster, 0, 999))
+        }));
+      }
+      function srStrList(v, max) {
+        return (Array.isArray(v) ? v : []).filter((x) => typeof x === "string" && x.length && x.length <= 80).slice(0, max).filter((x, i, a) => a.indexOf(x) === i);
+      }
+      function sanitizeSessionLogs(arr) {
+        if (!Array.isArray(arr)) return [];
+        const out = [], seen = new Set();
+        for (const l of arr) {
+          if (!l || typeof l !== "object" || !srId(l.id) || seen.has(l.id) || !isIsoDate(l.date)) continue;
+          seen.add(l.id);
+          const dial = l.dial && typeof l.dial === "object" ? {
+            pos: srNum(l.dial.pos, -1, 1), src: l.dial.src === "bridge" ? "bridge" : "manual",
+            f2p: srNum(l.dial.f2p, -90, 90), off: srNum(l.dial.off, -500, 500), n: Math.max(0, Math.round(Number(l.dial.n)) || 0)
+          } : null;
+          out.push({
+            id: l.id, date: l.date, startedAt: pdStr(l.startedAt, 40), endedAt: pdStr(l.endedAt, 40),
+            templateId: pdStr(l.templateId, 80), minutes: Math.max(0, Math.min(300, Math.round(Number(l.minutes)) || 0)),
+            actualMin: Math.max(0, Math.min(600, Math.round(Number(l.actualMin)) || 0)),
+            feelId: pdStr(l.feelId, 80), feelName: pdStr(l.feelName, 120), blockId: pdStr(l.blockId, 80),
+            body: srCleanBody(l.body),
+            summary: pdStr(l.summary, 800), findings: pdStr(l.findings, 800), takeaway: pdStr(l.takeaway, 500), nextStep: pdStr(l.nextStep, 500),
+            faultTags: srStrList(l.faultTags, 30), clubs: srStrList(l.clubs, 12), drillIds: srStrList(l.drillIds, 40),
+            feelRating: srNum(l.feelRating, 1, 5) === null ? null : Math.round(srNum(l.feelRating, 1, 5)),
+            stats: l.stats && typeof l.stats === "object" ? srClean(l.stats, 0) : null,
+            blocks: srCleanBlocks(l.blocks), dial: dial && dial.pos !== null ? dial : null,
+            dialCheck: SR_DIAL_CHECKS.includes(l.dialCheck) ? l.dialCheck : "", promoted: l.promoted === true
+          });
+        }
+        return out.slice(-365);
+      }
+      function sanitizeSessionRun(r) {
+        if (!r || typeof r !== "object" || !srId(r.id) || !isIsoDate(r.date)) return null;
+        const blocks = srCleanBlocks(r.blocks);
+        if (!blocks.length) return null;
+        const idx = Math.max(-1, Math.min(blocks.length - 1, Math.floor(Number(r.idx)) || 0));
+        return {
+          id: r.id, date: r.date, startedAt: pdStr(r.startedAt, 40), templateId: pdStr(r.templateId, 80),
+          minutes: Math.max(0, Math.min(300, Math.round(Number(r.minutes)) || 0)),
+          feelId: pdStr(r.feelId, 80), feelName: pdStr(r.feelName, 120), blockId: pdStr(r.blockId, 80),
+          body: srCleanBody(r.body), idx, cluster: Math.max(-1, Math.min(999, Math.floor(Number(r.cluster)) || 0)),
+          enteredAt: typeof r.enteredAt === "number" && isFinite(r.enteredAt) ? r.enteredAt : null,
+          blocks, dialCheck: SR_DIAL_CHECKS.includes(r.dialCheck) ? r.dialCheck : ""
+        };
+      }
+
       function loadState() {
         const base = {
           activeView: "deck",
@@ -2171,6 +2317,8 @@
           sessions: [],            // mat-mode session history (see SESSION section)
           sessionPrefs: { mode: null, minutes: 30 },
           activeSession: null,     // in-progress mat session (resumable after reload)
+          sessionLogs: [],         // finished coached sessions (structured log + bridge stats snapshot), capped at 365
+          sessionRun: null,        // in-progress coached session (resumable after reload)
           checklistFocusIds: clDefaultFocus(), // Active cues (max 2); seeded once (personal pre-swing checks, else the first 2 defaults)
           checklistBacklogIds: [], // cues un-starred / displaced by the 2-cue cap
           checklistClub: "all",    // "all" | "driver" | "irons"
@@ -2188,6 +2336,8 @@
             base.sessions = sanitizeSessions(saved.sessions);
             base.sessionPrefs = sanitizeSessionPrefs(saved.sessionPrefs);
             base.activeSession = sanitizeActiveSession(saved.activeSession);
+            base.sessionLogs = sanitizeSessionLogs(saved.sessionLogs);
+            base.sessionRun = sanitizeSessionRun(saved.sessionRun);
             if (Array.isArray(saved.checklistFocusIds)) base.checklistFocusIds = clStrIds(saved.checklistFocusIds); // [] = user un-starred everything
             base.checklistBacklogIds = clStrIds(saved.checklistBacklogIds) || [];
             if (FEEL_CLUBS.includes(saved.checklistClub)) base.checklistClub = saved.checklistClub;
@@ -2531,13 +2681,15 @@
       }
 
       // ---- Backup / import helpers ----
-      const SCHEMA_VERSION = 5; // v3: sessions / sessionPrefs / activeSession (mat mode); v4: swing checklist; v5: coach layer (feelsUser / blocks / parkingLot / checklistBacklogIds / checklistClub); all additive
+      const SCHEMA_VERSION = 6; // v6: coached sessions (sessionLogs / sessionRun); // v3: sessions / sessionPrefs / activeSession (mat mode); v4: swing checklist; v5: coach layer (feelsUser / blocks / parkingLot / checklistBacklogIds / checklistClub); all additive
       function buildPersistObject() {
         return {
           schemaVersion: SCHEMA_VERSION,
           sessions: state.sessions,
           sessionPrefs: state.sessionPrefs,
           activeSession: state.activeSession,
+          sessionLogs: state.sessionLogs,
+          sessionRun: state.sessionRun,
           checklistFocusIds: state.checklistFocusIds,
           checklistLog: state.checklistLog,
           checklistCustomItems: state.checklistCustomItems,
@@ -2626,6 +2778,11 @@
           state.sessions = sanitizeSessions(parsed.sessions);
           parts.push(`${state.sessions.length} mat sessions`);
         }
+        if (Array.isArray(parsed.sessionLogs)) {
+          state.sessionLogs = sanitizeSessionLogs(parsed.sessionLogs);
+          parts.push(`${state.sessionLogs.length} coached sessions`);
+        }
+        if (parsed.sessionRun !== undefined) state.sessionRun = sanitizeSessionRun(parsed.sessionRun);
         if (isPlainObj(parsed.sessionPrefs)) state.sessionPrefs = sanitizeSessionPrefs(parsed.sessionPrefs);
         if (Array.isArray(parsed.checklistCustomItems)) {
           state.checklistCustomItems = sanitizeChecklistCustom(parsed.checklistCustomItems);
@@ -2679,6 +2836,8 @@
           Object.keys(state.deliveryLogs || {}).length > 0 ||
           (state.roundLogs || []).length > 0 ||
           (state.sessions || []).length > 0 ||
+          (state.sessionLogs || []).length > 0 ||
+          !!state.sessionRun ||
           Object.keys(state.checklistLog || {}).length > 0 ||
           (state.checklistCustomItems || []).length > 0 ||
           Object.keys(state.feelsUser || {}).length > 0 ||
@@ -5920,7 +6079,7 @@
         };
 
         document.getElementById("btnResetEverything").onclick = () => {
-          if (!confirm("RESET EVERYTHING?\n\nThis erases ALL saved data in this browser: drills, goals, delivery logs, notes, courses, rounds, club bag, swing checklist, feels, test blocks and block history, parking lot, cadence and sim settings.\n\nTip: click Export Full Backup first.")) return;
+          if (!confirm("RESET EVERYTHING?\n\nThis erases ALL saved data in this browser: drills, goals, delivery logs, notes, courses, rounds, club bag, swing checklist, feels, test blocks and block history, parking lot, coached session logs and any session in progress, cadence and sim settings.\n\nTip: click Export Full Backup first.")) return;
           if (!confirm("Last chance - really erase everything?")) return;
           try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
           if (cadenceState.isPlaying) stopCadenceMetronome();
@@ -6303,6 +6462,7 @@
             <h2 class="tn-title">${title}</h2>
             <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
               ${act ? `<button type="button" class="nav-btn" id="btnTonightEndSaved">End &amp; save</button><button type="button" class="nav-btn" id="btnTonightDiscard">Discard</button>` : ""}
+              <button type="button" class="nav-btn" id="btnCoachStart" title="Timed template session with feel, body check and structured log">${state.sessionRun ? "&#9654; Resume coached session" : "&#129517; Start coached session"}</button>
               <button type="button" class="tn-start" id="btnTonightStart" ${!act && !plan.items.length ? "disabled" : ""}>${act ? "▶ Resume session" : "▶ Start session"}</button>
             </div>
           </div>
@@ -6349,6 +6509,7 @@
         const reset = document.getElementById("btnTonightReset");
         if (reset) reset.onclick = () => { tonightUi.edited = false; tonightUi.plan = null; renderTonightCard(); };
         document.getElementById("btnTonightStart").onclick = startSession;
+        document.getElementById("btnCoachStart").onclick = srOpen;
         const last = document.getElementById("btnTonightLast");
         if (last && head) last.onclick = () => openSummary(head.s.id);
         const endSaved = document.getElementById("btnTonightEndSaved");
@@ -6893,6 +7054,8 @@
         bridge.live = live;
         updateSimPills();
         if (live && !was && state.activeSession && mat.open && mat.view === "run") postActiveDrill(curBlock() && curBlock().drillId);
+        if (live && !was) { srResync(); srLoadLive(state.sessionRun); }
+        if (was !== live) srRefreshCtxBadge();
         if (was !== live && mat.open && mat.view === "run" && !mat.lastShot) renderMat();
       }
       function scheduleBridgeRetry() {
@@ -6952,6 +7115,7 @@
         if (bridge.seen.size > 3000) bridge.seen = new Set(Array.from(bridge.seen).slice(-1000));
         bridge.lastShot = shot;
         if (bridge.status) bridge.status.last_shot_ts = shot.ts;
+        srOnShot(shot);
         const s = state.activeSession, b = curBlock();
         if (!mat.open || mat.view !== "run" || !s || !b || mat.confirm) { updateSimPills(); return; }
         const sc = scoreShot(shot, b.target, s.mode);
@@ -7587,6 +7751,8 @@
       function daysBetween(a, b) { return Math.round((Date.parse(b + "T12:00:00") - Date.parse(a + "T12:00:00")) / 86400000); }
       function activeBlockDay() { const b = getActiveBlock(); return b ? Math.max(1, daysBetween(b.startDate, todayISO(0)) + 1) : 0; }
       function lastSessionNote() {
+        const sl = (state.sessionLogs || []).slice().reverse().find((l) => l.takeaway || l.summary || l.nextStep);
+        if (sl) return { date: sl.date, text: sl.takeaway || sl.summary || sl.nextStep };
         const logs = state.deliveryLogs || {};
         for (const d of Object.keys(logs).sort().reverse()) {
           const n = logs[d] && typeof logs[d].notes === "string" ? logs[d].notes.trim() : "";
@@ -8230,6 +8396,8 @@
           ${feelStripHtml(false)}
           ${flFormsHtml()}
           ${flBlockPanelHtml()}
+          ${srPanelHtml()}
+          ${weeklyReviewHtml()}
           ${fl.mode === "flash" ? flFlashHtml() : flLibraryHtml()}
           ${flHistoryHtml()}
           ${flParkingHtml()}
@@ -8390,6 +8558,757 @@
         document.getElementById("parkPanel").addEventListener("keydown", (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); closePark(true); } });
       })();
       // ============================== END COACH ==============================
+
+      // =====================================================================================
+      // ===== COACHED SESSIONS: runner, structured end-of-session log, stats card, driver miss dial, weekly review =====
+      // State it owns: state.sessionLogs (finished coached sessions, newest last, capped at 365) and
+      // state.sessionRun (the in-progress run; survives a reload). NOTE: state.sessions is the older Mat-mode drill history.
+      // Bridge v2: POST /api/context, GET /api/session-stats, GET /api/shots. Every fetch has a timeout and fails soft.
+      // =====================================================================================
+      const SR_KIND_LABEL = { warmup: "Warm-up", cold: "Cold start", block: "Feel block", transfer: "Transfer / random", putting: "Putting", speed: "Speed set", log: "Log" };
+      const SR_PHASE = { warmup: "warmup", cold: "cold", block: "block", transfer: "transfer", speed: "speed" };
+      const SR_CLUBS = ["Driver", "Fairway wood", "Hybrid", "Long irons", "Mid irons", "Short irons", "Wedges", "Putter"];
+      const SR_DIAL_PRESETS = [["Hook", -0.9], ["Too much draw", -0.6], ["Stock draw", -0.32], ["Straight", 0], ["Push / fade", 0.35], ["Open / slice", 0.8]];
+      const sr = { open: false, view: "setup", tpl: "session-30", setup: null, draft: null, run: null, live: [], fetched: null, statsP: null, doneId: null,
+        tick: null, restUntil: 0, returnFocus: null, ctxOk: null, confirmDiscard: false, focusSel: null };
+      const wr = { env: null };
+
+      function srTemplates() { return Array.isArray(DEFAULTS.sessionTemplates) ? DEFAULTS.sessionTemplates : []; }
+      function srFmt(v, d, signed) { if (v === null || v === undefined || !isFinite(v)) return "–"; const n = Number(v); return (signed && n > 0 ? "+" : "") + n.toFixed(d); }
+      function srMean(list) { const v = list.filter((x) => typeof x === "number" && isFinite(x)); return v.length ? v.reduce((a, b) => a + b, 0) / v.length : null; }
+      function srBodyLabels() {
+        const pr = (window.PLAYER_DATA && window.PLAYER_DATA.profile) || {};
+        const bc = pr.bodyChecks && typeof pr.bodyChecks === "object" ? pr.bodyChecks : {};
+        const txt = (Array.isArray(pr.constraints) ? pr.constraints.join(" ") : "") + " " + (typeof pr.constraints === "string" ? pr.constraints : "");
+        const tight = pdStr(bc.tight, 40) || (/hamstring/i.test(txt) ? "Hamstrings tight" : "Body tightness");
+        const joint = pdStr(bc.joint, 40) || (/ankle/i.test(txt) ? "Ankle" : "Joint / niggle");
+        return { tight, joint };
+      }
+      function srSessions() { return state.sessionLogs || []; }
+      function srLogById(id) { return srSessions().find((l) => l.id === id) || null; }
+      function srClubKind(c) {
+        const s = String(c || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (!s) return "";
+        if (/^(driver|dr|1w|1wood)$/.test(s) || s.indexOf("driver") >= 0) return "driver";
+        if (/putter|^pt$/.test(s)) return "putter";
+        if (/wedge|^(pw|gw|aw|sw|lw)$|^(5[0-9]|6[0-4])(deg)?$/.test(s)) return "wedge";
+        if (/wood|^[2-9]w$/.test(s)) return "wood";
+        if (/hybrid|^[2-7]h$/.test(s)) return "hybrid";
+        if (/iron|^[2-9]i$/.test(s)) return "iron";
+        return "other";
+      }
+      function srClubChip(c) {
+        const k = srClubKind(c), m = /(\d)/.exec(String(c || ""));
+        if (k === "driver") return "Driver";
+        if (k === "putter") return "Putter";
+        if (k === "wedge") return "Wedges";
+        if (k === "wood") return "Fairway wood";
+        if (k === "hybrid") return "Hybrid";
+        if (k === "iron") return m && Number(m[1]) <= 4 ? "Long irons" : m && Number(m[1]) <= 7 ? "Mid irons" : "Short irons";
+        return "";
+      }
+      async function srFetchJson(url, opts, ms) {
+        if (typeof window.fetch !== "function") return null;
+        const ctl = typeof AbortController === "function" ? new AbortController() : null;
+        const to = ctl ? setTimeout(() => ctl.abort(), ms || 3500) : null;
+        try {
+          const res = await fetch(url, Object.assign({ cache: "no-store", signal: ctl ? ctl.signal : undefined }, opts || {}));
+          const doc = await res.json();
+          return res.ok ? doc : null;
+        } catch (e) { return null; } finally { if (to) clearTimeout(to); }
+      }
+
+      // ---- bridge context ----
+      function srCtxFor(run) {
+        const b = run && run.idx >= 0 ? run.blocks[run.idx] : null;
+        return {
+          session_id: run ? srId(run.id) : null, feel_id: run ? srId(run.feelId) : null, block_id: run ? srId(run.blockId) : null,
+          phase: b ? SR_PHASE[b.kind] || null : null,
+          cluster: run && run.cluster >= 0 ? Math.min(999, run.cluster) : null
+        };
+      }
+      async function srPostContext(body) {
+        if (!bridge.live) { sr.ctxOk = null; srRefreshCtxBadge(); return; }
+        const doc = await srFetchJson(`${BRIDGE_URL}/api/context`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }, 2500);
+        sr.ctxOk = !!(doc && doc.context);
+        srRefreshCtxBadge();
+      }
+      function srClearContext() { return srPostContext({ session_id: null, feel_id: null, block_id: null, phase: null, cluster: null, note: null }); }
+      function srResync() { if (state.sessionRun && sr.view === "run") srPostContext(srCtxFor(state.sessionRun)); }
+      function srRefreshCtxBadge() {
+        const n = document.getElementById("srCtx");
+        if (n) n.textContent = !bridge.live ? "Local only (sim offline)" : sr.ctxOk === false ? "Sim did not accept context" : sr.ctxOk ? "Context sent to sim" : "";
+      }
+      async function srLoadLive(run) {
+        if (!bridge.live || !run) return;
+        const doc = await srFetchJson(`${BRIDGE_URL}/api/shots?date=${encodeURIComponent(run.date)}`, null, 4000);
+        if (doc && Array.isArray(doc.shots)) {
+          sr.live = doc.shots.filter((s) => s && s.session_id === run.id).slice(-500);
+          srRenderLive();
+        }
+      }
+      function srOnShot(shot) {
+        const run = state.sessionRun;
+        if (!run || shot.session_id !== run.id) return;
+        sr.live.push(shot);
+        if (sr.live.length > 500) sr.live = sr.live.slice(-500);
+        srRenderLive();
+      }
+
+      // ---- shot math ----
+      function srShotMetrics(s) {
+        const d = s.derived || {}, c = s.club_data || {}, b = s.ball || {};
+        return { smash: sNum(d.smash), f2p: sNum(d.face_to_path), off: sNum(d.start_offline_yd), aoa: sNum(c.aoa), path: sNum(c.path), face: sNum(c.face), carry: sNum(b.carry), ball_speed: sNum(b.speed) };
+      }
+      function srAvgs(shots) {
+        const m = shots.map(srShotMetrics), keys = ["smash", "aoa", "path", "face", "f2p", "carry", "ball_speed"], o = { n: shots.length };
+        keys.forEach((k) => { o[k] = srMean(m.map((x) => x[k])); });
+        return o;
+      }
+      // Dial: face-to-path (deg) -> needle position, -1 = far hook ... 0 = straight ... +1 = far open/slice.
+      function srDialPos(f2p, off) {
+        const pts = [[-8, -1], [-5, -0.7], [-3, -0.45], [-1, -0.2], [0, 0], [2, 0.45], [5, 1]];
+        let pos;
+        if (f2p <= pts[0][0]) pos = -1; else if (f2p >= pts[pts.length - 1][0]) pos = 1;
+        else for (let i = 1; i < pts.length; i++) if (f2p <= pts[i][0]) { const a = pts[i - 1], b = pts[i]; pos = a[1] + (b[1] - a[1]) * (f2p - a[0]) / (b[0] - a[0]); break; }
+        if (typeof off === "number" && isFinite(off)) pos += Math.max(-1, Math.min(1, off / 20)) * 0.08; // start line nudges the needle
+        return Math.max(-1, Math.min(1, pos));
+      }
+      function srDialFromShots(shots) {
+        const dr = shots.filter((s) => srClubKind(s.club) === "driver").map(srShotMetrics).filter((m) => m.f2p !== null);
+        if (!dr.length) return null;
+        const f2p = srMean(dr.map((m) => m.f2p)), off = srMean(dr.map((m) => m.off));
+        return { pos: srDialPos(f2p, off), src: "bridge", f2p, off, n: dr.length };
+      }
+      function srDialZone(pos) { return pos <= -0.6 ? "Hook zone" : pos <= -0.15 ? "Stock draw band" : pos < 0.3 ? "Near straight" : "Open face / cut-slice zone"; }
+
+      // ---- snapshot (stats card source) ----
+      function srBuildSnapshot(run, doc, shots) {
+        const mine = (shots || []).filter((s) => s && s.session_id === run.id).sort((a, b) => String(a.ts).localeCompare(String(b.ts)));
+        if (!doc && !mine.length) return null;
+        const snap = { shot_count: doc && typeof doc.shot_count === "number" ? doc.shot_count : mine.length };
+        if (doc) {
+          snap.cold_start = srClean(doc.cold_start, 0); snap.dispersion = srClean(doc.dispersion, 0);
+          snap.by_cluster = srClean(doc.by_cluster, 0); snap.by_feel = srClean(doc.by_feel, 0); snap.strike = srClean(doc.strike_consistency, 0);
+        }
+        if (mine.length) {
+          const basis = doc && doc.cold_start ? doc.cold_start.basis : "first3";
+          const coldSet = basis === "tagged" ? mine.filter((s) => s.phase === "cold") : basis === "none" ? [] : mine.slice(0, 3);
+          const cs = new Set(coldSet.map((s) => s.ts));
+          const rest = mine.filter((s) => !cs.has(s.ts));
+          const A = srAvgs(mine), R = srAvgs(rest);
+          snap.overall = srClean(A, 0); snap.rest = srClean(R, 0);
+          const irons = mine.filter((s) => srClubKind(s.club) === "iron" || srClubKind(s.club) === "wedge");
+          snap.irons = srClean(srAvgs(irons), 0);
+          const dd = srDialFromShots(mine);
+          if (dd) snap.driver = srClean(dd, 0);
+        }
+        const gaps = [];
+        const bc = snap.dispersion && Array.isArray(snap.dispersion.by_club) ? snap.dispersion.by_club : [];
+        bc.forEach((c) => { if (c && c.first3 && c.last3 && typeof c.first3.offline_std === "number" && typeof c.last3.offline_std === "number") gaps.push([Math.abs(c.first3.offline_std - c.last3.offline_std), c.n || 1]); });
+        if (gaps.length) { const w = gaps.reduce((t, g) => t + g[1], 0); snap.gap = gaps.reduce((t, g) => t + g[0] * g[1], 0) / w; }
+        return snap;
+      }
+
+      // ---- lifecycle ----
+      function srTemplate(id) { const t = srTemplates(); return t.find((x) => x.id === id) || t.find((x) => x.id === "session-30") || t[0] || null; }
+      function srOpenShell() {
+        const ov = document.getElementById("srOverlay");
+        if (!sr.open) sr.returnFocus = document.activeElement;
+        sr.open = true;
+        ov.classList.remove("hidden");
+        document.body.classList.add("sr-open");
+        ov.focus({ preventScroll: true });
+        if (!sr.tick) sr.tick = setInterval(srTickClock, 1000);
+      }
+      function srClose() {
+        sr.open = false;
+        if (sr.tick) { clearInterval(sr.tick); sr.tick = null; }
+        const ov = document.getElementById("srOverlay");
+        ov.classList.add("hidden");
+        ov.innerHTML = "";
+        document.body.classList.remove("sr-open");
+        renderAll();
+        const back = document.getElementById("btnCoachStart") || sr.returnFocus;
+        if (back && back.focus) back.focus({ preventScroll: true });
+      }
+      function srOpen() {
+        if (state.sessionRun) {
+          sr.view = "run"; sr.run = state.sessionRun;
+          srOpenShell();
+          if (state.sessionRun.idx < 0) srEnter(0); else { srRender(); srResync(); srLoadLive(state.sessionRun); }
+          return;
+        }
+        sr.view = "setup";
+        sr.setup = { tpl: sr.tpl, body: { tight: 0, joint: "ok", energy: 3 }, dialCheck: "" };
+        srOpenShell();
+        srRender();
+      }
+      function srFlush(run) {
+        if (!run || run.idx < 0) return;
+        const b = run.blocks[run.idx];
+        if (b && run.enteredAt) { b.secs = (b.secs || 0) + Math.max(0, Math.round((Date.now() - run.enteredAt) / 1000)); }
+        run.enteredAt = Date.now();
+      }
+      function srBegin() {
+        const su = sr.setup, tpl = srTemplate(su.tpl);
+        if (!tpl) { showToast("No session templates available."); return; }
+        const f = getActiveFeel(), blk = getActiveBlock();
+        const now = new Date();
+        state.sessionRun = {
+          id: "cs-" + now.getTime().toString(36), date: todayISO(0), startedAt: now.toISOString(), templateId: tpl.id, minutes: tpl.minutes,
+          feelId: f ? f.id : "", feelName: f ? f.name : "", blockId: blk ? blk.id : "", body: srCleanBody(su.body),
+          idx: -1, cluster: -1, enteredAt: null, dialCheck: su.dialCheck || "",
+          blocks: srCleanBlocks(tpl.blocks.map((b) => ({ name: b.name, minutes: b.minutes, kind: b.kind, note: b.note })))
+        };
+        sr.run = state.sessionRun; sr.live = []; sr.fetched = null; sr.statsP = null; sr.tpl = tpl.id;
+        sr.view = "run";
+        srEnter(0);
+      }
+      function srEnter(i) {
+        const run = state.sessionRun;
+        if (!run || i < 0 || i >= run.blocks.length) return;
+        srFlush(run);
+        run.idx = i;
+        run.cluster = Math.min(999, run.cluster + 1);
+        run.blocks[i].cluster = run.cluster;
+        run.enteredAt = Date.now();
+        sr.restUntil = 0;
+        saveState();
+        srPostContext(srCtxFor(run));
+        srRender();
+      }
+      function srNext() { const run = state.sessionRun; if (!run) return; if (run.idx < run.blocks.length - 1) srEnter(run.idx + 1); else srFinish(); }
+      function srPrev() { const run = state.sessionRun; if (run && run.idx > 0) srEnter(run.idx - 1); }
+      function srFinish() {
+        const run = state.sessionRun;
+        if (!run) return;
+        srFlush(run); run.enteredAt = null;
+        saveState();
+        srClearContext(); // later shots must not be tagged with this session
+        const f = run.feelId ? feelById(run.feelId) : null;
+        const todayMat = (state.sessions || []).filter((s) => s.date === run.date).flatMap((s) => s.blocks.filter((b) => b.done).map((b) => b.drillId));
+        const clubs = srStrList(sr.live.map((s) => srClubChip(s.club)).filter(Boolean), 12);
+        const drills = srStrList(todayMat, 40).filter((id) => drillById(id));
+        sr.draft = {
+          summary: "", findings: "", takeaway: "", nextStep: "", faultTags: [], clubs, drillIds: drills,
+          feelId: f ? f.id : "", feelRating: 0, dial: null, promote: false
+        };
+        sr.fetched = { state: "loading" };
+        sr.statsP = srFetchEnd(run);
+        sr.view = "log";
+        sr.focusSel = "[data-sr-bind='summary']";
+        srRender();
+        sr.statsP.then(() => { if (sr.open && sr.view === "log") srRefreshDialHint(); });
+      }
+      async function srFetchEnd(run) {
+        let doc = null, shots = null;
+        if (bridge.live) {
+          doc = await srFetchJson(`${BRIDGE_URL}/api/session-stats?date=${encodeURIComponent(run.date)}&session_id=${encodeURIComponent(run.id)}`, null, 4000);
+          const sh = await srFetchJson(`${BRIDGE_URL}/api/shots?date=${encodeURIComponent(run.date)}`, null, 4000);
+          if (sh && Array.isArray(sh.shots)) shots = sh.shots;
+        }
+        if (!shots && sr.live.length) shots = sr.live;
+        const snap = srBuildSnapshot(run, doc && typeof doc === "object" ? doc : null, shots || []);
+        sr.fetched = { state: snap ? "ok" : "none", snap, shots: shots || [] };
+        return sr.fetched;
+      }
+      function srRefreshDialHint() {
+        const n = document.getElementById("srDialAuto");
+        if (!n) return;
+        const d = sr.fetched && sr.fetched.snap && sr.fetched.snap.driver;
+        n.innerHTML = d ? `Sim data: ${esc(d.n)} driver shot${d.n === 1 ? "" : "s"}, avg face-to-path ${esc(srFmt(d.f2p, 1, true))}&deg;. The needle will be set from it unless you pick one below.` : `No driver data from the sim for this session. Pick where your driver miss sat today (optional).`;
+      }
+      async function srSave() {
+        const run = state.sessionRun, d = sr.draft;
+        if (!run || !d) return;
+        const btn = document.getElementById("srSaveBtn");
+        if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
+        if (sr.statsP) { try { await Promise.race([sr.statsP, new Promise((r) => setTimeout(r, 6000))]); } catch (e) { /* ignore */ } }
+        const snap = sr.fetched && sr.fetched.snap ? sr.fetched.snap : null;
+        let dial = d.dial;
+        if (!dial && snap && snap.driver) dial = { pos: snap.driver.pos, src: "bridge", f2p: snap.driver.f2p, off: snap.driver.off, n: snap.driver.n };
+        const f = d.feelId ? feelById(d.feelId) : null;
+        const ended = new Date();
+        const log = sanitizeSessionLogs([{
+          id: run.id, date: run.date, startedAt: run.startedAt, endedAt: ended.toISOString(), templateId: run.templateId, minutes: run.minutes,
+          actualMin: Math.max(1, Math.round((ended.getTime() - Date.parse(run.startedAt)) / 60000)),
+          feelId: d.feelId, feelName: f ? f.name : run.feelName, blockId: run.blockId, body: run.body,
+          summary: d.summary, findings: d.findings, takeaway: d.takeaway, nextStep: d.nextStep,
+          faultTags: d.faultTags, clubs: d.clubs, drillIds: d.drillIds, feelRating: d.feelRating || null,
+          stats: snap, blocks: run.blocks, dial, dialCheck: run.dialCheck, promoted: false
+        }])[0];
+        if (!log) { showToast("Could not save the session log."); if (btn) btn.disabled = false; return; }
+        state.sessionLogs = srSessions().filter((l) => l.id !== log.id).concat([log]).slice(-365);
+        state.sessionRun = null; sr.run = null;
+        // Keep the Goals / Delivery Chart check-in and streaks working.
+        const dl = ensureDayLog(log.date);
+        if (!dl.status) { dl.status = log.body.joint === "flare" ? "recovery" : "partial"; dl.mode = state.activeMode === "all" ? "real" : state.activeMode; }
+        if (log.feelRating) dl.quality = log.feelRating;
+        const line = [log.summary, log.takeaway ? "Takeaway: " + log.takeaway : ""].filter(Boolean).join(" | ");
+        if (line && !String(dl.notes || "").includes(line)) dl.notes = String(dl.notes || "").trim() ? dl.notes.trim() + "\n" + line : line;
+        log.drillIds.forEach((id) => { if (!dl.completedDrills.includes(id)) dl.completedDrills.push(id); });
+        let promoteMsg = "";
+        if (d.promote && log.takeaway) {
+          const phases = clPhases();
+          const cid = uid("cue");
+          state.checklistCustomItems.push({ id: cid, phase: (phases[0] || {}).id || "", title: clipText(log.takeaway, 100).replace(/…$/, ""), cue: log.takeaway.slice(0, 400) });
+          log.promoted = true;
+          const focus = clFocusIds();
+          if (focus.length >= CL_MAX_CUES) { clUi.swap = cid; clUi.focusSwap = true; promoteMsg = "swap"; }
+          else { clSetStar(cid, true); promoteMsg = "added"; }
+        }
+        saveState();
+        sr.doneId = log.id; sr.view = "done"; sr.promoteMsg = promoteMsg; sr.fetched = null; sr.statsP = null;
+        srRender();
+        const ov = document.getElementById("srOverlay"); if (ov) ov.scrollTop = 0;
+        renderHeader();
+        showToast("Session saved to your log and today's check-in.");
+      }
+      function srDiscard() {
+        if (!state.sessionRun) return;
+        state.sessionRun = null; sr.run = null; sr.live = []; sr.confirmDiscard = false;
+        saveState();
+        srClearContext();
+        srClose();
+        showToast("Session discarded.");
+      }
+
+      // ---- keyboard (scoped to the overlay, capture phase, like Mat mode) ----
+      window.addEventListener("keydown", (e) => {
+        if (!sr.open) return;
+        const tgt = e.target || {};
+        const typing = tgt.tagName === "TEXTAREA" || tgt.tagName === "INPUT" || tgt.tagName === "SELECT";
+        e.stopImmediatePropagation();
+        if (e.key === "Tab" || e.altKey || e.ctrlKey || e.metaKey) return;
+        if (e.key === "Escape") { e.preventDefault(); if (sr.confirmDiscard) { sr.confirmDiscard = false; srRender(); } else srClose(); return; }
+        if (typing || sr.view !== "run") return;
+        if (e.key === "ArrowRight" || e.key === "PageDown") { e.preventDefault(); if (!e.repeat) srNext(); }
+        else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); if (!e.repeat) srPrev(); }
+      }, true);
+
+      // ---- clocks ----
+      function srFmtClock(sec) { sec = Math.max(0, Math.floor(sec)); return Math.floor(sec / 60) + ":" + String(sec % 60).padStart(2, "0"); }
+      function srTickClock() {
+        const run = state.sessionRun;
+        if (!sr.open || sr.view !== "run" || !run || run.idx < 0) return;
+        const b = run.blocks[run.idx];
+        const secs = (b.secs || 0) + (run.enteredAt ? (Date.now() - run.enteredAt) / 1000 : 0);
+        const bEl = document.getElementById("srBlockClock"), sEl = document.getElementById("srTotalClock"), rEl = document.getElementById("srRest");
+        if (bEl) { bEl.textContent = srFmtClock(secs) + (b.minutes ? " / " + b.minutes + ":00" : ""); bEl.classList.toggle("over", !!b.minutes && secs > b.minutes * 60); }
+        if (sEl) sEl.textContent = srFmtClock((Date.now() - Date.parse(run.startedAt)) / 1000);
+        if (rEl) {
+          const left = Math.ceil((sr.restUntil - Date.now()) / 1000);
+          rEl.textContent = left > 0 ? "Rest " + left + " s" : "Rest 25 s";
+          if (left <= 0 && sr.restUntil) { sr.restUntil = 0; rEl.classList.remove("on"); }
+        }
+      }
+
+      // ---- rendering helpers ----
+      function srChip(act, val, label, pressed, cls) {
+        return `<button type="button" class="sr-chip ${cls || ""}" data-sr-act="${esc(act)}" data-sr-val="${esc(val)}" aria-pressed="${pressed ? "true" : "false"}" data-fk="${esc(act + ":" + val)}">${label}</button>`;
+      }
+      function srDialSvg(pos, small) {
+        const cx = 150, cy = 140, R = 112;
+        const pt = (p, r) => { const th = Math.PI * (1 - (p + 1) / 2); return [cx + r * Math.cos(th), cy - r * Math.sin(th)]; };
+        const arc = (p1, p2, col) => { const a = pt(p1, R), b = pt(p2, R), a2 = pt(p2, R - 22), b2 = pt(p1, R - 22); return `<path d="M${a[0].toFixed(1)} ${a[1].toFixed(1)} A${R} ${R} 0 0 1 ${b[0].toFixed(1)} ${b[1].toFixed(1)} L${a2[0].toFixed(1)} ${a2[1].toFixed(1)} A${R - 22} ${R - 22} 0 0 0 ${b2[0].toFixed(1)} ${b2[1].toFixed(1)} Z" fill="${col}"/>`; };
+        const has = typeof pos === "number" && isFinite(pos);
+        const tip = has ? pt(pos, R - 10) : [cx, cy];
+        const stock = pt(-0.32, R + 8);
+        return `<svg class="sr-dial${small ? " small" : ""}" viewBox="0 0 300 175" role="img" aria-label="Driver miss dial${has ? ": " + esc(srDialZone(pos)) : ": not set"}" focusable="false">
+          ${arc(-1, -0.6, "#dc2626")}${arc(-0.6, -0.45, "#f59e0b")}${arc(-0.45, -0.15, "#16a34a")}${arc(-0.15, 0.3, "#64748b")}${arc(0.3, 0.6, "#f59e0b")}${arc(0.6, 1, "#ea580c")}
+          <text x="10" y="162" class="sr-dial-t" fill="#fca5a5">HOOK</text>
+          <text x="290" y="156" class="sr-dial-t" text-anchor="end" fill="#fdba74">OPEN FACE</text>
+          <text x="290" y="170" class="sr-dial-t" text-anchor="end" fill="#fdba74">CUT-SLICE</text>
+          <text x="${(stock[0] - 4).toFixed(1)}" y="${(stock[1] - 4).toFixed(1)}" class="sr-dial-t" text-anchor="middle" fill="#86efac">stock draw</text>
+          ${has ? `<line class="sr-needle" data-dial-pos="${pos.toFixed(3)}" x1="${cx}" y1="${cy}" x2="${tip[0].toFixed(1)}" y2="${tip[1].toFixed(1)}" stroke="#f8fafc" stroke-width="5" stroke-linecap="round"/>` : ""}
+          <circle cx="${cx}" cy="${cy}" r="9" fill="#f8fafc"/>
+        </svg>`;
+      }
+      function srFixCues(faultId) {
+        return state.drills.filter((d) => (d.faultTags || []).includes(faultId)).slice(0, 3);
+      }
+      function srDialPanelHtml(dial, caption) {
+        const P = (window.PLAYER_DATA && window.PLAYER_DATA.profile && window.PLAYER_DATA.profile.driverDial) || {};
+        const faults = Array.isArray(DEFAULTS.faults) ? DEFAULTS.faults : [];
+        const fh = faults.find((f) => f.id === "driver-hook") || {}, fs = faults.find((f) => f.id === "open-face-slice") || {};
+        const early = pdStr(P.early, 500) || ("Chest and right shoulder open early, before the club arrives: the face is already closing, so the ball starts straight then hooks. " + (fh.rootCauseHint || ""));
+        const stalled = pdStr(P.stalled, 500) || ("The club stalls while the hips pop open: hands pulled to the lead hip or an armsy swing leaves the face open, so the ball is pushed or cut. " + (fs.rootCauseHint || ""));
+        const pos = dial ? dial.pos : null;
+        const side = pos === null ? "" : pos <= -0.15 ? "driver-hook" : pos >= 0.3 ? "open-face-slice" : "";
+        const cues = side ? srFixCues(side) : [];
+        const read = dial ? `${esc(srDialZone(dial.pos))}${dial.src === "bridge" ? ` &middot; ${esc(dial.n)} driver shot${dial.n === 1 ? "" : "s"}, avg face-to-path ${esc(srFmt(dial.f2p, 1, true))}&deg;${dial.off !== null && dial.off !== undefined ? `, avg start line ${esc(srFmt(Math.abs(dial.off), 1))} yd ${dial.off >= 0 ? "right" : "left"}` : ""}` : " &middot; set by hand"}` : "No driver reading yet.";
+        return `<div class="sr-dialbox">
+          ${caption ? `<div class="sr-sub">${esc(caption)}</div>` : ""}
+          ${srDialSvg(pos)}
+          <p class="sr-read" role="status">${read}</p>
+          <p class="sr-mech"><strong>Early opening &rarr; hook.</strong> ${esc(early)}</p>
+          <p class="sr-mech"><strong>Stalled club, hips popping &rarr; open face / cut-slice.</strong> ${esc(stalled)}</p>
+          ${side ? `<div class="sr-fix"><strong>Fix cues for the ${side === "driver-hook" ? "hook" : "open-face"} side</strong><ul>${cues.map((d) => `<li>${esc(d.title)}: ${esc(d.keyFeel || "")}</li>`).join("")}</ul></div>` : (dial ? `<p class="sr-sub">In the stock band: no fix needed. Keep checking both ways.</p>` : "")}
+          <p class="sr-sub">${esc(pdStr(P.rule, 200) || "After any fix, check the dial both ways: did the miss just swing to the other side?")}</p>
+        </div>`;
+      }
+      function srFixPrompt() {
+        const logs = srSessions().slice().sort((a, b) => String(a.endedAt || a.date).localeCompare(String(b.endedAt || b.date)));
+        let idx = -1;
+        logs.forEach((l, i) => { if (l.faultTags.includes("driver-hook") || l.faultTags.includes("open-face-slice")) idx = i; });
+        if (idx < 0) return null;
+        if (logs.slice(idx + 1).some((l) => l.dialCheck)) return null;
+        return logs[idx];
+      }
+      function srSetupHtml() {
+        const su = sr.setup, f = getActiveFeel(), lab = srBodyLabels(), prompt = srFixPrompt();
+        const cues = clFocusItems();
+        const rough = su.body.tight >= 2 || su.body.joint === "flare" || su.body.energy <= 2;
+        return `<div class="sr-wrap">
+          <div class="sr-top"><h1 class="sr-h1">Coached session</h1><button type="button" class="sr-btn small" data-sr-act="close" data-fk="close">Close</button></div>
+          <section class="sr-card"><h2>Length</h2>
+            <div class="sr-row" role="group" aria-label="Session length">${srTemplates().map((t) => srChip("tpl", t.id, esc(t.minutes + " min") + (t.minutes === 30 ? " (typical)" : ""), su.tpl === t.id)).join("")}</div>
+            ${(() => { const t = srTemplate(su.tpl); return t ? `<ol class="sr-plan">${t.blocks.map((b) => `<li><strong>${esc(b.name)}</strong> <span class="sr-sub">${esc(b.minutes)} min &middot; ${esc(SR_KIND_LABEL[b.kind] || b.kind)}</span></li>`).join("")}</ol>` : ""; })()}
+          </section>
+          <section class="sr-card"><h2>Feel in focus</h2>
+            ${f ? `<p class="sr-big">${esc(f.name)}</p>${f.cue ? `<p>${esc(f.cue)}</p>` : ""}` : `<p>No active feel. Start a block in Feels &amp; Blocks to give the data a feel to judge. You can still run the session.</p>`}
+            ${cues.length ? `<div class="sr-sub">Active cues (max ${CL_MAX_CUES})</div><ul class="sr-cues">${cues.map((c) => `<li><strong>${esc(c.title)}</strong>${c.cue ? ": " + esc(c.cue) : ""}</li>`).join("")}</ul>` : ""}
+          </section>
+          ${prompt ? `<section class="sr-card sr-warn" aria-label="Check the dial both ways"><h2>Check the dial both ways</h2>
+            <p>On ${esc(shortDateLabel(prompt.date))} you tagged a driver fix (${esc(prompt.faultTags.filter((t) => t === "driver-hook" || t === "open-face-slice").map((t) => t === "driver-hook" ? "hook" : "open-face slice").join(", "))}). Did the fix swing the miss to the other side?</p>
+            <div class="sr-row" role="group" aria-label="Did the miss swing to the other side">${[["yes", "Yes, it swung over"], ["no", "No, it is centred"], ["unsure", "Not sure yet"]].map((o) => srChip("dialcheck", o[0], esc(o[1]), su.dialCheck === o[0])).join("")}</div>
+          </section>` : ""}
+          <section class="sr-card"><h2>Body state</h2>
+            <div class="sr-sub">${esc(lab.tight)} (0 none &ndash; 3 very)</div>
+            <div class="sr-row" role="group" aria-label="${esc(lab.tight)}">${[0, 1, 2, 3].map((n) => srChip("tight", String(n), String(n), su.body.tight === n)).join("")}</div>
+            <div class="sr-sub">${esc(lab.joint)}</div>
+            <div class="sr-row" role="group" aria-label="${esc(lab.joint)}">${SR_JOINT.map((j) => srChip("joint", j, esc(j), su.body.joint === j)).join("")}</div>
+            <div class="sr-sub">Energy (1 flat &ndash; 5 great)</div>
+            <div class="sr-row" role="group" aria-label="Energy">${[1, 2, 3, 4, 5].map((n) => srChip("energy", String(n), String(n), su.body.energy === n)).join("")}</div>
+            ${rough ? `<p class="sr-note">Body state is rough. If contact is off today, do not read it as a technical regression, and skip speed work.</p>` : ""}
+          </section>
+          <div class="sr-actions"><button type="button" class="sr-btn primary" data-sr-act="begin" data-fk="begin">&#9654; Start session</button></div>
+        </div>`;
+      }
+      function srLiveHtml(run) {
+        const b = run.blocks[run.idx];
+        const mine = sr.live.filter((s) => s.cluster === b.cluster);
+        const last = sr.live[sr.live.length - 1];
+        const parts = [];
+        if (!bridge.live) parts.push(`<p class="sr-sub">Sim offline: tap Hit / Miss to score reps by hand. Context is stored locally.</p>`);
+        else {
+          parts.push(`<p><strong>${esc(mine.length)}</strong> shot${mine.length === 1 ? "" : "s"} this block &middot; <strong>${esc(sr.live.length)}</strong> in the session</p>`);
+          if (last) {
+            const m = srShotMetrics(last);
+            parts.push(`<p class="sr-sub">Last: ${esc(last.club || "")} &middot; smash ${esc(srFmt(m.smash, 2))} &middot; face-to-path ${esc(srFmt(m.f2p, 1, true))}&deg; &middot; AoA ${esc(srFmt(m.aoa, 1, true))}&deg; &middot; carry ${esc(srFmt(m.carry, 0))}</p>`);
+          }
+        }
+        if (b.kind === "speed") {
+          const sm = mine.map((s) => srShotMetrics(s).smash).filter((x) => x !== null);
+          if (sm.length >= 3 && srMean(sm) < 1.4) parts.push(`<p class="sr-note">Stop speed work: contact degraded (avg smash ${esc(srFmt(srMean(sm), 2))}).</p>`);
+        }
+        return parts.join("");
+      }
+      function srRenderLive() { const n = document.getElementById("srLive"), run = state.sessionRun; if (n && run && run.idx >= 0 && sr.view === "run") n.innerHTML = srLiveHtml(run); }
+      function srRunHtml() {
+        const run = state.sessionRun, b = run.blocks[run.idx], f = run.feelId ? feelById(run.feelId) : null;
+        const last = run.idx === run.blocks.length - 1;
+        const driverish = b.kind === "block" || b.kind === "speed" ? !(f && f.club === "irons") : false;
+        const cues = clFocusItems();
+        return `<div class="sr-wrap">
+          <div class="sr-top">
+            <div class="sr-prog" aria-label="Block ${run.idx + 1} of ${run.blocks.length}">${run.idx + 1}/${run.blocks.length}</div>
+            <div class="sr-clock"><small>Block</small> <span id="srBlockClock"></span></div>
+            <div class="sr-clock"><small>Total</small> <span id="srTotalClock"></span></div>
+            <span class="sim-pill" data-sim-pill></span>
+            <button type="button" class="sr-btn small" data-sr-act="close" data-fk="close" title="Hide this screen; the session keeps running (Esc)">Hide</button>
+          </div>
+          <div class="sr-sub" id="srCtx" role="status"></div>
+          <h1 class="sr-h1">${esc(b.name)}</h1>
+          <p class="sr-kind">${esc(SR_KIND_LABEL[b.kind] || b.kind)}${b.minutes ? " &middot; " + esc(b.minutes) + " min" : ""}</p>
+          ${b.note ? `<p class="sr-big">${esc(b.note)}</p>` : ""}
+          ${b.kind === "cold" ? `<p class="sr-note">Cold start: hit your first 3-5 shots before any grooving.</p>` : ""}
+          ${driverish ? `<p class="sr-note">Driver: 2-3 clusters, rest 20-30 s between hard reps, cap about 15-20 min of driver ball-striking in the session.</p>` : ""}
+          ${b.kind === "speed" ? `<p class="sr-note">Speed work only while contact holds: stop if smash drops under 1.40.</p>` : ""}
+          ${f && (b.kind === "block" || b.kind === "transfer" || b.kind === "cold") ? `<p><strong>${esc(f.name)}:</strong> ${esc(clipText(f.cue, 220))}</p>` : ""}
+          ${cues.length && b.kind !== "log" ? `<ul class="sr-cues">${cues.map((c) => `<li>${esc(c.title)}</li>`).join("")}</ul>` : ""}
+          <div id="srLive" class="sr-live">${srLiveHtml(run)}</div>
+          <div class="sr-score">
+            <button type="button" class="sr-btn hit" data-sr-act="hit" data-fk="hit">&#10003; Hit <small>${esc(b.hit)}</small></button>
+            <button type="button" class="sr-btn miss" data-sr-act="miss" data-fk="miss">&#10007; Miss <small>${esc(b.miss)}</small></button>
+            <button type="button" class="sr-btn" id="srRest" data-sr-act="rest" data-fk="rest">Rest 25 s</button>
+          </div>
+          <div class="sr-actions sticky">
+            <button type="button" class="sr-btn" data-sr-act="prev" data-fk="prev" ${run.idx === 0 ? "disabled" : ""}>&larr; Back</button>
+            <button type="button" class="sr-btn primary" data-sr-act="next" data-fk="next">${last ? "Finish &amp; write log" : "Next block &rarr;"}</button>
+            <button type="button" class="sr-btn small" data-sr-act="finish" data-fk="finish">End now</button>
+            <button type="button" class="sr-btn small danger" data-sr-act="discard" data-fk="discard">Discard</button>
+          </div>
+          ${sr.confirmDiscard ? `<div class="sr-modal" role="alertdialog" aria-label="Discard session"><div class="sr-modal-box"><h2>Discard this session?</h2><p>Nothing will be saved.</p><div class="sr-actions"><button type="button" class="sr-btn danger" data-sr-act="discardyes" data-fk="discardyes">Discard</button><button type="button" class="sr-btn" data-sr-act="discardno" data-fk="discardno">Keep going</button></div></div></div>` : ""}
+        </div>`;
+      }
+      function srLogHtml() {
+        const run = state.sessionRun, d = sr.draft;
+        if (!run || !d) return "";
+        const faults = Array.isArray(DEFAULTS.faults) ? DEFAULTS.faults : [];
+        const feels = allFeels().filter((f) => f.status !== "retired");
+        const fd = feelById(run.feelId);
+        const suggest = fd ? (fd.drillIds || []).filter((id) => drillById(id) && !d.drillIds.includes(id)) : [];
+        const dialVal = d.dial ? d.dial.pos : null;
+        const ta = (key, label, ph) => `<label class="sr-field">${esc(label)}<textarea data-sr-bind="${key}" maxlength="${key === "takeaway" || key === "nextStep" ? 500 : 800}" rows="2" placeholder="${esc(ph)}">${esc(d[key])}</textarea></label>`;
+        return `<div class="sr-wrap">
+          <div class="sr-top"><h1 class="sr-h1">Session log</h1><button type="button" class="sr-btn small" data-sr-act="close" data-fk="close">Hide</button></div>
+          <p class="sr-sub">${esc(run.blocks.reduce((t, b) => t + b.hit + b.miss, 0))} manual reps${sr.live.length ? ` &middot; ${esc(sr.live.length)} sim shots` : ""}. Numbers are saved with the log; write what you saw, not how you felt about it.</p>
+          <section class="sr-card"><h2>Write-up</h2>
+            ${ta("summary", "Session summary", "What did you work on and how did it go?")}
+            ${ta("findings", "Ball flight / feel findings", "What did the ball and the club data do? What did the feel do?")}
+            ${ta("takeaway", "Key takeaway", "One sentence")}
+            ${ta("nextStep", "Next session step", "What to do first next time")}
+            <button type="button" class="sr-chip wide" data-sr-act="promote" data-fk="promote" aria-pressed="${d.promote}">&#9733; Promote takeaway to active cue (max ${CL_MAX_CUES})</button>
+          </section>
+          <section class="sr-card"><h2>Fault tags</h2>
+            <div class="sr-row" role="group" aria-label="Fault tags">${faults.map((x) => srChip("tag", x.id, esc(x.name), d.faultTags.includes(x.id))).join("")}</div>
+          </section>
+          <section class="sr-card"><h2>Clubs used</h2>
+            <div class="sr-row" role="group" aria-label="Clubs used">${SR_CLUBS.map((c) => srChip("club", c, esc(c), d.clubs.includes(c))).join("")}</div>
+          </section>
+          <section class="sr-card"><h2>Drills used</h2>
+            <div class="sr-row" role="group" aria-label="Drills used">${d.drillIds.map((id) => srChip("drill", id, esc((drillById(id) || {}).title || id), true)).join("")}${suggest.map((id) => srChip("drill", id, "+ " + esc((drillById(id) || {}).title || id), false)).join("")}</div>
+            <label class="sr-field">Add another drill<select data-sr-bind="adddrill"><option value="">Choose a drill…</option>${state.drills.filter((x) => !d.drillIds.includes(x.id)).map((x) => `<option value="${esc(x.id)}">${esc(x.title)}</option>`).join("")}</select></label>
+          </section>
+          <section class="sr-card"><h2>Feel in focus</h2>
+            <label class="sr-field">Feel<select data-sr-bind="feelId"><option value="">None</option>${feels.map((x) => `<option value="${esc(x.id)}" ${x.id === d.feelId ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select></label>
+            <div class="sr-sub">Rate the feel today (1 poor &ndash; 5 great)</div>
+            <div class="sr-row" role="group" aria-label="Rate the feel today">${[1, 2, 3, 4, 5].map((n) => srChip("rating", String(n), String(n), d.feelRating === n)).join("")}</div>
+          </section>
+          <section class="sr-card"><h2>Driver miss today</h2>
+            <p class="sr-sub" id="srDialAuto"></p>
+            ${srDialSvg(dialVal, true)}
+            <div class="sr-row" role="group" aria-label="Set the driver miss dial by hand">${SR_DIAL_PRESETS.map((p) => srChip("dial", String(p[1]), esc(p[0]), dialVal !== null && Math.abs(dialVal - p[1]) < 0.001)).join("")}</div>
+          </section>
+          <div class="sr-actions sticky"><button type="button" class="sr-btn primary" id="srSaveBtn" data-sr-act="save" data-fk="save">Save session</button></div>
+        </div>`;
+      }
+      function srDoneHtml() {
+        const l = srLogById(sr.doneId);
+        if (!l) return `<div class="sr-wrap"><p>Saved.</p><button type="button" class="sr-btn primary" data-sr-act="close">Close</button></div>`;
+        return `<div class="sr-wrap">
+          <div class="sr-top"><h1 class="sr-h1">Session saved</h1></div>
+          <p class="sr-sub">${esc(shortDateLabel(l.date))} &middot; ${esc(l.actualMin)} min${l.feelName ? " &middot; " + esc(l.feelName) : ""}</p>
+          ${sr.promoteMsg === "swap" ? `<p class="sr-note">Your takeaway is waiting in the Swing Checklist: you already have ${CL_MAX_CUES} active cues, so choose which one to replace.</p>` : sr.promoteMsg === "added" ? `<p class="sr-note">Takeaway added to your active cues.</p>` : ""}
+          <section class="sr-card"><h2>Session stats</h2>${srStatsCardHtml(l)}</section>
+          <section class="sr-card"><h2>Driver miss dial</h2>${srDialPanelHtml(l.dial, "From this session")}</section>
+          <div class="sr-actions">
+            ${sr.promoteMsg === "swap" ? `<button type="button" class="sr-btn primary" data-sr-act="gochecklist" data-fk="gochecklist">Choose cue in Swing Checklist</button>` : ""}
+            <button type="button" class="sr-btn ${sr.promoteMsg === "swap" ? "" : "primary"}" data-sr-act="gofeels" data-fk="gofeels">Open weekly review</button>
+            <button type="button" class="sr-btn" data-sr-act="close" data-fk="close">Done</button>
+          </div>
+        </div>`;
+      }
+      function srRender() {
+        const ov = document.getElementById("srOverlay");
+        if (!ov || !sr.open) return;
+        const active = document.activeElement;
+        const fk = active && ov.contains(active) ? active.getAttribute("data-fk") : null;
+        const st = ov.scrollTop;
+        ov.innerHTML = sr.view === "setup" ? srSetupHtml() : sr.view === "run" && state.sessionRun && state.sessionRun.idx >= 0 ? srRunHtml() : sr.view === "log" ? srLogHtml() : sr.view === "done" ? srDoneHtml() : "";
+        ov.scrollTop = st;
+        updateSimPills();
+        srTickClock(); srRefreshCtxBadge();
+        if (sr.view === "log") srRefreshDialHint();
+        if (sr.focusSel) { const n = ov.querySelector(sr.focusSel); sr.focusSel = null; if (n) n.focus({ preventScroll: true }); }
+        else if (fk) { const t = Array.from(ov.querySelectorAll("[data-fk]")).find((n) => n.getAttribute("data-fk") === fk && !n.disabled); if (t) t.focus({ preventScroll: true }); }
+      }
+      function srToggle(list, v) { const i = list.indexOf(v); if (i >= 0) list.splice(i, 1); else list.push(v); }
+      function srHandle(act, val) {
+        const run = state.sessionRun, su = sr.setup, d = sr.draft;
+        if (act === "tpl") { su.tpl = val; srRender(); }
+        else if (act === "tight") { su.body.tight = Number(val); srRender(); }
+        else if (act === "joint") { su.body.joint = val; srRender(); }
+        else if (act === "energy") { su.body.energy = Number(val); srRender(); }
+        else if (act === "dialcheck") { su.dialCheck = su.dialCheck === val ? "" : val; srRender(); }
+        else if (act === "begin") srBegin();
+        else if (act === "next") srNext();
+        else if (act === "prev") srPrev();
+        else if (act === "finish") srFinish();
+        else if (act === "hit" || act === "miss") { const b = run && run.blocks[run.idx]; if (b) { b[act] = Math.min(999, b[act] + 1); saveState(); srRender(); } }
+        else if (act === "rest") { sr.restUntil = Date.now() + 25000; const n = document.getElementById("srRest"); if (n) n.classList.add("on"); srTickClock(); }
+        else if (act === "discard") { sr.confirmDiscard = true; sr.focusSel = "[data-sr-act='discardno']"; srRender(); }
+        else if (act === "discardno") { sr.confirmDiscard = false; srRender(); }
+        else if (act === "discardyes") srDiscard();
+        else if (act === "close") srClose();
+        else if (!d) { /* remaining acts need the log draft */ }
+        else if (act === "tag") { srToggle(d.faultTags, val); srRender(); }
+        else if (act === "club") { srToggle(d.clubs, val); srRender(); }
+        else if (act === "drill") { srToggle(d.drillIds, val); srRender(); }
+        else if (act === "rating") { d.feelRating = d.feelRating === Number(val) ? 0 : Number(val); srRender(); }
+        else if (act === "dial") { const p = Number(val); d.dial = d.dial && Math.abs(d.dial.pos - p) < 0.001 ? null : { pos: p, src: "manual", f2p: null, off: null, n: 0 }; srRender(); }
+        else if (act === "promote") { d.promote = !d.promote; srRender(); }
+        else if (act === "save") srSave();
+        else if (act === "gochecklist") { sr.open && srCloseKeep(); state.activeView = "checklist"; renderAll(); window.scrollTo(0, 0); }
+        else if (act === "gofeels") { srCloseKeep(); state.activeView = "feels"; renderAll(); window.scrollTo(0, 0); }
+      }
+      function srCloseKeep() { srClose(); }
+      (function bindSessionRunner() {
+        const ov = document.getElementById("srOverlay");
+        ov.addEventListener("click", (e) => {
+          const btn = e.target.closest && e.target.closest("[data-sr-act]");
+          if (btn && ov.contains(btn) && !btn.disabled) srHandle(btn.getAttribute("data-sr-act"), btn.getAttribute("data-sr-val"));
+        });
+        ov.addEventListener("input", (e) => {
+          const k = e.target.getAttribute && e.target.getAttribute("data-sr-bind");
+          if (k && sr.draft && e.target.tagName === "TEXTAREA") sr.draft[k] = e.target.value;
+        });
+        ov.addEventListener("change", (e) => {
+          const k = e.target.getAttribute && e.target.getAttribute("data-sr-bind");
+          if (!k || !sr.draft) return;
+          if (k === "feelId") sr.draft.feelId = e.target.value;
+          else if (k === "adddrill" && e.target.value && drillById(e.target.value)) { if (!sr.draft.drillIds.includes(e.target.value)) sr.draft.drillIds.push(e.target.value); srRender(); }
+        });
+        const fv = document.getElementById("view-feels");
+        fv.addEventListener("click", (e) => {
+          const btn = e.target.closest && e.target.closest("[data-sr-act]");
+          if (!btn || !fv.contains(btn)) return;
+          const act = btn.getAttribute("data-sr-act"), val = btn.getAttribute("data-sr-val");
+          if (act === "start") srOpen();
+          else if (act === "env") { const cur = srWeekEnvs(); const s = new Set(cur); if (s.has(val)) s.delete(val); else s.add(val); wr.env = Array.from(s); renderFeels(); }
+          else if (act === "delsession") {
+            const idx = srSessions().findIndex((l) => l.id === val);
+            if (idx < 0) return;
+            const removed = state.sessionLogs.splice(idx, 1)[0];
+            saveState(); renderFeels();
+            showUndoToast("Session log deleted.", () => { state.sessionLogs.splice(Math.min(idx, state.sessionLogs.length), 0, removed); saveState(); if (state.activeView === "feels") renderFeels(); });
+          }
+        });
+      })();
+
+      // ---- stats card (shared by session end, history, done view) ----
+      function srStatsCardHtml(l) {
+        const s = l.stats, man = l.blocks.reduce((t, b) => ({ hit: t.hit + b.hit, miss: t.miss + b.miss }), { hit: 0, miss: 0 });
+        const manual = man.hit + man.miss ? `<p>Manual reps: <strong>${man.hit}</strong> hit, <strong>${man.miss}</strong> miss.</p>` : "";
+        if (!s) return `<p class="sr-sub">No sim data for this session (bridge offline or no shots).</p>${manual}`;
+        const out = [`<p><strong>${esc(s.shot_count || 0)}</strong> sim shot${s.shot_count === 1 ? "" : "s"}.</p>${manual}`];
+        const cold = s.cold_start && s.cold_start.avg ? s.cold_start : null, rest = s.rest || null;
+        if (cold || rest) {
+          const rows = [["Smash", "smash", 2, false], ["AoA", "aoa", 1, true], ["Path", "path", 1, true], ["Face-to-path", "face_to_path", 1, true], ["Carry", "carry", 0, false], ["Ball speed", "ball_speed", 1, false]];
+          const rk = { face_to_path: "f2p" };
+          out.push(`<h3>Cold start vs the rest${cold ? ` <span class="sr-sub">(${esc(cold.count)} cold shot${cold.count === 1 ? "" : "s"}, ${esc(cold.basis)})</span>` : ""}</h3>
+            <table class="sr-table"><thead><tr><th>Metric</th><th>Cold</th><th>Rest</th><th>Diff</th></tr></thead><tbody>
+            ${rows.map((r) => { const c = cold ? cold.avg[r[1]] : null, v = rest ? rest[rk[r[1]] || r[1]] : null; const dv = typeof c === "number" && typeof v === "number" ? c - v : null; return `<tr><td>${esc(r[0])}</td><td>${esc(srFmt(c, r[2], r[3]))}</td><td>${esc(srFmt(v, r[2], r[3]))}</td><td>${esc(srFmt(dv, r[2], true))}</td></tr>`; }).join("")}
+            </tbody></table>`);
+          if (cold && (cold.offline_std !== null && cold.offline_std !== undefined)) out.push(`<p class="sr-sub">Cold-start dispersion: offline std ${esc(srFmt(cold.offline_std, 1))} yd${typeof cold.carry_std === "number" ? `, carry std ${esc(srFmt(cold.carry_std, 1))} yd` : ""}.</p>`);
+        }
+        const bc = s.dispersion && Array.isArray(s.dispersion.by_club) ? s.dispersion.by_club : [];
+        const dcl = bc.filter((c) => c && c.first3 && c.last3);
+        out.push(`<h3>First 3 vs last 3 (offline spread, yd)</h3>`);
+        if (dcl.length) {
+          const mx = Math.max.apply(null, dcl.map((c) => Math.max(c.first3.offline_std || 0, c.last3.offline_std || 0)).concat([1]));
+          const bar = (v, col, y) => `<rect x="70" y="${y}" width="${Math.max(2, (v / mx) * 200).toFixed(1)}" height="9" rx="2" fill="${col}"/><text x="${(76 + (v / mx) * 200).toFixed(1)}" y="${y + 8}" class="sr-svg-t">${esc(srFmt(v, 1))}</text>`;
+          out.push(`<svg class="sr-bars" viewBox="0 0 320 ${dcl.length * 34 + 6}" role="img" aria-label="First 3 versus last 3 dispersion by club" focusable="false">${dcl.map((c, i) => `<text x="0" y="${i * 34 + 17}" class="sr-svg-t">${esc(clipText(c.club, 10))}</text>${bar(c.first3.offline_std, "#f59e0b", i * 34 + 4)}${bar(c.last3.offline_std, "#38bdf8", i * 34 + 17)}`).join("")}</svg>
+            <p class="sr-sub"><span class="sr-key a"></span>first 3 <span class="sr-key b"></span>last 3</p>
+            <table class="sr-table"><thead><tr><th>Club</th><th>n</th><th>First 3</th><th>Last 3</th><th>Gap</th></tr></thead><tbody>
+            ${dcl.map((c) => `<tr><td>${esc(c.club)}</td><td>${esc(c.n)}</td><td>${esc(srFmt(c.first3.offline_std, 1))}</td><td>${esc(srFmt(c.last3.offline_std, 1))}</td><td>${esc(srFmt(Math.abs(c.first3.offline_std - c.last3.offline_std), 1))}</td></tr>`).join("")}
+            </tbody></table>
+            <p class="sr-sub">Gap = on-course readiness: smaller is better.${typeof s.gap === "number" ? ` Session gap ${esc(srFmt(s.gap, 1))} yd.` : ""}</p>`);
+        } else out.push(`<p class="sr-sub">Needs at least 6 shots with one club for a first-3 vs last-3 comparison. On-course readiness: smaller gap is better.</p>`);
+        const o = s.overall;
+        if (o) out.push(`<h3>Session averages</h3><p>Smash <strong>${esc(srFmt(o.smash, 2))}</strong> &middot; AoA <strong>${esc(srFmt(o.aoa, 1, true))}&deg;</strong> &middot; path <strong>${esc(srFmt(o.path, 1, true))}&deg;</strong> &middot; face-to-path <strong>${esc(srFmt(o.f2p, 1, true))}&deg;</strong></p>${s.irons && s.irons.n ? `<p class="sr-sub">Irons and wedges (${esc(s.irons.n)} shots): AoA ${esc(srFmt(s.irons.aoa, 1, true))}&deg;, smash ${esc(srFmt(s.irons.smash, 2))}</p>` : ""}`);
+        // Speed-work guard: smash < 1.40 in a cluster that was a speed block.
+        const sp = l.blocks.filter((b) => b.kind === "speed" && b.cluster !== null).map((b) => b.cluster);
+        const bcl = Array.isArray(s.by_cluster) ? s.by_cluster : [];
+        const bad = bcl.filter((c) => c && sp.includes(c.cluster) && typeof c.smash === "number" && c.smash < 1.4);
+        if (bad.length) out.push(`<p class="sr-note">Stop speed work: contact degraded (smash ${esc(srFmt(bad[0].smash, 2))} on the speed block).</p>`);
+        return out.join("");
+      }
+
+      // ---- Feels tab panels ----
+      function srPanelHtml() {
+        const run = state.sessionRun, logs = srSessions().slice().reverse();
+        const prompt = srFixPrompt();
+        const lastDial = (logs.find((l) => l.dial) || {}).dial || null;
+        const lastDialLog = logs.find((l) => l.dial);
+        return `
+          <section class="panel sr-panel" aria-label="Coached sessions">
+            <h3>&#129517; Coached sessions</h3>
+            <p class="fl-sub">Run a timed session against your active feel, then log it with numbers.</p>
+            <div class="fl-btns"><button type="button" class="nav-btn primary" data-sr-act="start" data-fk="srstart">${run ? "&#9654; Resume session" : "&#9654; Start session"}</button></div>
+            ${prompt ? `<p class="sr-note-inline"><strong>Check the dial both ways.</strong> You tagged a driver fix on ${esc(shortDateLabel(prompt.date))}. At your next session start: did the fix swing the miss to the other side?</p>` : ""}
+            <h4>Driver miss dial</h4>
+            ${srDialPanelHtml(lastDial, lastDialLog ? "From your session on " + shortDateLabel(lastDialLog.date) : "")}
+            <h4>Session history</h4>
+            ${logs.length ? logs.slice(0, 10).map((l) => `<details class="sr-hist"><summary>${esc(shortDateLabel(l.date))} &middot; ${esc(l.actualMin || l.minutes)} min${l.feelName ? " &middot; " + esc(l.feelName) : ""}${l.stats ? " &middot; " + esc(l.stats.shot_count || 0) + " shots" : ""}${l.feelRating ? " &middot; feel " + esc(l.feelRating) + "/5" : ""}</summary>
+              <div class="sr-hist-body">
+                ${srStatsCardHtml(l)}
+                ${l.summary ? `<p><strong>Summary:</strong> ${esc(l.summary)}</p>` : ""}${l.findings ? `<p><strong>Findings:</strong> ${esc(l.findings)}</p>` : ""}${l.takeaway ? `<p><strong>Takeaway:</strong> ${esc(l.takeaway)}</p>` : ""}${l.nextStep ? `<p><strong>Next step:</strong> ${esc(l.nextStep)}</p>` : ""}
+                ${l.faultTags.length ? `<p class="sr-sub">Faults: ${l.faultTags.map((t) => esc(((DEFAULTS.faults || []).find((f) => f.id === t) || {}).name || t)).join(", ")}</p>` : ""}
+                <p class="sr-sub">Body: ${esc(srBodyLabels().tight)} ${esc(l.body.tight)}/3, ${esc(srBodyLabels().joint)} ${esc(l.body.joint)}, energy ${esc(l.body.energy)}/5</p>
+                <button type="button" class="nav-btn danger" data-sr-act="delsession" data-sr-val="${esc(l.id)}" data-fk="del:${esc(l.id)}">Delete</button>
+              </div></details>`).join("") : `<p class="cl-empty">No coached sessions yet.</p>`}
+          </section>`;
+      }
+      function srWeekEnvs() {
+        if (Array.isArray(wr.env)) return wr.env;
+        const all = (Array.isArray(DEFAULTS.environments) ? DEFAULTS.environments : []).map((e) => e.id);
+        const home = all.filter((id) => id !== "range" && id !== "course");
+        return home.length ? home : all;
+      }
+      function srMetricMean(logs, fn) { return srMean(logs.map(fn)); }
+      function weeklyReviewHtml() {
+        const from = todayISO(-6), prevFrom = todayISO(-13), prevTo = todayISO(-7);
+        const week = srSessions().filter((l) => l.date >= from && l.date <= todayISO(0));
+        const prev = srSessions().filter((l) => l.date >= prevFrom && l.date <= prevTo);
+        const mins = week.reduce((t, l) => t + (l.actualMin || l.minutes || 0), 0);
+        const feelNames = []; week.forEach((l) => { const n = l.feelName || (feelById(l.feelId) || {}).name || "no feel"; if (!feelNames.includes(n)) feelNames.push(n); });
+        const rule = !week.length ? `<p>No coached sessions in the last 7 days.</p>`
+          : feelNames.length > 1 ? `<p class="sr-note-inline"><strong>One-feel-per-week rule: not followed.</strong> You practiced ${feelNames.length} different feels this week: ${feelNames.map(esc).join(", ")}.</p>`
+          : feelNames[0] === "no feel" ? `<p>No active feel was set on these sessions, so the one-feel-per-week rule cannot be checked. Start a block to track it.</p>`
+          : `<p><strong>One-feel-per-week rule: followed.</strong> All sessions used ${esc(feelNames[0])}.</p>`;
+        const metrics = [
+          ["Dispersion gap, first 3 vs last 3 (yd, smaller is better)", (l) => (l.stats ? l.stats.gap : null), 1, -1],
+          ["Smash (higher is better)", (l) => (l.stats && l.stats.overall ? l.stats.overall.smash : null), 2, 1],
+          ["Iron AoA (deg, more negative = hitting down)", (l) => (l.stats && l.stats.irons ? l.stats.irons.aoa : null), 1, -1]
+        ];
+        const rows = metrics.map((m) => {
+          const a = srMetricMean(week, m[1]), b = srMetricMean(prev, m[1]);
+          const dv = a !== null && b !== null ? a - b : null;
+          const good = dv === null || Math.abs(dv) < 0.005 ? "" : (dv * m[3] > 0 ? "good" : "bad");
+          return `<tr><td>${esc(m[0])}</td><td>${esc(srFmt(a, m[2]))}</td><td>${esc(srFmt(b, m[2]))}</td><td class="${good}">${esc(srFmt(dv, m[2], true))}</td></tr>`;
+        }).join("");
+        const tally = {};
+        week.forEach((l) => l.faultTags.forEach((t) => { tally[t] = (tally[t] || 0) + 1; }));
+        const tags = Object.keys(tally).sort((a, b) => tally[b] - tally[a]);
+        const fname = (id) => ((DEFAULTS.faults || []).find((f) => f.id === id) || {}).name || id;
+        const envs = srWeekEnvs(), top = tags[0];
+        const recs = top ? state.drills.filter((d) => (d.faultTags || []).includes(top) && (!(d.environments || []).length || (d.environments || []).some((e) => envs.includes(e)))).slice(0, 4) : [];
+        const b = getActiveBlock(), f = b ? feelById(b.feelId) : null, day = activeBlockDay();
+        let blockHtml = `<p>No test block running.</p>`;
+        if (b) {
+          const bl = srSessions().filter((l) => l.blockId === b.id);
+          const over = day > b.lengthDays || day === b.lengthDays;
+          blockHtml = `<p><strong>${esc(f ? f.name : b.feelName)}</strong>: day ${esc(day)} of ${esc(b.lengthDays)}</p><p class="sr-sub">Hypothesis: ${esc(b.hypothesis)}</p>
+            ${over ? `<div class="sr-note-inline"><strong>Block ${day > b.lengthDays ? "complete" : "ends today"}: make the verdict on data.</strong> Compare in this order: 1. dispersion, 2. strike, 3. attack angle, 4. distance.
+              <table class="sr-table"><thead><tr><th>Criterion</th><th>This block (${esc(bl.length)} session${bl.length === 1 ? "" : "s"})</th></tr></thead><tbody>
+              <tr><td>1. Dispersion gap (yd)</td><td>${esc(srFmt(srMetricMean(bl, (l) => (l.stats ? l.stats.gap : null)), 1))}</td></tr>
+              <tr><td>2. Strike (carry std, yd / smash)</td><td>${esc(srFmt(srMetricMean(bl, (l) => (l.stats && l.stats.strike ? l.stats.strike.carry_std : null)), 1))} / ${esc(srFmt(srMetricMean(bl, (l) => (l.stats && l.stats.overall ? l.stats.overall.smash : null)), 2))}</td></tr>
+              <tr><td>3. Iron attack angle (deg)</td><td>${esc(srFmt(srMetricMean(bl, (l) => (l.stats && l.stats.irons ? l.stats.irons.aoa : null)), 1, true))}</td></tr>
+              <tr><td>4. Distance (avg carry, yd)</td><td>${esc(srFmt(srMetricMean(bl, (l) => (l.stats && l.stats.overall ? l.stats.overall.carry : null)), 0))}</td></tr></tbody></table>
+              <div class="fl-btns"><button type="button" class="nav-btn primary" data-fl-act="endform" data-fk="wr-end">End block with a verdict&hellip;</button></div></div>` : ""}`;
+        }
+        const notes = week.slice().reverse().filter((l) => l.takeaway || l.nextStep).slice(0, 4);
+        return `
+          <section class="panel sr-panel" aria-label="Weekly review">
+            <h3>&#128197; Weekly review (last 7 days)</h3>
+            <p><strong>${week.length}</strong> session${week.length === 1 ? "" : "s"} &middot; <strong>${mins}</strong> min total</p>
+            ${rule}
+            <h4>Numbers first</h4>
+            <table class="sr-table"><thead><tr><th>Metric</th><th>This week</th><th>Prev week</th><th>Change</th></tr></thead><tbody>${rows}</tbody></table>
+            <h4>Faults tagged</h4>
+            ${tags.length ? `<p>${tags.map((t) => `${esc(fname(t))} <strong>&times;${tally[t]}</strong>`).join(" &middot; ")}</p><p><strong>Most frequent: ${esc(fname(top))}.</strong> Recommended drills:</p>
+              <div class="sr-row" role="group" aria-label="Environments you have">${(DEFAULTS.environments || []).map((e) => srChip("env", e.id, esc(e.name.split(" (")[0]), envs.includes(e.id))).join("")}</div>
+              ${recs.length ? `<ul class="sr-cues">${recs.map((d) => `<li><button type="button" class="linklike" data-fl-act="drill" data-fl-drill="${esc(d.id)}" data-fk="wrd:${esc(d.id)}">${esc(d.title)}</button> <span class="sr-sub">${esc((d.environments || []).join(", "))}</span></li>`).join("")}</ul>` : `<p class="sr-sub">No drills for that fault in the selected environments.</p>`}`
+              : `<p class="sr-sub">No fault tags this week.</p>`}
+            <h4>Active block</h4>
+            ${blockHtml}
+            ${notes.length ? `<h4>Notes (after the numbers)</h4><ul class="sr-cues">${notes.map((l) => `<li>${esc(shortDateLabel(l.date))}: ${esc(l.takeaway || "")}${l.nextStep ? ` <span class="sr-sub">Next: ${esc(l.nextStep)}</span>` : ""}</li>`).join("")}</ul>` : ""}
+          </section>`;
+      }
+      // ============================== END COACHED SESSIONS ==============================
 
       function renderAll() {
         renderHeader();

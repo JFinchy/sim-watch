@@ -159,7 +159,10 @@ if (D.swingChecklist !== undefined) {
       else it.drillIds.forEach((x) => { if (!drillIds.has(x)) err(`${t}: drillIds -> unknown drill "${x}"`); });
     });
     if (!Array.isArray(sc.defaultFocusIds)) err("swingChecklist.defaultFocusIds must be an array");
-    else sc.defaultFocusIds.forEach((x) => { if (!itemIds.has(x)) err(`swingChecklist.defaultFocusIds -> unknown item "${x}"`); });
+    else {
+      if (sc.defaultFocusIds.length > 2) err(`swingChecklist.defaultFocusIds has ${sc.defaultFocusIds.length} ids; the active-cue cap is 2`);
+      sc.defaultFocusIds.forEach((x) => { if (!itemIds.has(x)) err(`swingChecklist.defaultFocusIds -> unknown item "${x}"`); });
+    }
   }
 }
 
@@ -209,6 +212,42 @@ if (D.swingChecklist !== undefined) {
     if (d.video) for (const k of ["startSec", "endSec"]) if (d.video[k] !== undefined && (!isNum(d.video[k]) || d.video[k] < 0)) err(`${t}: video.${k} must be a non-negative number`);
     if (d.video && isNum(d.video.startSec) && isNum(d.video.endSec) && d.video.endSec <= d.video.startSec) err(`${t}: video.endSec must be after startSec`);
   });
+}
+
+// Optional private profile (git-ignored): validated only when the file exists.
+{
+  const pdFile = path.join(path.dirname(file), "player_data.js");
+  if (fs.existsSync(pdFile)) {
+    const pw = {};
+    let ok = true;
+    try { vm.runInNewContext(fs.readFileSync(pdFile, "utf8"), { window: pw }, { filename: pdFile }); } catch (e) { ok = false; err(`player_data.js failed to load: ${e.message}`); }
+    const P = pw.PLAYER_DATA;
+    if (ok && (!P || typeof P !== "object")) err("player_data.js must set window.PLAYER_DATA to an object");
+    else if (ok) {
+      const feels = Array.isArray(P.feels) ? P.feels : [];
+      const fids = uniqueIds(feels, "PLAYER_DATA.feels");
+      let active = 0;
+      feels.forEach((f) => {
+        const t = `PLAYER_DATA feel ${f.id}`;
+        if (!["all", "driver", "irons"].includes(f.club)) err(`${t}: club "${f.club}" must be all/driver/irons`);
+        if (!["candidate", "active", "parked", "retired"].includes(f.status)) err(`${t}: status "${f.status}" must be candidate/active/parked/retired`);
+        if (f.status === "active") active++;
+        if (f.drillIds !== undefined && !Array.isArray(f.drillIds)) err(`${t}: drillIds must be an array`);
+        else (f.drillIds || []).forEach((x) => { if (!drillIds.has(x)) err(`${t}: drillIds -> unknown drill "${x}"`); });
+      });
+      if (active > 1) err(`PLAYER_DATA has ${active} active feels; at most one allowed`);
+      const list = Array.isArray(P.personalChecklist) ? P.personalChecklist : [];
+      const cids = uniqueIds(list, "PLAYER_DATA.personalChecklist");
+      const builtIn = new Set(((D.swingChecklist || {}).items || []).map((i) => i.id));
+      let pre = 0;
+      list.forEach((c) => {
+        if (builtIn.has(c.id)) err(`PLAYER_DATA checklist id "${c.id}" collides with a swingChecklist item`);
+        if (c.clubs !== undefined && !["all", "driver", "irons"].includes(c.clubs)) err(`PLAYER_DATA checklist ${c.id}: clubs "${c.clubs}" must be all/driver/irons`);
+        if (c.preSwing === true) pre++;
+      });
+      if (list.length && pre !== 4) err(`PLAYER_DATA.personalChecklist has ${pre} preSwing items; exactly 4 required`);
+    }
+  }
 }
 
 console.log(`Checked ${file}`);
