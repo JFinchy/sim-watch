@@ -146,7 +146,7 @@ def _req(srv, method, path, body=None, headers=None):
 def test_server_status_shots_drill(bridge):
     hub, srv = bridge
     resp, data = _req(srv, "GET", "/api/status")
-    assert resp.status == 200 and resp.getheader("Access-Control-Allow-Origin") == "*"
+    assert resp.status == 200 and resp.getheader("Access-Control-Allow-Origin") is None  # no Origin -> no ACAO
     st = json.loads(data)
     assert st["ok"] is True and st["version"] == 1 and st["sniffer_ok"] is False and st["active_drill"] is None
 
@@ -154,9 +154,9 @@ def test_server_status_shots_drill(bridge):
                       {"Content-Type": "application/json"})
     assert resp.status == 200 and json.loads(data) == {"active_drill": "towel-drill"}
     for bad in ({"drill_id": "../x"}, {"drill_id": "x" * 81}, {"nope": 1}, [1]):
-        resp, _ = _req(srv, "POST", "/api/drill", json.dumps(bad))
+        resp, _ = _req(srv, "POST", "/api/drill", json.dumps(bad), {"Content-Type": "application/json"})
         assert resp.status == 400
-    resp, _ = _req(srv, "POST", "/api/drill", "not json")
+    resp, _ = _req(srv, "POST", "/api/drill", "not json", {"Content-Type": "application/json"})
     assert resp.status == 400
 
     rec = hub.record_shot(sw.openconnect_to_shot(OC_FULL))
@@ -208,7 +208,7 @@ def test_sse_status_shot_and_heartbeat(bridge):
         assert marker in buf, buf
 
     read_until(b"event: status\n")
-    assert b"text/event-stream" in buf and b"Access-Control-Allow-Origin: *" in buf
+    assert b"text/event-stream" in buf and b"Access-Control-Allow-Origin" not in buf
     # Fire a shot only after the client is subscribed.
     threading.Timer(0.1, lambda: hub.record_shot(sw.openconnect_to_shot(OC_FULL))).start()
     read_until(b"event: shot\n")
@@ -231,3 +231,192 @@ def test_busy_port_does_not_raise(bridge):
     hub, srv = bridge
     other = sw.BridgeServer(hub, port=srv.port)
     assert other.start() is False
+
+
+# ---------------------------------------------------------------- hardening: origin / host / CSRF
+
+def test_allowed_origins_are_reflected_never_star(bridge):
+    _, srv = bridge
+    for origin in (f"http://127.0.0.1:{srv.port}", f"http://localhost:{srv.port}", "null"):
+        resp, _ = _req(srv, "GET", "/api/status", headers={"Origin": origin})
+        assert resp.status == 200, origin
+        assert resp.getheader("Access-Control-Allow-Origin") == origin
+        assert resp.getheader("Access-Control-Allow-Private-Network") == "true"
+        assert "Origin" in resp.getheader("Vary")
+
+
+@pytest.mark.parametrize("origin", ["https://evil.example", "http://127.0.0.1:1", "http://localhost",
+                                    "http://127.0.0.1.evil.example:8765"])
+def test_foreign_origin_rejected(bridge, origin):
+    hub, srv = bridge
+    for method, path, body, hdrs in (("GET", "/api/status", None, {}), ("GET", "/api/shots", None, {}),
+                                     ("OPTIONS", "/api/drill", None, {}),
+                                     ("POST", "/api/drill", '{"drill_id":"x"}', {"Content-Type": "application/json"})):
+        resp, _ = _req(srv, method, path, body, {"Origin": origin, **hdrs})
+        assert resp.status == 403, (method, path)
+        assert resp.getheader("Access-Control-Allow-Origin") is None
+        assert resp.getheader("Access-Control-Allow-Private-Network") is None
+    assert hub.active_drill is None
+
+
+def test_preflight_for_null_origin(bridge):
+    _, srv = bridge
+    resp, _ = _req(srv, "OPTIONS", "/api/drill", headers={"Origin": "null",
+                                                          "Access-Control-Request-Method": "POST",
+                                                          "Access-Control-Request-Headers": "content-type"})
+    assert resp.status == 204 and resp.getheader("Access-Control-Allow-Origin") == "null"
+
+
+def test_cross_site_text_plain_post_rejected(bridge):
+    hub, srv = bridge
+    for origin in ("null", "https://evil.example", None):
+        hdrs = {"Content-Type": "text/plain"}
+        if origin:
+            hdrs["Origin"] = origin
+        resp, _ = _req(srv, "POST", "/api/drill", '{"drill_id":"pwned"}', hdrs)
+        assert resp.status in (403, 415), origin
+    resp, _ = _req(srv, "POST", "/api/drill", '{"drill_id":"pwned"}')  # no Content-Type at all
+    assert resp.status == 415
+    assert hub.active_drill is None
+    # The file:// page's real request (null origin + JSON, after preflight) still works.
+    resp, data = _req(srv, "POST", "/api/drill", '{"drill_id":"ok-drill"}',
+                      {"Origin": "null", "Content-Type": "application/json; charset=utf-8"})
+    assert resp.status == 200 and resp.getheader("Access-Control-Allow-Origin") == "null"
+    assert hub.active_drill == "ok-drill"
+
+
+@pytest.mark.parametrize("host,ok", [("127.0.0.1", True), ("localhost", True), ("LOCALHOST", True),
+                                     ("evil.example", False), ("evil.example:{port}", False),
+                                     ("127.0.0.1:1", False), ("127.0.0.1:{port}", True),
+                                     ("localhost:{port}", True), ("[::1]:{port}", False)])
+def test_host_header_check(bridge, host, ok):
+    _, srv = bridge
+    host = host.format(port=srv.port)
+    conn = http.client.HTTPConnection("127.0.0.1", srv.port, timeout=5)
+    conn.putrequest("GET", "/api/status", skip_host=True)
+    conn.putheader("Host", host)
+    conn.endheaders()
+    resp = conn.getresponse()
+    resp.read()
+    conn.close()
+    assert (resp.status == 200) is ok, host
+    if not ok:
+        assert resp.status == 421
+
+
+# ---------------------------------------------------------------- hardening: SSE cap / drill expiry / clip
+
+def _open_sse(srv):
+    sock = socket.create_connection(("127.0.0.1", srv.port), timeout=5)
+    sock.sendall(b"GET /api/events HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    buf = b""
+    end = time.time() + 5
+    while b"\n\n" not in buf.split(b"\r\n\r\n", 1)[-1] and time.time() < end:
+        chunk = sock.recv(4096)
+        if not chunk:
+            break
+        buf += chunk
+    return sock, buf
+
+
+def test_sse_subscriber_cap(bridge):
+    hub, srv = bridge
+    hub.max_subscribers = 3
+    socks = []
+    try:
+        for _ in range(3):
+            sock, buf = _open_sse(srv)
+            assert b"event: status" in buf
+            socks.append(sock)
+        resp, data = _req(srv, "GET", "/api/events")
+        assert resp.status == 503 and b"too many" in data
+        socks.pop().close()
+        end = time.time() + 3
+        while len(hub._subs) > 2 and time.time() < end:
+            time.sleep(0.05)
+        sock, buf = _open_sse(srv)  # a slot freed up
+        assert b"event: status" in buf
+        socks.append(sock)
+    finally:
+        for s in socks:
+            s.close()
+
+
+def test_active_drill_expires_without_subscribers(tmp_path):
+    hub = sw.ShotHub(sw.ShotStore(tmp_path))
+    hub.drill_idle_timeout = 60
+    hub.set_drill("towel")
+    t0 = time.monotonic()
+    assert hub.expire_drill_if_idle(t0 + 30) is False and hub.active_drill == "towel"
+    q = hub.subscribe()  # page connected: never expires, however long
+    assert hub.expire_drill_if_idle(t0 + 1000) is False
+    hub.unsubscribe(q)  # page closed: clock starts now
+    assert hub.expire_drill_if_idle(time.monotonic() + 59) is False
+    assert hub.expire_drill_if_idle(time.monotonic() + 61) is True
+    assert hub.active_drill is None
+
+
+def test_active_drill_reaper_on_live_server(bridge):
+    hub, srv = bridge
+    hub.drill_idle_timeout = 0.3
+    hub.reaper_interval = 0.05
+    hub.set_drill("gate")
+    end = time.time() + 3
+    while hub.active_drill and time.time() < end:
+        time.sleep(0.05)
+    assert hub.active_drill is None
+    rec = hub.record_shot(sw.openconnect_to_shot(OC_FULL))
+    assert rec["drill_id"] is None
+
+
+def test_clip_event_and_queued_payload_is_a_snapshot(tmp_path):
+    hub = sw.ShotHub(sw.ShotStore(tmp_path))
+    q = hub.subscribe()
+    rec = hub.record_shot(sw.openconnect_to_shot(OC_FULL, ts="2026-11-17T10:00:00.000-08:00"))
+    rec["clip"] = "mutated-after-broadcast.mp4"  # what the video manager does to its copy
+    assert hub.set_clip(rec["ts"], "001_7Iron_DTL.mp4") is True
+    assert hub.set_clip("2026-11-17T23:00:00.000-08:00", "nope.mp4") is False
+    ev, payload = q.get_nowait()
+    assert ev == "shot" and json.loads(payload)["clip"] is None
+    ev, payload = q.get_nowait()
+    assert ev == "clip" and json.loads(payload) == {"ts": rec["ts"], "clip": "001_7Iron_DTL.mp4"}
+    assert q.empty()
+    assert hub.store.read("2026-11-17")[0]["clip"] == "001_7Iron_DTL.mp4"
+
+
+# ---------------------------------------------------------------- hardening: second process / sniffer
+
+def test_bind_failure_means_no_recording_store(bridge, tmp_path, monkeypatch):
+    _, srv = bridge
+    monkeypatch.setattr(sw, "BRIDGE_HUB", None)
+    cfg = {"bridge": {"enabled": True, "port": srv.port, "sessions_dir": str(tmp_path / "Other")}}
+    hub, server = sw.start_bridge(cfg)
+    assert hub is None and server is None
+    assert sw.BRIDGE_HUB is None
+    assert not (tmp_path / "Other").exists()
+
+
+def test_start_bridge_ok_uses_temp_sessions_dir(tmp_path, monkeypatch):
+    monkeypatch.setattr(sw, "BRIDGE_HUB", None)
+    cfg = {"bridge": {"enabled": True, "port": 0, "sessions_dir": str(tmp_path / "S")}}
+    hub, server = sw.start_bridge(cfg)
+    try:
+        assert hub is not None and server.httpd is not None and sw.BRIDGE_HUB is hub
+        assert hub.store.sessions_dir == tmp_path / "S"
+    finally:
+        server.stop()
+
+
+def test_bridge_sniffer_records_and_syncs(tmp_path, monkeypatch):
+    hub = sw.ShotHub(sw.ShotStore(tmp_path))
+    sniffer = sw.make_bridge_sniffer(hub)
+    assert hub.sniffer is sniffer
+    sniffer._feed_text(json.dumps(OC_FULL))
+    assert hub.last_shot_ts is not None
+    calls = []
+    monkeypatch.setattr(sniffer, "start", lambda: calls.append("start"))
+    monkeypatch.setattr(sniffer, "stop", lambda: calls.append("stop"))
+    sw.sync_bridge_sniffer(sniffer, True)
+    sw.sync_bridge_sniffer(sniffer, False)  # not running -> nothing to stop
+    sw.sync_bridge_sniffer(None, True)
+    assert calls == ["start"]

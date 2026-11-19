@@ -3180,6 +3180,10 @@ BRIDGE_DEFAULTS = {"enabled": True, "port": 8765, "sessions_dir": "Swings/Sessio
 DRILL_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 BRIDGE_HUB = None  # the running ShotHub (if any); the watch loop drops its health summary here
+DRILL_IDLE_TIMEOUT_SEC = 60.0  # clear active_drill after this long with zero SSE subscribers (page closed)
+BRIDGE_MAX_SUBSCRIBERS = 8     # concurrent /api/events streams; more get 503
+SSE_WRITE_TIMEOUT_SEC = 10.0   # a client that stops reading for this long is dropped
+BRIDGE_ALLOWED_HOSTS = ("127.0.0.1", "localhost")
 
 
 def bridge_config(cfg: dict | None) -> dict:
@@ -3346,8 +3350,12 @@ class ShotHub:
         self.health: dict | None = None
         self.sniffer = None  # an OpenConnectMonitor (its .active flag is reported as sniffer_ok)
         self.heartbeat_sec = 15.0
+        self.max_subscribers = BRIDGE_MAX_SUBSCRIBERS
+        self.drill_idle_timeout = DRILL_IDLE_TIMEOUT_SEC
+        self.reaper_interval = 1.0
         self.stopping = threading.Event()
         self._subs: set[queue.Queue] = set()
+        self._no_subs_since: float | None = time.monotonic()  # None while at least one SSE client is connected
         self._lock = threading.Lock()
 
     def status(self) -> dict:
@@ -3365,13 +3373,37 @@ class ShotHub:
     def set_drill(self, drill_id: str | None) -> str | None:
         if not valid_drill_id(drill_id):
             raise ValueError("drill_id must be null or 1-80 chars of [A-Za-z0-9_-]")
-        self.active_drill = drill_id
+        with self._lock:
+            self.active_drill = drill_id
+            if self._no_subs_since is not None:
+                self._no_subs_since = time.monotonic()  # a headless POST (curl) gets a full idle window
         LOG.info("Active drill -> %s", drill_id or "(none)")
         self.broadcast("status", self.status())
         return drill_id
 
+    def expire_drill_if_idle(self, now: float | None = None) -> bool:
+        """Clear active_drill once no SSE client (= no open drills page) has been connected for
+        drill_idle_timeout seconds, so a closed page can't tag later shots. Returns True if cleared."""
+        now = time.monotonic() if now is None else now
+        with self._lock:
+            idle_since = self._no_subs_since
+            if self.active_drill is None or idle_since is None or now - idle_since < self.drill_idle_timeout:
+                return False
+            old, self.active_drill = self.active_drill, None
+        LOG.info("Active drill %s cleared: no drills page connected for %.0fs", old, now - idle_since)
+        self.broadcast("status", self.status())
+        return True
+
+    def set_clip(self, ts: str, clip: str) -> bool:
+        """Link a saved clip to its shot record and tell SSE clients (`clip` event). May raise OSError."""
+        hit = self.store.set_clip(ts, clip)
+        if hit:
+            self.broadcast("clip", {"ts": ts, "clip": clip})
+        return hit
+
     def record_shot(self, shot: dict) -> dict:
         """Tag with the active drill, persist, and push to SSE clients. Never raises."""
+        self.expire_drill_if_idle()
         if shot.get("drill_id") is None:
             shot["drill_id"] = self.active_drill
         try:
@@ -3382,22 +3414,30 @@ class ShotHub:
         self.broadcast("shot", shot)
         return shot
 
-    def subscribe(self) -> queue.Queue:
+    def subscribe(self) -> queue.Queue | None:
+        """A new SSE subscriber queue, or None when max_subscribers are already connected."""
         q: queue.Queue = queue.Queue(maxsize=200)
         with self._lock:
+            if len(self._subs) >= self.max_subscribers:
+                return None
             self._subs.add(q)
+            self._no_subs_since = None
         return q
 
     def unsubscribe(self, q: queue.Queue) -> None:
         with self._lock:
             self._subs.discard(q)
+            if not self._subs and self._no_subs_since is None:
+                self._no_subs_since = time.monotonic()
 
     def broadcast(self, event: str, data: dict) -> None:
+        # Serialise once, now: callers keep (and later mutate) the dict, e.g. a shot gaining its clip.
+        payload = json.dumps(data)
         with self._lock:
             subs = list(self._subs)
         for q in subs:
             try:
-                q.put_nowait((event, data))
+                q.put_nowait((event, payload))
             except queue.Full:
                 pass  # a stalled client just misses events; it can re-sync via /api/shots
 
@@ -3406,13 +3446,60 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
     """/api/* JSON + SSE endpoints; everything else is a static file from drills/ (never outside it)."""
 
     server_version = "SimWatchBridge/1"
+    timeout = 30  # socket timeout for ordinary requests (slow/idle clients can't pin a thread forever)
 
+    # Browser access policy (any page in any browser on this PC can reach 127.0.0.1):
+    # - Host must be 127.0.0.1/localhost[:port] -> blocks DNS-rebinding pages (421 otherwise).
+    # - CORS is never `*`: only http://127.0.0.1:<port>, http://localhost:<port> and the literal "null"
+    #   origin (drills/index.html opened via file://) are reflected. Any other Origin gets 403, so a
+    #   foreign site can neither read shots nor change the drill (it also can't open the SSE stream).
+    # - POST /api/drill requires Content-Type: application/json, which forces a CORS preflight; a plain
+    #   cross-site <form>/text/plain "simple request" is refused with 415 before it can change state.
+    # Residual risk (documented in README): a hostile page can produce Origin "null" from a sandboxed
+    # iframe, so it could read shot data and set/clear the active drill tag. That is the price of keeping
+    # the file:// page working without a token; it exposes golf numbers only, nothing on disk.
     def log_message(self, fmt, *args):  # route access logs to DEBUG, not stderr
         LOG.debug("bridge %s - %s", self.address_string(), fmt % args)
 
+    def _allowed_http_origins(self) -> set[str]:
+        port = self.server.server_address[1]
+        return {f"http://{h}:{port}" for h in BRIDGE_ALLOWED_HOSTS}
+
+    def _host_ok(self) -> bool:
+        host = (self.headers.get("Host") or "").strip().lower()
+        if not host:
+            return True  # browsers always send Host; only ancient HTTP/1.0 tools omit it
+        name, sep, port = host.rpartition(":") if not host.startswith("[") else (host, "", "")
+        if not sep:
+            name, port = host, ""
+        if name not in BRIDGE_ALLOWED_HOSTS:
+            return False
+        return port == "" or port == str(self.server.server_address[1])
+
+    def parse_request(self):
+        self._cors_origin = None
+        if not super().parse_request():
+            return False
+        if not self._host_ok():
+            self.close_connection = True
+            self._json(421, {"error": "Host must be 127.0.0.1 or localhost"})
+            return False
+        origin = self.headers.get("Origin")
+        if origin is not None:
+            if origin == "null" or origin in self._allowed_http_origins():
+                self._cors_origin = origin
+            else:
+                self.close_connection = True
+                self._json(403, {"error": "origin not allowed"})
+                return False
+        return True
+
     def end_headers(self):
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Private-Network", "true")
+        self.send_header("Vary", "Origin")
+        origin = getattr(self, "_cors_origin", None)
+        if origin:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Access-Control-Allow-Private-Network", "true")
         super().end_headers()
 
     @property
@@ -3439,6 +3526,7 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
     def do_GET(self):
         url = urllib.parse.urlsplit(self.path)
         if url.path == "/api/status":
+            self.hub.expire_drill_if_idle()
             return self._json(200, self.hub.status())
         if url.path == "/api/shots":
             q = urllib.parse.parse_qs(url.query)
@@ -3465,6 +3553,11 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
         url = urllib.parse.urlsplit(self.path)
         if url.path != "/api/drill":
             return self._json(404, {"error": "unknown endpoint"})
+        ctype = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
+        if ctype != "application/json":
+            # Keeps this a preflighted request for browsers (see the policy note above).
+            self.close_connection = True
+            return self._json(415, {"error": "Content-Type must be application/json"})
         try:
             length = int(self.headers.get("Content-Length") or 0)
         except ValueError:
@@ -3482,7 +3575,11 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
     def _serve_events(self) -> None:
         hub = self.hub
         q = hub.subscribe()
+        if q is None:
+            self.close_connection = True
+            return self._json(503, {"error": f"too many live-event clients (max {hub.max_subscribers})"})
         try:
+            self.connection.settimeout(SSE_WRITE_TIMEOUT_SEC)  # a stalled reader is dropped, not waited on
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream; charset=utf-8")
             self.send_header("Cache-Control", "no-cache")
@@ -3506,8 +3603,9 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
             hub.unsubscribe(q)
             self.close_connection = True
 
-    def _sse(self, event: str, data: dict) -> None:
-        self.wfile.write(f"event: {event}\ndata: {json.dumps(data)}\n\n".encode("utf-8"))
+    def _sse(self, event: str, data) -> None:
+        payload = data if isinstance(data, str) else json.dumps(data)
+        self.wfile.write(f"event: {event}\ndata: {payload}\n\n".encode("utf-8"))
         self.wfile.flush()
 
     def list_directory(self, path):
@@ -3557,8 +3655,17 @@ class BridgeServer:
         self._thread = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.5},
                                         name="BridgeServer", daemon=True)
         self._thread.start()
+        threading.Thread(target=self._reap, name="BridgeDrillReaper", daemon=True).start()
         LOG.info("Shot bridge listening on http://%s:%s/ (drills hub + /api/status)", self.host, self.port)
         return True
+
+    def _reap(self) -> None:
+        hub = self.hub
+        while not hub.stopping.wait(hub.reaper_interval):
+            try:
+                hub.expire_drill_if_idle()
+            except Exception:
+                log_throttled("bridge-reaper", "drill expiry check failed", exc_info=True)
 
     def stop(self) -> None:
         self.hub.stopping.set()
@@ -3584,9 +3691,38 @@ def start_bridge(cfg: dict, force: bool = False, port: int | None = None) -> tup
     except Exception as e:
         LOG.warning("Shot bridge disabled: bad bridge config (%s)", e)
         return None, None
-    server.start()
+    if not server.start():
+        # Most likely `simwatch.py bridge` (or another watcher) already owns the port and is recording.
+        # Don't build a second recorder here: two processes appending to one shots.jsonl would duplicate shots.
+        LOG.warning("Shot bridge already running in another process (port %s busy); not recording shots here",
+                    server.requested_port)
+        return None, None
     BRIDGE_HUB = hub
     return hub, server
+
+
+def make_bridge_sniffer(hub: ShotHub) -> OpenConnectMonitor:
+    """An OpenConnect sniffer that only records shots into the bridge (no video rig)."""
+    def on_shot(info: dict) -> None:
+        if info.get("shot"):
+            rec = hub.record_shot(info["shot"])
+            LOG.info("Shot %s recorded (club=%s, speed=%s, drill=%s)", rec.get("shot_num"), rec.get("club"),
+                     rec["ball"].get("speed"), rec.get("drill_id"))
+
+    sniffer = OpenConnectMonitor(on_shot, lambda club: LOG.info("Active club -> %s", club))
+    hub.sniffer = sniffer
+    return sniffer
+
+
+def sync_bridge_sniffer(sniffer: OpenConnectMonitor | None, run: bool) -> None:
+    """Start/stop a bridge-only sniffer with the watch loop's gate (GSPro running and not paused)."""
+    if sniffer is None:
+        return
+    running = bool(sniffer._thread and sniffer._thread.is_alive() and not sniffer._stop.is_set())
+    if run and not running:
+        sniffer.start()
+    elif not run and running:
+        sniffer.stop()
 
 
 def _bridge_note_health(state: str, res: dict) -> None:
@@ -3630,14 +3766,7 @@ def cmd_bridge(cfg: dict, demo: bool = False, demo_interval: float = 4.0, port: 
     if not hub or not server or not server.httpd:
         sys.exit("Shot bridge could not start (see log above).")
 
-    def on_shot(info: dict) -> None:
-        if info.get("shot"):
-            rec = hub.record_shot(info["shot"])
-            LOG.info("Shot %s recorded (club=%s, speed=%s, drill=%s)", rec.get("shot_num"), rec.get("club"),
-                     rec["ball"].get("speed"), rec.get("drill_id"))
-
-    sniffer = OpenConnectMonitor(on_shot, lambda club: LOG.info("Active club -> %s", club))
-    hub.sniffer = sniffer
+    sniffer = make_bridge_sniffer(hub)
     sniffer.start()
     LOG.info("Bridge-only mode running%s (Ctrl+C to stop). Status: http://127.0.0.1:%s/api/status",
              " with synthetic demo shots" if demo else "", server.port)
@@ -4111,7 +4240,7 @@ class SwingSessionManager:
                     if self.hub and shot_rec and shot_rec.get("ts") and (angle == "DTL" or not shot_rec.get("clip")):
                         shot_rec["clip"] = session_copy.name
                         try:
-                            self.hub.store.set_clip(shot_rec["ts"], session_copy.name)
+                            self.hub.set_clip(shot_rec["ts"], session_copy.name)
                         except OSError as e:
                             log_throttled("bridge-clip", f"could not link clip to shot: {e}")
                 except OSError as e:
@@ -4429,6 +4558,8 @@ def watch(cfg, initial_grace: bool = False) -> None:
     hub, bridge = start_bridge(cfg)  # never raises; a busy port is logged and the watchdog carries on
     if video_mgr and hub:
         video_mgr.hub = hub
+    # Without the video rig nothing else sniffs :921, so give the bridge its own (gated like the rig).
+    bridge_sniffer = make_bridge_sniffer(hub) if (hub and not video_mgr) else None
 
     st = _WatchState((time.time() + grace_sec) if initial_grace else 0.0)
     LOG.info("SimWatch running. Create a file named PAUSE next to this script to pause. Status: %s", STATUS_PATH)
@@ -4436,6 +4567,9 @@ def watch(cfg, initial_grace: bool = False) -> None:
         while True:
             try:
                 _watch_step(cfg, st, video_mgr)
+                if bridge_sniffer is not None:  # same gate as the video rig: run while the gated app is up
+                    gate = cfg.get("only_when_running")
+                    sync_bridge_sniffer(bridge_sniffer, (not gate) or bool(find_procs(gate)))
             except (KeyboardInterrupt, SystemExit):
                 raise
             except Exception as e:
@@ -4449,6 +4583,8 @@ def watch(cfg, initial_grace: bool = False) -> None:
     finally:
         if video_mgr:
             video_mgr.stop()
+        if bridge_sniffer:
+            bridge_sniffer.stop()
         if bridge:
             bridge.stop()
         write_status("stopped")

@@ -137,6 +137,32 @@ for (let i = 1; i < bagByCarry.length; i++) {
   if (g.progress !== undefined && (!isNum(g.progress) || g.progress < 0 || g.progress > 100)) warn(`goal ${g.id}: progress outside 0-100`);
 });
 
+// swingChecklist (Swing Checklist view)
+if (D.swingChecklist !== undefined) {
+  const sc = D.swingChecklist;
+  if (!sc || typeof sc !== "object" || Array.isArray(sc)) err("swingChecklist must be an object");
+  else {
+    const phaseIds = uniqueIds(sc.phases, "swingChecklist.phases");
+    (sc.phases || []).forEach((p) => { if (!isStr(p.name)) err(`swingChecklist phase ${p.id}: missing name`); });
+    if (!Array.isArray(sc.phases) || !sc.phases.length) err("swingChecklist.phases must be a non-empty array");
+    const itemIds = uniqueIds(sc.items, "swingChecklist.items");
+    if (!Array.isArray(sc.items) || !sc.items.length) err("swingChecklist.items must be a non-empty array");
+    (sc.items || []).forEach((it) => {
+      const t = `swingChecklist item ${it.id}`;
+      for (const f of ["title", "cue"]) if (!isStr(it[f])) err(`${t}: missing ${f}`);
+      if (!isStr(it.phase) || !phaseIds.has(it.phase)) err(`${t}: unknown phase "${it.phase}"`);
+      if (it.why !== undefined && typeof it.why !== "string") err(`${t}: why must be a string`);
+      if (it.fault !== undefined && typeof it.fault !== "string") err(`${t}: fault must be a string`);
+      if (it.feel !== undefined && typeof it.feel !== "string") err(`${t}: feel must be a string`);
+      if (!it.check || typeof it.check !== "object" || typeof it.check.dtl !== "string" || typeof it.check.fo !== "string") err(`${t}: check must be {dtl, fo} strings`);
+      if (!Array.isArray(it.drillIds)) err(`${t}: drillIds must be an array`);
+      else it.drillIds.forEach((x) => { if (!drillIds.has(x)) err(`${t}: drillIds -> unknown drill "${x}"`); });
+    });
+    if (!Array.isArray(sc.defaultFocusIds)) err("swingChecklist.defaultFocusIds must be an array");
+    else sc.defaultFocusIds.forEach((x) => { if (!itemIds.has(x)) err(`swingChecklist.defaultFocusIds -> unknown item "${x}"`); });
+  }
+}
+
 console.log(`Checked ${file}`);
 console.log(`  drills=${(D.drills || []).length} routines=${(D.routines || []).length} courses=${(D.courses || []).length} bag=${(D.bagMatrix || []).length}`);
 warnings.forEach((w) => console.log("WARN  " + w));

@@ -1434,6 +1434,90 @@
       .mat-flash { animation: none; }
       .mat-overlay *, .tonight-card * { transition: none !important; animation: none !important; }
     }
+    /* ===== SWING CHECKLIST view + Pre-shot cards overlay ===== */
+    .cl-head { margin-bottom: 14px; }
+    .cl-head-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 18px; }
+    .cl-head h2 { margin: 0; }
+    .cl-sub { margin: 2px 0 0; color: var(--muted); font-size: 0.86rem; }
+    .cl-stats { display: flex; flex-wrap: wrap; gap: 6px 18px; align-items: baseline; margin-top: 10px; }
+    .cl-progress { font-size: 1.15rem; }
+    .cl-progress strong { color: #6ee7b7; font-size: 1.5rem; }
+    .cl-week { color: var(--muted); font-size: 0.9rem; }
+    .cl-week strong { color: var(--text); }
+    .cl-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .cl-actions .nav-btn, .cl-focus-head .nav-btn { min-height: 44px; }
+    .nav-btn[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: #bae6fd; }
+    .cl-bar { height: 8px; border-radius: 999px; background: var(--bg-elev); overflow: hidden; margin-top: 10px; }
+    .cl-bar > span { display: block; height: 100%; background: var(--green); transition: width 0.25s ease; }
+    .cl-focus { margin-bottom: 18px; }
+    .cl-focus-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; margin-bottom: 10px; }
+    .cl-focus-head h3 { margin: 0; font-size: 1.15rem; color: #fde68a; }
+    .cl-focus-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 12px; }
+    .cl-fcard { background: #020617; border: 2px solid var(--amber); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+    .cl-fcard.done { border-color: var(--green); }
+    .cl-fcard .cl-kicker { font-size: 0.78rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #fbbf24; }
+    .cl-fcard h4 { margin: 0; font-size: clamp(1.15rem, 4.2vw, 1.5rem); line-height: 1.25; color: #fff; overflow-wrap: anywhere; }
+    .cl-fcard p { margin: 0; font-size: clamp(1.05rem, 3.8vw, 1.3rem); line-height: 1.4; color: #e2e8f0; overflow-wrap: anywhere; }
+    .cl-fcard .cl-fbtns { display: flex; gap: 8px; margin-top: auto; padding-top: 4px; }
+    .cl-empty { color: var(--muted); font-size: 0.95rem; margin: 0; }
+    .cl-phase { margin-bottom: 18px; }
+    .cl-phase > h3 { margin: 0 0 8px; font-size: 1.1rem; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+    .cl-phase > h3 .cl-count { font-size: 0.82rem; color: var(--muted); font-weight: 500; }
+    .cl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; align-items: start; }
+    .cl-item { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; min-width: 0; }
+    .cl-item.done { border-color: rgba(16,185,129,0.55); background: linear-gradient(0deg, var(--green-soft), var(--bg-card)); }
+    .cl-item.flash { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .cl-item-main { display: flex; gap: 10px; align-items: flex-start; }
+    .cl-text { flex: 1; min-width: 0; }
+    .cl-title { margin: 0; font-size: 1rem; line-height: 1.3; overflow-wrap: anywhere; }
+    .cl-cue { margin: 4px 0 0; color: #cbd5e1; font-size: 0.92rem; overflow-wrap: anywhere; }
+    .cl-badge { display: inline-block; font-size: 0.68rem; font-weight: 700; padding: 1px 7px; border-radius: 999px; background: var(--indigo-soft); color: #c7d2fe; margin-left: 6px; vertical-align: middle; }
+    .cl-toggle { flex: 0 0 auto; width: 44px; height: 44px; border-radius: 10px; border: 2px solid var(--border); background: var(--bg-elev); color: var(--muted); font-size: 1.3rem; line-height: 1; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }
+    .cl-toggle:hover { background: var(--bg-hover); color: #fff; }
+    .cl-check[aria-pressed="true"] { background: var(--green); border-color: var(--green); color: #04130d; }
+    .cl-star[aria-pressed="true"] { background: var(--amber-soft); border-color: var(--amber); color: #fbbf24; }
+    .cl-more { margin-top: 8px; background: none; border: none; color: var(--accent); font-weight: 600; font-size: 0.86rem; cursor: pointer; padding: 8px 4px; min-height: 36px; }
+    .cl-details { margin-top: 4px; border-top: 1px solid var(--border); padding-top: 8px; font-size: 0.88rem; color: #cbd5e1; }
+    .cl-details dl { margin: 0; }
+    .cl-details dt { font-weight: 700; color: var(--text); margin-top: 8px; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
+    .cl-details dd { margin: 2px 0 0; overflow-wrap: anywhere; }
+    .cl-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .cl-chips .chip { max-width: 100%; min-height: 36px; text-align: left; overflow-wrap: anywhere; }
+    .cl-help { background: var(--amber-soft); border: 1px solid var(--amber); border-radius: var(--radius); padding: 12px 16px; margin-bottom: 12px; }
+    .cl-help h4 { margin: 0 0 6px; color: #fde68a; font-size: 1.02rem; }
+    .cl-help ol { margin: 6px 0; padding-left: 22px; font-size: 0.92rem; }
+    .cl-help p { margin: 6px 0; font-size: 0.92rem; }
+    .cl-help .cl-chips { margin-top: 8px; }
+    .cl-add form { display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); max-width: 640px; }
+    .cl-add label { display: grid; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+    .cl-add input, .cl-add textarea, .cl-add select { background: var(--bg-elev); color: var(--text); border: 1px solid var(--border); border-radius: 8px; padding: 10px; font: inherit; width: 100%; min-height: 44px; }
+    .cl-add textarea { min-height: 80px; resize: vertical; }
+    body.cue-open { overflow: hidden; }
+    .cue-overlay { position: fixed; inset: 0; z-index: 950; background: #000; color: #fff; display: flex; flex-direction: column; padding: 16px clamp(16px, 4vw, 48px) 20px; height: 100vh; height: 100dvh; touch-action: pan-y; }
+    .cue-overlay.hidden { display: none; }
+    .cue-overlay:focus { outline: none; }
+    .cue-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+    .cue-count { font-size: 1.6rem; font-weight: 900; color: #fde68a; }
+    .cue-phase { font-size: 1.3rem; font-weight: 700; color: #cbd5e1; text-transform: uppercase; letter-spacing: 0.08em; }
+    .cue-btn { background: #111; color: #fff; border: 2px solid #475569; border-radius: 14px; font-size: 1.3rem; font-weight: 800; min-height: 64px; padding: 10px 22px; cursor: pointer; }
+    .cue-btn:hover { background: #1e293b; }
+    .cue-btn[aria-pressed="true"] { background: var(--green); border-color: var(--green); color: #04130d; }
+    .cue-body { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 22px; min-height: 0; overflow-y: auto; cursor: pointer; padding: 10px 0; }
+    .cue-title { margin: 0; font-size: clamp(2rem, 7vw, 4rem); line-height: 1.15; color: #fde68a; overflow-wrap: anywhere; }
+    .cue-text { margin: 0; font-size: clamp(1.5rem, 5.2vw, 3rem); line-height: 1.3; font-weight: 600; overflow-wrap: anywhere; }
+    .cue-dots { display: flex; justify-content: center; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+    .cue-dots i { width: 12px; height: 12px; border-radius: 50%; background: #334155; }
+    .cue-dots i.on { background: #fde68a; }
+    .cue-nav { display: grid; grid-template-columns: 1fr 1.4fr 1fr; gap: 10px; }
+    .cue-hint { margin: 10px 0 0; text-align: center; color: #94a3b8; font-size: 0.95rem; }
+    @media (max-width: 520px) {
+      .cl-item-main { gap: 8px; }
+      .cue-nav { grid-template-columns: 1fr 1fr; }
+      .cue-nav [data-cue-act="check"] { grid-column: 1 / -1; order: -1; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .cl-bar > span { transition: none; }
+    }
   </style>
 
 </head>
@@ -1462,6 +1546,7 @@
 
       <div class="pill-group" id="viewTabs" role="tablist" aria-label="Hub sections">
         <button class="btn-pill active" role="tab" aria-selected="true" aria-controls="view-deck" data-view="deck">🎯 Drill Deck</button>
+        <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-checklist" data-view="checklist">✅ Swing Checklist</button>
         <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-browse" data-view="browse">🗂️ Routines &amp; Sections</button>
         <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-tracker" data-view="tracker">📊 Goals &amp; Delivery Chart</button>
         <button class="btn-pill" role="tab" aria-selected="false" aria-controls="view-courses" data-view="courses">⛳ GSPro Courses &amp; Rounds</button>
@@ -1505,6 +1590,9 @@
       </div>
     </main>
 
+    <!-- VIEW 8: SWING CHECKLIST (rendered by renderChecklist) -->
+    <section id="view-checklist" class="hidden" role="tabpanel"></section>
+
     <!-- VIEW 2: ROUTINES & SECTIONS BROWSER -->
     <section id="view-browse" class="hidden" role="tabpanel"></section>
 
@@ -1526,6 +1614,9 @@
 
   <!-- MAT MODE (full-screen session overlay, rendered by renderMat) -->
   <div id="matOverlay" class="mat-overlay hidden" role="dialog" aria-modal="true" aria-label="Mat mode practice session" tabindex="-1"></div>
+
+  <!-- PRE-SHOT CARDS (fullscreen starred-cue overlay from the Swing Checklist, rendered by renderCue) -->
+  <div id="cueOverlay" class="cue-overlay hidden" role="dialog" aria-modal="true" aria-label="Pre-shot cards" tabindex="-1"></div>
 
   <div class="toast" id="toastEl" role="status" aria-live="polite" aria-atomic="true"></div>
 
@@ -1725,6 +1816,41 @@
         }
         return saved;
       }
+      // ---- Swing Checklist sanitizers (function declarations: loadState() runs before the checklist section) ----
+      function clStrIds(v) {
+        return Array.isArray(v) ? Array.from(new Set(v.filter((x) => typeof x === "string" && x && x.length <= 80))) : null;
+      }
+      function sanitizeChecklistLog(v) {
+        const out = {};
+        if (!v || typeof v !== "object" || Array.isArray(v)) return out;
+        for (const [k, arr] of Object.entries(v)) {
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(k)) continue;
+          const ids = clStrIds(arr);
+          if (ids && ids.length) out[k] = ids;
+        }
+        return out;
+      }
+      function sanitizeChecklistCustom(v) {
+        if (!Array.isArray(v)) return [];
+        const sc = DEFAULTS.swingChecklist || {};
+        const phases = (sc.phases || []).map((p) => p.id);
+        const builtIn = new Set((sc.items || []).map((i) => i.id));
+        const seen = new Set();
+        const out = [];
+        for (const it of v) {
+          if (!it || typeof it !== "object" || Array.isArray(it)) continue;
+          const id = typeof it.id === "string" ? it.id.trim().slice(0, 80) : "";
+          const title = typeof it.title === "string" ? it.title.trim().slice(0, 120) : "";
+          if (!id || !title || seen.has(id) || builtIn.has(id)) continue;
+          seen.add(id);
+          out.push({
+            id, title,
+            phase: phases.includes(it.phase) ? it.phase : (phases[0] || ""),
+            cue: typeof it.cue === "string" ? it.cue.trim().slice(0, 400) : ""
+          });
+        }
+        return out.slice(0, 200);
+      }
       function sanitizeSessionTarget(t) {
         if (!t || typeof t !== "object" || Array.isArray(t)) return null;
         if (!/^(hla|carry|ball_speed|face|path|spin_axis|aoa|manual)$/.test(String(t.metric))) return null;
@@ -1821,7 +1947,11 @@
           showBulkImport: false,
           sessions: [],            // mat-mode session history (see SESSION section)
           sessionPrefs: { mode: null, minutes: 30 },
-          activeSession: null      // in-progress mat session (resumable after reload)
+          activeSession: null,     // in-progress mat session (resumable after reload)
+          checklistFocusIds: clStrIds((DEFAULTS.swingChecklist || {}).defaultFocusIds) || [], // My Focus stars; seeded from defaults once
+          checklistLog: {},        // { "YYYY-MM-DD": [checkedItemIds] }
+          checklistCustomItems: [],// [{ id, phase, title, cue }]
+          checklistFocusOnly: false
         };
         try {
           const raw = localStorage.getItem(STORAGE_KEY);
@@ -1830,6 +1960,10 @@
             base.sessions = sanitizeSessions(saved.sessions);
             base.sessionPrefs = sanitizeSessionPrefs(saved.sessionPrefs);
             base.activeSession = sanitizeActiveSession(saved.activeSession);
+            if (Array.isArray(saved.checklistFocusIds)) base.checklistFocusIds = clStrIds(saved.checklistFocusIds); // [] = user un-starred everything
+            base.checklistLog = sanitizeChecklistLog(saved.checklistLog);
+            base.checklistCustomItems = sanitizeChecklistCustom(saved.checklistCustomItems);
+            if (typeof saved.checklistFocusOnly === "boolean") base.checklistFocusOnly = saved.checklistFocusOnly;
             if (Array.isArray(saved.drills) && saved.drills.length) base.drills = saved.drills;
             if (Array.isArray(saved.deletedDrillIds)) base.deletedDrillIds = saved.deletedDrillIds.filter((x) => typeof x === "string");
             if (typeof saved.lastBackupAt === "string") base.lastBackupAt = saved.lastBackupAt;
@@ -2160,13 +2294,17 @@
       }
 
       // ---- Backup / import helpers ----
-      const SCHEMA_VERSION = 3; // v3: sessions / sessionPrefs / activeSession (mat mode)
+      const SCHEMA_VERSION = 4; // v3: sessions / sessionPrefs / activeSession (mat mode); v4: swing checklist (all additive)
       function buildPersistObject() {
         return {
           schemaVersion: SCHEMA_VERSION,
           sessions: state.sessions,
           sessionPrefs: state.sessionPrefs,
           activeSession: state.activeSession,
+          checklistFocusIds: state.checklistFocusIds,
+          checklistLog: state.checklistLog,
+          checklistCustomItems: state.checklistCustomItems,
+          checklistFocusOnly: state.checklistFocusOnly,
           activeMode: state.activeMode,
           activeRoutine: state.activeRoutine,
           activeSection: state.activeSection,
@@ -2247,6 +2385,19 @@
           parts.push(`${state.sessions.length} mat sessions`);
         }
         if (isPlainObj(parsed.sessionPrefs)) state.sessionPrefs = sanitizeSessionPrefs(parsed.sessionPrefs);
+        if (Array.isArray(parsed.checklistCustomItems)) {
+          state.checklistCustomItems = sanitizeChecklistCustom(parsed.checklistCustomItems);
+          parts.push(`${state.checklistCustomItems.length} custom checklist items`);
+        }
+        if (Array.isArray(parsed.checklistFocusIds)) {
+          state.checklistFocusIds = clStrIds(parsed.checklistFocusIds);
+          parts.push(`${state.checklistFocusIds.length} focus items`);
+        }
+        if (isPlainObj(parsed.checklistLog)) {
+          state.checklistLog = sanitizeChecklistLog(parsed.checklistLog);
+          parts.push(`${Object.keys(state.checklistLog).length} checklist days`);
+        }
+        if (typeof parsed.checklistFocusOnly === "boolean") state.checklistFocusOnly = parsed.checklistFocusOnly;
         const bag = objs(parsed.bagMatrix, (b) => str(b.id) || str(b.club));
         if (bag && bag.length) { state.bagMatrix = mergeBagMatrix(bag); parts.push(`${bag.length} bag clubs`); }
         if (typeof parsed.cadencePresetId === "string") state.cadencePresetId = parsed.cadencePresetId;
@@ -2266,6 +2417,8 @@
           Object.keys(state.deliveryLogs || {}).length > 0 ||
           (state.roundLogs || []).length > 0 ||
           (state.sessions || []).length > 0 ||
+          Object.keys(state.checklistLog || {}).length > 0 ||
+          (state.checklistCustomItems || []).length > 0 ||
           Object.values(state.drillNotes || {}).some((v) => v) ||
           (state.courses || []).some((c) => c.custom || c.favorite || c.userNotes || c.rating);
       }
@@ -5502,7 +5655,7 @@
         };
 
         document.getElementById("btnResetEverything").onclick = () => {
-          if (!confirm("RESET EVERYTHING?\n\nThis erases ALL saved data in this browser: drills, goals, delivery logs, notes, courses, rounds, club bag, cadence and sim settings.\n\nTip: click Export Full Backup first.")) return;
+          if (!confirm("RESET EVERYTHING?\n\nThis erases ALL saved data in this browser: drills, goals, delivery logs, notes, courses, rounds, club bag, swing checklist, cadence and sim settings.\n\nTip: click Export Full Backup first.")) return;
           if (!confirm("Last chance - really erase everything?")) return;
           try { localStorage.removeItem(STORAGE_KEY); } catch (e) { /* ignore */ }
           if (cadenceState.isPlaying) stopCadenceMetronome();
@@ -6565,6 +6718,445 @@
         }
       }, true);
 
+      // =====================================================================================
+      // ===== SWING CHECKLIST: per-phase checklist view + "Pre-shot cards" fullscreen overlay =====
+      // (Deliberately NOT named "Mat mode": that is the Tonight's Session overlay above.)
+      // State it owns: state.checklistFocusIds, state.checklistLog, state.checklistCustomItems,
+      // state.checklistFocusOnly. Content comes from DEFAULTS.swingChecklist (drills_data.js).
+      // =====================================================================================
+      const clExpanded = new Set();          // item ids whose details are open (UI only)
+      const clDraft = { title: "", cue: "", phase: "" };
+      const clCue = { open: false, idx: 0, ids: [], returnFocus: null, tx: 0, ty: 0 };
+
+      function clData() { return DEFAULTS.swingChecklist || { phases: [], defaultFocusIds: [], items: [] }; }
+      function clPhases() { return Array.isArray(clData().phases) ? clData().phases : []; }
+      function clAllItems() {
+        const built = (clData().items || []).map((it) => Object.assign({}, it, { custom: false }));
+        const custom = (state.checklistCustomItems || []).map((it) => ({
+          id: it.id, phase: it.phase, title: it.title, cue: it.cue, why: "", check: { dtl: "", fo: "" },
+          fault: "", feel: "", drillIds: [], custom: true
+        }));
+        return built.concat(custom);
+      }
+      function clItemById(id) { return clAllItems().find((it) => it.id === id) || null; }
+      function clTodaySet() { return new Set(state.checklistLog[todayISO(0)] || []); }
+      function clFocusSet() { return new Set(state.checklistFocusIds || []); }
+      function clVisibleItems() {
+        const all = clAllItems();
+        const f = clFocusSet();
+        // Focus-only with nothing starred would show an empty list; fall back to everything.
+        if (!state.checklistFocusOnly || !f.size) return all;
+        return all.filter((it) => f.has(it.id));
+      }
+      function clFocusItems() {
+        const f = clFocusSet();
+        const order = clPhases().map((p) => p.id);
+        return clAllItems().filter((it) => f.has(it.id))
+          .map((it, i) => ({ it, i, p: order.indexOf(it.phase) }))
+          .sort((a, b) => (a.p - b.p) || (a.i - b.i)).map((x) => x.it);
+      }
+      function clWeekDays() {
+        let n = 0;
+        for (let i = 0; i < 7; i++) if ((state.checklistLog[todayISO(-i)] || []).length) n++;
+        return n;
+      }
+      function clPhaseName(id) { const p = clPhases().find((x) => x.id === id); return p ? p.name : ""; }
+
+      function clToggleCheck(id) {
+        const iso = todayISO(0);
+        const cur = new Set(state.checklistLog[iso] || []);
+        if (cur.has(id)) cur.delete(id); else cur.add(id);
+        if (cur.size) state.checklistLog[iso] = Array.from(cur); else delete state.checklistLog[iso];
+        saveState();
+      }
+      function clToggleStar(id) {
+        const cur = new Set(state.checklistFocusIds || []);
+        if (cur.has(id)) cur.delete(id); else cur.add(id);
+        state.checklistFocusIds = Array.from(cur);
+        saveState();
+      }
+
+      function clDrillChips(it) {
+        const chips = (it.drillIds || []).map((id) => drillById(id)).filter(Boolean);
+        if (!chips.length) return "";
+        return `<div class="cl-chips">${chips.map((d) => `<button type="button" class="chip" data-cl-act="drill" data-cl-drill="${esc(d.id)}" title="Open this drill in the Drill Deck">${esc(d.title)}</button>`).join("")}</div>`;
+      }
+
+      function clFocusCard(it, today) {
+        const done = today.has(it.id);
+        return `
+          <article class="cl-fcard ${done ? "done" : ""}">
+            <span class="cl-kicker">${esc(clPhaseName(it.phase))}</span>
+            <h4>${esc(it.title)}</h4>
+            ${it.cue ? `<p>${esc(it.cue)}</p>` : ""}
+            <div class="cl-fbtns">
+              <button type="button" class="cl-toggle cl-check" data-cl-act="check" data-cl-id="${esc(it.id)}" data-fk="check:${esc(it.id)}:f" aria-pressed="${done}" aria-label="Checked today: ${esc(it.title)}">&#10003;</button>
+              <button type="button" class="cl-toggle cl-star" data-cl-act="star" data-cl-id="${esc(it.id)}" data-fk="star:${esc(it.id)}:f" aria-pressed="true" aria-label="In My Focus: ${esc(it.title)}">&#9733;</button>
+            </div>
+          </article>`;
+      }
+
+      function clItemCard(it, today, focus) {
+        const done = today.has(it.id);
+        const starred = focus.has(it.id);
+        const open = clExpanded.has(it.id);
+        const rows = [];
+        if (it.why) rows.push(`<dt>Why it matters</dt><dd>${esc(it.why)}</dd>`);
+        if (it.check && it.check.dtl) rows.push(`<dt>Check it: down-the-line (DTL)</dt><dd>${esc(it.check.dtl)}</dd>`);
+        if (it.check && it.check.fo) rows.push(`<dt>Check it: face-on (FO)</dt><dd>${esc(it.check.fo)}</dd>`);
+        if (it.feel) rows.push(`<dt>Feel</dt><dd>${esc(it.feel)}</dd>`);
+        if (it.fault) rows.push(`<dt>Fault it fixes</dt><dd>${esc(it.fault)}</dd>`);
+        const chips = clDrillChips(it);
+        if (chips) rows.push(`<dt>Related drills</dt><dd>${chips}</dd>`);
+        if (!rows.length && !it.custom) rows.push(`<dt>Details</dt><dd>No extra details for this item.</dd>`);
+        const del = it.custom ? `<p><button type="button" class="nav-btn danger" data-cl-act="delete" data-cl-id="${esc(it.id)}">Delete my item</button></p>` : "";
+        return `
+          <article class="cl-item ${done ? "done" : ""}" data-cl-item="${esc(it.id)}">
+            <div class="cl-item-main">
+              <button type="button" class="cl-toggle cl-check" data-cl-act="check" data-cl-id="${esc(it.id)}" data-fk="check:${esc(it.id)}:l" aria-pressed="${done}" aria-label="Checked today: ${esc(it.title)}">&#10003;</button>
+              <div class="cl-text">
+                <h4 class="cl-title">${esc(it.title)}${it.custom ? `<span class="cl-badge">Custom</span>` : ""}</h4>
+                ${it.cue ? `<p class="cl-cue">${esc(it.cue)}</p>` : ""}
+              </div>
+              <button type="button" class="cl-toggle cl-star" data-cl-act="star" data-cl-id="${esc(it.id)}" data-fk="star:${esc(it.id)}:l" aria-pressed="${starred}" aria-label="In My Focus: ${esc(it.title)}">${starred ? "&#9733;" : "&#9734;"}</button>
+            </div>
+            <button type="button" class="cl-more" data-cl-act="expand" data-cl-id="${esc(it.id)}" data-fk="expand:${esc(it.id)}" aria-expanded="${open}" aria-controls="cl-d-${esc(it.id)}">${open ? "Hide details &#9652;" : "Details &#9662;"}</button>
+            <div class="cl-details ${open ? "" : "hidden"}" id="cl-d-${esc(it.id)}">
+              <dl>${rows.join("")}</dl>
+              ${del}
+            </div>
+          </article>`;
+      }
+
+      function clHelpCard() {
+        return `
+          <aside class="cl-help" aria-label="How to check for standing up">
+            <h4>Am I standing up? (early extension check)</h4>
+            <p>Use a down-the-line (DTL) clip in Kinovea:</p>
+            <ol>
+              <li>At address, draw a vertical line touching your butt (the butt line) and a horizontal line at head height.</li>
+              <li>Scrub frame by frame to impact.</li>
+              <li>If your hips move toward the ball past the butt line, or your head rises above the head line, you are standing up.</li>
+            </ol>
+            <p>Work on these two items:</p>
+            <div class="cl-chips">
+              <button type="button" class="chip" data-cl-act="goto" data-cl-id="ds-maintain-tilt">Maintain tilt: don't stand up</button>
+              <button type="button" class="chip" data-cl-act="goto" data-cl-id="ds-trail-shoulder-chin">Trail shoulder goes down and under the chin</button>
+            </div>
+          </aside>`;
+      }
+
+      function renderChecklist() {
+        const el = document.getElementById("view-checklist");
+        if (!el) return;
+        const active = document.activeElement;
+        const fk = active && el.contains(active) ? active.getAttribute("data-fk") : null;
+        const scrollY = window.scrollY;
+        const today = clTodaySet();
+        const focus = clFocusSet();
+        const all = clAllItems();
+        const visible = clVisibleItems();
+        const ids = new Set(all.map((it) => it.id));
+        const checkedVisible = visible.filter((it) => today.has(it.id)).length;
+        const pct = visible.length ? Math.round((checkedVisible / visible.length) * 100) : 0;
+        const focusItems = clFocusItems();
+        const phases = clPhases();
+        if (!clDraft.phase || !phases.some((p) => p.id === clDraft.phase)) clDraft.phase = (phases[0] && phases[0].id) || "";
+
+        const phaseHtml = phases.map((p) => {
+          const items = visible.filter((it) => it.phase === p.id);
+          if (!items.length) return "";
+          const doneN = items.filter((it) => today.has(it.id)).length;
+          return `
+            <section class="cl-phase" aria-labelledby="cl-ph-${esc(p.id)}">
+              <h3 id="cl-ph-${esc(p.id)}">${esc(p.name)} <span class="cl-count">${doneN} / ${items.length} today</span></h3>
+              ${p.id === "downswing" ? clHelpCard() : ""}
+              <div class="cl-grid">${items.map((it) => clItemCard(it, today, focus)).join("")}</div>
+            </section>`;
+        }).join("");
+
+        el.innerHTML = `
+          <section class="panel cl-head" aria-label="Checklist progress">
+            <div class="cl-head-row">
+              <div>
+                <h2>✅ Swing Checklist</h2>
+                <p class="cl-sub">Tick off the cues you actually worked on today. Star the few that matter most to build My Focus.</p>
+              </div>
+            </div>
+            <div class="cl-stats">
+              <span class="cl-progress" role="status"><strong>${checkedVisible} / ${visible.length}</strong> checked today</span>
+              <span class="cl-week">Days checked, last 7 days: <strong>${clWeekDays()}</strong></span>
+            </div>
+            <div class="cl-bar" aria-hidden="true"><span style="width:${pct}%"></span></div>
+            <div class="cl-actions">
+              <button type="button" class="nav-btn" data-cl-act="focusonly" data-fk="focusonly" aria-pressed="${!!state.checklistFocusOnly}">Focus only</button>
+              <button type="button" class="nav-btn" data-cl-act="clear" data-fk="clear" ${today.size ? "" : "disabled"}>Clear today</button>
+            </div>
+          </section>
+
+          <section class="panel cl-focus" aria-label="My Focus">
+            <div class="cl-focus-head">
+              <h3>⭐ My Focus (${focusItems.length})</h3>
+              <button type="button" class="nav-btn primary" data-cl-act="cards" data-fk="cards" ${focusItems.length ? "" : "disabled"} title="Fullscreen cue cards, one per screen">🎴 Pre-shot cards</button>
+            </div>
+            ${focusItems.length
+              ? `<div class="cl-focus-grid">${focusItems.map((it) => clFocusCard(it, today)).join("")}</div>`
+              : `<p class="cl-empty">No starred items yet. Tap the star on any item below to add it to My Focus.</p>`}
+          </section>
+
+          ${phaseHtml || `<p class="cl-empty">Nothing to show. Star an item or turn off Focus only.</p>`}
+
+          <section class="panel cl-add" aria-label="Add my own item">
+            <h3 style="margin-top:0;">➕ Add my own item</h3>
+            <form id="clAddForm" autocomplete="off">
+              <label>Title
+                <input type="text" id="clAddTitle" maxlength="120" required value="${esc(clDraft.title)}" />
+              </label>
+              <label>Cue (what to think or feel)
+                <textarea id="clAddCue" maxlength="400">${esc(clDraft.cue)}</textarea>
+              </label>
+              <label>Phase
+                <select id="clAddPhase">${phases.map((p) => `<option value="${esc(p.id)}" ${clDraft.phase === p.id ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
+              </label>
+              <div><button type="submit" class="nav-btn primary">Add item</button></div>
+            </form>
+          </section>`;
+        void ids;
+
+        window.scrollTo(0, scrollY);
+        if (fk) {
+          const target = Array.from(el.querySelectorAll("[data-fk]")).find((n) => n.getAttribute("data-fk") === fk && !n.disabled);
+          if (target) target.focus({ preventScroll: true });
+        }
+      }
+
+      function clGoto(id) {
+        const it = clItemById(id);
+        if (!it) return;
+        if (state.checklistFocusOnly && !clFocusSet().has(id)) state.checklistFocusOnly = false;
+        clExpanded.add(id);
+        saveState();
+        renderChecklist();
+        const el = document.getElementById("view-checklist");
+        const node = Array.from(el.querySelectorAll("[data-cl-item]")).find((n) => n.getAttribute("data-cl-item") === id);
+        if (!node) return;
+        const calm = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+        node.scrollIntoView({ block: "center", behavior: calm ? "auto" : "smooth" });
+        node.classList.add("flash");
+        setTimeout(() => node.classList.remove("flash"), 1600);
+        const btn = node.querySelector(".cl-more");
+        if (btn) btn.focus({ preventScroll: true });
+      }
+
+      function clOpenDrill(drillId) {
+        if (!drillById(drillId)) { showToast("That drill is no longer in your deck."); return; }
+        state.activeMode = "all";
+        state.activeRoutine = "all";
+        state.activeSection = "all";
+        state.selectedDrillId = drillId;
+        state.activeView = "deck";
+        saveState();
+        renderAll();
+        window.scrollTo(0, 0);
+      }
+
+      function clDelete(id) {
+        const idx = (state.checklistCustomItems || []).findIndex((it) => it.id === id);
+        if (idx < 0) return;
+        const removed = state.checklistCustomItems[idx];
+        const hadFocus = (state.checklistFocusIds || []).includes(id);
+        const logged = Object.keys(state.checklistLog).filter((d) => state.checklistLog[d].includes(id));
+        state.checklistCustomItems.splice(idx, 1);
+        state.checklistFocusIds = (state.checklistFocusIds || []).filter((x) => x !== id);
+        logged.forEach((d) => {
+          state.checklistLog[d] = state.checklistLog[d].filter((x) => x !== id);
+          if (!state.checklistLog[d].length) delete state.checklistLog[d];
+        });
+        clExpanded.delete(id);
+        saveState();
+        renderChecklist();
+        showUndoToast(`Deleted "${removed.title}".`, () => {
+          state.checklistCustomItems.splice(Math.min(idx, state.checklistCustomItems.length), 0, removed);
+          if (hadFocus) state.checklistFocusIds = (state.checklistFocusIds || []).concat([id]);
+          logged.forEach((d) => { state.checklistLog[d] = (state.checklistLog[d] || []).concat([id]); });
+          saveState();
+          if (state.activeView === "checklist") renderChecklist();
+        });
+      }
+
+      function clClearToday() {
+        const iso = todayISO(0);
+        const prev = state.checklistLog[iso];
+        if (!prev || !prev.length) return;
+        delete state.checklistLog[iso];
+        saveState();
+        renderChecklist();
+        showUndoToast("Cleared today's checks.", () => {
+          state.checklistLog[iso] = prev;
+          saveState();
+          if (state.activeView === "checklist") renderChecklist();
+        });
+      }
+
+      function clAddItem() {
+        const title = clDraft.title.trim().slice(0, 120);
+        if (!title) { showToast("Give your item a title first."); return; }
+        const phases = clPhases();
+        const phase = phases.some((p) => p.id === clDraft.phase) ? clDraft.phase : (phases[0] && phases[0].id) || "";
+        const id = "custom-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+        state.checklistCustomItems.push({ id, phase, title, cue: clDraft.cue.trim().slice(0, 400) });
+        clDraft.title = "";
+        clDraft.cue = "";
+        saveState();
+        renderChecklist();
+        showToast("Added your item. Star it to put it in My Focus.");
+      }
+
+      (function bindChecklist() {
+        const el = document.getElementById("view-checklist");
+        el.addEventListener("click", (e) => {
+          const btn = e.target.closest && e.target.closest("[data-cl-act]");
+          if (!btn || !el.contains(btn)) return;
+          const act = btn.getAttribute("data-cl-act");
+          const id = btn.getAttribute("data-cl-id");
+          if (act === "check") { clToggleCheck(id); renderChecklist(); }
+          else if (act === "star") {
+            clToggleStar(id);
+            renderChecklist();
+            showToast(clFocusSet().has(id) ? "Added to My Focus." : "Removed from My Focus.");
+          }
+          else if (act === "expand") {
+            if (clExpanded.has(id)) clExpanded.delete(id); else clExpanded.add(id);
+            renderChecklist();
+          }
+          else if (act === "focusonly") { state.checklistFocusOnly = !state.checklistFocusOnly; saveState(); renderChecklist(); }
+          else if (act === "clear") clClearToday();
+          else if (act === "cards") openCue();
+          else if (act === "goto") clGoto(id);
+          else if (act === "drill") clOpenDrill(btn.getAttribute("data-cl-drill"));
+          else if (act === "delete") clDelete(id);
+        });
+        el.addEventListener("input", (e) => {
+          if (e.target.id === "clAddTitle") clDraft.title = e.target.value;
+          else if (e.target.id === "clAddCue") clDraft.cue = e.target.value;
+        });
+        el.addEventListener("change", (e) => { if (e.target.id === "clAddPhase") clDraft.phase = e.target.value; });
+        el.addEventListener("submit", (e) => { e.preventDefault(); if (e.target.id === "clAddForm") clAddItem(); });
+      })();
+
+      // ---- Pre-shot cards: fullscreen, one starred item per screen ----
+      function openCue() {
+        const items = clFocusItems();
+        if (!items.length) { showToast("Star at least one item first."); return; }
+        if (typeof mat !== "undefined" && mat.open) return;
+        const ov = document.getElementById("cueOverlay");
+        if (!clCue.open) clCue.returnFocus = document.activeElement;
+        clCue.ids = items.map((it) => it.id);
+        clCue.idx = 0;
+        clCue.open = true;
+        ov.classList.remove("hidden");
+        document.body.classList.add("cue-open");
+        renderCue();
+        ov.focus({ preventScroll: true });
+        if (typeof requestWakeLock === "function") requestWakeLock();
+      }
+      function closeCue() {
+        if (!clCue.open) return;
+        clCue.open = false;
+        const ov = document.getElementById("cueOverlay");
+        ov.classList.add("hidden");
+        ov.innerHTML = "";
+        document.body.classList.remove("cue-open");
+        if (typeof mat !== "undefined" && !mat.open && typeof releaseWakeLock === "function") releaseWakeLock();
+        if (state.activeView === "checklist") renderChecklist();
+        const back = clCue.returnFocus && clCue.returnFocus.isConnected ? clCue.returnFocus : document.querySelector('[data-cl-act="cards"]');
+        if (back && back.focus) back.focus({ preventScroll: true });
+      }
+      function stepCue(delta) {
+        const n = clCue.ids.length;
+        if (!n) return;
+        clCue.idx = (clCue.idx + delta + n) % n;
+        renderCue();
+      }
+      function renderCue() {
+        const ov = document.getElementById("cueOverlay");
+        // Drop any items that vanished (e.g. deleted) so the index stays valid.
+        clCue.ids = clCue.ids.filter((id) => clItemById(id));
+        if (!clCue.ids.length) { closeCue(); return; }
+        if (clCue.idx >= clCue.ids.length) clCue.idx = 0;
+        const it = clItemById(clCue.ids[clCue.idx]);
+        const done = clTodaySet().has(it.id);
+        const act = document.activeElement && ov.contains(document.activeElement) ? document.activeElement.getAttribute("data-cue-act") : null;
+        ov.innerHTML = `
+          <div class="cue-top">
+            <span class="cue-count">${clCue.idx + 1} / ${clCue.ids.length}</span>
+            <span class="cue-phase">${esc(clPhaseName(it.phase))}</span>
+            <button type="button" class="cue-btn" data-cue-act="close" aria-label="Close pre-shot cards">&#10005; Close</button>
+          </div>
+          <div class="cue-body" data-cue-body aria-live="polite">
+            <h2 class="cue-title">${esc(it.title)}</h2>
+            ${it.cue ? `<p class="cue-text">${esc(it.cue)}</p>` : ""}
+          </div>
+          <div class="cue-dots" aria-hidden="true">${clCue.ids.map((_, i) => `<i class="${i === clCue.idx ? "on" : ""}"></i>`).join("")}</div>
+          <div class="cue-nav">
+            <button type="button" class="cue-btn" data-cue-act="prev" aria-label="Previous card">&larr; Prev</button>
+            <button type="button" class="cue-btn" data-cue-act="check" aria-pressed="${done}">${done ? "&#10003; Done today" : "Mark done today"}</button>
+            <button type="button" class="cue-btn" data-cue-act="next" aria-label="Next card">Next &rarr;</button>
+          </div>
+          <p class="cue-hint">Tap the card, swipe, or use the arrow keys to move on. Esc closes.</p>`;
+        if (act) {
+          const b = ov.querySelector(`[data-cue-act="${act}"]`);
+          if (b) b.focus({ preventScroll: true });
+        } else if (!ov.contains(document.activeElement)) {
+          ov.focus({ preventScroll: true });
+        }
+      }
+      (function bindCue() {
+        const ov = document.getElementById("cueOverlay");
+        ov.addEventListener("click", (e) => {
+          const btn = e.target.closest && e.target.closest("[data-cue-act]");
+          if (btn) {
+            const a = btn.getAttribute("data-cue-act");
+            if (a === "close") closeCue();
+            else if (a === "prev") stepCue(-1);
+            else if (a === "next") stepCue(1);
+            else if (a === "check") { clToggleCheck(clCue.ids[clCue.idx]); renderCue(); }
+            return;
+          }
+          if (e.target.closest && e.target.closest("[data-cue-body]")) stepCue(1);
+        });
+        ov.addEventListener("touchstart", (e) => {
+          const t = e.changedTouches && e.changedTouches[0];
+          if (t) { clCue.tx = t.clientX; clCue.ty = t.clientY; }
+        }, { passive: true });
+        ov.addEventListener("touchend", (e) => {
+          const t = e.changedTouches && e.changedTouches[0];
+          if (!t) return;
+          const dx = t.clientX - clCue.tx, dy = t.clientY - clCue.ty;
+          if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) stepCue(dx < 0 ? 1 : -1);
+        }, { passive: true });
+        // Capture phase so the page's T / M / arrow shortcuts never fire underneath the overlay.
+        window.addEventListener("keydown", (e) => {
+          if (!clCue.open) return;
+          e.stopImmediatePropagation();
+          if (e.altKey || e.ctrlKey || e.metaKey) return;
+          const k = e.key;
+          const tgt = e.target || {};
+          if (k === "Escape") { e.preventDefault(); closeCue(); }
+          else if (k === "Tab") {
+            const btns = Array.from(ov.querySelectorAll("button"));
+            if (!btns.length) { e.preventDefault(); return; }
+            const first = btns[0], last = btns[btns.length - 1];
+            if (e.shiftKey && (document.activeElement === first || document.activeElement === ov)) { e.preventDefault(); last.focus(); }
+            else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+          }
+          else if (k === "ArrowRight" || k === "PageDown") { e.preventDefault(); stepCue(1); }
+          else if (k === "ArrowLeft" || k === "PageUp") { e.preventDefault(); stepCue(-1); }
+          else if ((k === " " || k === "Enter") && tgt.tagName !== "BUTTON") { e.preventDefault(); stepCue(1); }
+        }, true);
+      })();
+      // ============================== END SWING CHECKLIST ==============================
+
       function renderAll() {
         renderHeader();
         renderModeBar();
@@ -6572,12 +7164,13 @@
         renderFilterBar();
         renderTonightCard();
 
-        ["deck", "browse", "tracker", "courses", "editor", "cadence", "bag"].forEach((v) => {
+        ["deck", "checklist", "browse", "tracker", "courses", "editor", "cadence", "bag"].forEach((v) => {
           const viewEl = document.getElementById(`view-${v}`);
           if (viewEl) viewEl.classList.toggle("hidden", state.activeView !== v);
         });
 
         if (state.activeView === "deck") renderDeck();
+        else if (state.activeView === "checklist") renderChecklist();
         else if (state.activeView === "browse") renderBrowse();
         else if (state.activeView === "tracker") renderTracker();
         else if (state.activeView === "courses") renderCourses();

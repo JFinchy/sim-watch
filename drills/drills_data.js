@@ -4287,5 +4287,307 @@ window.DEFAULT_DRILLS_DATA = {
         "Pressure drive: Imagine 18th hole at Cabot Cliffs with ocean right; execute committed stock shape."
       ]
     }
+  },
+  "swingChecklist": {
+    "phases": [
+      {
+        "id": "setup",
+        "name": "Setup"
+      },
+      {
+        "id": "backswing",
+        "name": "Backswing"
+      },
+      {
+        "id": "top",
+        "name": "Top"
+      },
+      {
+        "id": "downswing",
+        "name": "Downswing"
+      },
+      {
+        "id": "impact",
+        "name": "Impact"
+      },
+      {
+        "id": "finish",
+        "name": "Finish"
+      }
+    ],
+    "defaultFocusIds": [
+      "bs-lead-shoulder-chin",
+      "bs-shoulder-plane",
+      "bs-keep-tilt",
+      "ds-maintain-tilt",
+      "ds-trail-shoulder-chin"
+    ],
+    "items": [
+      {
+        "id": "setup-grip",
+        "phase": "setup",
+        "title": "Neutral grip",
+        "cue": "Two to two-and-a-half knuckles on the lead hand; both Vs point at the trail shoulder.",
+        "why": "Grip sets the clubface; most face problems start here.",
+        "check": {
+          "dtl": "",
+          "fo": "Count knuckles on the lead hand at address."
+        },
+        "drillIds": []
+      },
+      {
+        "id": "setup-posture",
+        "phase": "setup",
+        "title": "Athletic posture: hinge from the hips",
+        "cue": "Hinge from the hips with a flat back. Slight knee flex. Arms hang straight down from the shoulders.",
+        "why": "This forward bend is the 'tilt' you have to keep for the whole swing. If you start too upright you have nothing to keep.",
+        "check": {
+          "dtl": "Spine line from tailbone to the base of the neck, arms hanging under the shoulders, balanced over the middle of the feet.",
+          "fo": ""
+        },
+        "drillIds": [
+          "thoracic-pelvic-unlock"
+        ]
+      },
+      {
+        "id": "setup-side-tilt",
+        "phase": "setup",
+        "title": "Trail shoulder slightly lower",
+        "cue": "Trail hand is lower on the grip, so the trail shoulder sits a little lower and the spine tilts slightly away from the target.",
+        "why": "Presets the body behind the ball and an inside path.",
+        "check": {
+          "dtl": "",
+          "fo": "Shoulder line tilts slightly. Driver has more tilt than irons."
+        },
+        "drillIds": [
+          "driver-headcover-aoa"
+        ]
+      },
+      {
+        "id": "setup-alignment",
+        "phase": "setup",
+        "title": "Alignment & ball position",
+        "cue": "Feet, hips and shoulders parallel to the target line. Ball in the middle for mid-irons, moving forward to inside the lead heel for driver.",
+        "check": {
+          "dtl": "Alignment stick on the ground; check that the shoulder line matches it.",
+          "fo": "Ball position relative to the sternum."
+        },
+        "drillIds": [
+          "gate-towel-lowpoint"
+        ]
+      },
+      {
+        "id": "bs-takeaway",
+        "phase": "backswing",
+        "title": "One-piece takeaway",
+        "cue": "Club, hands and chest move away together. At P2 the clubhead is outside or covering the hands.",
+        "why": "An inside roll early leads to a steep, over-the-top move later.",
+        "check": {
+          "dtl": "At shaft-parallel the clubhead covers the hands and the toe points up, matching the spine.",
+          "fo": ""
+        },
+        "drillIds": [
+          "headcover-outside-takeaway"
+        ]
+      },
+      {
+        "id": "bs-lead-shoulder-chin",
+        "phase": "backswing",
+        "title": "Lead shoulder turns under the chin",
+        "cue": "The lead shoulder turns down and under the chin. It doesn't go level around the body.",
+        "why": "Turning around a tilted spine keeps you in posture. A level shoulder turn pulls you upright.",
+        "check": {
+          "dtl": "Lead shoulder moves toward the ball and down. Head stays roughly where it started.",
+          "fo": "Lead shoulder ends behind the ball, under the chin."
+        },
+        "drillIds": [
+          "thoracic-pelvic-unlock"
+        ]
+      },
+      {
+        "id": "bs-shoulder-plane",
+        "phase": "backswing",
+        "title": "Shoulders turn on a tilted plane",
+        "cue": "Turn the shoulders at roughly 90° to your spine angle. It's steeper than it feels. Lead shoulder down, trail shoulder up and back.",
+        "why": "Shoulders that turn flat (level to the ground) are the classic reason people stand up. The body has to rise to make room for the arms.",
+        "check": {
+          "dtl": "At the top the shoulder line points well below the shoulder height you had at address. A level shoulder line at the top means a flat turn.",
+          "fo": ""
+        },
+        "drillIds": [
+          "thoracic-pelvic-unlock",
+          "wall-glute-turn-p4"
+        ]
+      },
+      {
+        "id": "bs-keep-tilt",
+        "phase": "backswing",
+        "title": "Keep your tilt, head height steady",
+        "cue": "Keep the forward bend you set at address. Chest stays over the ball, and the head doesn't rise.",
+        "why": "Losing posture in the backswing forces a re-dip or a stand-up later.",
+        "check": {
+          "dtl": "Draw a line along the head and the spine at address in Kinovea. At the top, the head is still at that line and the spine angle is the same.",
+          "fo": ""
+        },
+        "drillIds": [
+          "wall-glute-turn-p4"
+        ]
+      },
+      {
+        "id": "bs-trail-hip-deep",
+        "phase": "backswing",
+        "title": "Trail hip turns back, not up or toward the ball",
+        "cue": "The trail pocket turns back, behind you. Seat stays on the 'wall' line. Trail knee keeps some flex. No sway.",
+        "why": "Depth in the hips makes room for the arms on the way down.",
+        "check": {
+          "dtl": "The rear end stays on or behind the butt line you drew at address.",
+          "fo": "Trail hip doesn't slide outside the trail foot."
+        },
+        "drillIds": [
+          "wall-glute-turn-p4"
+        ]
+      },
+      {
+        "id": "top-flat-wrist",
+        "phase": "top",
+        "title": "Lead wrist flat-ish, face square",
+        "cue": "Lead wrist flat or slightly bowed, not cupped. Clubface roughly matches the lead forearm.",
+        "check": {
+          "dtl": "Leading edge roughly parallel to the lead forearm.",
+          "fo": ""
+        },
+        "drillIds": [
+          "hackmotion-p4-flat-wrist"
+        ]
+      },
+      {
+        "id": "top-full-turn",
+        "phase": "top",
+        "title": "Full turn, back to target",
+        "cue": "Back faces the target, lead shoulder is behind the ball, and the weight is on the inside of the trail foot.",
+        "check": {
+          "dtl": "",
+          "fo": "Lead shoulder is behind the ball. Head hasn't drifted outside the trail foot."
+        },
+        "drillIds": [
+          "wall-glute-turn-p4"
+        ]
+      },
+      {
+        "id": "ds-pressure-first",
+        "phase": "downswing",
+        "title": "Pressure shifts lead first",
+        "cue": "Start the downswing from the ground. Pressure moves into the lead foot before the arms fire.",
+        "why": "Sequencing: lower body leads, upper body follows.",
+        "check": {
+          "dtl": "",
+          "fo": "Belt buckle moves toward the target early in the downswing."
+        },
+        "drillIds": [
+          "step-through-pressure-shift"
+        ]
+      },
+      {
+        "id": "ds-trail-elbow",
+        "phase": "downswing",
+        "title": "Trail elbow drops in front of the hip",
+        "cue": "The trail elbow works down in front of the trail hip, which shallows the shaft.",
+        "check": {
+          "dtl": "At P5-P6 the shaft is on or under the hands-to-ball plane line.",
+          "fo": ""
+        },
+        "drillIds": [
+          "pump-and-drop-p5",
+          "noodle-plane-gate"
+        ]
+      },
+      {
+        "id": "ds-maintain-tilt",
+        "phase": "downswing",
+        "title": "Maintain tilt: don't stand up",
+        "cue": "Chest stays down and the seat stays back on the wall line while the hips open. Don't thrust the hips toward the ball.",
+        "why": "Early extension (standing up) closes the space for the arms, which causes heel strikes, blocks, thin shots and flips. It is the most common amateur fault.",
+        "check": {
+          "dtl": "The butt line from address: hips stay on it through impact. The head line: the head doesn't rise or move toward the ball. If the hips move off the line toward the ball and the head lifts, you're standing up.",
+          "fo": ""
+        },
+        "fault": "Early extension / standing up",
+        "drillIds": [
+          "left-hip-clearance-rope",
+          "hackmotion-shaft-lean-impact"
+        ]
+      },
+      {
+        "id": "ds-trail-shoulder-chin",
+        "phase": "downswing",
+        "title": "Trail shoulder goes down and under the chin",
+        "cue": "Through impact the trail shoulder works DOWN and under the chin, not out and around. Shoulders tilt steeply through the ball.",
+        "why": "It's the downswing mirror of the backswing turn. A trail shoulder that turns level forces you up and out of posture.",
+        "check": {
+          "dtl": "Just after impact the trail shoulder is lower than the lead, and the spine angle is still bent toward the ball.",
+          "fo": "The trail shoulder passes under the chin as the head stays behind the ball."
+        },
+        "fault": "Shoulders spin level / over the top",
+        "drillIds": [
+          "left-hip-clearance-rope",
+          "step-through-pressure-shift"
+        ]
+      },
+      {
+        "id": "imp-hands-ahead",
+        "phase": "impact",
+        "title": "Hands ahead, ball-first strike",
+        "cue": "Hands ahead of the ball with forward shaft lean. Strike the ball, then the turf.",
+        "check": {
+          "dtl": "",
+          "fo": "Shaft leans toward the target at impact; divot starts after the ball."
+        },
+        "drillIds": [
+          "impact-bag-motorcycle",
+          "gate-towel-lowpoint",
+          "hackmotion-shaft-lean-impact"
+        ]
+      },
+      {
+        "id": "imp-weight-forward",
+        "phase": "impact",
+        "title": "Weight forward, hips open",
+        "cue": "About 70-80% of the weight on the lead side. Hips open, shoulders close to square.",
+        "check": {
+          "dtl": "",
+          "fo": "Lead hip is over or outside the lead foot at impact."
+        },
+        "drillIds": [
+          "step-through-pressure-shift"
+        ]
+      },
+      {
+        "id": "imp-head-behind",
+        "phase": "impact",
+        "title": "Head behind the ball",
+        "cue": "Head stays behind the ball through impact, especially with driver.",
+        "check": {
+          "dtl": "",
+          "fo": "Head is behind the ball at impact."
+        },
+        "drillIds": [
+          "driver-headcover-aoa"
+        ]
+      },
+      {
+        "id": "fin-balanced",
+        "phase": "finish",
+        "title": "Balanced full finish",
+        "cue": "Chest faces the target, nearly all the weight is on the lead foot, trail toe up on its tip. Hold it for three seconds.",
+        "why": "A finish you can hold proves the sequence and the balance were right.",
+        "check": {
+          "dtl": "",
+          "fo": "Belt buckle and chest face the target; trail shoulder ends closer to the target than the lead shoulder."
+        },
+        "drillIds": [
+          "step-through-pressure-shift"
+        ]
+      }
+    ]
   }
 };

@@ -197,6 +197,7 @@ Open `drills/index.html` directly (or double-click `open_drills.bat`, run `pytho
 - **3 Session Modes:** Switch between **Real Balls** (full sim & GSPro metrics), **Almost Golf Balls (Kids Asleep)** (silent start-line & strike routines), and **Gym-Sore / Recovery** (mobility + slow-mo Kinovea rehearsals).
 - **Keyboard & Arrow Navigation:** Use **`←` / `→`** (or Next/Prev Drill buttons) to step through drills and **`↑` / `↓`** (or Prev/Next Section buttons) to jump sections.
 - **Shorts & Coaching Write-Ups:** Plays local `.mp4` shorts from `drills/shorts/` (or linked YouTube Shorts) alongside animated biomechanical diagrams, **The Why**, step-by-step instructions, and **Kinovea DTL/FO checkpoints**.
+- **Swing Checklist (`✅ Swing Checklist`):** Per-phase swing cues (setup to finish) with a daily check, a "My Focus" star list, DTL/FO checks, an "Am I standing up?" Kinovea guide, drill chips that jump into the Drill Deck, your own custom items, and fullscreen **Pre-shot cards** for the hitting mat. Included in backup export/import.
 - **Goals & Daily Delivery Chart:** Log daily delivery check-ins (`Met`, `Partial`, `Gym-Sore Recovery`, `Missed`) across all three ball modes with a **30-day SVG delivery chart**, **91-day consistency heatmap**, streak tracking, and JSON export/import backup.
 - **GSPro Courses, Drill Playgrounds & Historical Rounds (`⛳ GSPro Courses & Rounds`):** Browse all **66** installed GSPro courses categorized by what you are looking for (`Drills, Range & Playgrounds`, `Short Courses & Par 3s`, `Kids Asleep / Almost (<125y)`, `Forgiving & Confidence`, `Bucket-List Majors & Tour`, `Links, Coastal & Dunes`, `Mountain, Desert & Altitude`, `Fantasy, Wild & Group Fun`), plus **9** saved `.crd` custom practice rounds (`C:\GSProV1\Core\GSP\CustomRounds`) and built-in **Par 3 / Junior tee** filters. Includes an unrestricted-date **Historical & Sim Round Logger** with smart Par auto-fill (including Par 3 tees -> Par 54/27), bulk CSV/JSON paste & file import, CSV export, per-course stats (`Plays`, `Best`, `Avg`, `Last`), and a **Score vs. Par Trend SVG Chart**.
 
@@ -212,10 +213,25 @@ records every shot the OpenConnect (:921) sniffer sees and serves it to `drills/
   {speed, path, face, aoa} or null, `clip` (session clip filename once Kinovea's recording is saved; DTL
   preferred) and `drill_id`. Anything the launch monitor didn't send is `null`. Linking a clip rewrites that
   day's file atomically.
-- **API** (`http://127.0.0.1:8765`, CORS `*` so the `file://` page can call it): `GET /api/status`,
-  `GET /api/shots?date=YYYY-MM-DD`, `GET /api/events` (Server-Sent Events: `status`, `shot`, 15s heartbeat),
-  `POST /api/drill {"drill_id": "..."|null}` (sets the active drill; ids are 1-80 chars of `A-Za-z0-9_-`).
-  `GET /` serves the `drills/` folder only.
+- **API** (`http://127.0.0.1:8765`): `GET /api/status`, `GET /api/shots?date=YYYY-MM-DD`, `GET /api/events`
+  (Server-Sent Events: `status`, `shot`, `clip` {ts, clip} when a saved clip is linked, 15s heartbeat; max 8
+  clients, more get 503; a client that stops reading for 10s is dropped), `POST /api/drill
+  {"drill_id": "..."|null}` (sets the active drill; ids are 1-80 chars of `A-Za-z0-9_-`; requires
+  `Content-Type: application/json`). `GET /` serves the `drills/` folder only.
+- **Browser access:** the `Host` header must be `127.0.0.1` or `localhost` (blocks DNS rebinding; other hosts
+  get 421). CORS is never `*`: only `http://127.0.0.1:<port>`, `http://localhost:<port>` and the `null` origin
+  (the page opened from `file://`) are allowed, and any other `Origin` gets 403. Requiring JSON on
+  `POST /api/drill` forces a CORS preflight, so a cross-site form or `text/plain` post can't change the drill.
+  Known residual risk: a hostile web page can also send `Origin: null` from a sandboxed iframe, so it could read
+  your shot numbers and set or clear the drill tag. It can't reach any other file or setting. Open the hub
+  via `http://127.0.0.1:8765/` instead of `file://` if you care about that.
+- **Drill expiry:** the active drill is cleared (and logged) after 60s with no drills page connected to
+  `/api/events`, so a closed tab can't tag later shots. A drill set from curl/PowerShell also expires after 60s
+  unless an event stream is open.
+- **One recorder:** if the port is busy (e.g. `python simwatch.py bridge` is already running), `watch`/`video`
+  log "Shot bridge already running in another process ... not recording shots here" and don't write
+  `shots.jsonl` themselves. With `video.enabled: false`, `watch` runs its own :921 sniffer for the bridge
+  (only while the `only_when_running` app is up).
 - While a drill is active its id is stored on each shot and added to clip names as `_D-<id>`.
 - **Config:** `"bridge": {"enabled": true, "port": 8765, "sessions_dir": "Swings/Sessions"}`. A busy port is
   logged and the watchdog carries on without the bridge.

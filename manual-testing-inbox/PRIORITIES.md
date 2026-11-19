@@ -11,6 +11,7 @@
 - [ ] Tonight's Session + Mat mode + live auto-scoring - see `tonights-session-mat-mode.md`
 - [ ] Drills content accuracy & safety (HackMotion, Gym-Sore, new drills) - see `drills-content-accuracy.md`
 - [ ] Drills hub fixes - see `drills-hub-fixes.md`
+- [ ] Swing Checklist - see `swing-checklist.md`
 
 ## Minor
 
