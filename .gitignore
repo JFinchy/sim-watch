@@ -52,3 +52,7 @@ simwatch_daemon.json
 VIDEO_ON
 STOP_REQUEST
 bridge_token.txt
+
+# Video rig runtime state (layout profile, replay state, hotkey registration) for status/doctor
+video_state.json
+video_state.json.tmp

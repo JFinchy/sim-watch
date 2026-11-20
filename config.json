@@ -31,7 +31,7 @@
     "suppress_focus_when_green": true
   },
   "video": {
-    "_note": "Kinovea 2x2 TV grid (Top: Live DTL+FO auto-replay, Bottom: Pro or My-Go-To reference) + OBS Projector PiP overlay + OpenConnect (:921) shot trigger & file naming.",
+    "_note": "Kinovea swing video (adaptive layout + post-shot replay + compare, see layout/replay below) + OBS Projector PiP overlay + OpenConnect (:921) shot trigger & file naming.",
     "enabled": true,
     "swings_dir": "Swings",
     "kinovea_exe": "C:\\Program Files\\Kinovea\\Kinovea.exe",
@@ -78,7 +78,40 @@
       },
       "shoulder_plane_offset_deg": 8
     },
+    "layout": {
+      "_note": "Kinovea window layout, picked from the connected displays at start and whenever they change. profile: auto | single_small (one display < large_min_width: GSPro owns the screen, replay pops up as 2 big panes) | single_large (same, bigger panes, optional strip) | dual (GSPro on one display, the other is a dedicated replay screen) | grid (the old 2x2 tiling). capture_hide / replay_hide: behind (below GSPro, default) | offscreen | minimized - how Kinovea waits out of sight while still recording. See SETUP-video.md.",
+      "profile": "auto",
+      "large_min_width": 1600,
+      "capture_hide": "behind",
+      "replay_hide": "behind",
+      "display_poll_sec": 5,
+      "profiles": {
+        "single_small": {"replay_width_pct": 100, "replay_height_pct": 80, "anchor": "top"},
+        "single_large": {"replay_width_pct": 75, "replay_height_pct": 65, "anchor": "top", "strip": false, "strip_width_pct": 30, "strip_height_pct": 22, "strip_corner": "bottom-right"},
+        "dual": {"replay_width_pct": 100, "replay_height_pct": 100, "anchor": "top", "always_on": true}
+      }
+    },
+    "replay": {
+      "_note": "Post-shot replay: stay on GSPro for delay seconds (ball flight + shot result panel), then show the last swing (DTL | FO, looping at replay_speed_pct) for show_sec, then back to GSPro. delay_by_club overrides delay_sec per club category (null = no replay). A new shot or Alt+X closes it early (dismiss_on_input: true adds any key/mouse input, off by default). mode: auto | off (Alt+A toggles; Alt+V always works).",
+      "mode": "auto",
+      "delay_sec": 8,
+      "delay_by_club": {"Driver": 9, "Iron": 8, "Wedge": 6, "Putter": null},
+      "show_sec": 10,
+      "manual_delay_sec": 4,
+      "clip_wait_sec": 4,
+      "dismiss_on_input": false,
+      "input_grace_sec": 1.5,
+      "cancel_on_club_change": false,
+      "restore_focus": true
+    },
+    "hud_seconds": 15,
+    "_hotkeys_note": "Every shortcut, its group and description live in HOTKEY_ACTIONS in simwatch.py; set a key here to override it (\"\" disables, a list gives aliases). `python simwatch.py keys` prints the map, `keys md` regenerates docs/SHORTCUTS.md.",
     "hotkeys": {
+      "replay_now": "Alt+V",
+      "replay_pin": "Alt+K",
+      "replay_dismiss": "Alt+X",
+      "replay_auto": "Alt+A",
+      "compare_cycle": "Alt+M",
       "cheatsheet": "Alt+H",
       "toggle_shotlab": "Alt+S",
       "toggle_pip": "Alt+P",

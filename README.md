@@ -173,7 +173,7 @@ Only one `watch`/`startup`/`video` daemon runs at a time (the `Local\SimWatchSin
 |---|---|
 | `run_simwatch.bat` | Launches `python simwatch.py startup` in the repo directory (cold start + watch loop + video rig). |
 | `run_shotlab.bat` | Opens ShotLab by hand (dev/offline use; installs Electron on first run). Not needed day to day, since the watchdog launches it. |
-| `run_practice_video.bat` | Practice video (`python simwatch.py video`): 2x2 Kinovea grid + hotkeys without GSPro. If the background daemon is running it asks that daemon to start its rig (until `simwatch.py video off`) instead of starting a second copy. |
+| `run_practice_video.bat` | Practice video (`python simwatch.py video`): Kinovea rig (adaptive layout + replay) + hotkeys without GSPro. If the background daemon is running it asks that daemon to start its rig (until `simwatch.py video off`) instead of starting a second copy. |
 | `open_drills.bat` | Opens the offline Golf Drills, Routines & Daily Delivery Hub webpage (`drills/index.html`). |
 | `install_autostart.bat` | Registers the `SimWatch` Task Scheduler job to run `run_simwatch.bat` at logon as admin. |
 | `reconnect_sim.bat` | Manual/diagnostic: runs `python simwatch.py reconnect` to attach FSX Pro to the Launch Pro. |
@@ -181,13 +181,49 @@ Only one `watch`/`startup`/`video` daemon runs at a time (the `Local\SimWatchSin
 
 ---
 
-## Video Coaching Rig: Kinovea 2x2 Grid, OBS Projector PiP & Swing Library
+## Video Coaching Rig: Adaptive Kinovea Layout, Post-Shot Replay, OBS Projector PiP & Swing Library
 
 > Camera placement, Kinovea 2025.2 install and one-time settings: see [SETUP-video.md](SETUP-video.md). Kinovea 2024.1 still works as a legacy fallback (`video.kinovea_backend`).
 
 SimWatch pairs with **Kinovea** and **OBS Studio** without USB camera conflicts: **Kinovea owns both USB cameras directly** (`DTL` and `FO` at full camera FPS), while **OBS captures Kinovea's LiveReplay window** when the projector is on.
 
-### 2x2 TV Layout (Works With or Without Projector)
+### Adaptive Layout & Post-Shot Replay (default)
+SimWatch picks the Kinovea layout from the connected displays when the video rig starts and again whenever they
+change (projector on/off, resolution), logs it (`Video layout: ...`) and shows it in `status` and `doctor`.
+Four Kinovea panes on one small screen were too small to see, so the default never shows four panes:
+
+| Profile (`video.layout.profile`) | When (`auto`) | What you see |
+|---|---|---|
+| `single_small` | one display narrower than `large_min_width` (1600), e.g. the 1366x768 rig | GSPro owns the screen. After each shot the replay pops up as **2 large panes (DTL \| FO)** over the top 80 % of the screen (GSPro's bottom data bar stays visible), then goes away. |
+| `single_large` | one display at least 1600 px wide | Same flow, replay over the top-centre 75 % x 65 %; optional always-on corner strip (`profiles.single_large.strip`). |
+| `dual` | two or more displays | GSPro on the projector/TV (same choice as `choose_display`), the other screen is a **dedicated replay screen** (DTL \| FO of the last swing, always on). |
+| `grid` | only when set explicitly | The old 2x2 grid (LiveReplay top, Reference bottom). |
+
+- **Capture keeps recording out of sight:** `video.layout.capture_hide` = `behind` (default: parked below GSPro on
+  GSPro's display, still a normal open window), `offscreen` (moved right of every display) or `minimized`.
+  Whether Kinovea 2025 keeps recording while minimized has to be checked on the rig, so `behind` is the default.
+- **Replay timing (`video.replay`):** after a shot SimWatch stays on GSPro for `delay_sec` so you see the ball land and
+  read the shot result, then shows the replay for `show_sec` (10 s = about one loop of the 4.5 s clip at 50 %
+  speed), then hands the keyboard back to GSPro. Per club category (`delay_by_club`): **Driver 9 s, Iron 8 s, Wedge
+  6 s, Putter no replay**; unknown club 8 s; `Alt+C` manual trigger 4 s. If the clip isn't saved yet at show time it
+  waits up to `clip_wait_sec` more. A new shot or `Alt+X` closes it early (opt-in `dismiss_on_input: true` also closes it on any key/mouse
+  input after the first 1.5 s, including a bumped mouse); `Alt+K` keeps it open; `Alt+A` turns auto replay off/on
+  (`Alt+V` always works). The replay loops at `video.replay_speed_pct` (Kinovea LiveReplay's own setting).
+- **GSPro focus:** replay windows are shown without activation (`SWP_NOACTIVATE`); if a Kinovea window still took
+  the foreground, SimWatch gives it back to GSPro (only from Kinovea/SimWatch, never from an app you switched to).
+  **Run GSPro windowed/borderless** (`gspro_display.windowed: true`): a window over exclusive-fullscreen GSPro can
+  minimize it, and `doctor` warns when auto replay is on and GSPro isn't windowed.
+- **Compare (`Alt+M`, "match up"):** cycles **DTL: you \| reference -> FO: you \| reference -> back to your DTL \| FO**. The
+  reference is the active one (`Alt+R` cycles My-Go-To -> pros -> your previous swing; pressing it while comparing
+  reloads the comparison). It uses its own Kinovea window, `Compare`, loaded with the two files; each step takes
+  ~2-4 s because Kinovea can only load files into a window when it starts. With no reference clip for the club
+  category it says where to put one instead of comparing you with yourself.
+- The `Reference` Kinovea window is only launched for the `grid` profile. There, a GSPro club change reloads it for the
+  new club category once the club has been stable for `video.club_reload_debounce_sec` (1.5 s, so scrolling
+  through clubs relaunches Kinovea once), on a background thread: a shot right after a club change is never
+  delayed, and no reload runs after SimWatch stops. Other profiles have no Reference window to reload.
+
+### 2x2 TV Layout (`video.layout.profile: "grid"`)
 - **Top Half (`LiveReplay`):** Side-by-side **My DTL** + **My FO** auto-replaying your most recent swing at 50% speed (`IsReplayWatcher`). (`Capture` records from both USB cameras in the background.)
 - **Bottom Half (`Reference`):** Side-by-side **Pro** or **My Go-To** DTL + FO swings, automatically matched to your active club category (`Driver`, `Iron`, or `Wedge`).
 
@@ -224,28 +260,41 @@ SimWatch automatically pairs captured DTL and FO clips (plus `My-Go-To/` clips) 
 - **FO Suite:** **Head Box** (sway circle), **Lead Hip Wall**, **Trail Hip Wall**, and **Ball Line** (vertical ball reference).
 - **Hybrid Drag Calibration + Custom Kinovea Tools:** SimWatch installs custom posture tools (`Golf_DTL_VPlane.xml` & `Golf_FO_Box.xml`) into `<Kinovea install dir>\DrawingTools\Custom\` (needs admin once; SimWatch logs the exact step if it can't write there), and lets you drag any endpoint directly inside Kinovea, save (`Ctrl+S`), and press **`Alt+Shift+L`** (or `python simwatch.py save-lines`) so future swings match your exact mat & camera setup.
 
-### Global Hotkeys & On-Screen Key Cheat Sheet
+### Global Hotkeys & On-Screen Shortcut Map
+All shortcuts are defined once (`HOTKEY_ACTIONS` in `simwatch.py`: action, default key, group, description;
+overridable per action in `config.json` -> `video.hotkeys`, `""` turns one off, a list gives aliases) and every view
+renders that one table:
+- **`Alt+H` on the rig** pops the grouped map up over GSPro (top-centre, auto-hides after `video.hud_seconds`). A key
+  another app has already claimed is shown in red.
+- **ShotLab's `⌨ Alt+H shortcuts` pill** (top bar): hover it to see the list with live registration state
+  (`/api/status` -> `hotkeys`).
+- **`python simwatch.py keys`** (or `hotkeys`, which also pops up the HUD) prints the map, including which keys the
+  running SimWatch actually registered; the console / `simwatch.log` prints it each time hotkeys are registered.
+- [docs/SHORTCUTS.md](docs/SHORTCUTS.md) (`python simwatch.py keys md` regenerates it), the bridge's
+  `/api/shortcuts` and the drills hub's **Shortcuts** button.
 
-Three ways to see them:
-- **`Alt+H` on the rig** pops the cheat sheet up over everything (top-centre). A key another app has already claimed is flagged in red.
-- **ShotLab's `⌨ Alt+H shortcuts` pill** (top bar, always visible): hover it to see the list.
-- **The SimWatch console window / `simwatch.log`** prints the full list each time the hotkeys are registered.
-- **`python simwatch.py hotkeys`** prints them, including which ones the running watchdog actually registered.
+Hotkeys are live while SimWatch's video rig runs (`video.enabled`).
 
-Every bare `Alt+<key>` also works as `Ctrl+Alt+<key>`, as a fallback if another app owns the Alt version. Hotkeys are live while SimWatch runs with `video.enabled`. Set any of them to `""` in `config.json` to turn it off.
+| Group | Shortcut | Action |
+|---|---|---|
+| Replay | `Alt+V` | Show the last swing replay now |
+| Replay | `Alt+K` | Keep the replay open (again: close) |
+| Replay | `Alt+X` | Close the replay / comparison, back to GSPro |
+| Replay | `Alt+A` | Auto replay after each shot on/off |
+| Replay | `Alt+L` / `Alt+Shift+L` | Toggle swing plane lines (and apply missing `.kva` sidecars) / save dragged lines as default |
+| Compare | `Alt+M` | **M**atch up with the reference: DTL you \| ref -> FO you \| ref -> back |
+| Reference | `Alt+R` | Next reference (My-Go-To -> pros -> previous swing) |
+| Session / Bookmark | `Alt+G` | Save last swing as My-Go-To (`Swings/My-Go-To/<ClubCategory>/`) |
+| Session / Bookmark | `Alt+C` / `Alt+O` / `Alt+D` | Manual capture / open today's folder / open drills hub |
+| System | `Alt+H` | Shortcut map HUD |
+| System | `Alt+S` | **ShotLab**: bring it to the front; press again to minimize it (GSPro gets focus back). Opens it if closed. |
+| System | `Alt+P` | Pin / unpin the OBS projector PiP |
 
-| Hotkey (`config.json` → `video.hotkeys`) | Action |
-|---|---|
-| `Alt+H` | Show / Hide the on-screen **Key Mapping & Status HUD** |
-| `Alt+S` | **ShotLab**: bring it to the front; press again to minimize it (GSPro gets focus back). Opens it if closed. |
-| `Alt+P` | Pin / Unpin the **OBS Projector PiP** overlay |
-| `Alt+G` | **Bookmark** your last DTL + FO swing into `Swings/My-Go-To/<ClubCategory>/` |
-| `Alt+R` | **Cycle Reference** in the bottom 2x2 row (`My-Go-To` → Pros → `Last-Swing`) |
-| `Alt+C` | Manually **trigger** a swing capture + Projector PiP |
-| `Alt+O` | **Open** today's `Swings/Sessions/YYYY-MM-DD/` folder in Explorer |
-| `Alt+D` | **Open** the Golf Drills & Daily Delivery Hub webpage |
-| `Alt+L` | **Toggle** Kinovea swing plane lines visibility & apply missing `.kva` sidecars |
-| `Alt+Shift+L` | **Save dragged swing lines** from Kinovea `.kva` as the new default template |
+Keys are `Alt+<letter>` because GSPro uses many single-letter keys; every plain `Alt+<key>` also answers to
+`Ctrl+Alt+<key>`. A key another program already owns is logged at startup with a free alternative
+(`Could not register hotkey Alt+G (bookmark_goto): ... Ctrl+Alt+G works instead. Free alternative: ...`), shown in
+red on the HUD and in ShotLab's pill, and listed by `doctor` ("hotkey registration"). `doctor` also flags duplicates,
+bare keys, `Alt+Enter` (GSPro's fullscreen toggle) and other risky combinations.
 
 ---
 
@@ -378,7 +427,7 @@ With **`opencv-python`** installed (`detect_ball_in_mp4`), SimWatch reads Frame 
 - **`device`:** `ip` (`"169.254.6.44"`), `port` (`9970`), `retry_sec` (`60`), `max_attempts` (`5`), `allow_wifi` (`true`), `close_settings` (`false`).
 - **`projector`:** `match_regex` (`null`), `side` (`"left"` or `"right"`).
 - **`gspro_display`:** `windowed` (`false`), `borderless_when_pip` (`true`), `windowed_when_projector_off` (`true`), `suppress_focus_when_green` (`true`).
-- **`video`:** `enabled`, `swings_dir`, `kinovea_exe`, `obs_exe`, `dtl_camera`, `fo_camera`, `replay_speed_pct`, `pre_trigger_sec`, `post_trigger_sec`, `default_reference`, `pros`, `projector_pip`, `swing_lines` (including `auto_detect_ball` & `auto_trace_path`), `hotkeys`.
+- **`video`:** `enabled`, `swings_dir`, `kinovea_exe`, `obs_exe`, `dtl_camera`, `fo_camera`, `replay_speed_pct`, `pre_trigger_sec`, `post_trigger_sec`, `default_reference`, `pros`, `projector_pip`, `swing_lines` (including `auto_detect_ball` & `auto_trace_path`), `layout` (`profile`, `large_min_width`, `capture_hide`, `replay_hide`, `display_poll_sec`, per-profile `profiles`), `replay` (`mode`, `delay_sec`, `delay_by_club`, `show_sec`, `manual_delay_sec`, `clip_wait_sec`, `dismiss_on_input`, `input_grace_sec`, `cancel_on_club_change`, `restore_focus`), `hud_seconds`, `hotkeys`.
 - **`apps`:** list of managed apps (`fs_connector`, `integrator`, `gspro_connect`, `gspro`) with `key`, `process`, `exe`, `window_title_re`, `start_timeout_sec`, `start_wait_sec`, optional `args` / `start_no_activate` / `ensure_actions`, and `post_start` actions (`gspro_configure`, `wait_port`, `wait`, `click_button_re`, `click_at`, `fsx_connect`).
 - **`checks`:** list of health checks and their `recovery_level` (checks marked `"device": true` are capped at Level 0 and skipped when `device_ping` indicates the hardware is off/asleep).
 - **`recovery`:** ordered list of escalation levels (`name` and `restart` app keys).
@@ -398,8 +447,9 @@ python simwatch.py startup               # cold start everything in order, then 
 python simwatch.py stop                  # ask the background daemon to exit cleanly (forced after 20 s)
 python simwatch.py recover [level]       # run one recovery level now (default 0)
 python simwatch.py displays              # show detected displays and projector decision
-python simwatch.py video [off]           # 2x2 Kinovea grid + hotkeys, no GSPro; hands off to a running daemon (VIDEO_ON)
-python simwatch.py status                # bridge status, today's shots, daemon + VIDEO_ON state, phone URL, log tail
+python simwatch.py video [off]           # Kinovea rig (adaptive layout) + hotkeys, no GSPro; hands off to a running daemon (VIDEO_ON)
+python simwatch.py status                # bridge status, today's shots, daemon + VIDEO_ON state, video layout/replay, phone URL, log tail
+python simwatch.py keys [md]             # print the grouped shortcut map; `md` regenerates docs/SHORTCUTS.md
 python simwatch.py phone                 # drills-hub URL (with pairing token) for a phone on your Wi-Fi (bridge.lan)
 python simwatch.py drills                # open the local Golf Drills & Daily Delivery Hub
 python simwatch.py bridge [--demo]       # run only the shot-data bridge (:8765) + :921 sniffer
@@ -408,8 +458,8 @@ python simwatch.py obs-setup             # generate Swings/ layout, workspaces &
 python simwatch.py lines [apply|on|off|toggle]  # apply or toggle Kinovea swing plane .kva lines
 python simwatch.py save-lines [club]     # save dragged .kva line coords as the new default
 python simwatch.py bookmark [club]       # save latest DTL + FO clips to Swings/My-Go-To/
-python simwatch.py reference [name]      # switch bottom Kinovea reference (My-Go-To or Pro)
-python simwatch.py hotkeys               # print hotkey cheat sheet & show HUD
+python simwatch.py reference [name]      # switch the active reference (My-Go-To, a pro, Last-Swing) used by compare / grid
+python simwatch.py hotkeys               # print the shortcut map & show the HUD (until Ctrl+C)
 python simwatch.py reconnect             # manual: connect FSX Pro to the Launch Pro
 python simwatch.py release-device        # disconnect FSX Pro so GameChanger can reconnect
 python simwatch.py discover              # list golf/video processes, TCP ports, and windows

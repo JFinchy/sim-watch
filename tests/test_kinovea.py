@@ -219,6 +219,8 @@ def test_is_putt(club, speed, vla, expected):
 
 
 def _bare_manager(cfg):
+    # Club-change reference reloads only happen in the 2x2 grid (the adaptive layouts have no Reference window).
+    cfg["video"].setdefault("layout", {"profile": "grid"})
     m = object.__new__(sw.SwingSessionManager)
     m.cfg, m.vcfg, m.hub, m.current_club, m.last_shot_info = cfg, cfg["video"], None, None, None
     m._lock = threading.RLock()
