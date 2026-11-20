@@ -7134,6 +7134,43 @@ def harden_offer_integrator_restart(cfg: dict, wait_sec: float = 30.0) -> bool |
 
 # --------------------------------------------------------------------------- main
 
+STATUS_LOG_PATTERNS = ("passive shot monitor", "Shot bridge", "Shot ", "Kinovea", "ERROR", "WARNING", "All green")
+
+
+def cmd_status(cfg: dict, tail: int = 15) -> int:
+    """Print bridge /api/status, today's shot count and the interesting tail of simwatch.log.
+
+    Exists so the rig can be checked with one shift-free command (remote-desktop sessions often drop Shift,
+    which rules out URLs, pipes and parentheses at the prompt)."""
+    import urllib.request
+    bcfg = bridge_config(cfg)
+    port = int(bcfg.get("port", 8765))
+    url = f"http://127.0.0.1:{port}/api/status"
+    try:
+        with urllib.request.urlopen(url, timeout=3) as r:
+            print(f"Bridge {url}:")
+            print(json.dumps(json.loads(r.read().decode("utf-8")), indent=2))
+    except Exception as e:
+        print(f"Bridge {url}: not reachable ({e})")
+    raw = Path(str(bcfg.get("sessions_dir") or BRIDGE_DEFAULTS["sessions_dir"]))
+    shots = (raw if raw.is_absolute() else HERE / raw) / time.strftime("%Y-%m-%d") / "shots.jsonl"
+    try:
+        n = sum(1 for line in shots.read_text(encoding="utf-8").splitlines() if line.strip())
+        print(f"\nToday's shots: {n} in {shots}")
+    except OSError:
+        print(f"\nToday's shots: none yet ({shots} missing)")
+    log = HERE / "simwatch.log"
+    try:
+        lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        lines = []
+    hits = [l for l in lines if any(p in l for p in STATUS_LOG_PATTERNS)][-tail:]
+    print(f"\nLast {len(hits)} notable lines of {log.name}:")
+    for l in hits:
+        print("  " + l)
+    return 0
+
+
 def _configure_logging() -> None:
     handlers: list[logging.Handler] = [logging.StreamHandler()]
     try:
@@ -7166,7 +7203,7 @@ def main() -> None:
             "discover", "dump", "calibrate", "check", "recover", "watch", "startup", "stop",
             "displays", "reconnect", "release-device",
             "video", "bookmark", "reference", "obs-setup", "hotkeys", "drills", "lines", "save-lines",
-            "doctor", "bridge", "harden", "clip-ready",
+            "doctor", "bridge", "harden", "clip-ready", "status",
         ],
     )
     ap.add_argument("arg", nargs="?")
@@ -7209,6 +7246,8 @@ def main() -> None:
         return calibrate()
 
     cfg = load_config(Path(a.config), command=a.command)
+    if a.command == "status":
+        sys.exit(cmd_status(cfg))
     if a.command == "bridge":
         return cmd_bridge(cfg, demo=a.demo, demo_interval=a.demo_interval, port=a.port)
     if a.command == "check":
