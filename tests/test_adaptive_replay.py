@@ -389,6 +389,23 @@ def test_manager_compare_cycle(tmp_path, monkeypatch):
     assert not m._start_compare("DTL") and m.compare_state == "off"
 
 
+
+def test_compare_cancelled_when_shot_lands_while_loading(tmp_path, monkeypatch):
+    m = _replay_manager(tmp_path, monkeypatch)
+    layout = sw.ensure_swings_layout(m.cfg)
+    _clip(layout["today"] / "001_7I_DTL.mp4")
+    _clip(layout["goto"] / "Iron" / "GoTo_7I_DTL.mp4")
+    m.current_club = "7I"
+
+    def launch_then_shot(cfg, screens):
+        m._schedule_replay("7I")  # the sniffer thread records a shot while Kinovea is still loading Compare
+        return 99
+
+    monkeypatch.setattr(sw, "launch_compare_window", launch_then_shot)
+    assert not m._start_compare("DTL")
+    assert m.compare_state == "off" and not m.replay.pinned and not m.replay_visible
+
+
 # ---------------------------------------------------------------- shortcut map
 
 def test_effective_hotkeys_defaults_overrides_aliases():

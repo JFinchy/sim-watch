@@ -581,6 +581,16 @@ def read_daemon_info() -> dict | None:
         return None
     if pid == os.getpid() or not psutil.pid_exists(pid):
         return None
+    # A crash (or a kill) skips the atexit cleanup, and Windows reuses pids quickly: a live pid that is not a
+    # python process is someone else's (e.g. `stop` would otherwise wait 20 s on an unrelated program).
+    try:
+        name = (psutil.Process(pid).name() or "").lower()
+        if name and not name.startswith("python"):
+            return None
+    except psutil.NoSuchProcess:
+        return None
+    except psutil.Error:
+        pass  # access denied (elevated daemon): trust the file
     return info
 
 
@@ -2937,7 +2947,10 @@ class _FileLock:
                 self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
                 os.write(self.fd, str(os.getpid()).encode())
                 return self
-            except FileExistsError:
+            except (FileExistsError, PermissionError):
+                # PermissionError: on Windows, O_EXCL on a lock file the previous holder just unlinked (still
+                # "delete pending" while AV/indexer holds a handle) fails with ACCESS_DENIED, not EEXIST.
+                # Treat it as busy and retry; otherwise the second clip-ready angle / a shot append is dropped.
                 try:
                     if time.time() - self.path.stat().st_mtime > self.stale_sec:
                         self.path.unlink(missing_ok=True)
@@ -4214,7 +4227,7 @@ class ProjectorPiPController:
             return
         if self._apply_overlay(True):
             if not self.pinned:
-                self.hide_at = time.time() + float(pc.get("popup_seconds", 12))
+                self.hide_at = time.time() + cfg_number(pc.get("popup_seconds", 12), 12.0)
             LOG.info("Projector PiP shown (%s)", "pinned" if self.pinned else f"{pc.get('popup_seconds', 12)}s")
 
     def toggle_pin(self) -> None:
@@ -7190,6 +7203,9 @@ class HotkeyOverlayManager:
         visible = [False]
         hide_at = [0.0]
         try:  # never take the keyboard from GSPro: WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW on the real toplevel
+            # Tk creates the toplevel's wrapper HWND lazily (at the first idle map, even while withdrawn); before
+            # that GetParent() does not return the wrapper and the style would land on the wrong window.
+            root.update_idletasks()
             hwnd = ctypes.windll.user32.GetParent(root.winfo_id()) or root.winfo_id()
             ex = ctypes.windll.user32.GetWindowLongW(hwnd, -20)
             ctypes.windll.user32.SetWindowLongW(hwnd, -20, ex | 0x08000000 | 0x00000080)
@@ -7387,6 +7403,11 @@ class SwingSessionManager:
             if self.replay.always_on:
                 self.replay_visible = self.replay.show_now(time.time()) == "show"
             self._retile(wait_sec=6.0)
+            if self._replay_enabled():
+                # The freshly launched Kinovea windows may have taken the foreground from GSPro (and minimized
+                # it in exclusive fullscreen); parking them behind GSPro does not give the keyboard back.
+                # Only acts when a Kinovea window / SimWatch holds the foreground (see restore_gspro_focus).
+                self._focus_gspro()
         else:
             install_kinovea_custom_golf_tools(self.cfg)
             apply_swing_lines_to_active_clips(self.cfg, club=self.current_club, overwrite=False)
@@ -7561,13 +7582,16 @@ class SwingSessionManager:
         Takes only the short _state_lock, never the rig lock a reference swap holds."""
         with self._state_lock:
             now = time.time()
-            post_sec = float(self.vcfg.get("post_trigger_sec", 1.5))
-            pre_sec = float(self.vcfg.get("pre_trigger_sec", 3.0))
+            # cfg_number, not float(): a typo'd/null value here must never cost the trigger (or, by raising
+            # into the sniffer callback, the shot record too).
+            post_sec = cfg_number(self.vcfg.get("post_trigger_sec", 1.5), 1.5)
+            pre_sec = cfg_number(self.vcfg.get("pre_trigger_sec", 3.0), 3.0)
             if resolve_kinovea_backend(self.cfg) == "2025":
                 if now - getattr(self, "_last_udp_trigger", 0.0) < 1.0:
                     return
                 self._last_udp_trigger = now
-                port = int(self.vcfg.get("udp_trigger_port", KINOVEA_DEFAULT_UDP_PORT))
+                port = int(cfg_number(self.vcfg.get("udp_trigger_port", KINOVEA_DEFAULT_UDP_PORT),
+                                      KINOVEA_DEFAULT_UDP_PORT))
                 if send_udp_trigger(port):
                     LOG.info("Sent Kinovea UDP trigger to 127.0.0.1:%d (pre=%.1fs, post=%.1fs)", port, pre_sec, post_sec)
                 return
@@ -7644,6 +7668,7 @@ class SwingSessionManager:
 
     def _schedule_replay(self, club: str | None, delay: float | None = -1.0) -> None:
         """Shot path (sniffer thread): schedule the post-shot replay; hide one that's up so the ball can be seen."""
+        self._shot_gen = getattr(self, "_shot_gen", 0) + 1  # lets a Compare that's still loading notice the shot
         if not self._replay_enabled():
             return
         now = time.time()
@@ -7733,6 +7758,7 @@ class SwingSessionManager:
             LOG.info("Compare is still loading; press again in a moment")
             return False
         try:
+            gen0 = getattr(self, "_shot_gen", 0)
             you_clip = self.last_saved_dtl if angle == "DTL" else self.last_saved_fo
             you, ref, why = pick_compare_clips(self.cfg, angle, self.active_reference, self._ref_club(), you_clip)
             if not (you and ref):
@@ -7743,10 +7769,16 @@ class SwingSessionManager:
                     pass
                 return False
             speed = self.vcfg.get("replay_speed_pct", 50)
+            if getattr(self, "_stopped", False):
+                return False
             if not launch_compare_window(self.cfg, build_compare_screens(you, ref, speed)):
                 LOG.warning("Compare %s: could not start the Kinovea Compare window", angle)
                 return False
             self.layout_ctl._hwnd(COMPARE_WINDOW, 8.0)  # wait for the (re)launched window outside the lock
+            if getattr(self, "_stopped", False) or getattr(self, "_shot_gen", 0) != gen0:
+                # A shot landed (or the rig stopped) while Compare loaded: the shot wins; don't pop over GSPro.
+                LOG.info("Compare %s cancelled: a new shot arrived while it was loading", angle)
+                return False
             self.compare_state = angle
             self.replay.hold(time.time())
             with self._win_lock:
