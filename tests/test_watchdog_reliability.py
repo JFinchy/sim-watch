@@ -288,3 +288,36 @@ def test_stop_other_instances_skips_own_venv_launcher_parent(monkeypatch):
     monkeypatch.setattr(simwatch.psutil, "wait_procs", lambda ps, timeout=None: (ps, []))
     assert simwatch.stop_other_simwatch_instances() == 1
     assert killed == [stale]
+
+
+def test_stop_other_instances_spares_direct_parent_when_psutil_walk_fails(monkeypatch):
+    """If psutil.Process().parents() raises, the launcher parent (os.getppid) must still be spared."""
+    import simwatch
+
+    killed = []
+
+    class FakeProc:
+        def __init__(self, pid, cmdline):
+            self.pid = pid
+            self.info = {"pid": pid, "name": "python.exe", "cmdline": cmdline}
+
+        def terminate(self):
+            killed.append(self.pid)
+
+        def kill(self):
+            killed.append(self.pid)
+
+    me, launcher, stale = 200, 100, 300
+    cmd = ["python.exe", "simwatch.py", "startup"]
+    procs = [FakeProc(launcher, cmd), FakeProc(me, cmd), FakeProc(stale, cmd)]
+
+    def broken_process(*a, **k):
+        raise simwatch.psutil.AccessDenied(launcher)
+
+    monkeypatch.setattr(simwatch.os, "getpid", lambda: me)
+    monkeypatch.setattr(simwatch.os, "getppid", lambda: launcher)
+    monkeypatch.setattr(simwatch.psutil, "process_iter", lambda attrs=None: iter(procs))
+    monkeypatch.setattr(simwatch.psutil, "Process", broken_process)
+    monkeypatch.setattr(simwatch.psutil, "wait_procs", lambda ps, timeout=None: (ps, []))
+    assert simwatch.stop_other_simwatch_instances() == 1
+    assert killed == [stale]

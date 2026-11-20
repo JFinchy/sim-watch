@@ -421,7 +421,7 @@ def stop_other_simwatch_instances() -> int:
     # Never stop ourselves or our own ancestors: on Windows a venv's Scripts\python.exe is a
     # launcher stub that runs the real interpreter as a child with the *same* command line,
     # so the parent looks exactly like a "prior" SimWatch (killing it exits the launcher with 15).
-    my_pids = {os.getpid()}
+    my_pids = {os.getpid(), os.getppid()}  # direct parent even if the psutil walk below fails
     try:
         my_pids.update(a.pid for a in psutil.Process().parents())
     except psutil.Error:
@@ -2582,6 +2582,8 @@ def wait_file_ready(path: Path, timeout: float = 8.0, stable_sec: float = 0.6) -
 # --------------------------------------------------------------------------- clip-ready (Kinovea post-recording)
 
 CLIP_EVENTS_DIR = ".clip-events"  # <today>/.clip-events/*.json: clip-ready -> running watchdog notifications
+CLIP_READY_LOCK_TIMEOUT_SEC = 60.0   # how long a clip-ready run waits for the other angle's run
+CLIP_READY_LOCK_STALE_SEC = 120.0    # a lock older than this is from a crashed run (must exceed one run's work)
 
 
 def angle_from_camalias(camalias: str | None, path: Path | None = None, cfg: dict | None = None) -> str:
@@ -2701,7 +2703,10 @@ def clip_ready(cfg: dict, src: Path, camalias: str | None, now: float | None = N
     lib = layout["sessions"] / date_str
     lib.mkdir(parents=True, exist_ok=True)
     ledger_path = lib / "clip_ready_ledger.json"
-    with _FileLock(lib / ".clip-ready.lock"):
+    # DTL and FO fire together; the first run copies ~100 MB twice and may decode the clip (OpenCV ball
+    # detect + path trace), so the second must be able to wait well past 10 s without stealing the lock.
+    with _FileLock(lib / ".clip-ready.lock", timeout=CLIP_READY_LOCK_TIMEOUT_SEC,
+                   stale_sec=CLIP_READY_LOCK_STALE_SEC):
         try:
             ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
         except (OSError, ValueError):
@@ -5196,6 +5201,7 @@ class SwingSessionManager:
         self.cfg = cfg
         self.vcfg = cfg.get("video", {})
         self.current_club: str | None = None
+        self._swing_cat: str = club_category(None)  # category of the loaded reference (putter never changes it)
         self.active_reference: str = self.vcfg.get("default_reference", "My-Go-To")
         self.shot_counter = self._init_shot_counter()
         self.last_shot_info: dict | None = None
@@ -5286,12 +5292,16 @@ class SwingSessionManager:
 
     def _on_club_change(self, club: str) -> None:
         with self._lock:
-            prev_cat = club_category(self.current_club)
+            # Compare against the last FULL-SWING category, not the previous club: Driver -> PT -> 7I
+            # must still swap the reference to Iron (the putter itself never swaps it).
+            prev_cat = getattr(self, "_swing_cat", None) or club_category(self.current_club)
             self.current_club = club
             new_cat = club_category(club)
             LOG.info("Active club changed -> %s (%s)", club, new_cat)
-            # Putter: no capture and no reference swap; keep whatever full-swing reference is loaded.
-            if new_cat != prev_cat and "Putter" not in (new_cat, prev_cat):
+            if new_cat == "Putter":
+                return  # no capture and no reference swap; keep whatever full-swing reference is loaded
+            self._swing_cat = new_cat
+            if new_cat != prev_cat:
                 setup_video_rig(self.cfg, ref_name=self.active_reference, club=club, launch=True, reload_ref=True)
                 tile_video_windows(self.cfg, wait_sec=4.0)
 
@@ -6412,7 +6422,11 @@ def evaluate_task(info: dict) -> tuple[str, str, str]:
         problems.append("not run with highest privileges")
     if not problems:
         return (PASS, item, "registered, no time limit, runs on battery, highest privileges")
-    return (WARN, item, "; ".join(problems) + f" -> fix: {HARDEN_HINT}")
+    # harden's task step only changes Settings (time limit / battery); it can't enable the task or change its
+    # principal, so a disabled or non-elevated task needs install_autostart.bat (re-registers it).
+    reinstall = not info.get("enabled", True) or info.get("run_level") != "HighestAvailable"
+    fix = "rerun install_autostart.bat" if reinstall else HARDEN_HINT
+    return (WARN, item, "; ".join(problems) + f" -> fix: {fix}")
 
 
 def exe_location_issue(path: str) -> str | None:

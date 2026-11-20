@@ -62,3 +62,15 @@ Run `run_simwatch.bat` (or `python simwatch.py watch`) with GSPro up, and keep `
 Steps 1-3 restart exactly what's described (nothing / GSPconnect chain / GameChanger only, with the stated
 backoff); the cursor never moves during automatic recovery; a 5 h-old PAUSE is removed; the task XML shows
 PT0S, battery-safe settings and 3 restarts; putts log as `Putter`.
+
+## Follow-up: venv launcher parent (4d6e4e9) + review fixes
+
+Branch: `feature/coach-system` (4d6e4e9 + working tree)
+
+11. **Scheduled-task start survives the singleton check.** With a SimWatch already running from the task, run
+    `schtasks /Run /TN SimWatch` (or sign out/in). `logs\launcher.log` must NOT show `exited with code 15`, and
+    `simwatch.log` shows `stopping prior SimWatch process (pid N)` only for the OLD instance's pids. Afterwards
+    `Get-CimInstance Win32_Process -Filter "Name='python.exe'" | ? CommandLine -match 'simwatch.py' | select ProcessId,ParentProcessId,CommandLine`
+    shows exactly one launcher/child pair (the venv `Scripts\python.exe` and its base-interpreter child).
+12. **Manual start replaces the task instance.** From a non-task Administrator terminal run
+    `.venv\Scripts\python.exe simwatch.py watch`: the task's instance is stopped and this one keeps running.

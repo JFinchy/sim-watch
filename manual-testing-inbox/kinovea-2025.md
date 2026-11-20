@@ -21,7 +21,8 @@ real rig can prove that cameras, Kinovea's command execution, file locking and L
 4. Hit a 7-iron. Within about 6 s: two raw files in `%LOCALAPPDATA%\SimWatch\Captures\<date>\DTL|FO`, and
    `Swings\Sessions\<date>\NNN_7I_..._DTL.mp4` / `_FO.mp4` with `.kva` files. LiveReplay plays both with swing lines.
    `shots.jsonl` has `clip` set to the DTL name, and the drills hub gets a `clip` event.
-5. Hit a putt (club PT). Nothing records, and the Reference row doesn't reload.
+5. Hit a putt (club PT). Nothing records, and the Reference row doesn't reload. Then go Driver -> PT -> 7-iron:
+   the Reference row reloads to the Iron reference on the 7-iron (it used to stay on Driver after a putt).
 6. Press Alt+C with no shot. A `NNN_Swing_DTL/FO` pair appears.
 7. Clap test (`SETUP-video.md` section 4): the clap sits about 3.0 s into the clip.
 8. Projector on: the PiP pops up on a shot, auto-hides, and pops up again on the next shot (it used to stay hidden).

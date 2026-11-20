@@ -40,8 +40,8 @@ override what differs:
       doubled backslashes.
 - [ ] Keys you may need: `apps[].exe` (`integrator` = GameChanger, `gspro_connect`, `gspro`, `fs_connector` = FSX Pro),
       `video.kinovea_exe`, `video.obs_exe`, `device.ip` (the Launch Pro address) and optionally `device.host_ip` (the PC
-      side of the link, default `169.254.6.1`). If you change the device IP, also override the `checks` entries that
-      carry an `ip`.
+      side of the link, default `169.254.6.1`). The device checks have no `ip` of their own and use `device.ip`, so
+      that one key is all you change. (Lists without a `key`, such as `checks`, are replaced whole by the overlay.)
 
 ## 4. GSPro side
 
@@ -111,7 +111,8 @@ run `simwatch.py obs-setup` for the scene collection.
 | "no usable Python 3.10+ found" | Install Python, then run `setup.bat`. |
 
 - Logs: `simwatch.log` (repo root, rotating) and `logs\launcher.log`.
-- Pause the watchdog by creating a file named `PAUSE` next to `simwatch.py`. Delete it to resume.
+- Pause the watchdog by creating a file named `PAUSE` next to `simwatch.py`. Delete it to resume. A PAUSE older
+  than `pause_max_hours` (default 4) is ignored and deleted, so a forgotten one can't stop the watchdog for good.
 - `simwatch.py stop` stops background instances.
 
 ## Updating

@@ -58,7 +58,7 @@ A check must fail `fail_threshold` (default `3`) times in a row (checked every `
 - Whenever `integrator` is in the restart list, SimWatch first runs `fsx_disconnect` as a safety net so FSX Pro cannot hold port `9970`.
 - After restarting, SimWatch waits `settle_sec` (default `15` s) before resuming checks.
 - If all recovery levels fail, SimWatch sounds 3 alert beeps, logs an error, backs off for `giveup_backoff_sec` (`300` s / 5 minutes), and resets to level 0.
-- **Gating & Pausing:** The `watch` loop idles unless `only_when_running` (`GSPro.exe`) is running, and pauses whenever an empty file named `PAUSE` exists next to `simwatch.py`.
+- **Gating & Pausing:** The `watch` loop idles unless `only_when_running` (`GSPro.exe`) is running, and pauses whenever a file named `PAUSE` exists next to `simwatch.py` (a PAUSE older than `pause_max_hours`, default 4, is ignored and deleted).
 
 ---
 

@@ -396,3 +396,12 @@ def test_harden_dry_run_mentions_gamechanger_restart(monkeypatch, capsys, real_c
     monkeypatch.setattr(sw, "IS_WINDOWS", False)
     sw.cmd_harden(real_cfg, apply=False, adapter="Ethernet 3")
     assert "restart GameChanger" in capsys.readouterr().out
+
+
+def test_task_fix_hint_points_at_reinstall_when_harden_cannot_fix_it():
+    base = {"execution_time_limit": "PT0S", "disallow_on_batteries": False, "stop_on_batteries": False,
+            "enabled": True, "run_level": "HighestAvailable"}
+    assert "harden" in sw.evaluate_task(dict(base, execution_time_limit="PT72H"))[2]
+    for bad in ({"run_level": "LeastPrivilege"}, {"enabled": False}):
+        status, _, detail = sw.evaluate_task(dict(base, **bad))
+        assert status == sw.WARN and "install_autostart.bat" in detail and "harden" not in detail

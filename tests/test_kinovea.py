@@ -339,3 +339,43 @@ def test_file_ready_requires_stable_size(tmp_path):
     assert sw.file_ready_for_copy(f, 2.0)
     (tmp_path / "e.mp4").write_bytes(b"")
     assert not sw.file_ready_for_copy(tmp_path / "e.mp4", 5.0)
+
+
+def test_putter_round_trip_still_swaps_reference(tmp_path, monkeypatch):
+    """Driver -> PT -> 7I: the putter keeps the Driver reference, but 7I must then swap it to Iron."""
+    m, _ = _bare_manager(_cfg(tmp_path))
+    reloads = []
+    monkeypatch.setattr(sw, "setup_video_rig", lambda cfg, club=None, **k: reloads.append(club))
+    monkeypatch.setattr(sw, "tile_video_windows", lambda *a, **k: None)
+    m.active_reference = "My-Go-To"
+    m._on_club_change("DR")
+    m._on_club_change("PT")
+    assert reloads == ["DR"]
+    m._on_club_change("7I")
+    assert reloads == ["DR", "7I"]
+    m._on_club_change("PT")
+    m._on_club_change("8I")  # same category as before the putt: no reload
+    assert reloads == ["DR", "7I"]
+
+
+def test_clip_ready_lock_outlasts_slow_first_run(tmp_path, monkeypatch):
+    """The FO run waits for the DTL run (copies + OpenCV) far longer than 10 s and never steals a live lock."""
+    seen = {}
+
+    class FakeLock:
+        def __init__(self, path, timeout=10.0, stale_sec=30.0):
+            seen.update(timeout=timeout, stale=stale_sec)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(sw, "_FileLock", FakeLock)
+    now = time.time()
+    cfg, store, old, new, src_dir = _seed(tmp_path, now)
+    clip = src_dir / "DTL_x.mp4"
+    clip.write_bytes(b"\x00" * 100)
+    sw.clip_ready(cfg, clip, "DTL", now=now, wait=False)
+    assert seen["timeout"] >= 60 and seen["stale"] > seen["timeout"]
