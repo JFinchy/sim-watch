@@ -149,8 +149,10 @@ Only one `watch`/`startup`/`video` daemon runs at a time (the `Local\SimWatchSin
 
 - A second `watch`/`startup` (e.g. double-clicking `run_simwatch.bat` while the sign-in task is running) prints
   "SimWatch is already running ..." and exits 0.
-- **Restart** the background daemon (e.g. after `git pull`): `python simwatch.py stop`, then
-  `schtasks /Run /TN SimWatch` (or run `run_simwatch.bat`). `stop` writes `STOP_REQUEST`; the daemon notices it
+- **Restart** the background daemon (e.g. after `git pull`): `python simwatch.py restart` does all of it: clean
+  stop, ends the scheduled task if it still shows Running (seen on the rig: the launcher window lingered and
+  `schtasks /Run` silently did nothing), starts it again and waits for the new daemon. By hand:
+  `python simwatch.py stop`, then `schtasks /Run /TN SimWatch` (or run `run_simwatch.bat`). `stop` writes `STOP_REQUEST`; the daemon notices it
   within one loop (~5-10 s), shuts the bridge/rig down cleanly and exits 0. If it hasn't exited after 20 s (still
   in its startup sequence, or hung) it is terminated. Either way `run_simwatch.bat` sees `STOP_REQUEST`, logs
   "stopped by simwatch.py stop", deletes it and exits 0, so there is **no** "SimWatch did not start" box, no
@@ -445,6 +447,7 @@ python simwatch.py check                 # run every health check once and print
 python simwatch.py watch                 # watch forever, escalate recovery, and run video rig
 python simwatch.py startup               # cold start everything in order, then watch
 python simwatch.py stop                  # ask the background daemon to exit cleanly (forced after 20 s)
+python simwatch.py restart               # stop + end a stuck task + start the scheduled task + wait for it
 python simwatch.py recover [level]       # run one recovery level now (default 0)
 python simwatch.py displays              # show detected displays and projector decision
 python simwatch.py video [off]           # Kinovea rig (adaptive layout) + hotkeys, no GSPro; hands off to a running daemon (VIDEO_ON)

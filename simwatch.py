@@ -706,6 +706,48 @@ def request_stop(timeout: float = 20.0) -> int:
     return len(pids)
 
 
+def scheduled_task_running(name: str = "SimWatch") -> bool | None:
+    """True/False from `schtasks /Query` (CSV), None if the task can't be queried."""
+    rc, out = _run_cmd(["schtasks", "/Query", "/TN", name, "/FO", "CSV", "/NH"], 15)
+    if rc != 0 or not out.strip():
+        return None
+    return '"running"' in out.strip().splitlines()[-1].lower()
+
+
+def cmd_restart(wait_task_sec: float = 15.0, wait_start_sec: float = 90.0) -> int:
+    """`simwatch.py restart`: clean stop, make sure the scheduled task has really ended (its launcher window can
+    linger and keep the task 'Running', so a plain `schtasks /Run` silently does nothing), start it again and wait
+    until the new daemon is up. One shift-free command for the rig after `git pull`."""
+    n = request_stop()
+    print(f"Stopped {n} running SimWatch background instance(s).")
+    deadline = time.time() + wait_task_sec
+    state = scheduled_task_running()
+    while state and time.time() < deadline:
+        time.sleep(1)
+        state = scheduled_task_running()
+    if state is None:
+        print("Scheduled task 'SimWatch' not found (run install_autostart.bat), or schtasks failed.")
+        return 1
+    if state:
+        print("Scheduled task still shows Running after the stop; ending it.")
+        _run_cmd(["schtasks", "/End", "/TN", "SimWatch"], 20)
+        time.sleep(2)
+    rc, out = _run_cmd(["schtasks", "/Run", "/TN", "SimWatch"], 20)
+    if rc != 0:
+        print(f"schtasks /Run failed: {out.strip()}")
+        return 1
+    print(f"Started the SimWatch task; waiting up to {wait_start_sec:.0f}s for it to come up...")
+    deadline = time.time() + wait_start_sec
+    while time.time() < deadline:
+        info = read_daemon_info()
+        if info and info.get("pid") and psutil.pid_exists(int(info["pid"])):
+            print(f"SimWatch is running (pid {info['pid']}, `{info.get('command', '?')}`).")
+            return 0
+        time.sleep(1)
+    print("SimWatch did not report in yet; check logs\\launcher.log and simwatch.log, or run `simwatch.py status`.")
+    return 1
+
+
 def video_request_active() -> bool:
     return VIDEO_REQUEST_PATH.exists()
 
@@ -10291,7 +10333,7 @@ def main() -> None:
     ap.add_argument(
         "command",
         choices=[
-            "discover", "dump", "calibrate", "check", "recover", "watch", "startup", "stop",
+            "discover", "dump", "calibrate", "check", "recover", "watch", "startup", "stop", "restart",
             "displays", "reconnect", "release-device",
             "video", "bookmark", "reference", "obs-setup", "hotkeys", "drills", "lines", "save-lines",
             "doctor", "bridge", "harden", "clip-ready", "status", "phone", "shotlab", "keys",
@@ -10313,6 +10355,8 @@ def main() -> None:
 
     if a.command == "clip-ready":  # Kinovea post-recording command: light, never fails (exit 0)
         sys.exit(cmd_clip_ready(Path(a.config), a.arg, a.arg2))
+    if a.command == "restart":
+        sys.exit(cmd_restart())
     if a.command == "stop":
         stopped = request_stop()
         print(f"Stopped {stopped} running SimWatch background instance(s).")
