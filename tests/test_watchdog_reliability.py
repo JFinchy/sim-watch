@@ -321,3 +321,38 @@ def test_stop_other_instances_spares_direct_parent_when_psutil_walk_fails(monkey
     monkeypatch.setattr(simwatch.psutil, "wait_procs", lambda ps, timeout=None: (ps, []))
     assert simwatch.stop_other_simwatch_instances() == 1
     assert killed == [stale]
+
+
+# ------------------------------------------------------------------ review fixes (2026-11-19)
+
+def test_post_recover_grace_holds_off_next_level(harness):
+    """After a ladder recovery, apps still starting must not trigger the next (heavier) level immediately."""
+    results, calls, st, step, clock = harness
+    results.update(bridge_link=False)
+    cfg = _cfg(post_recover_grace_sec=60,
+               checks=[{"name": "bridge", "type": "bridge_link", "recovery_level": 0}])
+    step(cfg, n=3)
+    assert calls == [("ladder", 0)]
+    step(cfg, n=6)  # 30 s, inside the 60 s grace
+    assert calls == [("ladder", 0)] and st.last_status == "post_recover_grace"
+    step(cfg, n=10)  # grace expired, still failing -> escalate
+    assert calls[-1] == ("ladder", 1)
+
+
+def test_bad_pause_max_hours_does_not_crash(tmp_path):
+    p = tmp_path / "PAUSE"
+    p.write_text("x")
+    assert sw.pause_active({"pause_max_hours": "four"}, p) is True
+
+
+def test_bad_backoff_sec_falls_back():
+    assert sw.device_backoff_sec({"device_recovery": {"backoff_sec": ["soon"]}}, 1) == 300.0
+
+
+def test_validate_config_warns_on_bad_device_numbers():
+    msgs = [m for sev, m in sw.validate_config({"pause_max_hours": "x", "device": {"offline_ticks": "y"},
+                                                "device_recovery": {"backoff_sec": "z"}}, check_paths=False)
+            if sev == "warning"]
+    assert any("pause_max_hours" in m for m in msgs)
+    assert any("offline_ticks" in m for m in msgs)
+    assert any("backoff_sec" in m for m in msgs)

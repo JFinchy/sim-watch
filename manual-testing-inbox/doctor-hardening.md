@@ -47,3 +47,10 @@ Branch: `feature/coach-system` (working tree). After `harden --apply` on the onb
    disabled, so fast startup can't run"), `adapter power mgmt` PASS showing `MSPower_DeviceEnable=False`.
 3. Reboot, then run `doctor` again. The profile must still be Private (the policy key persists).
 4. Dry run `simwatch.py harden` prints the GameChanger restart note.
+
+## Review fixes (2026-11-19)
+
+1. Unplug the Launch Pro and run `python simwatch.py harden`. It must say `device adapter: <not detected>` and must **not** pick a USB/Wi-Fi dongle. Adapter steps are skipped on `--apply` until you pass the name, e.g. `python simwatch.py harden "Ethernet 3" --apply`.
+2. On `--apply`, the static-IP step adds 169.254.6.1 before it removes the old addresses. A step that errors part-way now prints `FAILED`, not `OK`.
+3. Firewall rules are created as `Private,Domain` (check in wf.msc). The phone can still reach the drills hub bridge on :8765 over home Wi-Fi when that network is Private.
+4. Run `python simwatch.py doctor` from a non-admin terminal. The sniffer row is WARN ("expected when not elevated"), not FAIL.

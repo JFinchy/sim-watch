@@ -74,3 +74,8 @@ Branch: `feature/coach-system` (4d6e4e9 + working tree)
     shows exactly one launcher/child pair (the venv `Scripts\python.exe` and its base-interpreter child).
 12. **Manual start replaces the task instance.** From a non-task Administrator terminal run
     `.venv\Scripts\python.exe simwatch.py watch`: the task's instance is stopped and this one keeps running.
+
+## Review fixes (2026-11-19)
+
+1. Kill GSPconnect while watch is running. After level 0 recovery, the log should show `Post-recovery grace` while it restarts, and must not jump to level 1 (GSPro restart) within the ~35 s grace.
+2. Set `"pause_max_hours": "four"` in config.local.json, then run watch. It starts, `doctor` warns, and a PAUSE file is still honored. Revert afterwards.

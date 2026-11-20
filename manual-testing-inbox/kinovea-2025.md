@@ -33,3 +33,8 @@ real rig can prove that cameras, Kinovea's command execution, file locking and L
 
 Every full swing gives exactly one DTL and one FO clip, correctly named and linked to its shot. Putts give none.
 Kinovea never shows a command error. Re-running `video` with no config change doesn't restart Kinovea windows.
+
+## Review fixes (2026-11-19)
+
+1. Hit with Driver, then select PT, then press Alt+R (cycle reference). The Reference row must load the Driver reference, not an Iron or random pro clip.
+2. Press Alt+C (manual clip) once, then hit a real shot. The real shot's clips must link to it (named with its shot number and club), not show as `Swing`.

@@ -236,6 +236,20 @@ def validate_config(cfg: dict, check_paths: bool | None = None) -> list[tuple[st
     if isinstance(cfg.get("interval_sec"), (int, float)) and cfg["interval_sec"] <= 0:
         err("interval_sec must be > 0 (0 would busy-loop)")
 
+    def _is_num(v) -> bool:
+        return isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0
+
+    if "pause_max_hours" in cfg and not _is_num(cfg["pause_max_hours"]):
+        warn(f"pause_max_hours must be a non-negative number (got {cfg['pause_max_hours']!r}); using 4")
+    dev = cfg.get("device") if isinstance(cfg.get("device"), dict) else {}
+    for k in ("offline_ticks", "socket_clear_sec"):
+        if k in dev and not _is_num(dev[k]):
+            warn(f"device.{k} must be a non-negative number (got {dev[k]!r})")
+    drec = cfg.get("device_recovery") if isinstance(cfg.get("device_recovery"), dict) else {}
+    bo = drec.get("backoff_sec")
+    if bo is not None and not (isinstance(bo, list) and bo and all(_is_num(x) for x in bo)):
+        warn(f"device_recovery.backoff_sec must be a list of non-negative numbers (got {bo!r}); using [300]")
+
     referenced: set[str] = set(SPECIAL_APP_KEYS)
 
     checks = cfg.get("checks")
@@ -474,7 +488,7 @@ def acquire_singleton_lock() -> bool:
         mutex = kernel32.CreateMutexW(None, False, "Local\\SimWatchSingleton")
         err = ctypes.get_last_error()
         if not mutex:
-            return err != 183
+            return err not in (183, 5)  # 5 = ACCESS_DENIED: an elevated instance already owns it
         if err == 183:  # ERROR_ALREADY_EXISTS
             kernel32.CloseHandle(mutex)
             return False
@@ -1574,7 +1588,11 @@ def device_recovery_cfg(cfg) -> dict:
 
 def device_backoff_sec(cfg, attempts: int) -> float:
     """Wait after the `attempts`-th device-only recovery (1-based): 5 -> 15 -> 30 min, capped at the last."""
-    sched = [float(s) for s in (device_recovery_cfg(cfg).get("backoff_sec") or [300]) if float(s) >= 0] or [300.0]
+    try:
+        sched = [float(s) for s in (device_recovery_cfg(cfg).get("backoff_sec") or [300]) if float(s) >= 0] or [300.0]
+    except (TypeError, ValueError):
+        log_throttled("device-backoff-cfg", "device_recovery.backoff_sec has a non-number; using [300]")
+        sched = [300.0]
     return sched[min(max(attempts, 1), len(sched)) - 1]
 
 
@@ -2721,6 +2739,12 @@ def clip_ready(cfg: dict, src: Path, camalias: str | None, now: float | None = N
         if not shot:
             other = "FO" if angle == "DTL" else "DTL"
             nums = [int(m.group(1)) for p in lib.glob("*") if (m := re.match(r"^(\d{3})_", p.name))]
+            # Also stay above recorded shot numbers so a later real shot never collides with this clip.
+            for s_ in shots:
+                try:
+                    nums.append(int(s_.get("shot_num")))
+                except (TypeError, ValueError):
+                    pass
             number = max(nums, default=0) + 1
             for p in sorted(lib.glob(f"*_{other}.*"), key=lambda q: q.stat().st_mtime, reverse=True)[:1]:
                 m = re.match(r"^(\d{3})_", p.name)
@@ -2772,8 +2796,12 @@ def cmd_clip_ready(config_path: Path, path: str | None, camalias: str | None) ->
         except SystemExit as e:
             LOG.error("clip-ready: config problem (%s); using defaults", e)
             cfg = {"video": {}, "bridge": {}}
-        clip_ready(cfg, Path(path.strip('"')), camalias)
-    except BaseException as e:  # never fail Kinovea's command
+        try:
+            clip_ready(cfg, Path(path.strip('"')), camalias)
+        except TimeoutError as e:
+            LOG.warning("clip-ready: %s; retrying once", e)
+            clip_ready(cfg, Path(path.strip('"')), camalias)
+    except BaseException as e:  # never fail Kinovea's command (raw capture stays in the capture folder)
         LOG.error("clip-ready failed for %s: %s", path, e, exc_info=not isinstance(e, (SystemExit, KeyboardInterrupt)))
     return 0
 
@@ -5295,15 +5323,25 @@ class SwingSessionManager:
             # Compare against the last FULL-SWING category, not the previous club: Driver -> PT -> 7I
             # must still swap the reference to Iron (the putter itself never swaps it).
             prev_cat = getattr(self, "_swing_cat", None) or club_category(self.current_club)
+            self._swing_cat = prev_cat  # pin it before current_club changes, so a failed swap is retried
             self.current_club = club
             new_cat = club_category(club)
             LOG.info("Active club changed -> %s (%s)", club, new_cat)
             if new_cat == "Putter":
                 return  # no capture and no reference swap; keep whatever full-swing reference is loaded
-            self._swing_cat = new_cat
             if new_cat != prev_cat:
                 setup_video_rig(self.cfg, ref_name=self.active_reference, club=club, launch=True, reload_ref=True)
                 tile_video_windows(self.cfg, wait_sec=4.0)
+            # Record the category only once the swap succeeded, so a failed swap is retried next shot.
+            self._swing_cat = new_cat
+
+    def _ref_club(self) -> str | None:
+        """Club used to resolve the reference clips: never the putter (there are no putter references),
+        so Driver -> PT -> Alt+R keeps resolving Driver references."""
+        club = self.current_club
+        if club and club_category(club) == "Putter":
+            return getattr(self, "_swing_cat", None) or "Iron"
+        return club
 
     def _on_openconnect_shot(self, info: dict) -> None:
         hub = self.hub
@@ -5505,7 +5543,7 @@ class SwingSessionManager:
             layout = ensure_swings_layout(self.cfg)
             dtl = self.last_saved_dtl or next(iter(_latest_clips_in(layout["sessions"], "DTL")), None)
             fo = self.last_saved_fo or next(iter(_latest_clips_in(layout["sessions"], "FO")), None)
-            club = club_override or self.current_club
+            club = club_override or self._ref_club()
             if not club:
                 for cand in (dtl, fo):
                     if cand:
@@ -5569,7 +5607,7 @@ class SwingSessionManager:
     def set_reference(self, ref_name: str, launch_rig: bool = True) -> None:
         with self._lock:
             self.active_reference = ref_name
-            setup_video_rig(self.cfg, ref_name=ref_name, club=self.current_club, launch=launch_rig, reload_ref=launch_rig)
+            setup_video_rig(self.cfg, ref_name=ref_name, club=self._ref_club(), launch=launch_rig, reload_ref=launch_rig)
             if launch_rig:
                 tile_video_windows(self.cfg, wait_sec=4.0)
             LOG.info("Reference switched -> %s", ref_name)
@@ -5704,7 +5742,11 @@ def pause_active(cfg: dict | None = None, path: Path | None = None) -> bool:
     age = pause_age_sec(p)
     if age is None:
         return False
-    max_h = float((cfg or {}).get("pause_max_hours", 4) or 0)
+    try:
+        max_h = float((cfg or {}).get("pause_max_hours", 4) or 0)
+    except (TypeError, ValueError):
+        log_throttled("pause-max-hours", "config pause_max_hours is not a number; using 4")
+        max_h = 4.0
     if max_h > 0 and age > max_h * 3600:
         LOG.warning("PAUSE file is %.1f h old (limit %g h); ignoring and removing it - watchdog resumes.",
                     age / 3600, max_h)
@@ -5796,7 +5838,7 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
             state = "device_offline"
         else:
             state = "device_check"
-        st.fails, st.last_status = 0, state
+        st.fails, st.level, st.last_status = 0, 0, state
     elif res["only_device_failed"] and time.time() < st.grace_until:
         if st.last_status != "discovery_grace":
             LOG.info("Waiting for GameChanger auto-discovery grace period (%ds remaining)...", int(max(0, st.grace_until - time.time())))
@@ -5826,6 +5868,13 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
                               f"Device-side check(s) still failing ({', '.join(res['failing']) or '?'}); "
                               f"next GameChanger-only restart in {int(st.device_next_at - time.time())}s",
                               every_sec=120.0)
+    elif time.time() < st.grace_until and st.level > 0:
+        # Just ran a recovery level: apps are still starting, so don't escalate to the next (heavier) level yet.
+        if st.last_status != "post_recover_grace":
+            LOG.info("Post-recovery grace (%ds remaining) before escalating further...",
+                     int(max(0, st.grace_until - time.time())))
+        st.last_status = "post_recover_grace"
+        state = "post_recover_grace"
     else:
         # A non-device link (GSPconnect, :9050, :921, a hung app) is failing: escalate even if the Launch
         # Pro is offline - then device checks are ignored when choosing the level.
@@ -6373,6 +6422,9 @@ def evaluate_power(scheme_text: str, usb_idx: int | None, standby_idx: int | Non
     if aspm_idx is not None:
         rows.append((PASS, "PCIe link power mgmt (AC)", "off") if aspm_idx == 0 else
                     (WARN, "PCIe link power mgmt (AC)", f"level {aspm_idx} -> fix: {HARDEN_HINT}"))
+    if hibernate is None and hiberboot is None:
+        rows.append((WARN, "hibernate / fast startup", "could not read setting"))
+        return rows
     if hibernate == 0:  # fast startup needs the hiberfile: with hibernation off it can't run, whatever HiberbootEnabled says
         on = []
     else:
@@ -6714,6 +6766,9 @@ def _doc_task(cfg):
 
 def _doc_sniffer(cfg):
     ok, msg = sniffer_probe()
+    if not ok and not _is_admin():
+        return [(WARN, "sniffer raw socket", f"{msg} (expected when not elevated; the SimWatch task runs elevated "
+                                              "- rerun doctor as Administrator to check for real)")]
     return [(PASS if ok else FAIL, "sniffer raw socket", msg)]
 
 
@@ -6971,9 +7026,11 @@ def harden_steps(ctx: dict) -> list[tuple[str, str, bool]]:
     if dev:
         steps.append((f"Static IP {host}/16 on '{alias}' (no ~60 s APIPA wait after a replug)",
                       f"Set-NetIPInterface -InterfaceAlias {a} -AddressFamily IPv4 -Dhcp Disabled; "
+                      f"if (-not (Get-NetIPAddress -InterfaceAlias {a} -AddressFamily IPv4 -IPAddress '{host}' "
+                      f"-ErrorAction SilentlyContinue)) {{ New-NetIPAddress -InterfaceAlias {a} -IPAddress {host} "
+                      f"-PrefixLength 16 | Out-Null }}; "
                       f"Get-NetIPAddress -InterfaceAlias {a} -AddressFamily IPv4 -ErrorAction SilentlyContinue | "
-                      f"Remove-NetIPAddress -Confirm:$false; "
-                      f"New-NetIPAddress -InterfaceAlias {a} -IPAddress {host} -PrefixLength 16", True))
+                      f"Where-Object {{ $_.IPAddress -ne '{host}' }} | Remove-NetIPAddress -Confirm:$false", True))
         steps.append((f"Persistent /32 route to the Launch Pro {dev} via '{alias}'",
                       f"Remove-NetRoute -DestinationPrefix '{dev}/32' -Confirm:$false -ErrorAction SilentlyContinue; "
                       f"New-NetRoute -DestinationPrefix '{dev}/32' -InterfaceAlias {a} -NextHop 0.0.0.0 -RouteMetric 1",
@@ -7007,7 +7064,7 @@ def harden_steps(ctx: dict) -> list[tuple[str, str, bool]]:
         steps.append((f"Firewall inbound Allow for {label}",
                       f"Get-NetFirewallRule -DisplayName {name} -ErrorAction SilentlyContinue | Remove-NetFirewallRule; "
                       f"New-NetFirewallRule -DisplayName {name} -Direction Inbound -Action Allow "
-                      f"-Program {_psq(path)} -Profile Any", False))
+                      f"-Program {_psq(path)} -Profile Private,Domain", False))
     if programs:
         plist = ",".join(_psq(p) for p in programs.values())
         steps.append(("Remove firewall Block rules for those programs (created when a firewall prompt was cancelled)",
@@ -7045,9 +7102,9 @@ def _detect_device_adapter(device_ip: str | None) -> str | None:
         info = _adapter_info(device_ip)
         if info and info.get("Name") and str(info.get("Source") or "").startswith("169.254."):
             return info["Name"]
-    rc, out = _ps("Get-NetAdapter | Where-Object { $_.Status -ne 'Disabled' -and $_.InterfaceDescription -match "
-                  "'RNDIS|Remote NDIS|USB' } | Select-Object -First 1 -ExpandProperty Name", 20)
-    return (out.strip() or None) if rc == 0 else None
+    # No guessing by description (RNDIS/USB): that can match a USB Ethernet/Wi-Fi dongle carrying the PC's
+    # internet, and the static-IP step would strip its address. Undetected -> the user passes the name.
+    return None
 
 
 def harden_context(cfg: dict, adapter: str | None = None) -> dict:
@@ -7103,7 +7160,8 @@ def cmd_harden(cfg: dict, apply: bool = False, adapter: str | None = None) -> in
         if not ans.startswith("y"):
             LOG.info("harden step %d skipped: %s", i, desc)
             continue
-        rc, out = _ps(cmd, 120)
+        # Stop on the first error: PowerShell's exit code otherwise reflects only the last statement.
+        rc, out = _ps("$ErrorActionPreference = 'Stop'; " + cmd, 120)
         LOG.info("harden step %d rc=%s: %s | %s", i, rc, desc, out.strip()[-500:])
         print(f"  {'OK' if rc == 0 else f'FAILED (rc {rc})'}" + (f": {out.strip()[-300:]}" if out.strip() else ""))
         failed += rc != 0

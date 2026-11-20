@@ -379,3 +379,34 @@ def test_clip_ready_lock_outlasts_slow_first_run(tmp_path, monkeypatch):
     clip.write_bytes(b"\x00" * 100)
     sw.clip_ready(cfg, clip, "DTL", now=now, wait=False)
     assert seen["timeout"] >= 60 and seen["stale"] > seen["timeout"]
+
+
+def test_reference_change_while_on_putter_uses_last_full_swing(tmp_path, monkeypatch):
+    """Driver -> PT -> Alt+R: the reference must resolve Driver clips, not the (empty) Putter folder."""
+    m, _ = _bare_manager(_cfg(tmp_path))
+    clubs = []
+    monkeypatch.setattr(sw, "setup_video_rig", lambda cfg, club=None, **k: clubs.append(club))
+    monkeypatch.setattr(sw, "tile_video_windows", lambda *a, **k: None)
+    m.active_reference = "My-Go-To"
+    m._on_club_change("DR")
+    m._on_club_change("PT")
+    m.set_reference("Last-Swing")
+    assert sw.club_category(clubs[-1]) == "Driver"
+
+
+def test_failed_reference_swap_is_retried(tmp_path, monkeypatch):
+    m, _ = _bare_manager(_cfg(tmp_path))
+    calls = []
+
+    def flaky(cfg, club=None, **k):
+        calls.append(club)
+        if len(calls) == 1:
+            raise OSError("boom")
+
+    monkeypatch.setattr(sw, "setup_video_rig", flaky)
+    monkeypatch.setattr(sw, "tile_video_windows", lambda *a, **k: None)
+    m.active_reference = "My-Go-To"
+    with pytest.raises(OSError):
+        m._on_club_change("DR")
+    m._on_club_change("DR")  # category not recorded after the failure -> swap retried
+    assert calls == ["DR", "DR"]

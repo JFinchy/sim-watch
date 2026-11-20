@@ -1993,6 +1993,7 @@
             keep.userEdited = true;
             // Older edited copies predate `target`: inherit the default's scoring target.
             if (keep.target === undefined && d.target) keep.target = JSON.parse(JSON.stringify(d.target));
+            ["faultTags", "swingPhase", "environments", "equipment", "keyFeel", "pacing"].forEach((k) => { if (keep[k] === undefined && d[k] !== undefined) keep[k] = JSON.parse(JSON.stringify(d[k])); });
             delete keep.custom;
             merged.push(keep);
           } else {
@@ -3170,8 +3171,9 @@
         if (!normalized) return null;
         try {
           const u = new URL(normalized);
+          if (!/(^|\.)(youtube\.com|youtube-nocookie\.com|youtu\.be)$/i.test(u.hostname)) return null;
           let id = "";
-          if (u.hostname.includes("youtu.be")) {
+          if (/(^|\.)youtu\.be$/i.test(u.hostname)) {
             id = u.pathname.replace(/^\/+/, "").split(/[/?#]/)[0];
           } else if (u.pathname.includes("/shorts/")) {
             id = u.pathname.split("/shorts/")[1].split(/[/?#]/)[0];
@@ -3183,7 +3185,12 @@
             id = u.searchParams.get("v");
           }
           if (!id) return null;
-          const st = typeof startSec === "number" && isFinite(startSec) && startSec >= 0 ? Math.floor(startSec) : null;
+          let st = typeof startSec === "number" && isFinite(startSec) && startSec >= 0 ? Math.floor(startSec) : null;
+          if (st === null) {
+            const t = String(u.searchParams.get("t") || u.searchParams.get("start") || "").trim();
+            const tm = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/i.exec(t);
+            if (t && tm) st = Number(tm[1] || 0) * 3600 + Number(tm[2] || 0) * 60 + Number(tm[3] || 0);
+          }
           const en = typeof endSec === "number" && isFinite(endSec) && endSec >= 0 ? Math.floor(endSec) : null;
           return `https://www.youtube.com/embed/${encodeURIComponent(id)}?rel=0&playsinline=1${st !== null ? "&start=" + st : ""}${en !== null && (st === null || en > st) ? "&end=" + en : ""}`;
         } catch {
@@ -6257,6 +6264,7 @@
           const clipEnd = w3ParseTime(document.getElementById("edEndSec").value);
           if (Number.isNaN(clipStart) || Number.isNaN(clipEnd)) { showToast("Clip start / end must look like 0:42 or 42 (seconds)."); return; }
           if (clipStart !== null && clipEnd !== null && clipEnd <= clipStart) { showToast("Clip end must be after the clip start."); return; }
+          if (clipStart === null && clipEnd !== null && clipEnd <= 0) { showToast("Clip end must be after the clip start."); return; }
           const modes = [];
           if (document.getElementById("edModeReal").checked) modes.push("real");
           if (document.getElementById("edModeAlmost").checked) modes.push("almost");
@@ -9844,7 +9852,7 @@
       }
       function w3QueueToggle(id) {
         if (!drillById(id)) return;
-        const q = state.sessionQueue || [];
+        const q = w3Queue().slice();
         const i = q.indexOf(id);
         if (i >= 0) { q.splice(i, 1); showToast("Removed from today's session."); }
         else if (q.length >= W3_MAX_QUEUE) { showToast(`Session queue is full (${W3_MAX_QUEUE}). Remove one first.`); return; }
@@ -9874,10 +9882,14 @@
         const phase = phases.includes(d.swingPhase) ? d.swingPhase : phases.includes(alias[d.swingPhase]) ? alias[d.swingPhase] : (phases[0] || "");
         const cue = String(d.keyFeel).slice(0, 400);
         const title = clipText(d.keyFeel, 100).replace(/…$/, "");
-        let item = (state.checklistCustomItems || []).find((it) => it.cue === cue && it.title === title);
-        if (!item) { item = { id: uid("cue"), phase, title, cue }; state.checklistCustomItems.push(item); }
+        const title120 = title.trim().slice(0, 120);
+        let item = (state.checklistCustomItems || []).find((it) => it.cue === cue && it.title === title120);
+        const isNew = !item;
+        if (!item) item = { id: uid("cue"), phase, title: title120, cue };
+        const addItem = () => { if (isNew) state.checklistCustomItems.push(item); };
         if (clFocusIds().includes(item.id)) { showToast("That key feel is already an active cue."); return; }
         if (clFocusIds().length >= CL_MAX_CUES) {
+          addItem();
           clUi.swap = item.id; clUi.focusSwap = true;
           saveState();
           state.activeView = "checklist";
@@ -9885,6 +9897,7 @@
           window.scrollTo(0, 0);
           showToast(`You already have ${CL_MAX_CUES} active cues. Choose which one to replace.`);
         } else {
+          addItem();
           clSetStar(item.id, true);
           saveState();
           showToast("Key feel added to your active cues.");
@@ -10070,7 +10083,7 @@
         else if (ev.k === "step") {
           pace.phase = ev.label;
           if (ev.hit) { pace.count++; pace.flashT = ev.t; }
-          if (state.pacing.speak) crSpeak(ev.label);
+          if (state.pacing.speak && !cr.on) crSpeak(ev.label);
         }
       }
       function paceRenderLive() {
@@ -10098,7 +10111,7 @@
         return `<section class="pace-card" data-pace-root aria-label="Pacing timer">
           <h2 style="font-size:20px;margin:0 0 4px;">Pacing timer</h2>
           <div class="rec-row" role="group" aria-label="Pacing mode" style="justify-content:center;">
-            ${[["auto", "Auto"], ["block", "Block reps"], ["transfer", "Transfer reps"]].map((m) => `<button type="button" class="w3-chip" data-w3="pace-mode" data-val="${m[0]}" data-fk="pmode:${m[0]}" aria-pressed="${p.mode === m[0]}">${m[1]}</button>`).join("")}
+            ${[["auto", "Auto"], ["block", "Block reps"], ["transfer", "Transfer reps"]].map((m) => `<button type="button" class="w3-chip" data-w3="pace-mode" data-owner="${esc(owner)}" data-val="${m[0]}" data-fk="pmode:${m[0]}" aria-pressed="${p.mode === m[0]}">${m[1]}</button>`).join("")}
           </div>
           <p class="pace-meta">${mode === "block" ? `Block reps (${esc(why)}): chime every ${esc(fmt(p.blockSec))} s for grooving.` : `Transfer reps (${esc(why)}): ${esc(p.transferSec)} s cycle, full routine, one chime when it is time to hit.`}</p>
           <div class="pace-digits" data-pace-digits aria-hidden="true">–</div>
@@ -10256,6 +10269,7 @@
             const cur = recEnvSet() ? Array.from(recEnvSet()) : (DEFAULTS.environments || []).map((e) => e.id);
             const s = new Set(cur);
             if (s.has(val)) s.delete(val); else s.add(val);
+            if (!s.size) { showToast("Pick at least one environment"); s.add(val); }
             state.recEnvs = s.size === (DEFAULTS.environments || []).length ? [] : Array.from(s);
           }
           saveState(); renderRec();
@@ -10271,7 +10285,7 @@
         else if (act === "pace-mode") {
           state.pacing.mode = val; saveState();
           const root = node.closest("[data-pace-root]"), tog = root && root.querySelector('[data-w3="pace-toggle"]');
-          if (pace.on && tog) paceStart(pace.owner, paceResolveMode(tog.getAttribute("data-kind"), tog.getAttribute("data-drill")));
+          if (pace.on && tog && node.getAttribute("data-owner") === pace.owner) paceStart(pace.owner, paceResolveMode(tog.getAttribute("data-kind"), tog.getAttribute("data-drill")));
           else w3Rerender();
         }
         else if (act === "pace-toggle") {

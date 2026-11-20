@@ -42,6 +42,8 @@
     "trigger_quiet_period_sec": 3.0,
     "kinovea_memory_buffer_mb": 2048,
     "clip_link_window_sec": 20,
+    "capture_delayed_display": false,
+    "clip_ready_command": true,
     "legacy_trigger": "toggle",
     "obs_exe": "C:\\Program Files\\obs-studio\\bin\\64bit\\obs64.exe",
     "dtl_camera": "DTL",

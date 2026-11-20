@@ -18,8 +18,11 @@ Everything in SimWatch is plain Windows scripting (Win32 API calls, `PrintWindow
 **Fresh machine:** follow [`SETUP.md`](SETUP.md). The short version:
 ```powershell
 setup.bat                      # creates .venv, installs deps, runs doctor, offers autostart
-python simwatch.py doctor      # PASS/WARN/FAIL table: config, exe paths, ports, scheduled task
+python simwatch.py doctor      # PASS/WARN/FAIL table: config, exe paths, ports, task, device link, power, firewall
+python simwatch.py harden      # dry-run plan to harden the Launch Pro link (static IP, power, firewall); --apply (elevated) runs it step by step
 ```
+
+Machine-specific paths go in `config.local.json` (gitignored; overlays `config.json`, see `config.local.example.json`). `python simwatch.py discover --write-local` detects exe paths and writes it for you.
 
 `config.json` is validated on load: `watch`/`startup` refuse to start on errors (unknown app keys, unknown check types, bad recovery references) instead of failing silently later. Exe paths are machine-specific — check them in `doctor` output.
 
@@ -311,7 +314,7 @@ With **`opencv-python`** installed (`detect_ball_in_mp4`), SimWatch reads Frame 
 All commands accept an optional `--config <path>` flag (defaults to `config.json` next to `simwatch.py`).
 
 ```powershell
-python simwatch.py doctor                # validate config, exe paths, ports, scheduled task (exit 1 on FAIL)
+python simwatch.py doctor                # validate config, paths, ports, task, device link, power, firewall (exit 1 on FAIL)
 python simwatch.py check                 # run every health check once and print results
 python simwatch.py watch                 # watch forever, escalate recovery, and run video rig
 python simwatch.py startup               # cold start everything in order, then watch
