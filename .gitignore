@@ -41,3 +41,9 @@ config.local.json.bak
 Swings/Workspaces/*.xml
 Swings/Workspaces/CustomTools/
 Swings/Workspaces/lines_state.json
+
+# ShotLab Electron desktop app dependencies, builds, and local calibration data
+shotlab/node_modules/
+shotlab/dist/
+shotlab/data/
+

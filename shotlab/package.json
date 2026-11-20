@@ -1,0 +1,23 @@
+{
+  "name": "shotlab",
+  "version": "1.0.0",
+  "description": "ShotLab — Desktop Golf Launch Monitor Analytics, Club Auto-Detector & OBS Studio Overlay Suite for SimWatch / Bushnell Launch Pro / GSPro",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --demo",
+    "test": "node --test tests/*.test.js"
+  },
+  "keywords": [
+    "golf",
+    "gspro",
+    "bushnell-launch-pro",
+    "launch-monitor",
+    "obs-studio",
+    "electron"
+  ],
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^35.1.5"
+  }
+}
