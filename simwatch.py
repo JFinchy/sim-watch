@@ -1616,20 +1616,27 @@ def recover_device(cfg) -> None:
     _run_recovery_step(cfg, device_recovery_cfg(cfg), "device recovery")
 
 
-def release_fsx_for_recovery(cfg) -> None:
-    """Automated recovery must never move the real mouse (fsx_disconnect clicks): if FSX Pro is holding
-    the Launch Pro session, just close FSX Pro. The explicit reconnect/release-device commands still click."""
-    app = cfg.get("apps_by_key", {}).get("fs_connector")
-    if not app:
-        return
+def fsx_holds_device(cfg) -> bool:
+    """True when FSX Pro currently holds the Launch Pro session. That is the user's choice (they are using
+    FSX Pro), so automated recovery leaves both FSX Pro and GameChanger alone until it lets go."""
+    if not cfg.get("apps_by_key", {}).get("fs_connector"):
+        return False
     try:
-        held = fsx_session(cfg) is not None
+        return fsx_session(cfg) is not None
     except Exception as e:
         log_throttled("fsx-session", f"could not inspect FSX Pro session: {e}")
-        return
+        return False
+
+
+def release_fsx_for_recovery(cfg) -> bool:
+    """Never closes or clicks FSX Pro any more (user decision 2026-11-19: leave FSX alone). Returns True
+    when FSX Pro holds the Launch Pro so the caller can skip restarting GameChanger, which could not
+    connect anyway. `release-device` / `reconnect` remain the explicit, user-run ways to hand it over."""
+    held = fsx_holds_device(cfg)
     if held:
-        LOG.warning("  FSX Pro is holding the Launch Pro - closing FSX Pro so GameChanger can connect")
-        kill_app(app)
+        log_throttled("fsx-holds", "FSX Pro is using the Launch Pro - leaving it alone "
+                      "(run `python simwatch.py release-device` when you're done with FSX Pro)", every_sec=600.0)
+    return held
 
 
 def wait_device_sockets_clear(cfg, timeout: float = 10.0) -> bool:
@@ -1662,13 +1669,16 @@ def _run_recovery_step(cfg, step: dict, label: str) -> None:
     if "gspro" in keys and _is_gspro_healthy(cfg):
         LOG.info("  gspro already healthy and listening on :9050 - skipping GSPro restart")
         keys = [k for k in keys if k != "gspro"]
+    if "integrator" in keys and release_fsx_for_recovery(cfg):
+        keys = [k for k in keys if k != "integrator"]  # FSX Pro has the device: GameChanger couldn't connect
+    if not keys:
+        return
     LOG.warning(">>> %s: %s", label, step.get("name", "?"))
     for key in reversed(keys):          # stop downstream first
         kill_app(cfg["apps_by_key"][key])
     if keys:
         time.sleep(2)
     if "integrator" in keys:
-        release_fsx_for_recovery(cfg)   # safety net before GameChanger starts (never moves the mouse)
         dev = cfg.get("device") if isinstance(cfg.get("device"), dict) else {}
         wait_device_sockets_clear(cfg, cfg_number(dev.get("socket_clear_sec", 10), 10))
     for key in keys:
@@ -6159,6 +6169,13 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
         else:
             state = "device_check"
         st.fails, st.level, st.last_status = 0, 0, state
+    elif res["only_device_failed"] and fsx_holds_device(cfg):
+        # The user is on FSX Pro, which holds the Launch Pro: an intentional state, not a failure.
+        if st.last_status != "fsx_holds_device":
+            LOG.info("FSX Pro is using the Launch Pro; leaving FSX Pro and GameChanger alone "
+                     "(run `python simwatch.py release-device` when done).")
+        st.fails, st.last_status = 0, "fsx_holds_device"
+        state = "fsx_holds_device"
     elif res["only_device_failed"] and time.time() < st.grace_until:
         if st.last_status != "discovery_grace":
             LOG.info("Waiting for GameChanger auto-discovery grace period (%ds remaining)...", int(max(0, st.grace_until - time.time())))
@@ -6351,7 +6368,7 @@ def startup(cfg) -> None:
             LOG.error("startup.order: unknown app key %r; skipping", key)
             continue
         if key == "integrator":
-            release_fsx_for_recovery(cfg)  # unattended: close FSX Pro if it holds the device, never click
+            release_fsx_for_recovery(cfg)  # FSX Pro holding the device is left alone (just logged)
         launch_app(cfg, app, 60)
     time.sleep(cfg.get("settle_sec", 15))
     LOG.info("Startup done:")

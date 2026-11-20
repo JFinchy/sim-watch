@@ -79,3 +79,12 @@ Branch: `feature/coach-system` (4d6e4e9 + working tree)
 
 1. Kill GSPconnect while watch is running. After level 0 recovery, the log should show `Post-recovery grace` while it restarts, and must not jump to level 1 (GSPro restart) within the ~35 s grace.
 2. Set `"pause_max_hours": "four"` in config.local.json, then run watch. It starts, `doctor` warns, and a PAUSE file is still honored. Revert afterwards.
+
+## FSX Pro left alone (2026-11-19)
+
+Branch: `master`. User decision: automated recovery must not close FSX Pro.
+
+1. With SimWatch running and GSPro open, run `python simwatch.py reconnect` (FSX Pro takes the Launch Pro).
+2. Wait 2 minutes. `simwatch.log` should show `FSX Pro is using the Launch Pro; leaving FSX Pro and GameChanger alone`
+   once, with no `device recovery: restart GameChanger` lines, and FSX Pro must still be open.
+3. Run `python simwatch.py release-device`. Within about a minute GameChanger reconnects (or one device-only recovery runs) and the log returns to `All green.`

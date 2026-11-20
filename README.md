@@ -76,7 +76,8 @@ If you need FSX Pro's own live connection (e.g. for firmware updates or calibrat
 python simwatch.py reconnect         # connect FSX Pro to the Launch Pro (takes it from GameChanger)
 python simwatch.py release-device    # disconnect FSX Pro so GameChanger can reconnect
 ```
-Automatic recovery also calls `fsx_disconnect` before every GameChanger restart as a safety net.
+Automatic recovery never closes or clicks FSX Pro. While FSX Pro holds the Launch Pro, the watchdog logs it and
+leaves FSX Pro and GameChanger alone (no GameChanger restarts) until you run `release-device` or close FSX Pro.
 
 ---
 

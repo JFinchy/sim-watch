@@ -239,7 +239,31 @@ def test_recovery_never_clicks_fsx(monkeypatch):
     monkeypatch.setattr(sw, "wait_device_sockets_clear", lambda cfg, timeout=10: True)
     monkeypatch.setattr(sw.time, "sleep", lambda s: None)
     sw.recover_device(cfg)
-    assert killed == ["integrator", "fs_connector"]
+    assert killed == []  # FSX Pro holds the device: leave it alone and don't bounce GameChanger either
+
+
+def test_fsx_holding_device_is_not_treated_as_failure(harness, monkeypatch):
+    results, calls, st, step, _ = harness
+    monkeypatch.setattr(sw, "fsx_holds_device", lambda cfg: True)
+    results.update(device_tcp=False)  # Launch Pro pings, GameChanger has no session (FSX Pro has it)
+    step(n=10)
+    assert calls == [] and st.last_status == "fsx_holds_device"
+    monkeypatch.setattr(sw, "fsx_holds_device", lambda cfg: False)  # user ran release-device / closed FSX
+    step(n=3)
+    assert ("device",) in calls
+
+
+def test_ladder_step_keeps_other_apps_when_fsx_holds_device(monkeypatch):
+    killed, launched = [], []
+    apps = {k: {"key": k, "process": k} for k in ("integrator", "connector", "fs_connector")}
+    cfg = {"apps_by_key": apps, "settle_sec": 0, "device": {}}
+    monkeypatch.setattr(sw, "fsx_session", lambda cfg: object())
+    monkeypatch.setattr(sw, "kill_app", lambda app, timeout=8: killed.append(app["key"]))
+    monkeypatch.setattr(sw, "launch_app", lambda cfg, app, t: launched.append(app["key"]))
+    monkeypatch.setattr(sw, "wait_device_sockets_clear", lambda cfg, timeout=10: True)
+    monkeypatch.setattr(sw.time, "sleep", lambda s: None)
+    sw._run_recovery_step(cfg, {"name": "x", "restart": ["integrator", "connector"]}, "ladder")
+    assert killed == ["connector"] and launched == ["connector"]
 
 
 def test_device_checks_inherit_device_ip_from_config():
