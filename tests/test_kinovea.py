@@ -222,6 +222,9 @@ def _bare_manager(cfg):
     m = object.__new__(sw.SwingSessionManager)
     m.cfg, m.vcfg, m.hub, m.current_club, m.last_shot_info = cfg, cfg["video"], None, None, None
     m._lock = threading.RLock()
+    m._state_lock = threading.Lock()
+    m._pending_ref_club, m._ref_swap_thread = None, None
+    m._ref_swap_sync = True  # apply reference swaps inline (the async worker has its own test)
     m._stop_capture_at = 0.0
     calls = []
     m.trigger_capture = lambda: calls.append("trigger")
@@ -306,12 +309,13 @@ def test_clip_ready_links_correct_shot_and_is_idempotent(tmp_path):
     assert len(list(lib.glob("*_DTL.mp4"))) == 1
     assert len(list((lib / sw.CLIP_EVENTS_DIR).glob("*.json"))) == 1
 
-    # The FO clip of the same swing pairs with the same shot but does not steal the DTL link.
+    # The FO clip of the same swing pairs with the same shot (clips.FO) but does not steal the DTL link.
     fo = src_dir / "FO_2026-11-19_101500.mp4"
     fo.write_bytes(b"\x00" * 2048)
     res_fo = sw.clip_ready(cfg, fo, "%camalias%", now=now + 0.3, wait=False)
-    assert res_fo["clip"] == "002_7I_168y_118mph_D-gate1_FO.mp4" and res_fo["linked"] is False
-    assert store.read(date)[1]["clip"] == res["clip"]
+    assert res_fo["clip"] == "002_7I_168y_118mph_D-gate1_FO.mp4" and res_fo["linked"] is True
+    rec = store.read(date)[1]
+    assert rec["clip"] == res["clip"] and rec["clips"] == {"DTL": res["clip"], "FO": res_fo["clip"]}
 
 
 def test_clip_ready_without_matching_shot_and_cli_never_fails(tmp_path):
@@ -364,7 +368,8 @@ def test_clip_ready_lock_outlasts_slow_first_run(tmp_path, monkeypatch):
 
     class FakeLock:
         def __init__(self, path, timeout=10.0, stale_sec=30.0):
-            seen.update(timeout=timeout, stale=stale_sec)
+            if path.name == ".clip-ready.lock":  # (shots.jsonl writes take their own, shorter lock)
+                seen.update(timeout=timeout, stale=stale_sec)
 
         def __enter__(self):
             return self

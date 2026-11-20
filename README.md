@@ -214,10 +214,14 @@ Open `drills/index.html` directly (or double-click `open_drills.bat`, run `pytho
 records every shot the OpenConnect (:921) sniffer sees and serves it to `drills/index.html`.
 
 - **Storage:** one JSON line per shot in `Swings/Sessions/YYYY-MM-DD/shots.jsonl`: `ts` (local ISO-8601 with
-  offset), `shot_num`, `club`, `ball` {speed, carry, total, hla, vla, spin, spin_axis}, `club_data`
-  {speed, path, face, aoa} or null, `clip` (session clip filename once Kinovea's recording is saved; DTL
-  preferred) and `drill_id`. Anything the launch monitor didn't send is `null`. Linking a clip rewrites that
-  day's file atomically.
+  offset), `shot_num` (day-unique sequence; also the `NNN_` of clip names), `device_shot_num` (the launch
+  monitor's ShotNumber, which can reset mid-day), `club`, `ball` {speed, carry, total, hla, vla, spin,
+  spin_axis}, `club_data` {speed, path, face, aoa} or null, `clip` (session clip filename once Kinovea's
+  recording is saved; DTL preferred), `clips` {DTL, FO} and `drill_id`. Anything the launch monitor didn't
+  send is `null`. Linking a clip rewrites that day's file atomically, under a lock file (`.shots.lock`)
+  shared by the watchdog and Kinovea's `clip-ready` command, so neither can drop the other's write.
+- **Shot detection:** OpenConnect heartbeats and messages with `ContainsBallData: false` are ignored; the
+  same shot re-sent within 30 s (same ShotNumber, ball speed, spin and HLA) is recorded once.
 - **API** (`http://127.0.0.1:8765`): `GET /api/status`, `GET /api/shots?date=YYYY-MM-DD`, `GET /api/events`
   (Server-Sent Events: `status`, `shot`, `clip` {ts, clip} when a saved clip is linked, 15s heartbeat; max 8
   clients, more get 503; a client that stops reading for 10s is dropped), `POST /api/drill
@@ -242,6 +246,8 @@ records every shot the OpenConnect (:921) sniffer sees and serves it to `drills/
   logged and the watchdog carries on without the bridge.
 - **Testing:** `python simwatch.py bridge` runs only the server + sniffer; add `--demo` (optionally
   `--demo-interval 2`, `--port 8766`) to emit a synthetic shot every few seconds. The demo runs on macOS too.
+  Demo shots go to `Swings/Sessions-demo/` (`bridge.demo_sessions_dir`), are tagged `"demo": true`, and the
+  real :921 sniffer is not started, so demo and real shots never mix.
 
 ## Manual Setup & What We Need From You (One-Time Checklist)
 
@@ -354,6 +360,7 @@ python simwatch.py calibrate             # hover over a green status light -> in
 - `drills/` — offline Golf Drills, Routines & Daily Delivery Hub (`index.html`, `drills_data.js`, `shorts/`)
 - `Swings/` — organized session recordings, `My-Go-To/`, `Pros/`, `Workspaces/`, and `OBS_SimWatch_SceneCollection.json`
 - `simwatch.log` — rotating runtime log file (UTF-8, level + thread name per line, full tracebacks, max 2 MB × 3 backups)
+- `logs/clip-ready.log` — Kinovea's post-recording `clip-ready` runs (separate file: two processes can't share one rotating log on Windows)
 - `simwatch_status.json` — rewritten every cycle: `timestamp`, `state` (`healthy`, `degraded`, `recovering`, `device_offline`, `backoff`, `paused`, `error`, …), failing checks, recovery level
 - `logs/launcher.log` — autostart (`run_simwatch.bat --no-pause`) output; a startup failure also pops a message box instead of closing silently
 - `*.bak` — one rolling backup written before SimWatch overwrites Kinovea preferences or the OBS scene collection (only when content changes)

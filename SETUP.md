@@ -58,7 +58,8 @@ Most dropped connections come from Windows power-saving the USB NIC, the APIPA a
 
 - [ ] Plug in the Launch Pro and power it on, then run `.venv\Scripts\python.exe simwatch.py harden`. This is a
       **dry run**: it prints the exact PowerShell for your PC, with the adapter detected automatically:
-      - a static `169.254.6.1/16` on the device adapter
+      - a static `169.254.6.1/16` on the device adapter (if adding it fails, DHCP is switched back on and no
+        existing address is removed, so the adapter is never left without one)
       - a persistent `/32` route to the device
       - interface metric 5 and the Private network profile, plus the Unidentified Networks = Private policy (a
         direct-cabled link is an 'Unidentified network' that otherwise comes back Public after an adapter restart)
@@ -110,7 +111,7 @@ run `simwatch.py obs-setup` for the scene collection.
 | `config.local.json` FAIL | Invalid JSON. Fix it or delete it and rerun `discover --write-local`. |
 | "no usable Python 3.10+ found" | Install Python, then run `setup.bat`. |
 
-- Logs: `simwatch.log` (repo root, rotating) and `logs\launcher.log`.
+- Logs: `simwatch.log` (repo root, rotating), `logs\launcher.log` and `logs\clip-ready.log` (Kinovea's post-recording command).
 - Pause the watchdog by creating a file named `PAUSE` next to `simwatch.py`. Delete it to resume. A PAUSE older
   than `pause_max_hours` (default 4) is ignored and deleted, so a forgotten one can't stop the watchdog for good.
 - `simwatch.py stop` stops background instances.
