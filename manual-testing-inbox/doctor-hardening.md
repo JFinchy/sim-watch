@@ -54,3 +54,10 @@ Branch: `feature/coach-system` (working tree). After `harden --apply` on the onb
 2. On `--apply`, the static-IP step adds 169.254.6.1 before it removes the old addresses. A step that errors part-way now prints `FAILED`, not `OK`.
 3. Firewall rules are created as `Private,Domain` (check in wf.msc). The phone can still reach the drills hub bridge on :8765 over home Wi-Fi when that network is Private.
 4. Run `python simwatch.py doctor` from a non-admin terminal. The sniffer row is WARN ("expected when not elevated"), not FAIL.
+
+## Rig result 2026-11-19 (second run, commit 021c548)
+
+- `harden --apply`: all 18 steps `rc=0`. The GameChanger restart reconnected (`device_tcp: OK - integrator connected to 169.254.6.44:9971 (wired)`).
+- `doctor`: 40 passed, 1 warning, 0 failures. Profile Private, adapter power mgmt off (`MSPower_DeviceEnable=False`), fast startup off, static IP, /32 route metric 5, Kinovea v2025.2.0.0.
+  The only WARN was port 9970 with no session right after the GameChanger restart; 9971 was connected.
+- Still to do: follow-up step 3 (reboot, then `doctor`: profile still Private) and the "Review fixes" steps 1-4.
