@@ -154,9 +154,13 @@ def unique_path(dest: Path) -> Path:
         n += 1
 
 
+STATUS_EXTRAS: dict = {}  # extra top-level sections (e.g. "shotlab") merged into every status write
+
+
 def write_status(state: str, **fields) -> None:
     """Heartbeat for external monitoring: simwatch_status.json next to the script, atomic (tmp + replace)."""
     doc = {"timestamp": datetime.now().isoformat(timespec="seconds"), "pid": os.getpid(), "state": state}
+    doc.update(STATUS_EXTRAS)
     doc.update(fields)
     try:
         tmp = STATUS_PATH.with_name(STATUS_PATH.name + ".tmp")
@@ -4456,12 +4460,70 @@ class ShotStore:
             return hit
 
 
+_GSPRO_KEYS_LOCK = threading.Lock()
+
+
+def send_gspro_club_keys(key: str, steps: int, cfg: dict | None = None) -> tuple[bool, str]:
+    """Send I (club up) or K (club down) keystrokes to the running GSPro window on Windows.
+
+    Used by ShotLab's club auto-detector (manual Sync GSPro or >=90% Auto-Switch).
+    Returns (ok, detail). Safe no-op returning (False, ...) off Windows.
+    """
+    k = str(key or "").strip().lower()
+    if k not in ("i", "k"):
+        return False, "key must be 'i' or 'k'"
+    if not isinstance(steps, int) or isinstance(steps, bool) or not 1 <= steps <= 16:
+        return False, "steps must be an integer 1-16"
+    if not IS_WINDOWS:
+        return False, "GSPro keystroke switching requires Windows"
+    if not _GSPRO_KEYS_LOCK.acquire(timeout=2.0):
+        return False, "GSPro club switch already in progress"
+    try:
+        import win32api
+        import win32con
+        proc_name = (
+            ((cfg or {}).get("apps_by_key") or {}).get("gspro", {}).get("process")
+            or "GSPro.exe"
+        )
+        hwnd = None
+        for p in find_procs(proc_name):
+            hwnd = find_window_for_pid(p.pid, title_re=r"^(?!GSPro Configuration$).+", include_minimized=True)
+            if hwnd:
+                break
+        if not hwnd:
+            return False, "GSPro main window not found"
+        vk = ord(k.upper())
+        scan = win32api.MapVirtualKey(vk, 0)
+        lp_down = 1 | (scan << 16)
+        lp_up = 1 | (scan << 16) | (1 << 30) | (1 << 31)
+        import pywintypes
+        try:
+            # pywin32's PostMessage returns None and raises pywintypes.error on failure
+            for _ in range(steps):
+                win32api.PostMessage(hwnd, win32con.WM_KEYDOWN, vk, lp_down)
+                time.sleep(0.025)
+                win32api.PostMessage(hwnd, win32con.WM_KEYUP, vk, lp_up)
+                time.sleep(0.045)
+        except pywintypes.error as e:
+            if getattr(e, "winerror", None) == 5:  # ERROR_ACCESS_DENIED: UIPI blocks posting to an elevated GSPro
+                return False, "GSPro is running as Administrator but SimWatch is not; run SimWatch elevated"
+            return False, f"PostMessage failed: {e}"
+        LOG.info("Sent %dx '%s' club-switch key(s) to GSPro (hwnd=%s)", steps, k.upper(), hwnd)
+        return True, f"sent {steps}x {k.upper()}"
+    except Exception as e:
+        LOG.warning("send_gspro_club_keys failed: %s", e)
+        return False, str(e)
+    finally:
+        _GSPRO_KEYS_LOCK.release()
+
+
 class ShotHub:
     """Shared bridge state: the store, the active drill/coaching context, and SSE subscriber fan-out."""
 
     def __init__(self, store: ShotStore):
         self.store = store
         self.context: dict = {k: None for k in CONTEXT_FIELDS}  # active coaching context (drill_id = active drill)
+        self.current_club: str | None = None
         self.last_shot_ts: str | None = None
         self.health: dict | None = None
         self.sniffer = None  # an OpenConnectMonitor (its .active flag is reported as sniffer_ok)
@@ -4486,6 +4548,23 @@ class ShotHub:
         """The day's shots, every line normalized to the v2 shape."""
         return [normalize_shot(r) for r in self.store.read(date_str)]
 
+    def _hotkey_rows(self) -> list[dict]:
+        fn = getattr(self, "hotkeys_fn", None)
+        try:
+            return list(fn()) if fn else []
+        except Exception:
+            return []
+
+    def set_club(self, club: str | None) -> str | None:
+        """Record the active GSPro club (from OpenConnect Code 201) and notify SSE clients."""
+        norm = (str(club).strip() or None) if club is not None else None
+        with self._lock:
+            if norm == self.current_club:
+                return norm
+            self.current_club = norm
+        self.broadcast("club", {"club": norm})
+        return norm
+
     def set_context(self, fields: dict) -> dict:
         """Merge validated context fields (absent keys unchanged, null clears). Returns the new context."""
         fields = validate_context(fields)
@@ -4499,16 +4578,24 @@ class ShotHub:
         return ctx
 
     def status(self) -> dict:
+        with self._lock:
+            current_club = self.current_club
+            last_shot_ts = self.last_shot_ts
+            active_drill = self.context["drill_id"]
+            context_snap = dict(self.context)
+            health = self.health
         doc = {
             "ok": True,
             "version": BRIDGE_VERSION,
             "sniffer_ok": bool(getattr(self.sniffer, "active", False)),
-            "last_shot_ts": self.last_shot_ts,
-            "active_drill": self.active_drill,
-            "context": dict(self.context),
+            "current_club": current_club,
+            "hotkeys": self._hotkey_rows(),
+            "last_shot_ts": last_shot_ts,
+            "active_drill": active_drill,
+            "context": context_snap,
         }
-        if self.health is not None:
-            doc["health"] = self.health
+        if health is not None:
+            doc["health"] = health
         return doc
 
     def set_drill(self, drill_id: str | None) -> str | None:
@@ -4663,6 +4750,10 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_OPTIONS(self):
+        url = urllib.parse.urlsplit(self.path)
+        if url.path == "/api/gspro/club" and self.headers.get("Origin") is not None:
+            self._cors_origin = None
+            return self._json(403, {"error": "cross-origin club switching not allowed"})
         self.send_response(204)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
@@ -4711,8 +4802,12 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         url = urllib.parse.urlsplit(self.path)
-        if url.path not in ("/api/drill", "/api/context"):
+        if url.path not in ("/api/drill", "/api/context", "/api/gspro/club"):
             return self._json(404, {"error": "unknown endpoint"})
+        if url.path == "/api/gspro/club" and self.headers.get("Origin") is not None:
+            # Never allow browser/sandboxed-iframe Origin (including Origin: "null") to inject Windows keystrokes
+            self._cors_origin = None
+            return self._json(403, {"error": "cross-origin club switching not allowed"})
         ctype = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
         if ctype != "application/json":
             # Keeps this a preflighted request for browsers (see the policy note above).
@@ -4728,6 +4823,17 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
             doc = json.loads(self.rfile.read(length).decode("utf-8") or "null")
         except (UnicodeDecodeError, json.JSONDecodeError):
             return self._json(400, {"error": "body must be JSON"})
+        if url.path == "/api/gspro/club":
+            if not isinstance(doc, dict):
+                return self._json(400, {"error": "expected JSON object with key ('i'|'k') and steps (1-16)"})
+            key = str(doc.get("key") or "").strip().lower()
+            steps = doc.get("steps")
+            if key not in ("i", "k") or not isinstance(steps, int) or isinstance(steps, bool) or not 1 <= steps <= 16:
+                return self._json(400, {"error": "expected key in ('i', 'k') and integer steps 1-16"})
+            ok, detail = send_gspro_club_keys(key, steps, cfg=getattr(self.server, "cfg", None))
+            if not ok:
+                return self._json(503, {"ok": False, "error": detail})
+            return self._json(200, {"ok": True, "key": key, "steps": steps, "club": doc.get("club"), "detail": detail})
         if url.path == "/api/context":
             try:
                 ctx = self.hub.set_context(doc)
@@ -4792,11 +4898,13 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
 class BridgeServer:
     """ThreadingHTTPServer on 127.0.0.1 in a daemon thread. start() never raises (busy port -> logged)."""
 
-    def __init__(self, hub: ShotHub, port: int = 8765, host: str = "127.0.0.1", static_dir: Path | None = None):
+    def __init__(self, hub: ShotHub, port: int = 8765, host: str = "127.0.0.1", static_dir: Path | None = None,
+                 cfg: dict | None = None):
         self.hub = hub
         self.host = host
         self.requested_port = int(port)
         self.static_dir = Path(static_dir) if static_dir else (HERE / "drills")
+        self.cfg = cfg
         self.httpd: http.server.ThreadingHTTPServer | None = None
         self._thread: threading.Thread | None = None
 
@@ -4816,6 +4924,7 @@ class BridgeServer:
             return False
         httpd.daemon_threads = True
         httpd.hub = self.hub  # type: ignore[attr-defined]
+        httpd.cfg = self.cfg  # type: ignore[attr-defined]
         self.hub.stopping.clear()
         self.httpd = httpd
         self._thread = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.5},
@@ -4853,7 +4962,7 @@ def start_bridge(cfg: dict, force: bool = False, port: int | None = None) -> tup
     try:
         raw = Path(str(bcfg.get("sessions_dir") or BRIDGE_DEFAULTS["sessions_dir"]))
         hub = ShotHub(ShotStore(raw if raw.is_absolute() else HERE / raw))
-        server = BridgeServer(hub, port=int(port if port is not None else bcfg.get("port", 8765)))
+        server = BridgeServer(hub, port=int(port if port is not None else bcfg.get("port", 8765)), cfg=cfg)
     except Exception as e:
         LOG.warning("Shot bridge disabled: bad bridge config (%s)", e)
         return None, None
@@ -4875,7 +4984,11 @@ def make_bridge_sniffer(hub: ShotHub) -> OpenConnectMonitor:
             LOG.info("Shot %s recorded (club=%s, speed=%s, drill=%s)", rec.get("shot_num"), rec.get("club"),
                      rec["ball"].get("speed"), rec.get("drill_id"))
 
-    sniffer = OpenConnectMonitor(on_shot, lambda club: LOG.info("Active club -> %s", club))
+    def on_club(club: str) -> None:
+        LOG.info("Active club -> %s", club)
+        hub.set_club(club)
+
+    sniffer = OpenConnectMonitor(on_shot, on_club)
     hub.sniffer = sniffer
     return sniffer
 
@@ -4895,8 +5008,346 @@ def _bridge_note_health(state: str, res: dict) -> None:
     """Cache the latest watch-loop verdict for /api/status (cheap; no extra checks are run)."""
     hub = BRIDGE_HUB
     if hub is not None:
-        hub.health = {"state": state, "all_ok": bool(res.get("all_ok")), "failing": list(res.get("failing") or []),
-                      "ts": local_iso_now()}
+        prev = hub.health or {}
+        health = {"state": state, "all_ok": bool(res.get("all_ok")), "failing": list(res.get("failing") or []),
+                  "ts": local_iso_now()}
+        hub.health = health
+        # Push only real changes (state or failing set) so ShotLab / the drills hub can show rig health live.
+        if (prev.get("state"), prev.get("failing")) != (health["state"], health["failing"]):
+            hub.broadcast("health", health)
+
+
+# --------------------------------------------------------------------------- ShotLab companion supervisor
+
+SHOTLAB_DEFAULTS = {
+    "enabled": False,
+    "dir": "shotlab",
+    "obs_port": 8766,
+    "startup_grace_sec": 45,       # time a fresh launch gets to answer /api/health
+    "health_fail_ticks": 6,        # consecutive failed probes (after grace) before a live process counts as hung
+    "restart_backoff_sec": [10, 30, 120, 300],
+    "healthy_reset_sec": 300,      # healthy this long -> crash backoff starts over
+}
+
+
+def shotlab_config(cfg: dict | None) -> dict:
+    """The `shotlab` section with defaults; bad values fall back to the default (logged) so a config typo
+    in this optional feature can never take down the watchdog."""
+    out = dict(SHOTLAB_DEFAULTS)
+    raw = (cfg or {}).get("shotlab")
+    if not isinstance(raw, dict):
+        return out
+
+    def bad(key, val):
+        log_throttled(f"shotlab-cfg:{key}", f"config shotlab.{key}={val!r} is invalid; using {SHOTLAB_DEFAULTS[key]!r}",
+                      every_sec=3600.0)
+
+    for key, val in raw.items():
+        if str(key).startswith("_") or key not in SHOTLAB_DEFAULTS:
+            continue
+        default = SHOTLAB_DEFAULTS[key]
+        try:
+            if key == "enabled":
+                if not isinstance(val, bool):
+                    raise ValueError
+                out[key] = val
+            elif key == "dir":
+                if not isinstance(val, str) or not val.strip():
+                    raise ValueError
+                out[key] = val
+            elif key == "restart_backoff_sec":
+                seq = [float(x) for x in val] if isinstance(val, list) else None
+                if not seq or any(not math.isfinite(x) or x < 0 for x in seq):
+                    raise ValueError
+                out[key] = seq
+            elif key == "obs_port":
+                port = int(val)
+                if isinstance(val, bool) or not 1 <= port <= 65535:
+                    raise ValueError
+                out[key] = port
+            else:  # numeric knobs
+                num = float(val)
+                if isinstance(val, bool) or not math.isfinite(num) or num <= 0:
+                    raise ValueError
+                out[key] = int(num) if isinstance(default, int) else num
+        except (TypeError, ValueError):
+            bad(key, val)
+    return out
+
+
+def shotlab_dir(cfg: dict | None) -> Path:
+    d = Path(str(shotlab_config(cfg).get("dir") or "shotlab"))
+    return d if d.is_absolute() else HERE / d
+
+
+def shotlab_electron_exe(cfg: dict | None) -> Path:
+    name = "electron.exe" if IS_WINDOWS else "electron"
+    return shotlab_dir(cfg) / "node_modules" / "electron" / "dist" / name
+
+
+def probe_shotlab_health(port: int, timeout: float = 1.5) -> dict | None:
+    """GET ShotLab's /api/health on the OBS server. Returns the doc only if it really is ShotLab."""
+    import http.client
+    conn = http.client.HTTPConnection("127.0.0.1", int(port), timeout=timeout)
+    try:
+        conn.request("GET", "/api/health")
+        resp = conn.getresponse()
+        if resp.status != 200:
+            return None
+        doc = json.loads(resp.read(65536).decode("utf-8", "replace"))
+        return doc if isinstance(doc, dict) and doc.get("app") == "shotlab" else None
+    except (OSError, ValueError, http.client.HTTPException):
+        return None
+    finally:
+        conn.close()
+
+
+def port_listener_pid(port: int) -> int | None:
+    """PID listening on 127.0.0.1/any :port, else None (also None if sockets can't be enumerated)."""
+    try:
+        for c in psutil.net_connections(kind="tcp"):
+            if c.status == psutil.CONN_LISTEN and c.laddr and c.laddr.port == int(port):
+                return c.pid
+    except (psutil.Error, OSError):
+        pass
+    return None
+
+
+def launch_shotlab(cfg: dict, bridge_port: int | None = None, activate: bool = False):
+    """Start ShotLab's Electron app. By default it opens behind GSPro without taking focus;
+    activate=True (hotkey / `shotlab` command) opens it in front. Returns the Popen, or None."""
+    exe = shotlab_electron_exe(cfg)
+    app_dir = shotlab_dir(cfg)
+    if not exe.exists():
+        log_throttled("shotlab-missing", f"ShotLab not installed ({exe} missing); run setup.bat or run_shotlab.bat once",
+                      every_sec=3600.0)
+        return None
+    scfg = shotlab_config(cfg)
+    env = dict(os.environ)
+    if not activate:
+        env["SHOTLAB_LAUNCHED_BY"] = "simwatch"  # ShotLab opens its window without activating it
+    env["SHOTLAB_OBS_PORT"] = str(int(scfg["obs_port"]))
+    env["SIMWATCH_PORT"] = str(int(bridge_port or bridge_config(cfg).get("port", 8765)))
+    env.pop("ELECTRON_RUN_AS_NODE", None)
+    kwargs: dict = {"cwd": str(app_dir), "env": env}
+    if IS_WINDOWS:
+        kwargs["creationflags"] = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+        si = subprocess.STARTUPINFO()
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        si.wShowWindow = 1 if activate else 4  # SW_SHOWNORMAL : SW_SHOWNOACTIVATE
+        kwargs["startupinfo"] = si
+    try:
+        proc = subprocess.Popen([str(exe), str(app_dir)], **kwargs)
+    except OSError as e:
+        log_throttled("shotlab-start", f"could not start ShotLab: {e}")
+        return None
+    LOG.info("Launched ShotLab (pid %s, OBS overlays on :%s)", proc.pid, scfg["obs_port"])
+    return proc
+
+
+def toggle_shotlab_window(cfg: dict, supervisor: "ShotLabSupervisor | None" = None) -> str:
+    """Alt+S: front-most ShotLab -> minimize (GSPro gets focus back); otherwise restore + focus it;
+    not running -> open it in front (through the supervisor when there is one, so crashes still relaunch)."""
+    health = probe_shotlab_health(int(shotlab_config(cfg)["obs_port"]))
+    if not health:
+        ok = supervisor.launch_now(activate=True) if supervisor else bool(launch_shotlab(cfg, activate=True))
+        return "launched" if ok else "unavailable (not installed?)"
+    try:
+        pid = int(health.get("pid"))
+    except (TypeError, ValueError):
+        return "running but reported no pid"
+    hwnd = find_window_for_pid(pid, title_re=r"^ShotLab", include_minimized=True)
+    if not hwnd:
+        return "running but its window was not found"
+    import win32con
+    import win32gui
+    if win32gui.GetForegroundWindow() == hwnd and not win32gui.IsIconic(hwnd):
+        win32gui.ShowWindow(hwnd, win32con.SW_MINIMIZE)
+        return "hidden"
+    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE if win32gui.IsIconic(hwnd) else win32con.SW_SHOW)
+    try:
+        win32gui.SetForegroundWindow(hwnd)  # allowed: we just received the WM_HOTKEY input
+    except Exception as e:
+        log_throttled("shotlab-fg", f"could not bring ShotLab to the front: {e}")
+    return "shown"
+
+
+class ShotLabSupervisor:
+    """Keeps the ShotLab desktop app alive alongside the rig, without ever touching rig health/recovery.
+
+    - Launches ShotLab once the gated sim app (GSPro) is up.
+    - Exit code 0 = the user closed it: leave it closed until the next GSPro session.
+    - Non-zero exit = crash: relaunch with backoff. Alive but not answering /api/health past the grace
+      period (and it owns its port) = hung: kill and relaunch with the same backoff.
+    - A ShotLab someone started by hand (run_shotlab.bat) is "adopted": monitored, never killed.
+    Collaborators are injectable so the state machine is testable off Windows.
+    """
+
+    def __init__(self, cfg: dict, launcher=None, probe=None, port_owner=None, clock=time.monotonic,
+                 installed=None):
+        self.cfg = cfg
+        self.scfg = shotlab_config(cfg)
+        self.port = int(self.scfg["obs_port"])
+        self._launch = launcher or (lambda activate=False: launch_shotlab(cfg, activate=activate))
+        self._lock = threading.RLock()  # tick() runs on the watch thread, launch_now() on the hotkey thread
+        self._probe = probe or (lambda: probe_shotlab_health(self.port))
+        self._port_owner = port_owner or (lambda: port_listener_pid(self.port))
+        self._installed = installed or (lambda: shotlab_electron_exe(cfg).exists())
+        self._clock = clock
+        self.proc = None
+        self.state = "idle"
+        self.detail = ""
+        self.launched_at = 0.0
+        self.health_fails = 0
+        self.attempts = 0
+        self.next_at = 0.0
+        self.healthy_since = None
+        self.last_health: dict | None = None
+        self.prev_gate_up = False
+        self.was_healthy = False  # the current launch has answered /api/health at least once
+
+    def _backoff(self) -> float:
+        seq = [float(x) for x in (self.scfg.get("restart_backoff_sec") or [30])]
+        return seq[min(self.attempts, len(seq)) - 1] if self.attempts else 0.0
+
+    def _schedule_restart(self, why: str) -> None:
+        self.proc = None
+        self.attempts += 1
+        wait = self._backoff()
+        self.next_at = self._clock() + wait
+        self.state, self.detail = "restart_pending", f"{why}; relaunch in {int(wait)}s (attempt {self.attempts})"
+        LOG.warning("ShotLab %s", self.detail)
+
+    def _kill(self) -> None:
+        proc = self.proc
+        if proc is None:
+            return
+        try:
+            proc.kill()
+            proc.wait(timeout=5)
+        except Exception:
+            pass
+
+    def _mark_healthy(self, health: dict, state: str) -> None:
+        now = self._clock()
+        self.was_healthy = True
+        self.health_fails = 0
+        self.last_health = health
+        if self.healthy_since is None:
+            self.healthy_since = now
+        elif self.attempts and now - self.healthy_since >= float(self.scfg["healthy_reset_sec"]):
+            self.attempts = 0
+        self.state, self.detail = state, ""
+
+    def launch_now(self, activate: bool = True) -> bool:
+        """Open ShotLab immediately (hotkey). Clears user_closed/backoff; the result is supervised as usual."""
+        with self._lock:
+            if self.proc is not None and self.proc.poll() is None:
+                return True
+            proc = self._launch(activate=activate)
+            if proc is None:
+                return False
+            self.proc, self.launched_at, self.health_fails = proc, self._clock(), 0
+            self.was_healthy = False
+            self.attempts, self.next_at = 0, 0.0
+            self.state, self.detail = "starting", ""
+            return True
+
+    def tick(self, gate_up: bool, paused: bool = False) -> None:
+        """gate_up = the GSPro session is live (its rising edge = a new session); paused = PAUSE file present
+        (only blocks launching, so pausing/unpausing never reopens a ShotLab the user closed)."""
+        try:
+            with self._lock:
+                self._tick(gate_up, paused)
+        except Exception as e:  # ShotLab supervision must never disturb the rig watch loop
+            self.state, self.detail = "error", f"{type(e).__name__}: {e}"
+            log_throttled("shotlab-tick", f"ShotLab supervisor error: {e}", every_sec=300.0, exc_info=True)
+
+    def _tick(self, gate_up: bool, paused: bool = False) -> None:
+        if not self.scfg.get("enabled"):
+            self.state = "disabled"
+            return
+        now = self._clock()
+        if gate_up and not self.prev_gate_up and self.state == "user_closed":
+            self.state, self.detail = "idle", ""  # a new GSPro session: bring ShotLab back
+        self.prev_gate_up = gate_up
+
+        health = self._probe()
+        if self.proc is not None:
+            rc = self.proc.poll()
+            if rc is None:
+                if health is not None:
+                    self._mark_healthy(health, "running")
+                    return
+                self.healthy_since = None
+                if now - self.launched_at < float(self.scfg["startup_grace_sec"]):
+                    self.state, self.detail = "starting", ""
+                    return
+                owner = self._port_owner()
+                if owner is not None and owner != self.proc.pid:
+                    # Something else holds ShotLab's port; restarting would just loop. Report it.
+                    self.state = "port_conflict"
+                    self.detail = f"port {self.port} is held by pid {owner}; change shotlab.obs_port or free it"
+                    log_throttled("shotlab-port", f"ShotLab: {self.detail}", every_sec=600.0)
+                    return
+                self.health_fails += 1
+                self.state, self.detail = "unresponsive", f"{self.health_fails} failed health probe(s)"
+                if self.health_fails >= int(self.scfg["health_fail_ticks"]):
+                    self._kill()
+                    self._schedule_restart("was unresponsive")
+                return
+            self.proc = None
+            self.healthy_since = None
+            if rc == 0 and now - self.launched_at < float(self.scfg["startup_grace_sec"]) and not self.was_healthy:
+                # ShotLab is single-instance: a copy that quits with 0 before ever answering means another
+                # (unresponsive) ShotLab already holds the lock. Report it; don't call it a user close.
+                self.attempts += 1
+                self.next_at = now + self._backoff()
+                self.state = "other_instance"
+                self.detail = ("another ShotLab is running but not answering on "
+                               f":{self.port} (hung, or its OBS port is taken); close it in Task Manager")
+                log_throttled("shotlab-other", f"ShotLab: {self.detail}", every_sec=600.0)
+                return
+            if rc == 0:
+                self.state, self.detail = "user_closed", "closed by the user; reopens with the next GSPro session"
+                LOG.info("ShotLab closed (exit 0); not relaunching until the next GSPro session.")
+                return
+            self._schedule_restart(f"exited with code {rc}")
+            return
+
+        # No process of ours.
+        if health is not None:
+            self._mark_healthy(health, "adopted")  # started by hand; watch it, never kill it
+            return
+        self.healthy_since = None
+        if self.state == "adopted":
+            self.state, self.detail = "user_closed", "manually started instance went away"
+            return
+        if self.state == "user_closed" or not gate_up or paused:
+            return
+        if self.state in ("restart_pending", "other_instance") and now < self.next_at:
+            return
+        if not self._installed():
+            self.state, self.detail = "not_installed", "run setup.bat (or run_shotlab.bat once) to install Electron"
+            return
+        proc = self._launch()
+        if proc is None:
+            self._schedule_restart("failed to launch")
+            return
+        self.proc, self.launched_at, self.health_fails = proc, now, 0
+        self.was_healthy = False
+        self.state, self.detail = "starting", ""
+
+    def status(self) -> dict:
+        doc = {"state": self.state, "port": self.port}
+        if self.detail:
+            doc["detail"] = self.detail
+        if self.proc is not None:
+            doc["pid"] = self.proc.pid
+        if self.last_health and self.state in ("running", "adopted"):
+            doc["bridge_connected"] = self.last_health.get("bridgeConnected")
+            doc["obs_clients"] = self.last_health.get("obsClients")
+        return doc
 
 
 def demo_openconnect_message(n: int) -> dict:
@@ -4958,6 +5409,53 @@ def cmd_bridge(cfg: dict, demo: bool = False, demo_interval: float = 4.0, port: 
         server.stop()
 
 
+# The one list of global hotkeys: (config action, default keys, what it does). The HUD (Alt+H), the
+# `hotkeys` command, simwatch_status.json and ShotLab's Keys pill all read this, so they never drift.
+HOTKEY_ACTIONS: list[tuple[str, str, str]] = [
+    ("cheatsheet", "Alt+H", "Show / hide this key cheat sheet"),
+    ("toggle_shotlab", "Alt+S", "Show / hide ShotLab (opens it if closed)"),
+    ("toggle_pip", "Alt+P", "Pin / unpin OBS Projector PiP"),
+    ("trigger_shot", "Alt+C", "Manual swing capture + PiP"),
+    ("bookmark_goto", "Alt+G", "Bookmark last swing -> My-Go-To"),
+    ("cycle_reference", "Alt+R", "Cycle bottom reference (Go-To / Pros)"),
+    ("toggle_lines", "Alt+L", "Toggle Kinovea swing plane lines"),
+    ("save_lines", "Alt+Shift+L", "Save dragged swing lines as default"),
+    ("open_folder", "Alt+O", "Open today's Swings folder"),
+    ("open_drills", "Alt+D", "Open the drills hub"),
+]
+
+
+def effective_hotkeys(hotkeys_cfg: dict | None) -> dict[str, str]:
+    """Defaults overlaid with config (a config value of "" or null disables that hotkey)."""
+    cfg_hk = hotkeys_cfg if isinstance(hotkeys_cfg, dict) else {}
+    out = {}
+    for action, default, _ in HOTKEY_ACTIONS:
+        spec = cfg_hk.get(action, default)
+        if spec:
+            out[action] = str(spec)
+    return out
+
+
+def hotkey_rows(hotkeys_cfg: dict | None, registration: dict | None = None) -> list[dict]:
+    """[{action, keys, label, state}] for display; state is ok | ctrl_alt_only | failed | invalid | unknown."""
+    keys = effective_hotkeys(hotkeys_cfg)
+    reg = registration or {}
+    return [{"action": a, "keys": keys[a], "label": label, "state": reg.get(a, "unknown")}
+            for a, _, label in HOTKEY_ACTIONS if a in keys]
+
+
+def format_hotkey_cheatsheet(rows: list[dict]) -> str:
+    notes = {"ctrl_alt_only": "  (bare key taken by another app: use Ctrl+{k})",
+             "failed": "  !! NOT REGISTERED (another app owns it; change it in config.json video.hotkeys)",
+             "invalid": "  !! invalid key spec in config.json"}
+    lines = ["== SimWatch hotkeys (live while SimWatch is running with video.enabled) =="]
+    for r in rows:
+        note = notes.get(r["state"], "").format(k=r["keys"])
+        lines.append(f"  {r['keys']:<12} {r['label']}{note}")
+    lines.append("  Every bare Alt+<key> also works as Ctrl+Alt+<key>.")
+    return "\n".join(lines)
+
+
 def parse_hotkey(spec: str) -> tuple[int, int] | None:
     """Parse 'Alt+H' / 'Ctrl+Shift+P' / 'F8' into (win32_mods, vk_code)."""
     MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, MOD_NOREPEAT = 0x0001, 0x0002, 0x0004, 0x0008, 0x4000
@@ -4991,8 +5489,9 @@ class HotkeyOverlayManager:
     """Global Win32 hotkeys + Always-on-Top tkinter Key Mapping & Status HUD."""
 
     def __init__(self, hotkeys_cfg: dict, callbacks: dict, status_fn):
-        self.hotkeys_cfg = hotkeys_cfg
+        self.hotkeys_cfg = effective_hotkeys(hotkeys_cfg)
         self.callbacks = callbacks
+        self.registration: dict[str, str] = {}  # action -> ok | ctrl_alt_only | failed | invalid
         self.status_fn = status_fn
         self._stop = threading.Event()
         self._hk_thread = None
@@ -5034,6 +5533,9 @@ class HotkeyOverlayManager:
     def toggle_hud(self) -> None:
         self._hud_queue.put("TOGGLE")
 
+    def rows(self) -> list[dict]:
+        return hotkey_rows(self.hotkeys_cfg, self.registration if self._hk_thread_id else {})
+
     def show_hud(self) -> None:
         self._hud_queue.put("SHOW")
 
@@ -5050,18 +5552,26 @@ class HotkeyOverlayManager:
             parsed = parse_hotkey(spec)
             if not parsed:
                 LOG.warning("Invalid hotkey %s=%r", action, spec)
+                self.registration[action] = "invalid"
                 continue
             mods, vk = parsed
-            if user32.RegisterHotKey(None, hk_id, mods, vk):
+            main_ok = bool(user32.RegisterHotKey(None, hk_id, mods, vk))
+            if main_ok:
                 registered.append((hk_id, action))
                 hk_id += 1
-            else:
-                LOG.warning("Could not register hotkey %s (%s)", spec, action)
             # Also bind Ctrl+Alt+<Key> as a non-conflicting fallback for bare Alt+<Key> shortcuts
+            fallback_ok = False
             if (mods & 0x0001) and not (mods & (0x0002 | 0x0004 | 0x0008)):
                 if user32.RegisterHotKey(None, hk_id, mods | 0x0002, vk):
                     registered.append((hk_id, action))
                     hk_id += 1
+                    fallback_ok = True
+            self.registration[action] = "ok" if main_ok else ("ctrl_alt_only" if fallback_ok else "failed")
+            if not main_ok:
+                LOG.warning("Could not register hotkey %s (%s)%s", spec, action,
+                            "; Ctrl+" + spec + " still works" if fallback_ok else " - another app owns it")
+
+        LOG.info("\n%s", format_hotkey_cheatsheet(hotkey_rows(self.hotkeys_cfg, self.registration)))
 
         msg = ctypes.wintypes.MSG()
         while not self._stop.is_set():
@@ -5083,6 +5593,7 @@ class HotkeyOverlayManager:
             except Exception:
                 pass
         self._hk_thread_id = None
+        self.registration = {}
 
     def _run_hud(self) -> None:
         try:
@@ -5108,25 +5619,21 @@ class HotkeyOverlayManager:
             fg="#38bdf8", bg="#111827", font=("Segoe UI", 12, "bold"),
         ).pack(anchor="w", pady=(0, 6))
 
-        rows = [
-            ("cheatsheet", "Show / Hide this Key Cheat Sheet"),
-            ("toggle_pip", "Pin / Unpin OBS Projector PiP Overlay"),
-            ("bookmark_goto", "Bookmark Last Swing -> My-Go-To"),
-            ("cycle_reference", "Cycle Bottom Reference (Go-To / Pros)"),
-            ("trigger_shot", "Manual Trigger Swing Capture + PiP"),
-            ("open_folder", "Open Today's Swings Folder"),
-            ("open_drills", "Open Golf Drills & Delivery Tracker"),
-            ("toggle_lines", "Toggle Kinovea Swing Plane Lines"),
-            ("save_lines", "Save Dragged Swing Lines as Default"),
-        ]
-        for key, desc in rows:
-            hk = self.hotkeys_cfg.get(key, "-")
+        state_labels: dict[str, "tk.Label"] = {}
+        for action, _, desc in HOTKEY_ACTIONS:
+            hk = self.hotkeys_cfg.get(action)
+            if not hk:
+                continue
             row = tk.Frame(frame, bg="#111827")
             row.pack(fill="x", pady=2)
-            tk.Label(row, text=f"{hk:<10}", fg="#facc15", bg="#1f2937",
+            tk.Label(row, text=f"{hk:<12}", fg="#facc15", bg="#1f2937",
                      font=("Consolas", 10, "bold"), padx=6, pady=2).pack(side="left")
             tk.Label(row, text=f"  {desc}", fg="#e5e7eb", bg="#111827",
                      font=("Segoe UI", 10)).pack(side="left")
+            state_labels[action] = tk.Label(row, text="", fg="#f87171", bg="#111827", font=("Segoe UI", 9))
+            state_labels[action].pack(side="left")
+        tk.Label(frame, text="Every Alt+<key> also works as Ctrl+Alt+<key>.", fg="#6b7280", bg="#111827",
+                 font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 0))
 
         status_var = tk.StringVar(value="")
         tk.Label(
@@ -5135,6 +5642,10 @@ class HotkeyOverlayManager:
         ).pack(anchor="w")
 
         def refresh_status():
+            for action, lbl in state_labels.items():
+                state = self.registration.get(action)
+                lbl.configure(text={"failed": "  (taken by another app)", "invalid": "  (bad key in config)",
+                                    "ctrl_alt_only": "  (use Ctrl+Alt)"}.get(state, ""))
             try:
                 st = self.status_fn()
                 status_var.set(
@@ -5202,7 +5713,12 @@ class SwingSessionManager:
         self._last_batch_angles: set[str] = set()
         self._retiled_on_first_clip = False
         self._lock = threading.RLock()
+        # Serializes Kinovea relaunches (reference swap, debounced club reload). Lock order: _rig_lock, then _lock.
+        self._rig_lock = threading.RLock()
+        self._club_reload_timer: threading.Timer | None = None
+        self._loaded_ref_cat: str | None = club_category(self.current_club)
         self.hub: ShotHub | None = None  # shot-data bridge (set by watch()/cmd_video() when enabled)
+        self.shotlab: "ShotLabSupervisor | None" = None  # set by watch() when shotlab.enabled
 
         self.pip = ProjectorPiPController(cfg)
         self.oc_monitor = OpenConnectMonitor(self._on_openconnect_shot, self._on_club_change)
@@ -5210,6 +5726,7 @@ class SwingSessionManager:
             self.vcfg.get("hotkeys", {}),
             {
                 "cheatsheet": self._toggle_cheatsheet,
+                "toggle_shotlab": self.toggle_shotlab,
                 "toggle_pip": self.pip.toggle_pin,
                 "bookmark_goto": self.bookmark_last_swing,
                 "cycle_reference": self.cycle_reference,
@@ -5255,6 +5772,10 @@ class SwingSessionManager:
     def stop(self) -> None:
         if not self._started:
             return
+        with self._lock:
+            if self._club_reload_timer is not None:
+                self._club_reload_timer.cancel()
+                self._club_reload_timer = None
         self.oc_monitor.stop()
         self.hotkeys.stop()
         self._started = False
@@ -5277,16 +5798,46 @@ class SwingSessionManager:
                 folders.append(extra)
         return folders
 
+    def _apply_debounced_club_reload(self) -> None:
+        # _rig_lock (not _lock) is held across the relaunch, so shots/club events keep flowing meanwhile,
+        # but a concurrent reference swap (Alt+R) waits instead of relaunching Kinovea on top of us.
+        with self._rig_lock:
+            with self._lock:
+                self._club_reload_timer = None
+                if not self._started:
+                    return  # stop() raced the timer: never relaunch Kinovea after shutdown
+                club = self.current_club
+                new_cat = club_category(club)
+                prev_cat = self._loaded_ref_cat
+                if not club or new_cat == prev_cat or "Putter" in (new_cat, prev_cat):
+                    if new_cat != "Putter":
+                        self._loaded_ref_cat = new_cat
+                    return
+                self._loaded_ref_cat = new_cat
+                ref_name = self.active_reference  # read under the rig lock: reflects any swap that just finished
+            try:
+                setup_video_rig(self.cfg, ref_name=ref_name, club=club, launch=True, reload_ref=True)
+                tile_video_windows(self.cfg, wait_sec=4.0)
+            except Exception:
+                LOG.warning("Debounced Kinovea reference reload failed for club %s", club, exc_info=True)
+
     def _on_club_change(self, club: str) -> None:
+        hub = self.hub
+        if hub is not None:
+            hub.set_club(club)
         with self._lock:
-            prev_cat = club_category(self.current_club)
             self.current_club = club
             new_cat = club_category(club)
             LOG.info("Active club changed -> %s (%s)", club, new_cat)
+            if self._club_reload_timer is not None:
+                self._club_reload_timer.cancel()
+                self._club_reload_timer = None
             # Putter: no capture and no reference swap; keep whatever full-swing reference is loaded.
-            if new_cat != prev_cat and "Putter" not in (new_cat, prev_cat):
-                setup_video_rig(self.cfg, ref_name=self.active_reference, club=club, launch=True, reload_ref=True)
-                tile_video_windows(self.cfg, wait_sec=4.0)
+            if new_cat != self._loaded_ref_cat and "Putter" not in (new_cat, self._loaded_ref_cat):
+                timer = threading.Timer(1.5, self._apply_debounced_club_reload)
+                timer.daemon = True
+                self._club_reload_timer = timer
+                timer.start()
 
     def _on_openconnect_shot(self, info: dict) -> None:
         hub = self.hub
@@ -5341,6 +5892,10 @@ class SwingSessionManager:
 
     def _toggle_cheatsheet(self) -> None:
         self.hotkeys.toggle_hud()
+
+    def toggle_shotlab(self) -> None:
+        result = toggle_shotlab_window(self.cfg, self.shotlab)
+        LOG.info("Hotkey: ShotLab %s", result)
 
     def get_hud_status(self) -> dict:
         with self._lock:
@@ -5550,7 +6105,7 @@ class SwingSessionManager:
             return saved_dtl, saved_fo
 
     def set_reference(self, ref_name: str, launch_rig: bool = True) -> None:
-        with self._lock:
+        with self._rig_lock, self._lock:
             self.active_reference = ref_name
             setup_video_rig(self.cfg, ref_name=ref_name, club=self.current_club, launch=launch_rig, reload_ref=launch_rig)
             if launch_rig:
@@ -5558,7 +6113,7 @@ class SwingSessionManager:
             LOG.info("Reference switched -> %s", ref_name)
 
     def cycle_reference(self) -> None:
-        with self._lock:
+        with self._rig_lock, self._lock:
             choices = ["My-Go-To"] + list(self.vcfg.get("pros", [])) + ["Last-Swing"]
             try:
                 idx = (choices.index(self.active_reference) + 1) % len(choices)
@@ -5861,15 +6416,33 @@ def watch(cfg, initial_grace: bool = False) -> None:
     # Without the video rig nothing else sniffs :921, so give the bridge its own (gated like the rig).
     bridge_sniffer = make_bridge_sniffer(hub) if (hub and not video_mgr) else None
 
+    try:
+        shotlab = ShotLabSupervisor(cfg) if shotlab_config(cfg).get("enabled") else None
+    except Exception as e:  # optional feature: never block the watchdog from starting
+        LOG.warning("ShotLab supervision disabled: %s", e)
+        shotlab = None
+    if video_mgr:
+        video_mgr.shotlab = shotlab
+        if hub:
+            hub.hotkeys_fn = video_mgr.hotkeys.rows  # ShotLab's Keys pill reads these via /api/status
+
     st = _WatchState((time.time() + grace_sec) if initial_grace else 0.0)
     LOG.info("SimWatch running. Create a file named PAUSE next to this script to pause. Status: %s", STATUS_PATH)
     try:
         while True:
             try:
-                _watch_step(cfg, st, video_mgr)
-                if bridge_sniffer is not None:  # same gate as the video rig: run while the gated app is up
+                if bridge_sniffer is not None or shotlab is not None:
                     gate = cfg.get("only_when_running")
-                    sync_bridge_sniffer(bridge_sniffer, (not gate) or bool(find_procs(gate)))
+                    gate_up = (not gate) or bool(find_procs(gate))
+                    if bridge_sniffer is not None:  # same gate as the video rig: run while the gated app is up
+                        sync_bridge_sniffer(bridge_sniffer, gate_up)
+                    if shotlab is not None:
+                        # Separate from the rig checks on purpose: ShotLab can never trigger GSPro/GameChanger recovery.
+                        shotlab.tick(gate_up, paused=pause_active(cfg))
+                        STATUS_EXTRAS["shotlab"] = shotlab.status()
+                if video_mgr is not None:
+                    STATUS_EXTRAS["hotkeys"] = video_mgr.hotkeys.rows()
+                _watch_step(cfg, st, video_mgr)  # writes the status (incl. the extras above), then sleeps
             except (KeyboardInterrupt, SystemExit):
                 raise
             except Exception as e:
@@ -5887,6 +6460,7 @@ def watch(cfg, initial_grace: bool = False) -> None:
             bridge_sniffer.stop()
         if bridge:
             bridge.stop()
+        STATUS_EXTRAS.clear()  # don't report a live ShotLab / hotkeys after we've stopped
         write_status("stopped")
 
 
@@ -6029,18 +6603,40 @@ def calibrate() -> None:
     print("\nAdd to \"checks\" in config.json:\n" + json.dumps(snippet, indent=2))
 
 
+def running_watchdog_status() -> dict | None:
+    """simwatch_status.json if it was written by a SimWatch process that is still alive, else None."""
+    try:
+        doc = json.loads(STATUS_PATH.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(doc, dict) or doc.get("state") == "stopped":
+        return None
+    try:
+        pid = int(doc.get("pid"))
+        if pid == os.getpid():
+            return None
+        proc = psutil.Process(pid)
+        # Guard against PID reuse after a crash: it must still be a Python process running simwatch.py.
+        if "python" not in (proc.name() or "").lower() or not any("simwatch" in str(a).lower() for a in proc.cmdline()):
+            return None
+    except (TypeError, ValueError, psutil.Error):
+        return None
+    return doc
+
+
 def print_hotkey_cheatsheet(cfg: dict) -> None:
-    hk = cfg.get("video", {}).get("hotkeys", {})
-    print("\n== SimWatch Video & Swing Hotkeys ==")
-    print(f"  {hk.get('cheatsheet', 'Alt+H'):<10} -> Show / Hide On-Screen Key Mapping HUD")
-    print(f"  {hk.get('toggle_pip', 'Alt+P'):<10} -> Pin / Unpin OBS Projector PiP Overlay")
-    print(f"  {hk.get('bookmark_goto', 'Alt+G'):<10} -> Bookmark Last Swing -> Swings/My-Go-To/")
-    print(f"  {hk.get('cycle_reference', 'Alt+R'):<10} -> Cycle Reference (My-Go-To / Pros / Last-Swing)")
-    print(f"  {hk.get('trigger_shot', 'Alt+C'):<10} -> Trigger Swing Capture + Projector PiP")
-    print(f"  {hk.get('open_folder', 'Alt+O'):<10} -> Open Today's Swings Folder in Explorer")
-    print(f"  {hk.get('open_drills', 'Alt+D'):<10} -> Open Golf Drills & Daily Delivery Hub")
-    print(f"  {hk.get('toggle_lines', 'Alt+L'):<10} -> Toggle Kinovea Swing Plane Lines")
-    print(f"  {hk.get('save_lines', 'Alt+Shift+L'):<10} -> Save Dragged Swing Lines as Default")
+    """Print the hotkeys; if a SimWatch watchdog is running, include which ones it actually registered."""
+    registration = None
+    doc = running_watchdog_status()
+    hk = doc.get("hotkeys") if doc else None
+    if isinstance(hk, list):
+        registration = {r.get("action"): r.get("state") for r in hk if isinstance(r, dict)}
+    print()
+    print(format_hotkey_cheatsheet(hotkey_rows(cfg.get("video", {}).get("hotkeys"), registration)))
+    if doc is None:
+        print("  (SimWatch isn't running, so key registration couldn't be checked.)")
+    elif registration is None:
+        print("  (SimWatch is running without the video rig (video.enabled=false), so no hotkeys are active.)")
 
 
 def cmd_video(cfg: dict) -> None:
@@ -6177,6 +6773,8 @@ def doctor_report(config_path: Path) -> list[tuple[str, str, str]]:
             else:
                 add(FAIL if needed else WARN, item, f"not found: {path}")
 
+    rows.extend(doctor_shotlab_rows(cfg_raw))
+
     # ports
     dev = cfg_raw.get("device", {}) if isinstance(cfg_raw.get("device"), dict) else {}
     ports = [(GSPRO_PORT, "OpenConnect"), (9050, "GSPconnect<->GSPro")]
@@ -6192,6 +6790,28 @@ def doctor_report(config_path: Path) -> list[tuple[str, str, str]]:
 
     # scheduled task, sniffer, firewall, device adapter, power, ... (Windows only; SKIP elsewhere)
     rows.extend(doctor_system_rows(cfg_raw))
+    return rows
+
+
+def doctor_shotlab_rows(cfg_raw: dict) -> list[tuple[str, str, str]]:
+    """ShotLab companion: installed? answering on its OBS port? Never a FAIL (it is optional)."""
+    scfg = shotlab_config(cfg_raw)
+    if not scfg.get("enabled"):
+        return [(INFO, "ShotLab", "disabled (set shotlab.enabled=true to have SimWatch run it)")]
+    rows = []
+    exe = shotlab_electron_exe(cfg_raw)
+    rows.append((PASS if exe.exists() else WARN, "ShotLab installed",
+                 str(exe) if exe.exists() else f"{exe} missing -> run setup.bat (needs Node.js 20+) or run_shotlab.bat once"))
+    port = int(scfg["obs_port"])
+    health = probe_shotlab_health(port)
+    if health:
+        rows.append((PASS, f"ShotLab :{port}", f"running (pid {health.get('pid')}, bridge "
+                     f"{'connected' if health.get('bridgeConnected') else 'NOT connected'})"))
+    else:
+        owner = port_listener_pid(port)
+        rows.append((WARN if owner else INFO, f"ShotLab :{port}",
+                     f"port held by another program (pid {owner})" if owner else
+                     "not running (fine; the watchdog starts it with GSPro)"))
     return rows
 
 
@@ -7059,7 +7679,7 @@ def main() -> None:
             "discover", "dump", "calibrate", "check", "recover", "watch", "startup", "stop",
             "displays", "reconnect", "release-device",
             "video", "bookmark", "reference", "obs-setup", "hotkeys", "drills", "lines", "save-lines",
-            "doctor", "bridge", "harden", "clip-ready",
+            "doctor", "bridge", "harden", "clip-ready", "shotlab",
         ],
     )
     ap.add_argument("arg", nargs="?")
@@ -7104,6 +7724,9 @@ def main() -> None:
     cfg = load_config(Path(a.config), command=a.command)
     if a.command == "bridge":
         return cmd_bridge(cfg, demo=a.demo, demo_interval=a.demo_interval, port=a.port)
+    if a.command == "shotlab":
+        # Open ShotLab now (or focus the running one: ShotLab is single-instance). The watchdog adopts it.
+        sys.exit(0 if launch_shotlab(cfg, activate=True) else 1)
     if a.command == "check":
         run_checks(cfg)
     elif a.command == "recover":
@@ -7176,6 +7799,9 @@ def main() -> None:
         print("  3. Run `python simwatch.py startup` (or `watch`) — SimWatch positions & auto-hides the PiP over GSPro!")
     elif a.command == "hotkeys":
         print_hotkey_cheatsheet(cfg)
+        if running_watchdog_status() is not None:  # read-only: never stop the live watchdog for this
+            print("\nSimWatch is running: press Alt+H (or Ctrl+Alt+H) to show the on-screen cheat sheet.")
+            return
         mgr = SwingSessionManager(cfg)
         mgr.hotkeys.start()
         mgr.hotkeys.show_hud()

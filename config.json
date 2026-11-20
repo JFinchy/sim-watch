@@ -78,6 +78,7 @@
     },
     "hotkeys": {
       "cheatsheet": "Alt+H",
+      "toggle_shotlab": "Alt+S",
       "toggle_pip": "Alt+P",
       "bookmark_goto": "Alt+G",
       "cycle_reference": "Alt+R",
@@ -93,6 +94,13 @@
     "enabled": true,
     "port": 8765,
     "sessions_dir": "Swings/Sessions"
+  },
+  "shotlab": {
+    "_note": "ShotLab desktop app + OBS overlays (shotlab/). The watchdog launches it once GSPro is up, relaunches it if it crashes or hangs, and leaves it closed if you close it (until the next GSPro session). Supervised separately from 'checks': ShotLab problems never trigger rig recovery. Install once with setup.bat (needs Node.js 20+).",
+    "enabled": true,
+    "dir": "shotlab",
+    "obs_port": 8766,
+    "restart_backoff_sec": [10, 30, 120, 300]
   },
   "apps": [
     {

@@ -635,3 +635,72 @@ def test_demo_message_has_coherent_club_data():
         cd = shot["club_data"]
         assert all(cd[k] is not None for k in ("speed", "path", "face", "aoa"))
         assert 1.0 < shot["derived"]["smash"] < 1.6
+
+
+def test_hub_club_tracking_and_gspro_club_endpoint(bridge, monkeypatch):
+    hub, srv = bridge
+    q = hub.subscribe()
+    try:
+        assert hub.set_club("7Iron") == "7Iron"
+        st = json.loads(_req(srv, "GET", "/api/status")[1])
+        assert st["current_club"] == "7Iron"
+        events = []
+        while not q.empty():
+            events.append(q.get_nowait())
+        assert any(ev == "club" and json.loads(data)["club"] == "7Iron" for ev, data in events)
+    finally:
+        hub.unsubscribe(q)
+
+    # Validation checks on POST /api/gspro/club
+    for bad in ({}, {"key": "x", "steps": 1}, {"key": "i", "steps": 0}, {"key": "k", "steps": 17}, {"key": "i", "steps": True}):
+        resp, _ = _req(srv, "POST", "/api/gspro/club", json.dumps(bad), JSON)
+        assert resp.status == 400, bad
+
+    # Stubbed Windows keystroke dispatch -> 200
+    calls = []
+    monkeypatch.setattr(sw, "send_gspro_club_keys", lambda k, s, cfg=None: (calls.append((k, s)) or True, f"sent {s}x {k.upper()}"))
+    resp, data = _req(srv, "POST", "/api/gspro/club", json.dumps({"key": "k", "steps": 4, "club": "7I"}), JSON)
+    assert resp.status == 200
+    assert json.loads(data)["ok"] is True and calls == [("k", 4)]
+
+    # Unavailable GSPro / non-Windows -> 503
+    monkeypatch.setattr(sw, "send_gspro_club_keys", lambda k, s, cfg=None: (False, "GSPro main window not found"))
+    resp, data = _req(srv, "POST", "/api/gspro/club", json.dumps({"key": "i", "steps": 2}), JSON)
+    assert resp.status == 503 and json.loads(data)["ok"] is False
+
+    # Browser origins (including file:// Origin: null) must be blocked on /api/gspro/club
+    for bad_origin in ("null", f"http://127.0.0.1:{srv.port}", "https://evil.example"):
+        resp, _ = _req(srv, "POST", "/api/gspro/club", json.dumps({"key": "i", "steps": 1}),
+                       {**JSON, "Origin": bad_origin})
+        assert resp.status == 403, bad_origin
+        resp, _ = _req(srv, "OPTIONS", "/api/gspro/club", headers={"Origin": bad_origin})
+        assert resp.status == 403, bad_origin
+
+    # Non-JSON Content-Type -> 415; malformed JSON -> 400
+    resp, _ = _req(srv, "POST", "/api/gspro/club", '{"key":"i","steps":1}', {"Content-Type": "text/plain"})
+    assert resp.status == 415
+    resp, _ = _req(srv, "POST", "/api/gspro/club", "{bad json", JSON)
+    assert resp.status == 400
+
+
+def test_hub_set_club_deduplicates_and_sniffer_handles_code_201(tmp_path):
+    hub = sw.ShotHub(sw.ShotStore(tmp_path))
+    q = hub.subscribe()
+    try:
+        assert hub.set_club("7Iron") == "7Iron"
+        assert hub.set_club("7Iron") == "7Iron"  # duplicate -> should not broadcast again
+        assert hub.set_club(None) is None
+        events = []
+        while not q.empty():
+            events.append(q.get_nowait())
+        assert len(events) == 2
+        assert json.loads(events[0][1]) == {"club": "7Iron"}
+        assert json.loads(events[1][1]) == {"club": None}
+    finally:
+        hub.unsubscribe(q)
+
+    sniffer = sw.make_bridge_sniffer(hub)
+    sniffer._feed_text(json.dumps({"Code": 201, "Message": "GSPro Player Information", "Player": {"Club": "DR"}}))
+    assert hub.current_club == "DR"
+
+

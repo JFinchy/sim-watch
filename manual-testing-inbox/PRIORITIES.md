@@ -20,6 +20,8 @@
 - [ ] Drill library expansion (faults, environments, templates) - see `drill-library-expansion.md`
 - [ ] Session runner, structured log, miss dial & weekly review - see `session-log-and-review.md`
 - [ ] Drill recommender, pacing timer, cue repeater & tone profiles - see `pacing-cues-recommender.md`
+- [ ] ShotLab Electron desktop dashboard, club auto-detector & OBS Studio overlays - see `shotlab-desktop-obs.md`
+- [ ] SimWatch ↔ ShotLab integration (supervisor, Rig pill, setup/doctor) - see `shotlab-simwatch-integration.md`
 
 ## Minor
 

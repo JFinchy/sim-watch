@@ -110,6 +110,25 @@ When GSPro starts, it shows its **GSPro Configuration** Unity dialog. SimWatch (
 3. Launches apps in `startup.order`: `gspro` (runs `gspro_configure` + waits for `:9050`) → `gspro_connect` (only launched if GSPro didn't already spawn `GSPconnect.exe`) → `integrator` (GameChanger, which claims the Launch Pro).
 4. Waits `settle_sec` (`15` s), runs a full health check, and enters the `watch` loop.
 
+### How the pieces fit (one front door)
+
+`run_simwatch.bat` is the only thing you need to start. SimWatch owns everything else:
+
+```
+Launch Pro → GameChanger → GSPconnect → GSPro          (rig chain: checks + escalating recovery)
+                               │ :921 sniffed
+                               ▼
+              SimWatch bridge :8765  ──►  drills hub (browser)
+              (shots, club, context,  ──►  ShotLab desktop app ──► OBS Browser Sources :8766
+               rig health events)           ▲
+                                            └── supervised by the watchdog (launch / crash relaunch / hang restart)
+Kinovea 2x2 + OBS Projector PiP          (video rig, started with GSPro)
+```
+
+- **ShotLab** (`shotlab` in `config.json`) starts once GSPro is up and opens behind GSPro without taking focus. If it crashes or hangs, the watchdog relaunches it with backoff (`restart_backoff_sec`). If you close it yourself, it stays closed until the next GSPro session; `python simwatch.py shotlab` reopens it now. A ShotLab started by hand (`run_shotlab.bat`) is monitored but never killed.
+- ShotLab is supervised **separately from `checks`**: a ShotLab problem never marks the rig unhealthy or restarts GSPro/GameChanger. Its state is the `shotlab` section of `simwatch_status.json`, and `doctor` reports it.
+- The other direction: SimWatch pushes its watchdog verdict over the bridge (`health` SSE event), shown as the **Rig** pill in ShotLab's top bar (Rig OK / recovering / Launch Pro off, with failing checks on hover).
+
 ### Autostart on Sign-In
 
 Right-click **`install_autostart.bat`** → **Run as administrator**. This creates a Windows Scheduled Task named `SimWatch` that runs `run_simwatch.bat --no-pause` at logon (`ONLOGON`) with highest privileges (`HIGHEST`) after a 10-second delay.
@@ -126,6 +145,7 @@ schtasks /Delete /TN "SimWatch" /F
 | Script | Purpose |
 |---|---|
 | `run_simwatch.bat` | Launches `python simwatch.py startup` in the repo directory (cold start + watch loop + video rig). |
+| `run_shotlab.bat` | Opens ShotLab by hand (dev/offline use; installs Electron on first run). Not needed day to day, since the watchdog launches it. |
 | `run_practice_video.bat` | Standalone TV-only practice mode (`python simwatch.py video`): 2x2 Kinovea grid + hotkeys without GSPro. |
 | `open_drills.bat` | Opens the offline Golf Drills, Routines & Daily Delivery Hub webpage (`drills/index.html`). |
 | `install_autostart.bat` | Registers the `SimWatch` Task Scheduler job to run `run_simwatch.bat` at logon as admin. |
@@ -178,9 +198,19 @@ SimWatch automatically pairs captured DTL and FO clips (plus `My-Go-To/` clips) 
 - **Hybrid Drag Calibration + Custom Kinovea Tools:** SimWatch installs custom posture tools (`Golf_DTL_VPlane.xml` & `Golf_FO_Box.xml`) into `<Kinovea install dir>\DrawingTools\Custom\` (needs admin once; SimWatch logs the exact step if it can't write there), and lets you drag any endpoint directly inside Kinovea, save (`Ctrl+S`), and press **`Alt+Shift+L`** (or `python simwatch.py save-lines`) so future swings match your exact mat & camera setup.
 
 ### Global Hotkeys & On-Screen Key Cheat Sheet
+
+Three ways to see them:
+- **`Alt+H` on the rig** pops the cheat sheet up over everything (top-centre). A key another app has already claimed is flagged in red.
+- **ShotLab's `⌨ Alt+H shortcuts` pill** (top bar, always visible): hover it to see the list.
+- **The SimWatch console window / `simwatch.log`** prints the full list each time the hotkeys are registered.
+- **`python simwatch.py hotkeys`** prints them, including which ones the running watchdog actually registered.
+
+Every bare `Alt+<key>` also works as `Ctrl+Alt+<key>`, as a fallback if another app owns the Alt version. Hotkeys are live while SimWatch runs with `video.enabled`. Set any of them to `""` in `config.json` to turn it off.
+
 | Hotkey (`config.json` → `video.hotkeys`) | Action |
 |---|---|
 | `Alt+H` | Show / Hide the on-screen **Key Mapping & Status HUD** |
+| `Alt+S` | **ShotLab**: bring it to the front; press again to minimize it (GSPro gets focus back). Opens it if closed. |
 | `Alt+P` | Pin / Unpin the **OBS Projector PiP** overlay |
 | `Alt+G` | **Bookmark** your last DTL + FO swing into `Swings/My-Go-To/<ClubCategory>/` |
 | `Alt+R` | **Cycle Reference** in the bottom 2x2 row (`My-Go-To` → Pros → `Last-Swing`) |
@@ -321,6 +351,7 @@ python simwatch.py displays              # show detected displays and projector 
 python simwatch.py video                 # standalone TV-only 2x2 Kinovea grid + hotkeys (no GSPro)
 python simwatch.py drills                # open the local Golf Drills & Daily Delivery Hub
 python simwatch.py bridge [--demo]       # run only the shot-data bridge (:8765) + :921 sniffer
+python simwatch.py shotlab               # open ShotLab now (or focus it); the watchdog adopts it
 python simwatch.py obs-setup             # generate Swings/ layout, workspaces & OBS scene JSON
 python simwatch.py lines [apply|on|off|toggle]  # apply or toggle Kinovea swing plane .kva lines
 python simwatch.py save-lines [club]     # save dragged .kva line coords as the new default

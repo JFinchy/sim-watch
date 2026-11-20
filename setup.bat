@@ -44,6 +44,26 @@ if errorlevel 1 echo [SimWatch] WARNING: requirements-video.txt failed to instal
 :skipvideo
 
 echo.
+where npm >nul 2>&1
+if errorlevel 1 (
+  echo [SimWatch] Node.js not found - skipping ShotLab install. Install Node.js 20+ LTS and rerun setup.bat to add ShotLab.
+  goto :skipshotlab
+)
+set "NODE_MAJOR=0"
+for /f "delims=v." %%v in ('node -v') do set "NODE_MAJOR=%%v"
+if %NODE_MAJOR% LSS 20 (
+  echo [SimWatch] ShotLab needs Node.js 20+ ^(found v%NODE_MAJOR%^) - skipping. Install Node.js 20+ LTS and rerun setup.bat.
+  goto :skipshotlab
+)
+choice /C YN /M "Install ShotLab desktop app + OBS overlays (downloads Electron, ~100 MB)"
+if errorlevel 2 goto :skipshotlab
+pushd "%~dp0shotlab"
+call npm install
+if errorlevel 1 echo [SimWatch] WARNING: ShotLab npm install failed. SimWatch still works without it.
+popd
+:skipshotlab
+
+echo.
 if exist "%~dp0config.local.json" goto :havelocal
 echo No config.local.json yet ^(per-machine exe paths / device IP, gitignored^).
 choice /C YN /M "Auto-detect GameChanger, GSPro, GSPconnect, FSX Pro, Kinovea and OBS paths and write config.local.json"
