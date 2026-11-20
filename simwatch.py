@@ -114,6 +114,18 @@ def log_throttled(key: str, msg: str, every_sec: float = 60.0, level: int = logg
     return True
 
 
+def cfg_number(value, default: float) -> float:
+    """`value` as a non-negative finite float, else `default`. For optional numeric settings that
+    validate_config only WARNS about: a bad value must fall back, not raise on every watch tick."""
+    if isinstance(value, bool):
+        return float(default)
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+    return v if v >= 0 and v != float("inf") else float(default)  # NaN fails v >= 0
+
+
 def write_text_if_changed(path: Path, data: str | bytes, backup: bool = True) -> bool:
     """Atomically write `data` to `path`. Skip if identical; keep ONE rolling `<name>.bak` of old content.
 
@@ -1588,8 +1600,11 @@ def device_recovery_cfg(cfg) -> dict:
 
 def device_backoff_sec(cfg, attempts: int) -> float:
     """Wait after the `attempts`-th device-only recovery (1-based): 5 -> 15 -> 30 min, capped at the last."""
+    raw = device_recovery_cfg(cfg).get("backoff_sec") or [300]
+    if not isinstance(raw, (list, tuple)):
+        raw = [raw]  # a bare number/string must not be iterated char by char ("300" -> 3, 0, 0)
     try:
-        sched = [float(s) for s in (device_recovery_cfg(cfg).get("backoff_sec") or [300]) if float(s) >= 0] or [300.0]
+        sched = [float(s) for s in raw if not isinstance(s, bool) and float(s) >= 0] or [300.0]
     except (TypeError, ValueError):
         log_throttled("device-backoff-cfg", "device_recovery.backoff_sec has a non-number; using [300]")
         sched = [300.0]
@@ -1654,7 +1669,8 @@ def _run_recovery_step(cfg, step: dict, label: str) -> None:
         time.sleep(2)
     if "integrator" in keys:
         release_fsx_for_recovery(cfg)   # safety net before GameChanger starts (never moves the mouse)
-        wait_device_sockets_clear(cfg, float(cfg.get("device", {}).get("socket_clear_sec", 10)))
+        dev = cfg.get("device") if isinstance(cfg.get("device"), dict) else {}
+        wait_device_sockets_clear(cfg, cfg_number(dev.get("socket_clear_sec", 10), 10))
     for key in keys:
         launch_app(cfg, cfg["apps_by_key"][key], 45)
     time.sleep(cfg.get("settle_sec", 15))
@@ -3908,6 +3924,8 @@ class ProjectorPiPController:
         try:
             hwnd = self._find_window()
             if not hwnd:
+                if not show:
+                    self.visible = False  # projector window is gone (OBS closed): nothing left on screen
                 return False
             if not show:
                 win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
@@ -3961,8 +3979,9 @@ class ProjectorPiPController:
 
     def tick(self) -> None:
         if self.visible and not self.pinned and self.hide_at and time.time() >= self.hide_at:
-            self._apply_overlay(False)
-            LOG.info("Projector PiP auto-hidden")
+            # Log only a real hide: a failing hide is retried every tick (0.5 s) and must not flood the log.
+            if self._apply_overlay(False):
+                LOG.info("Projector PiP auto-hidden")
 
     def status_text(self) -> str:
         if self.visible and self.pinned:
@@ -4020,7 +4039,10 @@ class OpenConnectMonitor:
             club = str(player["Club"]).strip()
             if club and club != self._last_club:
                 self._last_club = club
-                self.on_club_change(club)
+                try:
+                    self.on_club_change(club)
+                except Exception:  # a failed reference swap must not drop the shot in this same message
+                    log_throttled("oc-club-cb", f"club change to {club} failed", exc_info=True)
 
         ball = obj.get("BallData")
         opts = obj.get("ShotDataOptions") or {}
@@ -4049,6 +4071,14 @@ class OpenConnectMonitor:
                         "shot": shot,  # full bridge shot record (see openconnect_to_shot), or None
                     })
 
+    def _safe_handle(self, obj) -> None:
+        """_handle_json, but a malformed message or a raising callback (e.g. a reference swap that hits an
+        OSError) is logged instead of propagating into _run() and killing the sniffer thread."""
+        try:
+            self._handle_json(obj)
+        except Exception:
+            log_throttled("oc-handle", "OpenConnect monitor: message handling failed", exc_info=True)
+
     def _feed_text(self, text: str) -> None:
         self._buf = (self._buf + text)[-32768:]
         dec = json.JSONDecoder()
@@ -4062,7 +4092,7 @@ class OpenConnectMonitor:
             try:
                 obj, end = dec.raw_decode(self._buf)
                 self._buf = self._buf[end:]
-                self._handle_json(obj)
+                self._safe_handle(obj)
             except json.JSONDecodeError:
                 recovered = False
                 search_pos = 1
@@ -4074,7 +4104,7 @@ class OpenConnectMonitor:
                         obj, end = dec.raw_decode(self._buf[pos:])
                         if isinstance(obj, dict) and any(k in obj for k in _OC_TOP_KEYS):
                             self._buf = self._buf[pos + end:]
-                            self._handle_json(obj)
+                            self._safe_handle(obj)
                             recovered = True
                             break
                     except json.JSONDecodeError:
@@ -4136,7 +4166,13 @@ class OpenConnectMonitor:
                     if seg_key == self._last_seg_key:
                         continue
                     self._last_seg_key = seg_key
-                    self._feed_text(payload.decode("utf-8", errors="ignore"))
+                    try:
+                        self._feed_text(payload.decode("utf-8", errors="ignore"))
+                    except Exception:
+                        # Belt and braces (_feed_text already isolates callbacks): one bad message must not
+                        # end shot detection for the rest of the session - nothing restarts this thread.
+                        self._buf = ""
+                        log_throttled("oc-feed", "OpenConnect monitor: failed to parse traffic", exc_info=True)
         finally:
             self.active = False
             try:
@@ -5817,7 +5853,8 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
     res = evaluate_checks(cfg, verbose=False)
     state = "unknown"
     # Debounce "device offline": ping AND device_tcp must both fail on N consecutive ticks (default 3).
-    offline_need = max(1, int(cfg.get("device", {}).get("offline_ticks", 3)))
+    dev = cfg.get("device") if isinstance(cfg.get("device"), dict) else {}
+    offline_need = max(1, int(cfg_number(dev.get("offline_ticks", 3), 3)))
     st.offline_ticks = st.offline_ticks + 1 if res.get("device_offline_raw") else 0
     device_offline = st.offline_ticks >= offline_need
     device_suspect = bool(res.get("device_offline_raw")) and not device_offline
@@ -7190,7 +7227,7 @@ def harden_offer_integrator_restart(cfg: dict, wait_sec: float = 30.0) -> bool |
     app = dict(app, key=app.get("key") or "integrator")
     kill_app(app)
     time.sleep(2)
-    wait_device_sockets_clear(cfg, float((cfg.get("device") or {}).get("socket_clear_sec", 10)))
+    wait_device_sockets_clear(cfg, cfg_number((cfg.get("device") or {}).get("socket_clear_sec", 10), 10))
     launch_app(cfg, app, 45)
     run_cfg = dict(cfg, apps_by_key=dict(cfg.get("apps_by_key") or {}, **{app["key"]: app}))
     end = time.time() + wait_sec

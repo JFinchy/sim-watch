@@ -36,3 +36,15 @@ A hardening pass on the watchdog: crash-proof `watch` loop, config validation, a
 10. First run may create one `.bak` next to a changed file; the second run creates no new backups and does not change file timestamps (skipped, identical).
 11. Recording starts on the shot and stops after `post_trigger_sec`, including while paused; PiP hides after `popup_seconds` even while paused; a failed stop command is retried every tick (up to ~10 s) and then gives up with an ERROR.
 12. Both clips exist; `_2` suffix on the second; no overwrite.
+
+## Addendum: code-review robustness fixes (uncommitted, `feature/coach-system`)
+
+Steps:
+
+A. With `watch` running and video enabled, take a shot so the OBS PiP pops up, then close OBS before `popup_seconds` elapses. Wait 30 s.
+B. Set `"offline_ticks": "y"` under `device` in `config.local.json`, restart `watch`, power the Launch Pro off for ~30 s, then put the value back.
+
+Pass criteria:
+
+A. `simwatch.log` has no repeating `Projector PiP auto-hidden` lines (it used to log twice a second forever). The next shot after OBS is restarted pops the PiP again.
+B. `config warning: device.offline_ticks must be a non-negative number` at startup, then normal `device_offline` handling after 3 ticks. No `watch iteration failed (ValueError ...)` lines.
