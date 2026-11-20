@@ -20,6 +20,7 @@
 - [ ] Drill library expansion (faults, environments, templates) - see `drill-library-expansion.md`
 - [ ] Session runner, structured log, miss dial & weekly review - see `session-log-and-review.md`
 - [ ] Drill recommender, pacing timer, cue repeater & tone profiles - see `pacing-cues-recommender.md`
+- [ ] Practice-video handoff, phone access (bridge.lan) & narrowed firewall rules - see `video-handoff-phone-firewall.md`
 
 ## Minor
 

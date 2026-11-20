@@ -374,7 +374,7 @@ def test_kva_round_trip(tmp_path):
 
 def test_watch_survives_forced_exception(monkeypatch, tmp_path):
     monkeypatch.setattr(sw, "STATUS_PATH", tmp_path / "status.json")
-    monkeypatch.setattr(sw, "acquire_singleton_lock", lambda: True)
+    monkeypatch.setattr(sw, "acquire_singleton_lock", lambda *a: True)
     calls = {"n": 0}
 
     class Stop(BaseException):

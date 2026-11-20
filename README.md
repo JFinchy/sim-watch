@@ -123,6 +123,29 @@ To remove the scheduled task:
 schtasks /Delete /TN "SimWatch" /F
 ```
 
+### One daemon at a time (stop / restart / practice video)
+
+Only one `watch`/`startup`/`video` daemon runs at a time (the `Local\SimWatchSingleton` mutex plus
+`simwatch_daemon.json`). A second copy **never kills the running one**:
+
+- A second `watch`/`startup` (e.g. double-clicking `run_simwatch.bat` while the sign-in task is running) prints
+  "SimWatch is already running ..." and exits 0.
+- **Restart** the background daemon (e.g. after `git pull`): `python simwatch.py stop`, then
+  `schtasks /Run /TN SimWatch` (or run `run_simwatch.bat`). `stop` writes `STOP_REQUEST`; the daemon notices it
+  within one loop (~5-10 s), shuts the bridge/rig down cleanly and exits 0. If it hasn't exited after 20 s (still
+  in its startup sequence, or hung) it is terminated. Either way `run_simwatch.bat` sees `STOP_REQUEST`, logs
+  "stopped by simwatch.py stop", deletes it and exits 0, so there is **no** "SimWatch did not start" box, no
+  task restart, and the task ends (so `schtasks /Run` works again). This also works from a non-elevated
+  prompt against the elevated task.
+- After a crash the mutex is gone, so the task's own restart (or the next sign-in) starts normally.
+- **Practice video** (`python simwatch.py video` / `run_practice_video.bat`) while the daemon runs: it writes a
+  `VIDEO_ON` file and exits 0. The daemon then starts its video rig (Kinovea grid, OBS PiP, hotkeys, :921 shot
+  capture) **even without GSPro**, and keeps it on until you run `python simwatch.py video off` (or delete
+  `VIDEO_ON`); after that the rig follows GSPro again (Kinovea windows stay open; close them yourself). This works
+  even with `video.enabled: false` and with the bridge disabled. `VIDEO_ON` is a request to the *current*
+  daemon: a newly started daemon deletes a leftover one. With no daemon running, `video` runs standalone in its
+  console as before (Ctrl+C or `simwatch.py stop` ends it).
+
 ---
 
 ## Helper Batch Scripts
@@ -130,7 +153,7 @@ schtasks /Delete /TN "SimWatch" /F
 | Script | Purpose |
 |---|---|
 | `run_simwatch.bat` | Launches `python simwatch.py startup` in the repo directory (cold start + watch loop + video rig). |
-| `run_practice_video.bat` | Standalone TV-only practice mode (`python simwatch.py video`): 2x2 Kinovea grid + hotkeys without GSPro. |
+| `run_practice_video.bat` | Practice video (`python simwatch.py video`): 2x2 Kinovea grid + hotkeys without GSPro. If the background daemon is running it asks that daemon to start its rig (until `simwatch.py video off`) instead of starting a second copy. |
 | `open_drills.bat` | Opens the offline Golf Drills, Routines & Daily Delivery Hub webpage (`drills/index.html`). |
 | `install_autostart.bat` | Registers the `SimWatch` Task Scheduler job to run `run_simwatch.bat` at logon as admin. |
 | `reconnect_sim.bat` | Manual/diagnostic: runs `python simwatch.py reconnect` to attach FSX Pro to the Launch Pro. |
@@ -243,8 +266,25 @@ records every shot the OpenConnect (:921) sniffer sees and serves it to `drills/
   `shots.jsonl` themselves. With `video.enabled: false`, `watch` runs its own :921 sniffer for the bridge
   (only while the `only_when_running` app is up).
 - While a drill is active its id is stored on each shot and added to clip names as `_D-<id>`.
-- **Config:** `"bridge": {"enabled": true, "port": 8765, "sessions_dir": "Swings/Sessions"}`. A busy port is
-  logged and the watchdog carries on without the bridge.
+- **Config:** `"bridge": {"enabled": true, "port": 8765, "sessions_dir": "Swings/Sessions", "lan": false}`. A
+  busy port is logged and the watchdog carries on without the bridge.
+- **Phone over home Wi-Fi (opt-in, `bridge.lan: true`):** the bridge then listens on all interfaces
+  (`0.0.0.0:<port>`). Clients on this PC (127.0.0.1) behave exactly as above, no token. Every other client
+  must present the pairing token from `bridge_token.txt` (created on first use, gitignored) on **every**
+  request, static files included: pass it once as `?token=...` and the server sets an `HttpOnly;
+  SameSite=Strict` cookie (1 year) that the page's fetch/SSE calls then send automatically. Without it: 401.
+  For token-authenticated LAN clients the `Host` may be an IP literal or this PC's hostname (`name` or
+  `name.<suffix>`) on the bridge port (else 421), and an `Origin`, if sent, must be that same
+  `http://<host>:<port>` (else 403). A DNS-rebinding page can't know the token and never receives the
+  cookie (it's scoped to the real host), so the localhost protections are unchanged.
+  Setup: set `"bridge": {"lan": true}` in `config.local.json`, `simwatch.py stop` + restart, run
+  `simwatch.py harden --apply` (adds firewall rule "SimWatch bridge LAN (phone)": inbound TCP `<port>`,
+  Private profile, `RemoteAddress LocalSubnet` only; your home Wi-Fi must be a **Private** network), then
+  `python simwatch.py phone` prints `http://192.168.x.y:8765/?token=...` (plus a QR code if the optional
+  `qrcode` package is installed). `status` and `doctor` print the URL too. Revoke all paired phones: delete
+  `bridge_token.txt` and restart. With `lan` back to false, doctor reports a leftover firewall rule as INFO.
+  When served over http the drills page talks to `location.origin`; opened from `file://` it uses
+  `http://127.0.0.1:8765`.
 - **Testing:** `python simwatch.py bridge` runs only the server + sniffer; add `--demo` (optionally
   `--demo-interval 2`, `--port 8766`) to emit a synthetic shot every few seconds. The demo runs on macOS too.
   Demo shots go to `Swings/Sessions-demo/` (`bridge.demo_sessions_dir`), are tagged `"demo": true`, and the
@@ -325,10 +365,12 @@ python simwatch.py doctor                # validate config, paths, ports, task, 
 python simwatch.py check                 # run every health check once and print results
 python simwatch.py watch                 # watch forever, escalate recovery, and run video rig
 python simwatch.py startup               # cold start everything in order, then watch
-python simwatch.py stop                  # stop any running background SimWatch daemons
+python simwatch.py stop                  # ask the background daemon to exit cleanly (forced after 20 s)
 python simwatch.py recover [level]       # run one recovery level now (default 0)
 python simwatch.py displays              # show detected displays and projector decision
-python simwatch.py video                 # standalone TV-only 2x2 Kinovea grid + hotkeys (no GSPro)
+python simwatch.py video [off]           # 2x2 Kinovea grid + hotkeys, no GSPro; hands off to a running daemon (VIDEO_ON)
+python simwatch.py status                # bridge status, today's shots, daemon + VIDEO_ON state, phone URL, log tail
+python simwatch.py phone                 # drills-hub URL (with pairing token) for a phone on your Wi-Fi (bridge.lan)
 python simwatch.py drills                # open the local Golf Drills & Daily Delivery Hub
 python simwatch.py bridge [--demo]       # run only the shot-data bridge (:8765) + :921 sniffer
 python simwatch.py obs-setup             # generate Swings/ layout, workspaces & OBS scene JSON

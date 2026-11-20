@@ -6409,7 +6409,7 @@
       };
       const SESSION_MODES = ["real", "almost", "sore"];
       const SESSION_MINUTES = [20, 30, 45];
-      const BRIDGE_URL = "http://127.0.0.1:8765";
+      const BRIDGE_URL = /^https?:$/.test(location.protocol) ? location.origin : "http://127.0.0.1:8765"; // served by the bridge (PC or phone) vs file://
       const AUTO_ADVANCE_MS = 2500;
       const DONE_MIN_SECS = 45; // a block with no reps counts as done after this long on it
 

@@ -41,3 +41,9 @@ config.local.json.bak
 Swings/Workspaces/*.xml
 Swings/Workspaces/CustomTools/
 Swings/Workspaces/lines_state.json
+
+# Daemon coordination + phone pairing (runtime, per machine)
+simwatch_daemon.json
+VIDEO_ON
+STOP_REQUEST
+bridge_token.txt

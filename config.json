@@ -91,10 +91,12 @@
     }
   },
   "bridge": {
-    "_note": "Local shot-data bridge for the drills hub: every OpenConnect shot is appended to <sessions_dir>/YYYY-MM-DD/shots.jsonl and served on http://127.0.0.1:<port>/ (127.0.0.1 only).",
+    "_note": "Local shot-data bridge for the drills hub: every OpenConnect shot is appended to <sessions_dir>/YYYY-MM-DD/shots.jsonl and served on http://127.0.0.1:<port>/ (127.0.0.1 only unless lan is true).",
     "enabled": true,
     "port": 8765,
-    "sessions_dir": "Swings/Sessions"
+    "sessions_dir": "Swings/Sessions",
+    "_lan_note": "lan: true = also serve the drills hub to a phone on your home Wi-Fi (binds 0.0.0.0; non-local clients need the pairing token in bridge_token.txt). Get the URL with: python simwatch.py phone. Then run harden --apply for the firewall rule (TCP <port>, Private, LocalSubnet only).",
+    "lan": false
   },
   "apps": [
     {

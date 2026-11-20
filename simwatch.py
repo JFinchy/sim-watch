@@ -10,11 +10,13 @@ Commands:
   python simwatch.py recover [level]       run one recovery level now (default 0)
   python simwatch.py watch                 run forever: check, escalate recovery, and drive video rig
   python simwatch.py startup               after a reboot: launch everything in order, then watch
-  python simwatch.py stop                  stop any running background SimWatch daemon instances
+  python simwatch.py stop                  stop the background SimWatch daemon (clean exit; a second watch/
+                                           startup never kills the running one, it just exits)
   python simwatch.py displays              show detected displays and what GSPro would be told to use
   python simwatch.py reconnect             manual/diagnostic: connect FSX Pro's own view to the Launch Pro
   python simwatch.py release-device        disconnect FSX Pro from the Launch Pro so GameChanger can reconnect
-  python simwatch.py video                 launch/tile 2x2 Kinovea TV grid + OBS PiP + hotkeys (no GSPro needed)
+  python simwatch.py video [off]           2x2 Kinovea TV grid + OBS PiP + hotkeys (no GSPro needed); if the
+                                           watch/startup daemon runs, asks it to start its rig (until `video off`)
   python simwatch.py bookmark [club]       save latest DTL & FO swing clips to Swings/My-Go-To/
   python simwatch.py reference [name]      switch bottom Kinovea reference (My-Go-To or Pro name)
   python simwatch.py obs-setup             create Swings/ layout, Kinovea workspaces & OBS scene collection JSON
@@ -26,14 +28,20 @@ Commands:
   python simwatch.py harden [adapter] [--apply]  print (or run, elevated) Launch Pro link/firewall/power hardening
   python simwatch.py discover --write-local      detect app exe paths and write config.local.json
   python simwatch.py bridge [--demo]       run only the shot-data bridge (http://127.0.0.1:8765) + :921 sniffer
+  python simwatch.py phone                 print the drills-hub URL for a phone on your Wi-Fi (needs bridge.lan)
+  python simwatch.py status                bridge status, today's shots, daemon/video request, log tail
   python simwatch.py clip-ready <file> DTL Kinovea 2025 post-recording command: link + library + replay copy
 
 Run from an ADMIN terminal if any sim app runs as admin (Windows blocks clicks & raw sockets otherwise).
 """
 import argparse
+import atexit
 import ctypes
 import functools
+import hmac
+import http.cookies
 import http.server
+import ipaddress
 import json
 import logging
 from logging.handlers import RotatingFileHandler
@@ -42,6 +50,7 @@ import os
 import queue
 import random
 import re
+import secrets
 import shutil
 import socket
 import struct
@@ -92,6 +101,11 @@ GSPRO_PORT = 921
 VIDEO_EXTS = (".mp4", ".mkv", ".avi", ".mov")
 STATUS_PATH = HERE / "simwatch_status.json"
 _SINGLETON_MUTEX = None
+# Daemon coordination files (all gitignored, next to this script):
+DAEMON_INFO_PATH = HERE / "simwatch_daemon.json"  # {pid, command, started} of the daemon holding the singleton
+VIDEO_REQUEST_PATH = HERE / "VIDEO_ON"            # `video` while a daemon runs: "start the video rig, no GSPro needed"
+STOP_REQUEST_PATH = HERE / "STOP_REQUEST"         # `stop`: ask the daemon to exit cleanly (also tells the launcher)
+_DAEMON_STARTED = 0.0                             # time.time() when this process took the singleton
 
 _THROTTLE: dict[str, float] = {}
 _THROTTLE_LOCK = threading.Lock()
@@ -338,6 +352,9 @@ def validate_config(cfg: dict, check_paths: bool | None = None) -> list[tuple[st
     sl = cfg.get("video", {}).get("swing_lines", {}) if isinstance(cfg.get("video"), dict) else {}
     if isinstance(sl, dict) and sl.get("handedness") and str(sl["handedness"]).lower() not in ("left", "right"):
         warn(f"video.swing_lines.handedness {sl['handedness']!r} is not 'left' or 'right' (treated as right)")
+    bcfg = cfg.get("bridge")
+    if isinstance(bcfg, dict) and "lan" in bcfg and not isinstance(bcfg["lan"], bool):
+        warn(f"bridge.lan {bcfg['lan']!r} is not true/false (treated as false: phone access stays off)")
     return out
 
 
@@ -442,30 +459,51 @@ def read_config_layers(path: Path) -> tuple:
     return deep_merge_config(base, over), lp
 
 
-def stop_other_simwatch_instances() -> int:
-    """Terminate any other background `simwatch.py` daemon (`watch`/`startup`/`video`) processes."""
-    # Never stop ourselves or our own ancestors: on Windows a venv's Scripts\python.exe is a
-    # launcher stub that runs the real interpreter as a child with the *same* command line,
-    # so the parent looks exactly like a "prior" SimWatch (killing it exits the launcher with 15).
-    my_pids = {os.getpid(), os.getppid()}  # direct parent even if the psutil walk below fails
+DAEMON_CMDS = ("watch", "startup", "video")
+
+
+def _own_pids() -> set[int]:
+    """This process and its ancestors. On Windows a venv's Scripts\\python.exe is a launcher stub that runs the
+    real interpreter as a child with the *same* command line, so the parent looks exactly like a "prior" SimWatch
+    (killing it exits the launcher with 15)."""
+    pids = {os.getpid(), os.getppid()}  # direct parent even if the psutil walk below fails
     try:
-        my_pids.update(a.pid for a in psutil.Process().parents())
+        pids.update(a.pid for a in psutil.Process().parents())
     except psutil.Error:
         pass
-    daemon_cmds = {"watch", "startup", "video"}
-    victims = []
+    return pids
+
+
+def find_simwatch_daemons() -> list:
+    """Other `simwatch.py watch|startup|video` python processes (never ourselves or our ancestors).
+    Each returned psutil.Process has .info["cmdline"]. An elevated daemon's cmdline may be unreadable from a
+    non-elevated shell; it is then missed here (the singleton mutex + simwatch_daemon.json still see it)."""
+    mine = _own_pids()
+    found = []
     for p in psutil.process_iter(["pid", "name", "cmdline"]):
         try:
-            if p.info["pid"] in my_pids:
+            if p.info["pid"] in mine:
                 continue
             name = (p.info["name"] or "").lower()
             if not name.startswith("python"):
                 continue
             cmd = [str(a).lower() for a in (p.info["cmdline"] or [])]
-            if any("simwatch.py" in a for a in cmd) and any(a in daemon_cmds for a in cmd):
-                victims.append(p)
+            if any("simwatch.py" in a for a in cmd) and any(a in DAEMON_CMDS for a in cmd):
+                found.append(p)
         except psutil.Error:
             pass
+    return found
+
+
+def _daemon_command_of(proc) -> str:
+    cmd = [str(a).lower() for a in ((getattr(proc, "info", None) or {}).get("cmdline") or [])]
+    return next((a for a in cmd if a in DAEMON_CMDS), "unknown")
+
+
+def stop_other_simwatch_instances() -> int:
+    """Force-terminate any other background `simwatch.py` daemon (`watch`/`startup`/`video`) processes.
+    Last resort for `simwatch.py stop` after the clean STOP_REQUEST handshake timed out (see request_stop)."""
+    victims = find_simwatch_daemons()
     if not victims:
         return 0
     for p in victims:
@@ -483,14 +521,10 @@ def stop_other_simwatch_instances() -> int:
     return len(victims)
 
 
-def acquire_singleton_lock() -> bool:
-    """Ensure only one SimWatch watch/startup/video daemon runs at a time."""
+def _create_singleton_mutex() -> str:
+    """Create the Local\\SimWatchSingleton mutex: "acquired", "held" (another daemon owns it) or "unavailable"
+    (not Windows / ctypes failure). Separate function so tests can stub it."""
     global _SINGLETON_MUTEX
-    if _SINGLETON_MUTEX is not None:
-        return True
-    stopped = stop_other_simwatch_instances()
-    if stopped:
-        time.sleep(0.5)
     try:
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.wintypes.BOOL, ctypes.wintypes.LPCWSTR]
@@ -500,14 +534,158 @@ def acquire_singleton_lock() -> bool:
         mutex = kernel32.CreateMutexW(None, False, "Local\\SimWatchSingleton")
         err = ctypes.get_last_error()
         if not mutex:
-            return err not in (183, 5)  # 5 = ACCESS_DENIED: an elevated instance already owns it
+            return "held" if err in (183, 5) else "unavailable"  # 5 = ACCESS_DENIED: an elevated instance owns it
         if err == 183:  # ERROR_ALREADY_EXISTS
             kernel32.CloseHandle(mutex)
-            return False
+            return "held"
         _SINGLETON_MUTEX = mutex
+        return "acquired"
     except Exception:
+        return "unavailable"
+
+
+def read_daemon_info() -> dict | None:
+    """simwatch_daemon.json if the pid in it is still alive (else None: stale file from a crash)."""
+    try:
+        info = json.loads(DAEMON_INFO_PATH.read_text(encoding="utf-8"))
+        pid = int(info.get("pid"))
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+    if pid == os.getpid() or not psutil.pid_exists(pid):
+        return None
+    return info
+
+
+def running_daemon() -> dict | None:
+    """{pid, command} of the SimWatch daemon running in another process, or None."""
+    info = read_daemon_info()
+    if info:
+        return {"pid": info.get("pid"), "command": str(info.get("command") or "unknown")}
+    procs = find_simwatch_daemons()
+    if procs:
+        return {"pid": procs[0].pid, "command": _daemon_command_of(procs[0])}
+    return None
+
+
+def _remove_daemon_info() -> None:
+    try:
+        info = json.loads(DAEMON_INFO_PATH.read_text(encoding="utf-8"))
+        if int(info.get("pid", -1)) == os.getpid():
+            DAEMON_INFO_PATH.unlink(missing_ok=True)
+    except (OSError, ValueError, TypeError, AttributeError):
         pass
+
+
+def _clear_stale_requests(command: str) -> None:
+    """At daemon start: drop a STOP_REQUEST aimed at an earlier process and (watch/startup) a VIDEO_ON left from
+    an earlier daemon session - a request only ever targets the daemon that was running when it was made."""
+    paths = [STOP_REQUEST_PATH] + ([VIDEO_REQUEST_PATH] if command in ("watch", "startup") else [])
+    for path in paths:
+        try:
+            if path.exists():
+                path.unlink()
+                LOG.info("Removed stale %s from an earlier SimWatch run", path.name)
+        except OSError:
+            pass
+
+
+def acquire_singleton_lock(command: str = "watch") -> bool:
+    """Take the single-daemon slot for watch/startup/video. Never kills anything: returns False when another
+    daemon already runs (callers then exit cleanly or hand off; `simwatch.py stop` is the way to stop it)."""
+    global _SINGLETON_MUTEX, _DAEMON_STARTED
+    if _SINGLETON_MUTEX is not None:
+        return True
+    state = _create_singleton_mutex()
+    if state == "held":
+        return False
+    if state == "unavailable":
+        if find_simwatch_daemons():  # no mutex (ctypes failure): fall back to a process scan
+            return False
+        _SINGLETON_MUTEX = "no-mutex"
+    elif _SINGLETON_MUTEX is None:
+        _SINGLETON_MUTEX = "acquired"  # (the real creator stores the handle; a stub may not)
+    _DAEMON_STARTED = time.time()
+    _clear_stale_requests(command)
+    try:
+        DAEMON_INFO_PATH.write_text(json.dumps({"pid": os.getpid(), "command": command,
+                                                "started": datetime.now().isoformat(timespec="seconds")}),
+                                    encoding="utf-8")
+        atexit.register(_remove_daemon_info)
+    except OSError as e:
+        LOG.warning("could not write %s: %s", DAEMON_INFO_PATH.name, e)
     return True
+
+
+def already_running_message(command: str) -> str:
+    d = running_daemon()
+    who = f" (pid {d['pid']}, `{d['command']}`)" if d and d.get("pid") else ""
+    return (f"SimWatch is already running in the background{who}; not starting a second `{command}`. "
+            "To restart it: python simwatch.py stop, then start it again (or: schtasks /Run /TN SimWatch).")
+
+
+def stop_requested() -> bool:
+    """True when `simwatch.py stop` wrote STOP_REQUEST after this daemon started."""
+    try:
+        return STOP_REQUEST_PATH.stat().st_mtime >= _DAEMON_STARTED - 1.0
+    except OSError:
+        return False
+
+
+def request_stop(timeout: float = 20.0) -> int:
+    """`simwatch.py stop`: ask the running daemon to exit cleanly (STOP_REQUEST; it works across elevation and
+    lets the daemon close the bridge/rig), wait, then force-terminate whatever is left. STOP_REQUEST also tells
+    run_simwatch.bat that the exit was a deliberate stop, so it shows no error box and ends the scheduled task
+    (a later `schtasks /Run /TN SimWatch` then starts it again). Returns the number of processes found."""
+    procs = find_simwatch_daemons()
+    pids = {p.pid for p in procs}
+    info = read_daemon_info()
+    if info and info.get("pid"):
+        pids.add(int(info["pid"]))
+    if not pids:
+        return 0
+    try:
+        STOP_REQUEST_PATH.write_text(f"stop requested {datetime.now().isoformat(timespec='seconds')} "
+                                     f"by pid {os.getpid()}\n", encoding="utf-8")
+    except OSError as e:
+        LOG.warning("could not write %s (%s); force-stopping instead", STOP_REQUEST_PATH.name, e)
+        return max(len(pids), stop_other_simwatch_instances())
+    print(f"Asked SimWatch (pid {', '.join(str(p) for p in sorted(pids))}) to stop; waiting up to {timeout:.0f}s...")
+    deadline = time.time() + timeout
+    while time.time() < deadline and any(psutil.pid_exists(p) for p in pids):
+        time.sleep(0.5)
+    left = [p for p in pids if psutil.pid_exists(p)]
+    if left:
+        LOG.info("SimWatch did not exit within %.0fs (pid %s); terminating", timeout, left)
+        stop_other_simwatch_instances()  # STOP_REQUEST stays: the launcher sees it and treats rc 15 as a stop
+        left = [p for p in pids if psutil.pid_exists(p)]
+        if left:
+            print(f"Could not stop pid {left} (elevated? run this from an Administrator prompt).")
+    else:
+        try:
+            STOP_REQUEST_PATH.unlink(missing_ok=True)  # clean exit (rc 0): nothing left for the launcher to read
+        except OSError:
+            pass
+    return len(pids)
+
+
+def video_request_active() -> bool:
+    return VIDEO_REQUEST_PATH.exists()
+
+
+def write_video_request(by: str = "video") -> None:
+    VIDEO_REQUEST_PATH.write_text(f"requested_at: {datetime.now().isoformat(timespec='seconds')} by {by}\n"
+                                  "Delete this file or run `python simwatch.py video off` to release the video rig.\n",
+                                  encoding="utf-8")
+
+
+def clear_video_request() -> bool:
+    try:
+        existed = VIDEO_REQUEST_PATH.exists()
+        VIDEO_REQUEST_PATH.unlink(missing_ok=True)
+        return existed
+    except OSError as e:
+        LOG.warning("could not remove %s: %s", VIDEO_REQUEST_PATH.name, e)
+        return False
 
 
 # --------------------------------------------------------------------------- processes
@@ -4275,7 +4453,7 @@ BRIDGE_VERSION = 2
 CONTEXT_PHASES = ("warmup", "cold", "block", "transfer", "speed")
 CONTEXT_FIELDS = ("drill_id", "feel_id", "block_id", "session_id", "phase", "cluster", "note")
 CONTEXT_NOTE_MAX = 200
-BRIDGE_DEFAULTS = {"enabled": True, "port": 8765, "sessions_dir": "Swings/Sessions"}
+BRIDGE_DEFAULTS = {"enabled": True, "port": 8765, "sessions_dir": "Swings/Sessions", "lan": False}
 BRIDGE_DEMO_SESSIONS_DIR = "Swings/Sessions-demo"  # `bridge --demo` (override: bridge.demo_sessions_dir)
 DRILL_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
@@ -4284,6 +4462,9 @@ DRILL_IDLE_TIMEOUT_SEC = 60.0  # clear active_drill after this long with zero SS
 BRIDGE_MAX_SUBSCRIBERS = 8     # concurrent /api/events streams; more get 503
 SSE_WRITE_TIMEOUT_SEC = 10.0   # a client that stops reading for this long is dropped
 BRIDGE_ALLOWED_HOSTS = ("127.0.0.1", "localhost")
+BRIDGE_TOKEN_PATH = HERE / "bridge_token.txt"  # phone pairing token for bridge.lan (gitignored, created on demand)
+BRIDGE_TOKEN_COOKIE = "simwatch_token"
+BRIDGE_LAN_FIREWALL_RULE = "SimWatch bridge LAN (phone)"
 
 
 def bridge_config(cfg: dict | None) -> dict:
@@ -4293,6 +4474,78 @@ def bridge_config(cfg: dict | None) -> dict:
     if isinstance(b, dict):
         out.update({k: v for k, v in b.items() if not k.startswith("_")})
     return out
+
+
+def bridge_lan_enabled(cfg: dict | None) -> bool:
+    return bridge_config(cfg).get("lan") is True
+
+
+def bridge_token(create: bool = True, path: Path | None = None) -> str | None:
+    """The LAN pairing token (bridge_token.txt). Created once (exclusive create, so two processes racing to
+    create it agree on one token); delete the file to revoke every paired phone."""
+    path = path or BRIDGE_TOKEN_PATH
+    for _ in range(2):
+        try:
+            tok = path.read_text(encoding="utf-8").strip()
+            if tok:
+                return tok
+        except OSError:
+            pass
+        if not create:
+            return None
+        try:
+            fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            time.sleep(0.05)  # another process is writing it: read theirs
+            continue
+        except OSError as e:
+            LOG.warning("could not create %s: %s", path.name, e)
+            return None
+        tok = secrets.token_urlsafe(24)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(tok + "\n")
+        return tok
+    return None
+
+
+def lan_ipv4_candidates() -> list[str]:
+    """This PC's home-network IPv4 addresses, best first: the default-route address, then other private
+    addresses. Never loopback or 169.254.x (that is the Launch Pro's direct link, not Wi-Fi)."""
+    def usable(ip: str) -> bool:
+        try:
+            a = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        return a.version == 4 and a.is_private and not a.is_loopback and not a.is_link_local
+
+    out: list[str] = []
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("192.0.2.1", 9))  # UDP connect sends nothing; it only picks the outbound interface
+            ip = s.getsockname()[0]
+            if usable(ip):
+                out.append(ip)
+    except OSError:
+        pass
+    try:
+        for addrs in psutil.net_if_addrs().values():
+            for a in addrs:
+                if a.family == socket.AF_INET and usable(a.address) and a.address not in out:
+                    out.append(a.address)
+    except Exception:
+        pass
+    return out
+
+
+def bridge_phone_url(cfg: dict | None, create_token: bool = True) -> str | None:
+    """http://<LAN IP>:<port>/?token=... for a phone on the same Wi-Fi; None if lan is off or no LAN IP."""
+    if not bridge_lan_enabled(cfg):
+        return None
+    ips = lan_ipv4_candidates()
+    tok = bridge_token(create=create_token)
+    if not ips or not tok:
+        return None
+    return f"http://{ips[0]}:{int(bridge_config(cfg).get('port', 8765))}/?token={tok}"
 
 
 def valid_drill_id(value) -> bool:
@@ -4837,8 +5090,84 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
     # Residual risk (documented in README): a hostile page can produce Origin "null" from a sandboxed
     # iframe, so it could read shot data and set/clear the active drill tag. That is the price of keeping
     # the file:// page working without a token; it exposes golf numbers only, nothing on disk.
+    #
+    # LAN clients (bridge.lan true; anything not from 127.0.0.0/8) never get the rules above. They must present
+    # the pairing token (?token=... once, then the HttpOnly SameSite=Strict cookie) on EVERY request, static
+    # files included; their Host may then be an IP literal or this PC's hostname (a DNS-rebinding page can
+    # neither know the token nor receive the cookie, which is scoped to the real host), and an Origin, if sent,
+    # must be that same http://<Host>. With lan off the server binds 127.0.0.1, so no LAN client can connect.
     def log_message(self, fmt, *args):  # route access logs to DEBUG, not stderr
         LOG.debug("bridge %s - %s", self.address_string(), fmt % args)
+
+    def _client_is_loopback(self) -> bool:
+        try:
+            return ipaddress.ip_address(str(self.client_address[0]).split("%", 1)[0]).is_loopback
+        except ValueError:
+            return False
+
+    def _split_host(self) -> tuple[str, str]:
+        host = (self.headers.get("Host") or "").strip().lower()
+        if host.startswith("["):
+            name, _, rest = host[1:].partition("]")
+            return name, rest[1:] if rest.startswith(":") else ""
+        name, sep, port = host.rpartition(":")
+        return (name, port) if sep else (host, "")
+
+    def _lan_host_ok(self) -> bool:
+        name, port = self._split_host()
+        if not name or (port and port != str(self.server.server_address[1])):
+            return False
+        try:
+            ipaddress.ip_address(name)
+            return True  # an IP literal can't be a rebinding hostname
+        except ValueError:
+            pass
+        me = socket.gethostname().lower()
+        return bool(me) and (name == me or name.startswith(me + "."))
+
+    def _lan_token_ok(self) -> bool:
+        want = getattr(self.server, "lan_token", None)
+        if not want:
+            return False
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+        given = (q.get("token") or [""])[0]
+        if given and hmac.compare_digest(given.encode(), want.encode()):
+            self._set_token_cookie = True
+            return True
+        jar = http.cookies.SimpleCookie()
+        try:
+            jar.load(self.headers.get("Cookie") or "")
+        except http.cookies.CookieError:
+            return False
+        c = jar.get(BRIDGE_TOKEN_COOKIE)
+        return bool(c) and hmac.compare_digest(c.value.encode(), want.encode())
+
+    def _lan_parse_ok(self) -> bool:
+        """Access policy for a non-loopback client (see the class comment)."""
+        if not getattr(self.server, "lan_token", None):
+            self.close_connection = True
+            self._json(403, {"error": "LAN access is disabled (bridge.lan is false)"})
+            return False
+        if not self._lan_token_ok():
+            self.close_connection = True
+            self._json(401, {"error": "pairing token required: run `python simwatch.py phone` on the PC and "
+                                      "open the URL it prints"})
+            return False
+        if not self._lan_host_ok():
+            self.close_connection = True
+            self._json(421, {"error": "Host must be this PC's LAN IP or hostname"})
+            return False
+        origin = self.headers.get("Origin")
+        if origin is not None:
+            name, port = self._split_host()
+            host = f"[{name}]" if ":" in name else name
+            same = {f"http://{host}:{port}" if port else f"http://{host}"}
+            if origin.lower() not in same:
+                self.close_connection = True
+                self._json(403, {"error": "origin not allowed"})
+                return False
+            self._cors_origin = origin
+        return True
 
     def _allowed_http_origins(self) -> set[str]:
         port = self.server.server_address[1]
@@ -4857,8 +5186,11 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def parse_request(self):
         self._cors_origin = None
+        self._set_token_cookie = False
         if not super().parse_request():
             return False
+        if not self._client_is_loopback():
+            return self._lan_parse_ok()
         if not self._host_ok():
             self.close_connection = True
             self._json(421, {"error": "Host must be 127.0.0.1 or localhost"})
@@ -4875,6 +5207,10 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("Vary", "Origin")
+        if getattr(self, "_set_token_cookie", False):
+            self._set_token_cookie = False
+            self.send_header("Set-Cookie", f"{BRIDGE_TOKEN_COOKIE}={self.server.lan_token}; Path=/; "
+                                           "Max-Age=31536000; HttpOnly; SameSite=Strict")
         origin = getattr(self, "_cors_origin", None)
         if origin:
             self.send_header("Access-Control-Allow-Origin", origin)
@@ -5022,11 +5358,14 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 class BridgeServer:
-    """ThreadingHTTPServer on 127.0.0.1 in a daemon thread. start() never raises (busy port -> logged)."""
+    """ThreadingHTTPServer on 127.0.0.1 in a daemon thread. start() never raises (busy port -> logged).
+    lan_token set (bridge.lan): binds 0.0.0.0 unless a host is given, and LAN clients must present the token."""
 
-    def __init__(self, hub: ShotHub, port: int = 8765, host: str = "127.0.0.1", static_dir: Path | None = None):
+    def __init__(self, hub: ShotHub, port: int = 8765, host: str | None = None, static_dir: Path | None = None,
+                 lan_token: str | None = None):
         self.hub = hub
-        self.host = host
+        self.lan_token = lan_token or None
+        self.host = host or ("0.0.0.0" if self.lan_token else "127.0.0.1")
         self.requested_port = int(port)
         self.static_dir = Path(static_dir) if static_dir else (HERE / "drills")
         self.httpd: http.server.ThreadingHTTPServer | None = None
@@ -5048,6 +5387,7 @@ class BridgeServer:
             return False
         httpd.daemon_threads = True
         httpd.hub = self.hub  # type: ignore[attr-defined]
+        httpd.lan_token = self.lan_token  # type: ignore[attr-defined]
         self.hub.stopping.clear()
         self.httpd = httpd
         self._thread = threading.Thread(target=httpd.serve_forever, kwargs={"poll_interval": 0.5},
@@ -5055,6 +5395,8 @@ class BridgeServer:
         self._thread.start()
         threading.Thread(target=self._reap, name="BridgeDrillReaper", daemon=True).start()
         LOG.info("Shot bridge listening on http://%s:%s/ (drills hub + /api/status)", self.host, self.port)
+        if self.lan_token:  # never log the token itself
+            LOG.info("Shot bridge LAN access ON (pairing token required); phone URL: python simwatch.py phone")
         return True
 
     def _reap(self) -> None:
@@ -5096,7 +5438,11 @@ def start_bridge(cfg: dict, force: bool = False, port: int | None = None,
     try:
         hub = ShotHub(ShotStore(bridge_sessions_dir(cfg, demo)))
         hub.demo = demo
-        server = BridgeServer(hub, port=int(port if port is not None else bcfg.get("port", 8765)))
+        lan_token = bridge_token(create=True) if bridge_lan_enabled(cfg) else None
+        if bridge_lan_enabled(cfg) and not lan_token:
+            LOG.warning("bridge.lan is on but no pairing token could be created; serving 127.0.0.1 only")
+        server = BridgeServer(hub, port=int(port if port is not None else bcfg.get("port", 8765)),
+                              lan_token=lan_token)
     except Exception as e:
         LOG.warning("Shot bridge disabled: bad bridge config (%s)", e)
         return None, None
@@ -6079,11 +6425,13 @@ class _WatchState:
         self.device_next_at = 0.0     # earliest time the next device-only recovery may run
         self.video_failures = 0       # consecutive video_mgr.start() failures (retried with backoff)
         self.video_next_at = 0.0      # earliest time the next video_mgr.start() attempt may run
+        self.video_forced = False     # last seen state of the VIDEO_ON practice-video request (for logging)
 
-    def reset(self) -> None:
+    def reset(self, keep_video_backoff: bool = False) -> None:
         self.fails, self.level, self.last_status, self.gate_running = 0, 0, None, False
         self.offline_ticks = 0
-        self.video_failures, self.video_next_at = 0, 0.0
+        if not keep_video_backoff:
+            self.video_failures, self.video_next_at = 0, 0.0
 
 
 VIDEO_START_BACKOFF_SEC = (15.0, 30.0, 60.0, 120.0, 300.0)  # retry delays after a failed video rig start
@@ -6114,16 +6462,30 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
     grace_sec = float(cfg.get("post_recover_grace_sec", 35))
     gate = cfg.get("only_when_running")
 
+    # VIDEO_ON (written by `simwatch.py video` / run_practice_video.bat while this daemon runs): keep the video
+    # rig up even without GSPro, until `simwatch.py video off` (or deleting the file).
+    forced = video_request_active()
+    if forced != st.video_forced:
+        st.video_forced = forced
+        LOG.info("Practice video request %s", "received (VIDEO_ON): starting the video rig regardless of GSPro"
+                 if forced else "cleared: the video rig follows GSPro again")
+    # A manager created only because of a request (video.enabled false) runs only while the request is up.
+    want_video = bool(video_mgr) and (forced or not getattr(video_mgr, "forced_only", False))
+    if video_mgr and not want_video:
+        video_mgr.stop()
+
     paused = pause_active(cfg)
     gate_up = (not gate) or bool(find_procs(gate))
     if paused or not gate_up:
-        if video_mgr and not gate_up:
+        if video_mgr and forced:
+            _ensure_video_started(st, video_mgr)
+        elif video_mgr and not gate_up:
             video_mgr.stop()
-        st.reset()
+        st.reset(keep_video_backoff=forced)
         write_status("paused" if paused else "waiting_for_gate", paused=paused, gate=gate, gate_up=gate_up,
-                     failing=[], level=0)
-        # Keep servicing pending stop-capture / PiP auto-hide, but start no new rig work.
-        _sleep_with_video(interval, video_mgr, allow_new_work=False)
+                     failing=[], level=0, video_request=forced)
+        # Keep servicing pending stop-capture / PiP auto-hide; new rig work only for a requested practice rig.
+        _sleep_with_video(interval, video_mgr, allow_new_work=forced and not paused)
         return
 
     if not st.gate_running:
@@ -6134,7 +6496,8 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
             run_actions(cfg["apps_by_key"]["gspro"], cfg)
             time.sleep(cfg.get("settle_sec", 15))
             st.grace_until = time.time() + grace_sec
-    _ensure_video_started(st, video_mgr)  # first start, or a retry after a failed one
+    if want_video:
+        _ensure_video_started(st, video_mgr)  # first start, or a retry after a failed one
 
     if "gspro" in cfg["apps_by_key"] and (time.time() - st.last_cfg_attempt) >= 15.0:
         if WindowSpec(r"^GSPro Configuration$").exists(timeout=0):
@@ -6248,9 +6611,15 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
     _sleep_with_video(interval, video_mgr)
 
 
+def _video_running(video_mgr) -> bool:
+    return bool(video_mgr) and bool(getattr(video_mgr, "_started", False))
+
+
 def watch(cfg, initial_grace: bool = False) -> None:
-    if not acquire_singleton_lock():
-        LOG.warning("Another SimWatch instance is already running; exiting.")
+    if not acquire_singleton_lock("watch"):
+        msg = already_running_message("watch")
+        LOG.warning(msg)
+        print(msg)
         return
     pause_active(cfg)  # clear a stale PAUSE at startup (logged)
 
@@ -6268,11 +6637,24 @@ def watch(cfg, initial_grace: bool = False) -> None:
     LOG.info("SimWatch running. Create a file named PAUSE next to this script to pause. Status: %s", STATUS_PATH)
     try:
         while True:
+            if stop_requested():
+                LOG.info("Stop requested (`simwatch.py stop`); shutting down cleanly.")
+                break
             try:
+                if video_request_active():
+                    if video_mgr is None:  # video.enabled is false: build a rig just for this request
+                        video_mgr = SwingSessionManager(cfg)
+                        video_mgr.forced_only = True
+                        video_mgr.hub = hub
+                    # The rig's own :921 sniffer feeds the bridge; never run two (shots would be recorded twice).
+                    sync_bridge_sniffer(bridge_sniffer, False)
                 _watch_step(cfg, st, video_mgr)
                 if bridge_sniffer is not None:  # same gate as the video rig: run while the gated app is up
                     gate = cfg.get("only_when_running")
-                    sync_bridge_sniffer(bridge_sniffer, (not gate) or bool(find_procs(gate)))
+                    run_sniffer = ((not gate) or bool(find_procs(gate))) and not _video_running(video_mgr)
+                    sync_bridge_sniffer(bridge_sniffer, run_sniffer)
+                    if run_sniffer and hub is not None:
+                        hub.sniffer = bridge_sniffer  # a requested video rig may have pointed it at its own
             except (KeyboardInterrupt, SystemExit):
                 raise
             except Exception as e:
@@ -6350,8 +6732,10 @@ def wait_device_link(cfg, timeout: float) -> bool:
 
 def startup(cfg) -> None:
     """Cold start after a PC reboot: bring the whole chain up in order, then watch it."""
-    if not acquire_singleton_lock():
-        LOG.warning("Another SimWatch instance is already running; exiting.")
+    if not acquire_singleton_lock("startup"):
+        msg = already_running_message("startup")
+        LOG.warning(msg)
+        print(msg)
         return
     st = cfg.get("startup")
     if not st or not st.get("order"):
@@ -6446,11 +6830,39 @@ def print_hotkey_cheatsheet(cfg: dict) -> None:
     print(f"  {hk.get('save_lines', 'Alt+Shift+L'):<10} -> Save Dragged Swing Lines as Default")
 
 
-def cmd_video(cfg: dict) -> None:
-    """Standalone TV-only practice mode: Kinovea 2x2 grid + hotkeys + shot/audio watcher."""
-    if not acquire_singleton_lock():
-        LOG.warning("Another SimWatch instance is already running; exiting.")
-        return
+def cmd_video(cfg: dict, mode: str | None = None) -> int:
+    """Practice video: Kinovea 2x2 grid + hotkeys + shot/audio watcher, no GSPro needed.
+
+    If the watch/startup daemon is running, hand off instead of fighting it: write VIDEO_ON so the daemon starts
+    its own video rig regardless of GSPro (kept on until `video off` / the file is deleted) and exit 0.
+    With no daemon running, run standalone in this console (Ctrl+C stops it)."""
+    mode = (mode or "on").strip().lower()
+    if mode not in ("on", "off"):
+        print(f"Invalid video mode {mode!r} (valid: on, off)")
+        return 2
+    if mode == "off":
+        had = clear_video_request()
+        d = running_daemon()
+        if d and d.get("command") == "video":
+            print(f"Standalone video mode is running (pid {d['pid']}): close its window / Ctrl+C, "
+                  "or run: python simwatch.py stop")
+        else:
+            print("Practice video request cleared; the video rig follows GSPro again." if had
+                  else "No practice video request was active.")
+        return 0
+    if not acquire_singleton_lock("video"):
+        d = running_daemon()
+        if d and d.get("command") == "video":
+            msg = f"Standalone video mode is already running (pid {d['pid']}); nothing to do."
+        else:
+            write_video_request()
+            who = f" (pid {d['pid']}, `{d['command']}`)" if d and d.get("pid") else ""
+            msg = (f"SimWatch is already running in the background{who}: asked it to start the video rig "
+                   "(no GSPro needed). It picks this up within a few seconds (after its startup sequence, if one "
+                   "is still running). The rig stays on until: python simwatch.py video off")
+        LOG.info(msg)
+        print(msg)
+        return 0
     mgr = SwingSessionManager(cfg)
     mgr.hub, bridge = start_bridge(cfg)
     mgr.start(launch_rig=True)
@@ -6458,6 +6870,9 @@ def cmd_video(cfg: dict) -> None:
     LOG.info("Standalone video mode running (Ctrl+C to stop).")
     try:
         while True:
+            if stop_requested():
+                LOG.info("Stop requested (`simwatch.py stop`); leaving standalone video mode.")
+                break
             if pause_active(cfg):
                 time.sleep(1)
                 continue
@@ -6469,6 +6884,7 @@ def cmd_video(cfg: dict) -> None:
         mgr.stop()
         if bridge:
             bridge.stop()
+    return 0
 
 
 # --------------------------------------------------------------------------- doctor
@@ -6593,6 +7009,15 @@ def doctor_report(config_path: Path) -> list[tuple[str, str, str]]:
             {"none": "not listening / no session (fine if the sim is not running)",
              "unknown": "could not enumerate sockets (try an admin shell)"}.get(st, st))
 
+    # phone access to the drills hub (bridge.lan)
+    if bridge_lan_enabled(cfg_raw):
+        url = bridge_phone_url(cfg_raw)
+        add(INFO if url else WARN, "bridge LAN (phone)",
+            f"on - open on your phone (same Wi-Fi): {url}" if url else
+            "on, but no home-network IPv4 address or pairing token found (Wi-Fi/Ethernet connected?)")
+    else:
+        add(INFO, "bridge LAN (phone)", "off (bridge.lan false: drills hub served to this PC only)")
+
     # scheduled task, sniffer, firewall, device adapter, power, ... (Windows only; SKIP elsewhere)
     rows.extend(doctor_system_rows(cfg_raw))
     return rows
@@ -6628,7 +7053,7 @@ PAUSE_STALE_SEC = 4 * 3600
 KINOVEA_MIN_VERSION = (2025, 1)
 DOCTOR_SYSTEM_CHECKS = ("scheduled task 'SimWatch'", "sniffer raw socket", "firewall", "GameChanger exe",
                         "device adapter", "device ping", "power", "FSX Pro device hold", "Kinovea version",
-                        "GameChanger OpenConnect target")
+                        "GameChanger OpenConnect target", "firewall: bridge LAN (phone)")
 
 
 def _run_cmd(args: list, timeout: float = 20) -> tuple[int, str]:
@@ -6705,6 +7130,73 @@ def firewall_programs(cfg: dict) -> dict[str, list[str]]:
         if a and a.get("exe"):
             progs[a.get("process") or proc] = [a["exe"]]
     return progs
+
+
+# Inbound remote-address scope of SimWatch's firewall Allow rules (what `harden` sets, what `doctor` expects):
+# - python.exe: the :921 sniffer is a raw socket bound to 127.0.0.1 and the bridge serves 127.0.0.1 - loopback
+#   only. (Phone access over Wi-Fi gets its own port-only rule: BRIDGE_LAN_FIREWALL_RULE, TCP <port>, LocalSubnet.)
+# - GSPconnect.exe: :921 from GameChanger and :9050 to GSPro are both on this PC - loopback only.
+# - GameChanger.exe / FSX Pro.exe: talk to the Launch Pro at 169.254.x on the direct link (TCP replies are
+#   allowed statefully anyway) and may receive its UDP discovery/broadcasts, whose SOURCE is the device's
+#   169.254.x address; LocalSubnet also covers a Launch Pro joined to the home Wi-Fi instead of the direct link.
+#   169.254.0.0/16 is listed explicitly because LocalSubnet only contains it while the link adapter has its
+#   169.254 address (i.e. not during a replug/APIPA wait).
+FIREWALL_SCOPE_LOOPBACK = ("127.0.0.1",)
+FIREWALL_SCOPE_DEVICE = ("169.254.0.0/16", "LocalSubnet")
+
+
+def firewall_remote_scope(label: str) -> tuple[str, ...]:
+    """The -RemoteAddress list for a firewall_programs()/harden label."""
+    low = label.lower()
+    if low.startswith("python") or "gspconnect" in low:
+        return FIREWALL_SCOPE_LOOPBACK
+    return FIREWALL_SCOPE_DEVICE
+
+
+def _scope_networks(scope) -> tuple[list, set[str]]:
+    nets, keywords = [], set()
+    for e in scope:
+        if e == "127.0.0.1":
+            nets.append(ipaddress.ip_network("127.0.0.0/8"))  # any loopback address is as narrow as it gets
+        elif e[:1].isdigit():
+            nets.append(ipaddress.ip_network(e, strict=False))
+        else:
+            keywords.add(e.lower())
+    return nets, keywords
+
+
+def remote_scope_within(remote, expected) -> bool:
+    """Is a rule's RemoteAddress (Windows form: 'Any', 'LocalSubnet', '127.0.0.1', '169.254.0.0/255.255.0.0',
+    'a-b' ranges; list or comma-joined) no broader than `expected`? Unparseable -> False (treated as broad)."""
+    items = remote if isinstance(remote, (list, tuple)) else str(remote or "").split(",")
+    items = [str(i).strip() for i in items if str(i).strip()]
+    if not items:
+        return False
+    nets, keywords = _scope_networks(expected)
+
+    def ip_ok(ip) -> bool:
+        return any(ip.version == n.version and ip in n for n in nets)
+
+    for e in items:
+        low = e.lower()
+        if low in ("any", "*"):
+            return False
+        if not (low[:1].isdigit() or ":" in low):
+            if low.rstrip("46") not in keywords:  # LocalSubnet4/6 count as LocalSubnet
+                return False
+            continue
+        try:
+            if "-" in e:
+                lo, hi = (ipaddress.ip_address(x.strip()) for x in e.split("-", 1))
+                if not (ip_ok(lo) and ip_ok(hi)):
+                    return False
+            else:
+                net = ipaddress.ip_network(e, strict=False)
+                if not any(net.version == n.version and net.subnet_of(n) for n in nets):
+                    return False
+        except ValueError:
+            return False
+    return True
 
 
 def pause_file_row(age_sec: float | None, max_hours=4):
@@ -6870,11 +7362,19 @@ def evaluate_firewall(rules: list, programs: dict[str, list[str]]) -> list[tuple
         allows = [r for r in mine if str(r.get("Action", "")).lower() == "allow"
                   and str(r.get("Direction", "")).lower() == "inbound"]
         item = f"firewall: {label}"
+        expected = firewall_remote_scope(label)
+        broad = [r for r in allows if "RemoteAddress" in r and not remote_scope_within(r["RemoteAddress"], expected)]
         if blocks:
             names = ", ".join(sorted({str(r.get("Name", "?")) for r in blocks}))[:80]
             rows.append((FAIL, item, f"Block rule(s): {names} -> fix: {HARDEN_HINT} (or delete them in wf.msc)"))
+        elif broad:
+            desc = "; ".join(sorted({f"{r.get('Name', '?')} (remote {r.get('RemoteAddress') or 'Any'})"
+                                     for r in broad}))[:160]
+            rows.append((WARN, item, f"inbound Allow broader than needed: {desc}; expected {','.join(expected)} -> "
+                                     f"fix: {HARDEN_HINT} narrows SimWatch's own rule; narrow or delete any "
+                                     "other listed rule in wf.msc"))
         elif allows:
-            rows.append((PASS, item, "inbound Allow rule present"))
+            rows.append((PASS, item, f"inbound Allow rule present (remote {','.join(expected)})"))
         else:
             rows.append((WARN, item, f"no inbound Allow rule -> fix: {HARDEN_HINT}"))
     return rows
@@ -7044,12 +7544,53 @@ $out = foreach ($f in (Get-NetFirewallApplicationFilter -PolicyStore ActiveStore
     Where-Object {{ $p -contains [Environment]::ExpandEnvironmentVariables($_.Program) }})) {{
   foreach ($r in ($f | Get-NetFirewallRule)) {{
     [pscustomobject]@{{Program=[Environment]::ExpandEnvironmentVariables($f.Program); Name=$r.DisplayName;
-      Direction=[string]$r.Direction; Action=[string]$r.Action; Enabled=[string]$r.Enabled}} }} }}
+      Direction=[string]$r.Direction; Action=[string]$r.Action; Enabled=[string]$r.Enabled;
+      RemoteAddress=(@(($r | Get-NetFirewallAddressFilter).RemoteAddress) -join ',')}} }} }}
 ConvertTo-Json -InputObject @($out) -Compress"""
     res = _ps_json(script, 60)
     if isinstance(res, dict):
         res = [res]
     return res if isinstance(res, list) else None
+
+
+def _bridge_lan_rule_info() -> list | None:
+    """[{Name, Enabled, Action, Profile, LocalPort, Protocol, RemoteAddress}] for BRIDGE_LAN_FIREWALL_RULE."""
+    script = f"""$ErrorActionPreference='SilentlyContinue'
+$out = foreach ($r in @(Get-NetFirewallRule -DisplayName {_psq(BRIDGE_LAN_FIREWALL_RULE)})) {{
+  $pf = $r | Get-NetFirewallPortFilter; $af = $r | Get-NetFirewallAddressFilter
+  [pscustomobject]@{{Name=$r.DisplayName; Enabled=[string]$r.Enabled; Action=[string]$r.Action;
+    Profile=[string]$r.Profile; Protocol=[string]$pf.Protocol; LocalPort=(@($pf.LocalPort) -join ',');
+    RemoteAddress=(@($af.RemoteAddress) -join ',')}} }}
+ConvertTo-Json -InputObject @($out) -Compress"""
+    res = _ps_json(script, 30)
+    if isinstance(res, dict):
+        res = [res]
+    return res if isinstance(res, list) else None
+
+
+def evaluate_bridge_lan_rule(lan_on: bool, rules: list | None, port: int) -> tuple[str, str, str]:
+    """Doctor row for the phone-access firewall rule (only wanted while bridge.lan is true)."""
+    item = "firewall: bridge LAN (phone)"
+    rules = [r for r in rules or [] if isinstance(r, dict)]
+    remove = f"Remove-NetFirewallRule -DisplayName {_psq(BRIDGE_LAN_FIREWALL_RULE)}"
+    if not lan_on:
+        if rules:
+            return (INFO, item, f"leftover rule while bridge.lan is off (harmless: the bridge binds 127.0.0.1) "
+                                f"-> remove (Administrator PowerShell): {remove}")
+        return (PASS, item, "no LAN rule (bridge.lan off)")
+    if not rules:
+        return (WARN, item, f"bridge.lan is on but no inbound rule for TCP {port}; the phone can't connect -> "
+                            f"fix: {HARDEN_HINT}")
+    for r in rules:
+        prof = str(r.get("Profile", "")).lower()
+        ok = (str(r.get("Enabled", "True")).lower() in ("true", "1") and str(r.get("Action", "")).lower() == "allow"
+              and str(r.get("LocalPort", "")).strip() == str(port) and str(r.get("Protocol", "")).upper() == "TCP"
+              and "public" not in prof and prof not in ("any", "")
+              and remote_scope_within(r.get("RemoteAddress"), ("LocalSubnet",)))
+        if not ok:
+            return (WARN, item, f"rule differs from TCP {port} / Private / LocalSubnet (port {r.get('LocalPort')}, "
+                                f"profile {r.get('Profile')}, remote {r.get('RemoteAddress')}) -> fix: {HARDEN_HINT}")
+    return (PASS, item, f"TCP {port} inbound, Private profile, LocalSubnet only")
 
 
 def _reg_hklm_dword(subkey: str, value: str) -> int | None:
@@ -7116,6 +7657,13 @@ def _doc_firewall(cfg):
     if rules is None:
         return [(WARN, "firewall", "could not query rules (Get-NetFirewallApplicationFilter failed)")]
     return evaluate_firewall(rules, progs)
+
+
+def _doc_bridge_lan(cfg):
+    rules = _bridge_lan_rule_info()
+    if rules is None:
+        return [(WARN, "firewall: bridge LAN (phone)", "could not query rules (Get-NetFirewallRule failed)")]
+    return [evaluate_bridge_lan_rule(bridge_lan_enabled(cfg), rules, int(bridge_config(cfg).get("port", 8765)))]
 
 
 def _doc_gamechanger(cfg):
@@ -7200,7 +7748,8 @@ def doctor_system_rows(cfg: dict) -> list[tuple[str, str, str]]:
         return [(SKIP, name, "Windows only") for name in DOCTOR_SYSTEM_CHECKS]
     rows: list[tuple[str, str, str]] = []
     for name, fn in zip(DOCTOR_SYSTEM_CHECKS, (_doc_task, _doc_sniffer, _doc_firewall, _doc_gamechanger, _doc_device,
-                                               None, _doc_power, _doc_fsx_hold, _doc_kinovea, _doc_oc_target)):
+                                               None, _doc_power, _doc_fsx_hold, _doc_kinovea, _doc_oc_target,
+                                               _doc_bridge_lan)):
         if fn is None:  # "device ping" is produced by _doc_device
             continue
         try:
@@ -7405,11 +7954,22 @@ def harden_steps(ctx: dict) -> list[tuple[str, str, bool]]:
                   f"Set-NetConnectionProfile -InterfaceAlias {a} -NetworkCategory Private", True))
     programs = ctx.get("programs") or {}
     for label, path in programs.items():
+        # Remove + recreate (not "add if missing"), so an older, broader SimWatch rule is narrowed in place.
         name = _psq(f"SimWatch allow {label}")
-        steps.append((f"Firewall inbound Allow for {label}",
+        scope = firewall_remote_scope(label)
+        steps.append((f"Firewall inbound Allow for {label} (remote {','.join(scope)} only)",
                       f"Get-NetFirewallRule -DisplayName {name} -ErrorAction SilentlyContinue | Remove-NetFirewallRule; "
                       f"New-NetFirewallRule -DisplayName {name} -Direction Inbound -Action Allow "
-                      f"-Program {_psq(path)} -Profile Private,Domain", False))
+                      f"-Program {_psq(path)} -Profile Private,Domain "
+                      f"-RemoteAddress {','.join(_psq(x) for x in scope)}", False))
+    if ctx.get("bridge_lan"):
+        port = int(ctx.get("bridge_port") or 8765)
+        name = _psq(BRIDGE_LAN_FIREWALL_RULE)
+        steps.append((f"Firewall inbound Allow TCP {port} for the drills hub on your phone (bridge.lan; Private "
+                      "profile, same subnet only)",
+                      f"Get-NetFirewallRule -DisplayName {name} -ErrorAction SilentlyContinue | Remove-NetFirewallRule; "
+                      f"New-NetFirewallRule -DisplayName {name} -Direction Inbound -Action Allow -Protocol TCP "
+                      f"-LocalPort {port} -Profile Private -RemoteAddress LocalSubnet", False))
     if programs:
         plist = ",".join(_psq(p) for p in programs.values())
         steps.append(("Remove firewall Block rules for those programs (created when a firewall prompt was cancelled)",
@@ -7459,7 +8019,8 @@ def harden_context(cfg: dict, adapter: str | None = None) -> dict:
         if not label.startswith("python.exe"):
             programs[label] = paths[0]
     ctx = {"adapter": adapter or _detect_device_adapter(dev.get("ip")), "device_ip": dev.get("ip"),
-           "host_ip": dev.get("host_ip"), "programs": programs, "ultimate_active": False, "task_exists": False}
+           "host_ip": dev.get("host_ip"), "programs": programs, "ultimate_active": False, "task_exists": False,
+           "bridge_lan": bridge_lan_enabled(cfg), "bridge_port": int(bridge_config(cfg).get("port", 8765))}
     if IS_WINDOWS:
         ctx["ultimate_active"] = parse_active_scheme(_run_cmd(["powercfg", "/getactivescheme"], 10)[1])[0] == ULTIMATE_GUID
         ctx["task_exists"] = _run_cmd(["schtasks", "/Query", "/TN", "SimWatch"], 15)[0] == 0
@@ -7585,6 +8146,55 @@ def cmd_status(cfg: dict, tail: int = 15) -> int:
     print(f"\nLast {len(hits)} notable lines of {log.name}:")
     for l in hits:
         print("  " + l)
+    d = running_daemon()
+    print("\nSimWatch daemon: " + (f"running (pid {d['pid']}, `{d['command']}`)" if d else "not running"))
+    print("Practice video request (VIDEO_ON): " + ("ON - clear with: python simwatch.py video off"
+                                                  if video_request_active() else "off"))
+    if bridge_lan_enabled(cfg):
+        url = bridge_phone_url(cfg)
+        print(f"Phone URL (same Wi-Fi): {url or 'no home-network IPv4 address found'}")
+    return 0
+
+
+def print_ascii_qr(text: str) -> bool:
+    """Print a scannable QR code if the optional `qrcode` package is installed (pip install qrcode)."""
+    try:
+        import qrcode  # type: ignore
+    except ImportError:
+        return False
+    try:
+        qr = qrcode.QRCode(border=2)
+        qr.add_data(text)
+        qr.make(fit=True)
+        qr.print_ascii(invert=True)
+        return True
+    except Exception as e:
+        LOG.debug("QR print failed: %s", e)
+        return False
+
+
+def cmd_phone(cfg: dict) -> int:
+    """Print the drills-hub URL (with pairing token) for a phone on the same Wi-Fi."""
+    if not bridge_lan_enabled(cfg):
+        print("Phone access is off. To turn it on:\n"
+              "  1. In config.local.json (or config.json) set:  \"bridge\": {\"lan\": true}\n"
+              "  2. Restart SimWatch:  python simwatch.py stop   then run run_simwatch.bat (or reboot)\n"
+              "  3. Firewall rule (Administrator):  python simwatch.py harden --apply\n"
+              "  4. Run  python simwatch.py phone  again for the URL.")
+        return 1
+    url = bridge_phone_url(cfg)
+    if not url:
+        print("bridge.lan is on, but no home-network IPv4 address (or pairing token) was found. "
+              "Is the PC on Wi-Fi/Ethernet?")
+        return 1
+    print("Open this on your phone (same Wi-Fi). The token is remembered in a cookie after the first visit:\n")
+    print(f"  {url}\n")
+    others = lan_ipv4_candidates()[1:]
+    if others:
+        print("If that does not load, try the same URL with: " + ", ".join(others))
+    if not print_ascii_qr(url):
+        print("(For a scannable QR code here: pip install qrcode)")
+    print(f"\nRevoke every paired phone: delete {BRIDGE_TOKEN_PATH.name} and restart SimWatch.")
     return 0
 
 
@@ -7643,7 +8253,7 @@ def main() -> None:
             "discover", "dump", "calibrate", "check", "recover", "watch", "startup", "stop",
             "displays", "reconnect", "release-device",
             "video", "bookmark", "reference", "obs-setup", "hotkeys", "drills", "lines", "save-lines",
-            "doctor", "bridge", "harden", "clip-ready", "status",
+            "doctor", "bridge", "harden", "clip-ready", "status", "phone",
         ],
     )
     ap.add_argument("arg", nargs="?")
@@ -7663,7 +8273,7 @@ def main() -> None:
     if a.command == "clip-ready":  # Kinovea post-recording command: light, never fails (exit 0)
         sys.exit(cmd_clip_ready(Path(a.config), a.arg, a.arg2))
     if a.command == "stop":
-        stopped = stop_other_simwatch_instances()
+        stopped = request_stop()
         print(f"Stopped {stopped} running SimWatch background instance(s).")
         return
     if a.command == "drills":
@@ -7688,6 +8298,8 @@ def main() -> None:
     cfg = load_config(Path(a.config), command=a.command)
     if a.command == "status":
         sys.exit(cmd_status(cfg))
+    if a.command == "phone":
+        sys.exit(cmd_phone(cfg))
     if a.command == "bridge":
         return cmd_bridge(cfg, demo=a.demo, demo_interval=a.demo_interval, port=a.port)
     if a.command == "check":
@@ -7736,7 +8348,7 @@ def main() -> None:
             pass
         run_checks(cfg)
     elif a.command == "video":
-        cmd_video(cfg)
+        sys.exit(cmd_video(cfg, a.arg))
     elif a.command == "bookmark":
         mgr = SwingSessionManager(cfg)
         dtl, fo = mgr.bookmark_last_swing(club_override=a.arg)

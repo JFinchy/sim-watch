@@ -63,7 +63,13 @@ Most dropped connections come from Windows power-saving the USB NIC, the APIPA a
       - a persistent `/32` route to the device
       - interface metric 5 and the Private network profile, plus the Unidentified Networks = Private policy (a
         direct-cabled link is an 'Unidentified network' that otherwise comes back Public after an adapter restart)
-      - firewall Allow rules for python.exe, GameChanger, GSPconnect and FSX Pro, and removal of any matching Block rules
+      - firewall Allow rules, each limited to the remote addresses that program actually needs: python.exe (sniffer +
+        bridge) and GSPconnect `127.0.0.1` only (everything they talk to is on this PC); GameChanger and FSX Pro
+        `169.254.0.0/16,LocalSubnet` (the Launch Pro's direct link and its UDP discovery, or a Launch Pro on your
+        home Wi-Fi). Existing SimWatch rules are removed and recreated, so rerunning `--apply` narrows an older
+        rig. Plus removal of any matching Block rules
+      - only with `"bridge": {"lan": true}` (phone access to the drills hub): one more rule, inbound TCP 8765,
+        Private profile, `LocalSubnet` only
       - adapter power management off
       - USB selective suspend off and PCIe ASPM off
       - the High performance plan
@@ -101,6 +107,9 @@ run `simwatch.py obs-setup` for the scene collection.
 |---|---|
 | `sniffer raw socket` FAIL / drills hub shows no shots | Run elevated. Make sure GameChanger targets `127.0.0.1:921`. |
 | `firewall: ...` FAIL (Block rule) | Someone cancelled a firewall prompt. Run `simwatch.py harden --apply`, or delete the rule in `wf.msc`. |
+| `firewall: ...` WARN (broader than needed) | An Allow rule accepts more remote addresses than the program needs. `harden --apply` narrows SimWatch's own rule; narrow or delete any other rule it names (e.g. one an installer created) in `wf.msc`. |
+| `firewall: bridge LAN (phone)` WARN / INFO | WARN: `bridge.lan` is on but the TCP 8765 rule is missing or too broad: `harden --apply`. INFO: leftover rule with `lan` off; the row prints the `Remove-NetFirewallRule` command. |
+| "SimWatch is already running" | A daemon is already up (the sign-in task). Restart it with `simwatch.py stop`, then `schtasks /Run /TN SimWatch`. `run_practice_video.bat` asks that daemon to start the video rig; `simwatch.py video off` releases it. |
 | `FSX Pro device hold` FAIL | FSX Pro grabbed the Launch Pro. Run `release_device.bat` (or close FSX Pro). |
 | `GameChanger exe` WARN (Downloads / Zone.Identifier) | Move it to `C:\SimTools\GameChanger`, run `Unblock-File`, update `config.local.json`. |
 | `device adapter` / `device ping` WARN | Launch Pro off, asleep or unplugged. Replug it. After `harden`, the address is static, so no 60 s wait. |
