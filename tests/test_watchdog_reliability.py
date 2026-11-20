@@ -239,7 +239,31 @@ def test_recovery_never_clicks_fsx(monkeypatch):
     monkeypatch.setattr(sw, "wait_device_sockets_clear", lambda cfg, timeout=10: True)
     monkeypatch.setattr(sw.time, "sleep", lambda s: None)
     sw.recover_device(cfg)
-    assert killed == ["integrator", "fs_connector"]
+    assert killed == []  # FSX Pro holds the device: leave it alone and don't bounce GameChanger either
+
+
+def test_fsx_holding_device_is_not_treated_as_failure(harness, monkeypatch):
+    results, calls, st, step, _ = harness
+    monkeypatch.setattr(sw, "fsx_holds_device", lambda cfg: True)
+    results.update(device_tcp=False)  # Launch Pro pings, GameChanger has no session (FSX Pro has it)
+    step(n=10)
+    assert calls == [] and st.last_status == "fsx_holds_device"
+    monkeypatch.setattr(sw, "fsx_holds_device", lambda cfg: False)  # user ran release-device / closed FSX
+    step(n=3)
+    assert ("device",) in calls
+
+
+def test_ladder_step_keeps_other_apps_when_fsx_holds_device(monkeypatch):
+    killed, launched = [], []
+    apps = {k: {"key": k, "process": k} for k in ("integrator", "connector", "fs_connector")}
+    cfg = {"apps_by_key": apps, "settle_sec": 0, "device": {}}
+    monkeypatch.setattr(sw, "fsx_session", lambda cfg: object())
+    monkeypatch.setattr(sw, "kill_app", lambda app, timeout=8: killed.append(app["key"]))
+    monkeypatch.setattr(sw, "launch_app", lambda cfg, app, t: launched.append(app["key"]))
+    monkeypatch.setattr(sw, "wait_device_sockets_clear", lambda cfg, timeout=10: True)
+    monkeypatch.setattr(sw.time, "sleep", lambda s: None)
+    sw._run_recovery_step(cfg, {"name": "x", "restart": ["integrator", "connector"]}, "ladder")
+    assert killed == ["connector"] and launched == ["connector"]
 
 
 def test_device_checks_inherit_device_ip_from_config():
@@ -255,3 +279,104 @@ def test_device_checks_inherit_device_ip_from_config():
     ping = next(c for c in dev_checks if c["type"] == "device_ping")
     simwatch._DEVICE_RUNTIME.pop("learned_ip", None)
     assert simwatch.device_ping_target(ping, cfg) == "169.254.9.9"
+
+
+def test_stop_other_instances_skips_own_venv_launcher_parent(monkeypatch):
+    """Windows venv launcher: parent process has the same simwatch cmdline and must not be killed."""
+    import simwatch
+
+    killed = []
+
+    class FakeProc:
+        def __init__(self, pid, cmdline):
+            self.pid = pid
+            self.info = {"pid": pid, "name": "python.exe", "cmdline": cmdline}
+
+        def terminate(self):
+            killed.append(self.pid)
+
+        def kill(self):
+            killed.append(self.pid)
+
+    me, launcher, stale = 200, 100, 300
+    cmd = ["python.exe", "simwatch.py", "startup"]
+    procs = [FakeProc(launcher, cmd), FakeProc(me, cmd), FakeProc(stale, cmd)]
+
+    class FakeSelf:
+        def parents(self):
+            return [FakeProc(launcher, cmd)]
+
+    monkeypatch.setattr(simwatch.os, "getpid", lambda: me)
+    monkeypatch.setattr(simwatch.psutil, "process_iter", lambda attrs=None: iter(procs))
+    monkeypatch.setattr(simwatch.psutil, "Process", lambda *a, **k: FakeSelf())
+    monkeypatch.setattr(simwatch.psutil, "wait_procs", lambda ps, timeout=None: (ps, []))
+    assert simwatch.stop_other_simwatch_instances() == 1
+    assert killed == [stale]
+
+
+def test_stop_other_instances_spares_direct_parent_when_psutil_walk_fails(monkeypatch):
+    """If psutil.Process().parents() raises, the launcher parent (os.getppid) must still be spared."""
+    import simwatch
+
+    killed = []
+
+    class FakeProc:
+        def __init__(self, pid, cmdline):
+            self.pid = pid
+            self.info = {"pid": pid, "name": "python.exe", "cmdline": cmdline}
+
+        def terminate(self):
+            killed.append(self.pid)
+
+        def kill(self):
+            killed.append(self.pid)
+
+    me, launcher, stale = 200, 100, 300
+    cmd = ["python.exe", "simwatch.py", "startup"]
+    procs = [FakeProc(launcher, cmd), FakeProc(me, cmd), FakeProc(stale, cmd)]
+
+    def broken_process(*a, **k):
+        raise simwatch.psutil.AccessDenied(launcher)
+
+    monkeypatch.setattr(simwatch.os, "getpid", lambda: me)
+    monkeypatch.setattr(simwatch.os, "getppid", lambda: launcher)
+    monkeypatch.setattr(simwatch.psutil, "process_iter", lambda attrs=None: iter(procs))
+    monkeypatch.setattr(simwatch.psutil, "Process", broken_process)
+    monkeypatch.setattr(simwatch.psutil, "wait_procs", lambda ps, timeout=None: (ps, []))
+    assert simwatch.stop_other_simwatch_instances() == 1
+    assert killed == [stale]
+
+
+# ------------------------------------------------------------------ review fixes (2026-11-19)
+
+def test_post_recover_grace_holds_off_next_level(harness):
+    """After a ladder recovery, apps still starting must not trigger the next (heavier) level immediately."""
+    results, calls, st, step, clock = harness
+    results.update(bridge_link=False)
+    cfg = _cfg(post_recover_grace_sec=60,
+               checks=[{"name": "bridge", "type": "bridge_link", "recovery_level": 0}])
+    step(cfg, n=3)
+    assert calls == [("ladder", 0)]
+    step(cfg, n=6)  # 30 s, inside the 60 s grace
+    assert calls == [("ladder", 0)] and st.last_status == "post_recover_grace"
+    step(cfg, n=10)  # grace expired, still failing -> escalate
+    assert calls[-1] == ("ladder", 1)
+
+
+def test_bad_pause_max_hours_does_not_crash(tmp_path):
+    p = tmp_path / "PAUSE"
+    p.write_text("x")
+    assert sw.pause_active({"pause_max_hours": "four"}, p) is True
+
+
+def test_bad_backoff_sec_falls_back():
+    assert sw.device_backoff_sec({"device_recovery": {"backoff_sec": ["soon"]}}, 1) == 300.0
+
+
+def test_validate_config_warns_on_bad_device_numbers():
+    msgs = [m for sev, m in sw.validate_config({"pause_max_hours": "x", "device": {"offline_ticks": "y"},
+                                                "device_recovery": {"backoff_sec": "z"}}, check_paths=False)
+            if sev == "warning"]
+    assert any("pause_max_hours" in m for m in msgs)
+    assert any("offline_ticks" in m for m in msgs)
+    assert any("backoff_sec" in m for m in msgs)

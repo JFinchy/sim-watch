@@ -222,6 +222,9 @@ def _bare_manager(cfg):
     m = object.__new__(sw.SwingSessionManager)
     m.cfg, m.vcfg, m.hub, m.current_club, m.last_shot_info = cfg, cfg["video"], None, None, None
     m._lock = threading.RLock()
+    m._state_lock = threading.Lock()
+    m._pending_ref_club, m._ref_swap_thread = None, None
+    m._ref_swap_sync = True  # apply reference swaps inline (the async worker has its own test)
     m._stop_capture_at = 0.0
     calls = []
     m.trigger_capture = lambda: calls.append("trigger")
@@ -306,12 +309,13 @@ def test_clip_ready_links_correct_shot_and_is_idempotent(tmp_path):
     assert len(list(lib.glob("*_DTL.mp4"))) == 1
     assert len(list((lib / sw.CLIP_EVENTS_DIR).glob("*.json"))) == 1
 
-    # The FO clip of the same swing pairs with the same shot but does not steal the DTL link.
+    # The FO clip of the same swing pairs with the same shot (clips.FO) but does not steal the DTL link.
     fo = src_dir / "FO_2026-11-19_101500.mp4"
     fo.write_bytes(b"\x00" * 2048)
     res_fo = sw.clip_ready(cfg, fo, "%camalias%", now=now + 0.3, wait=False)
-    assert res_fo["clip"] == "002_7I_168y_118mph_D-gate1_FO.mp4" and res_fo["linked"] is False
-    assert store.read(date)[1]["clip"] == res["clip"]
+    assert res_fo["clip"] == "002_7I_168y_118mph_D-gate1_FO.mp4" and res_fo["linked"] is True
+    rec = store.read(date)[1]
+    assert rec["clip"] == res["clip"] and rec["clips"] == {"DTL": res["clip"], "FO": res_fo["clip"]}
 
 
 def test_clip_ready_without_matching_shot_and_cli_never_fails(tmp_path):
@@ -339,3 +343,75 @@ def test_file_ready_requires_stable_size(tmp_path):
     assert sw.file_ready_for_copy(f, 2.0)
     (tmp_path / "e.mp4").write_bytes(b"")
     assert not sw.file_ready_for_copy(tmp_path / "e.mp4", 5.0)
+
+
+def test_putter_round_trip_still_swaps_reference(tmp_path, monkeypatch):
+    """Driver -> PT -> 7I: the putter keeps the Driver reference, but 7I must then swap it to Iron."""
+    m, _ = _bare_manager(_cfg(tmp_path))
+    reloads = []
+    monkeypatch.setattr(sw, "setup_video_rig", lambda cfg, club=None, **k: reloads.append(club))
+    monkeypatch.setattr(sw, "tile_video_windows", lambda *a, **k: None)
+    m.active_reference = "My-Go-To"
+    m._on_club_change("DR")
+    m._on_club_change("PT")
+    assert reloads == ["DR"]
+    m._on_club_change("7I")
+    assert reloads == ["DR", "7I"]
+    m._on_club_change("PT")
+    m._on_club_change("8I")  # same category as before the putt: no reload
+    assert reloads == ["DR", "7I"]
+
+
+def test_clip_ready_lock_outlasts_slow_first_run(tmp_path, monkeypatch):
+    """The FO run waits for the DTL run (copies + OpenCV) far longer than 10 s and never steals a live lock."""
+    seen = {}
+
+    class FakeLock:
+        def __init__(self, path, timeout=10.0, stale_sec=30.0):
+            if path.name == ".clip-ready.lock":  # (shots.jsonl writes take their own, shorter lock)
+                seen.update(timeout=timeout, stale=stale_sec)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    monkeypatch.setattr(sw, "_FileLock", FakeLock)
+    now = time.time()
+    cfg, store, old, new, src_dir = _seed(tmp_path, now)
+    clip = src_dir / "DTL_x.mp4"
+    clip.write_bytes(b"\x00" * 100)
+    sw.clip_ready(cfg, clip, "DTL", now=now, wait=False)
+    assert seen["timeout"] >= 60 and seen["stale"] > seen["timeout"]
+
+
+def test_reference_change_while_on_putter_uses_last_full_swing(tmp_path, monkeypatch):
+    """Driver -> PT -> Alt+R: the reference must resolve Driver clips, not the (empty) Putter folder."""
+    m, _ = _bare_manager(_cfg(tmp_path))
+    clubs = []
+    monkeypatch.setattr(sw, "setup_video_rig", lambda cfg, club=None, **k: clubs.append(club))
+    monkeypatch.setattr(sw, "tile_video_windows", lambda *a, **k: None)
+    m.active_reference = "My-Go-To"
+    m._on_club_change("DR")
+    m._on_club_change("PT")
+    m.set_reference("Last-Swing")
+    assert sw.club_category(clubs[-1]) == "Driver"
+
+
+def test_failed_reference_swap_is_retried(tmp_path, monkeypatch):
+    m, _ = _bare_manager(_cfg(tmp_path))
+    calls = []
+
+    def flaky(cfg, club=None, **k):
+        calls.append(club)
+        if len(calls) == 1:
+            raise OSError("boom")
+
+    monkeypatch.setattr(sw, "setup_video_rig", flaky)
+    monkeypatch.setattr(sw, "tile_video_windows", lambda *a, **k: None)
+    m.active_reference = "My-Go-To"
+    with pytest.raises(OSError):
+        m._on_club_change("DR")
+    m._on_club_change("DR")  # category not recorded after the failure -> swap retried
+    assert calls == ["DR", "DR"]

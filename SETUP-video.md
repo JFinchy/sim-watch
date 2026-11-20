@@ -33,8 +33,10 @@ so Kinovea doesn't overwrite them. Don't rename the windows `Capture`, `LiveRepl
    *UDP trigger* enabled on port 8875, the audio trigger off, and the action set to "Record video". Both capture
    screens should show the trigger as *armed*.
 3. **Post-recording command:** each capture screen's menu > *Post-recording command* should show
-   `"...python.exe" "...simwatch.py" clip-ready "%filepath%" DTL` (or `FO`), and it should be enabled.
-   Don't edit it. SimWatch regenerates it.
+   `"...pythonw.exe" "...simwatch.py" clip-ready "%filepath%" DTL` (or `FO`), and it should be enabled.
+   `pythonw.exe` (next to the Python SimWatch runs with; `python.exe` only if there is none) opens no console
+   window, so nothing pops over fullscreen GSPro. Don't edit it. SimWatch regenerates it.
+   `clip-ready` logs to `logs\clip-ready.log` (not `simwatch.log`).
 4. **Firewall prompt:** Kinovea listens on UDP 8875 on all interfaces, so Windows may ask once whether
    Kinovea may use the network. Windows Firewall doesn't filter loopback traffic and SimWatch sends to
    `127.0.0.1`, so the trigger works either way. Choose "Cancel"/deny unless you want other machines
@@ -51,6 +53,13 @@ Raw recordings go to `video.capture_root`. The default is `%LOCALAPPDATA%\SimWat
 "file finished" detection and slows recording. The organized library copies
 (`Swings\Sessions\<date>\NNN_<club>_<carry>y_<speed>mph[_D-<drill>]_<angle>.mp4` + `.kva`) and the
 LiveReplay folders (`Swings\Sessions\<date>\DTL|FO`) are written by `clip-ready`.
+
+`NNN` is the shot's day-unique number (`shot_num` in `shots.jsonl`), not the launch monitor's ShotNumber,
+which can restart at 1 when GameChanger restarts (that one is kept as `device_shot_num`). Whether a shot
+already has its DTL/FO clip is read from the shot record (`clips` {DTL, FO}), not from file names. A clip
+saved just after midnight for a shot just before it is filed (library copy + link) under the shot's day;
+its LiveReplay copy goes to the new day's folder. `clip-ready` links the clip itself under a lock shared with
+the watchdog; if it can't (file busy), the running watchdog writes the link and retries.
 
 ## 4. Timing
 

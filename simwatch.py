@@ -10,11 +10,13 @@ Commands:
   python simwatch.py recover [level]       run one recovery level now (default 0)
   python simwatch.py watch                 run forever: check, escalate recovery, and drive video rig
   python simwatch.py startup               after a reboot: launch everything in order, then watch
-  python simwatch.py stop                  stop any running background SimWatch daemon instances
+  python simwatch.py stop                  stop the background SimWatch daemon (clean exit; a second watch/
+                                           startup never kills the running one, it just exits)
   python simwatch.py displays              show detected displays and what GSPro would be told to use
   python simwatch.py reconnect             manual/diagnostic: connect FSX Pro's own view to the Launch Pro
   python simwatch.py release-device        disconnect FSX Pro from the Launch Pro so GameChanger can reconnect
-  python simwatch.py video                 launch/tile 2x2 Kinovea TV grid + OBS PiP + hotkeys (no GSPro needed)
+  python simwatch.py video [off]           2x2 Kinovea TV grid + OBS PiP + hotkeys (no GSPro needed); if the
+                                           watch/startup daemon runs, asks it to start its rig (until `video off`)
   python simwatch.py bookmark [club]       save latest DTL & FO swing clips to Swings/My-Go-To/
   python simwatch.py reference [name]      switch bottom Kinovea reference (My-Go-To or Pro name)
   python simwatch.py obs-setup             create Swings/ layout, Kinovea workspaces & OBS scene collection JSON
@@ -26,14 +28,20 @@ Commands:
   python simwatch.py harden [adapter] [--apply]  print (or run, elevated) Launch Pro link/firewall/power hardening
   python simwatch.py discover --write-local      detect app exe paths and write config.local.json
   python simwatch.py bridge [--demo]       run only the shot-data bridge (http://127.0.0.1:8765) + :921 sniffer
+  python simwatch.py phone                 print the drills-hub URL for a phone on your Wi-Fi (needs bridge.lan)
+  python simwatch.py status                bridge status, today's shots, daemon/video request, log tail
   python simwatch.py clip-ready <file> DTL Kinovea 2025 post-recording command: link + library + replay copy
 
 Run from an ADMIN terminal if any sim app runs as admin (Windows blocks clicks & raw sockets otherwise).
 """
 import argparse
+import atexit
 import ctypes
 import functools
+import hmac
+import http.cookies
 import http.server
+import ipaddress
 import json
 import logging
 from logging.handlers import RotatingFileHandler
@@ -42,6 +50,7 @@ import os
 import queue
 import random
 import re
+import secrets
 import shutil
 import socket
 import struct
@@ -52,7 +61,7 @@ import time
 import urllib.parse
 import uuid
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 import psutil
@@ -92,6 +101,11 @@ GSPRO_PORT = 921
 VIDEO_EXTS = (".mp4", ".mkv", ".avi", ".mov")
 STATUS_PATH = HERE / "simwatch_status.json"
 _SINGLETON_MUTEX = None
+# Daemon coordination files (all gitignored, next to this script):
+DAEMON_INFO_PATH = HERE / "simwatch_daemon.json"  # {pid, command, started} of the daemon holding the singleton
+VIDEO_REQUEST_PATH = HERE / "VIDEO_ON"            # `video` while a daemon runs: "start the video rig, no GSPro needed"
+STOP_REQUEST_PATH = HERE / "STOP_REQUEST"         # `stop`: ask the daemon to exit cleanly (also tells the launcher)
+_DAEMON_STARTED = 0.0                             # time.time() when this process took the singleton
 
 _THROTTLE: dict[str, float] = {}
 _THROTTLE_LOCK = threading.Lock()
@@ -112,6 +126,18 @@ def log_throttled(key: str, msg: str, every_sec: float = 60.0, level: int = logg
         _THROTTLE[key] = now
     LOG.log(level, msg, exc_info=exc_info)
     return True
+
+
+def cfg_number(value, default: float) -> float:
+    """`value` as a non-negative finite float, else `default`. For optional numeric settings that
+    validate_config only WARNS about: a bad value must fall back, not raise on every watch tick."""
+    if isinstance(value, bool):
+        return float(default)
+    try:
+        v = float(value)
+    except (TypeError, ValueError):
+        return float(default)
+    return v if v >= 0 and v != float("inf") else float(default)  # NaN fails v >= 0
 
 
 def write_text_if_changed(path: Path, data: str | bytes, backup: bool = True) -> bool:
@@ -240,6 +266,20 @@ def validate_config(cfg: dict, check_paths: bool | None = None) -> list[tuple[st
     if isinstance(cfg.get("interval_sec"), (int, float)) and cfg["interval_sec"] <= 0:
         err("interval_sec must be > 0 (0 would busy-loop)")
 
+    def _is_num(v) -> bool:
+        return isinstance(v, (int, float)) and not isinstance(v, bool) and v >= 0
+
+    if "pause_max_hours" in cfg and not _is_num(cfg["pause_max_hours"]):
+        warn(f"pause_max_hours must be a non-negative number (got {cfg['pause_max_hours']!r}); using 4")
+    dev = cfg.get("device") if isinstance(cfg.get("device"), dict) else {}
+    for k in ("offline_ticks", "socket_clear_sec"):
+        if k in dev and not _is_num(dev[k]):
+            warn(f"device.{k} must be a non-negative number (got {dev[k]!r})")
+    drec = cfg.get("device_recovery") if isinstance(cfg.get("device_recovery"), dict) else {}
+    bo = drec.get("backoff_sec")
+    if bo is not None and not (isinstance(bo, list) and bo and all(_is_num(x) for x in bo)):
+        warn(f"device_recovery.backoff_sec must be a list of non-negative numbers (got {bo!r}); using [300]")
+
     referenced: set[str] = set(SPECIAL_APP_KEYS)
 
     checks = cfg.get("checks")
@@ -316,6 +356,9 @@ def validate_config(cfg: dict, check_paths: bool | None = None) -> list[tuple[st
     sl = cfg.get("video", {}).get("swing_lines", {}) if isinstance(cfg.get("video"), dict) else {}
     if isinstance(sl, dict) and sl.get("handedness") and str(sl["handedness"]).lower() not in ("left", "right"):
         warn(f"video.swing_lines.handedness {sl['handedness']!r} is not 'left' or 'right' (treated as right)")
+    bcfg = cfg.get("bridge")
+    if isinstance(bcfg, dict) and "lan" in bcfg and not isinstance(bcfg["lan"], bool):
+        warn(f"bridge.lan {bcfg['lan']!r} is not true/false (treated as false: phone access stays off)")
     return out
 
 
@@ -420,23 +463,51 @@ def read_config_layers(path: Path) -> tuple:
     return deep_merge_config(base, over), lp
 
 
-def stop_other_simwatch_instances() -> int:
-    """Terminate any other background `simwatch.py` daemon (`watch`/`startup`/`video`) processes."""
-    my_pid = os.getpid()
-    daemon_cmds = {"watch", "startup", "video"}
-    victims = []
+DAEMON_CMDS = ("watch", "startup", "video")
+
+
+def _own_pids() -> set[int]:
+    """This process and its ancestors. On Windows a venv's Scripts\\python.exe is a launcher stub that runs the
+    real interpreter as a child with the *same* command line, so the parent looks exactly like a "prior" SimWatch
+    (killing it exits the launcher with 15)."""
+    pids = {os.getpid(), os.getppid()}  # direct parent even if the psutil walk below fails
+    try:
+        pids.update(a.pid for a in psutil.Process().parents())
+    except psutil.Error:
+        pass
+    return pids
+
+
+def find_simwatch_daemons() -> list:
+    """Other `simwatch.py watch|startup|video` python processes (never ourselves or our ancestors).
+    Each returned psutil.Process has .info["cmdline"]. An elevated daemon's cmdline may be unreadable from a
+    non-elevated shell; it is then missed here (the singleton mutex + simwatch_daemon.json still see it)."""
+    mine = _own_pids()
+    found = []
     for p in psutil.process_iter(["pid", "name", "cmdline"]):
         try:
-            if p.info["pid"] == my_pid:
+            if p.info["pid"] in mine:
                 continue
             name = (p.info["name"] or "").lower()
             if not name.startswith("python"):
                 continue
             cmd = [str(a).lower() for a in (p.info["cmdline"] or [])]
-            if any("simwatch.py" in a for a in cmd) and any(a in daemon_cmds for a in cmd):
-                victims.append(p)
+            if any("simwatch.py" in a for a in cmd) and any(a in DAEMON_CMDS for a in cmd):
+                found.append(p)
         except psutil.Error:
             pass
+    return found
+
+
+def _daemon_command_of(proc) -> str:
+    cmd = [str(a).lower() for a in ((getattr(proc, "info", None) or {}).get("cmdline") or [])]
+    return next((a for a in cmd if a in DAEMON_CMDS), "unknown")
+
+
+def stop_other_simwatch_instances() -> int:
+    """Force-terminate any other background `simwatch.py` daemon (`watch`/`startup`/`video`) processes.
+    Last resort for `simwatch.py stop` after the clean STOP_REQUEST handshake timed out (see request_stop)."""
+    victims = find_simwatch_daemons()
     if not victims:
         return 0
     for p in victims:
@@ -454,14 +525,10 @@ def stop_other_simwatch_instances() -> int:
     return len(victims)
 
 
-def acquire_singleton_lock() -> bool:
-    """Ensure only one SimWatch watch/startup/video daemon runs at a time."""
+def _create_singleton_mutex() -> str:
+    """Create the Local\\SimWatchSingleton mutex: "acquired", "held" (another daemon owns it) or "unavailable"
+    (not Windows / ctypes failure). Separate function so tests can stub it."""
     global _SINGLETON_MUTEX
-    if _SINGLETON_MUTEX is not None:
-        return True
-    stopped = stop_other_simwatch_instances()
-    if stopped:
-        time.sleep(0.5)
     try:
         kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
         kernel32.CreateMutexW.argtypes = [ctypes.c_void_p, ctypes.wintypes.BOOL, ctypes.wintypes.LPCWSTR]
@@ -471,14 +538,158 @@ def acquire_singleton_lock() -> bool:
         mutex = kernel32.CreateMutexW(None, False, "Local\\SimWatchSingleton")
         err = ctypes.get_last_error()
         if not mutex:
-            return err != 183
+            return "held" if err in (183, 5) else "unavailable"  # 5 = ACCESS_DENIED: an elevated instance owns it
         if err == 183:  # ERROR_ALREADY_EXISTS
             kernel32.CloseHandle(mutex)
-            return False
+            return "held"
         _SINGLETON_MUTEX = mutex
+        return "acquired"
     except Exception:
+        return "unavailable"
+
+
+def read_daemon_info() -> dict | None:
+    """simwatch_daemon.json if the pid in it is still alive (else None: stale file from a crash)."""
+    try:
+        info = json.loads(DAEMON_INFO_PATH.read_text(encoding="utf-8"))
+        pid = int(info.get("pid"))
+    except (OSError, ValueError, TypeError, AttributeError):
+        return None
+    if pid == os.getpid() or not psutil.pid_exists(pid):
+        return None
+    return info
+
+
+def running_daemon() -> dict | None:
+    """{pid, command} of the SimWatch daemon running in another process, or None."""
+    info = read_daemon_info()
+    if info:
+        return {"pid": info.get("pid"), "command": str(info.get("command") or "unknown")}
+    procs = find_simwatch_daemons()
+    if procs:
+        return {"pid": procs[0].pid, "command": _daemon_command_of(procs[0])}
+    return None
+
+
+def _remove_daemon_info() -> None:
+    try:
+        info = json.loads(DAEMON_INFO_PATH.read_text(encoding="utf-8"))
+        if int(info.get("pid", -1)) == os.getpid():
+            DAEMON_INFO_PATH.unlink(missing_ok=True)
+    except (OSError, ValueError, TypeError, AttributeError):
         pass
+
+
+def _clear_stale_requests(command: str) -> None:
+    """At daemon start: drop a STOP_REQUEST aimed at an earlier process and (watch/startup) a VIDEO_ON left from
+    an earlier daemon session - a request only ever targets the daemon that was running when it was made."""
+    paths = [STOP_REQUEST_PATH] + ([VIDEO_REQUEST_PATH] if command in ("watch", "startup") else [])
+    for path in paths:
+        try:
+            if path.exists():
+                path.unlink()
+                LOG.info("Removed stale %s from an earlier SimWatch run", path.name)
+        except OSError:
+            pass
+
+
+def acquire_singleton_lock(command: str = "watch") -> bool:
+    """Take the single-daemon slot for watch/startup/video. Never kills anything: returns False when another
+    daemon already runs (callers then exit cleanly or hand off; `simwatch.py stop` is the way to stop it)."""
+    global _SINGLETON_MUTEX, _DAEMON_STARTED
+    if _SINGLETON_MUTEX is not None:
+        return True
+    state = _create_singleton_mutex()
+    if state == "held":
+        return False
+    if state == "unavailable":
+        if find_simwatch_daemons():  # no mutex (ctypes failure): fall back to a process scan
+            return False
+        _SINGLETON_MUTEX = "no-mutex"
+    elif _SINGLETON_MUTEX is None:
+        _SINGLETON_MUTEX = "acquired"  # (the real creator stores the handle; a stub may not)
+    _DAEMON_STARTED = time.time()
+    _clear_stale_requests(command)
+    try:
+        DAEMON_INFO_PATH.write_text(json.dumps({"pid": os.getpid(), "command": command,
+                                                "started": datetime.now().isoformat(timespec="seconds")}),
+                                    encoding="utf-8")
+        atexit.register(_remove_daemon_info)
+    except OSError as e:
+        LOG.warning("could not write %s: %s", DAEMON_INFO_PATH.name, e)
     return True
+
+
+def already_running_message(command: str) -> str:
+    d = running_daemon()
+    who = f" (pid {d['pid']}, `{d['command']}`)" if d and d.get("pid") else ""
+    return (f"SimWatch is already running in the background{who}; not starting a second `{command}`. "
+            "To restart it: python simwatch.py stop, then start it again (or: schtasks /Run /TN SimWatch).")
+
+
+def stop_requested() -> bool:
+    """True when `simwatch.py stop` wrote STOP_REQUEST after this daemon started."""
+    try:
+        return STOP_REQUEST_PATH.stat().st_mtime >= _DAEMON_STARTED - 1.0
+    except OSError:
+        return False
+
+
+def request_stop(timeout: float = 20.0) -> int:
+    """`simwatch.py stop`: ask the running daemon to exit cleanly (STOP_REQUEST; it works across elevation and
+    lets the daemon close the bridge/rig), wait, then force-terminate whatever is left. STOP_REQUEST also tells
+    run_simwatch.bat that the exit was a deliberate stop, so it shows no error box and ends the scheduled task
+    (a later `schtasks /Run /TN SimWatch` then starts it again). Returns the number of processes found."""
+    procs = find_simwatch_daemons()
+    pids = {p.pid for p in procs}
+    info = read_daemon_info()
+    if info and info.get("pid"):
+        pids.add(int(info["pid"]))
+    if not pids:
+        return 0
+    try:
+        STOP_REQUEST_PATH.write_text(f"stop requested {datetime.now().isoformat(timespec='seconds')} "
+                                     f"by pid {os.getpid()}\n", encoding="utf-8")
+    except OSError as e:
+        LOG.warning("could not write %s (%s); force-stopping instead", STOP_REQUEST_PATH.name, e)
+        return max(len(pids), stop_other_simwatch_instances())
+    print(f"Asked SimWatch (pid {', '.join(str(p) for p in sorted(pids))}) to stop; waiting up to {timeout:.0f}s...")
+    deadline = time.time() + timeout
+    while time.time() < deadline and any(psutil.pid_exists(p) for p in pids):
+        time.sleep(0.5)
+    left = [p for p in pids if psutil.pid_exists(p)]
+    if left:
+        LOG.info("SimWatch did not exit within %.0fs (pid %s); terminating", timeout, left)
+        stop_other_simwatch_instances()  # STOP_REQUEST stays: the launcher sees it and treats rc 15 as a stop
+        left = [p for p in pids if psutil.pid_exists(p)]
+        if left:
+            print(f"Could not stop pid {left} (elevated? run this from an Administrator prompt).")
+    else:
+        try:
+            STOP_REQUEST_PATH.unlink(missing_ok=True)  # clean exit (rc 0): nothing left for the launcher to read
+        except OSError:
+            pass
+    return len(pids)
+
+
+def video_request_active() -> bool:
+    return VIDEO_REQUEST_PATH.exists()
+
+
+def write_video_request(by: str = "video") -> None:
+    VIDEO_REQUEST_PATH.write_text(f"requested_at: {datetime.now().isoformat(timespec='seconds')} by {by}\n"
+                                  "Delete this file or run `python simwatch.py video off` to release the video rig.\n",
+                                  encoding="utf-8")
+
+
+def clear_video_request() -> bool:
+    try:
+        existed = VIDEO_REQUEST_PATH.exists()
+        VIDEO_REQUEST_PATH.unlink(missing_ok=True)
+        return existed
+    except OSError as e:
+        LOG.warning("could not remove %s: %s", VIDEO_REQUEST_PATH.name, e)
+        return False
 
 
 # --------------------------------------------------------------------------- processes
@@ -1571,7 +1782,14 @@ def device_recovery_cfg(cfg) -> dict:
 
 def device_backoff_sec(cfg, attempts: int) -> float:
     """Wait after the `attempts`-th device-only recovery (1-based): 5 -> 15 -> 30 min, capped at the last."""
-    sched = [float(s) for s in (device_recovery_cfg(cfg).get("backoff_sec") or [300]) if float(s) >= 0] or [300.0]
+    raw = device_recovery_cfg(cfg).get("backoff_sec") or [300]
+    if not isinstance(raw, (list, tuple)):
+        raw = [raw]  # a bare number/string must not be iterated char by char ("300" -> 3, 0, 0)
+    try:
+        sched = [float(s) for s in raw if not isinstance(s, bool) and float(s) >= 0] or [300.0]
+    except (TypeError, ValueError):
+        log_throttled("device-backoff-cfg", "device_recovery.backoff_sec has a non-number; using [300]")
+        sched = [300.0]
     return sched[min(max(attempts, 1), len(sched)) - 1]
 
 
@@ -1580,20 +1798,27 @@ def recover_device(cfg) -> None:
     _run_recovery_step(cfg, device_recovery_cfg(cfg), "device recovery")
 
 
-def release_fsx_for_recovery(cfg) -> None:
-    """Automated recovery must never move the real mouse (fsx_disconnect clicks): if FSX Pro is holding
-    the Launch Pro session, just close FSX Pro. The explicit reconnect/release-device commands still click."""
-    app = cfg.get("apps_by_key", {}).get("fs_connector")
-    if not app:
-        return
+def fsx_holds_device(cfg) -> bool:
+    """True when FSX Pro currently holds the Launch Pro session. That is the user's choice (they are using
+    FSX Pro), so automated recovery leaves both FSX Pro and GameChanger alone until it lets go."""
+    if not cfg.get("apps_by_key", {}).get("fs_connector"):
+        return False
     try:
-        held = fsx_session(cfg) is not None
+        return fsx_session(cfg) is not None
     except Exception as e:
         log_throttled("fsx-session", f"could not inspect FSX Pro session: {e}")
-        return
+        return False
+
+
+def release_fsx_for_recovery(cfg) -> bool:
+    """Never closes or clicks FSX Pro any more (user decision 2026-11-19: leave FSX alone). Returns True
+    when FSX Pro holds the Launch Pro so the caller can skip restarting GameChanger, which could not
+    connect anyway. `release-device` / `reconnect` remain the explicit, user-run ways to hand it over."""
+    held = fsx_holds_device(cfg)
     if held:
-        LOG.warning("  FSX Pro is holding the Launch Pro - closing FSX Pro so GameChanger can connect")
-        kill_app(app)
+        log_throttled("fsx-holds", "FSX Pro is using the Launch Pro - leaving it alone "
+                      "(run `python simwatch.py release-device` when you're done with FSX Pro)", every_sec=600.0)
+    return held
 
 
 def wait_device_sockets_clear(cfg, timeout: float = 10.0) -> bool:
@@ -1626,14 +1851,18 @@ def _run_recovery_step(cfg, step: dict, label: str) -> None:
     if "gspro" in keys and _is_gspro_healthy(cfg):
         LOG.info("  gspro already healthy and listening on :9050 - skipping GSPro restart")
         keys = [k for k in keys if k != "gspro"]
+    if "integrator" in keys and release_fsx_for_recovery(cfg):
+        keys = [k for k in keys if k != "integrator"]  # FSX Pro has the device: GameChanger couldn't connect
+    if not keys:
+        return
     LOG.warning(">>> %s: %s", label, step.get("name", "?"))
     for key in reversed(keys):          # stop downstream first
         kill_app(cfg["apps_by_key"][key])
     if keys:
         time.sleep(2)
     if "integrator" in keys:
-        release_fsx_for_recovery(cfg)   # safety net before GameChanger starts (never moves the mouse)
-        wait_device_sockets_clear(cfg, float(cfg.get("device", {}).get("socket_clear_sec", 10)))
+        dev = cfg.get("device") if isinstance(cfg.get("device"), dict) else {}
+        wait_device_sockets_clear(cfg, cfg_number(dev.get("socket_clear_sec", 10), 10))
     for key in keys:
         launch_app(cfg, cfg["apps_by_key"][key], 45)
     time.sleep(cfg.get("settle_sec", 15))
@@ -2217,11 +2446,24 @@ def kinovea_capture_folders(cfg: dict, layout: dict) -> dict[str, dict]:
     return out
 
 
+def windowless_python(python_exe: str | None) -> str:
+    """pythonw.exe next to `python_exe` when it exists (no console window popping over fullscreen GSPro and
+    stealing focus), else `python_exe` itself."""
+    py = python_exe or sys.executable or "python"
+    p = Path(py)
+    if p.name.lower() == "python.exe":
+        w = p.with_name("pythonw.exe")
+        if w.exists():
+            return str(w)
+    return py
+
+
 def kinovea_clip_ready_instruction(angle: str, python_exe: str | None = None, script: str | None = None) -> str:
     """Post-recording command line. Kinovea runs `cmd.exe /C <line>`; with >2 quotes cmd strips the first
     and last quote, so the whole line is wrapped in one extra pair. %filepath% is Kinovea's variable; the
-    angle is literal because %camalias% is not available in the post-recording context."""
-    py = python_exe or sys.executable or "python"
+    angle is literal because %camalias% is not available in the post-recording context. Uses pythonw.exe
+    when available; clip-ready logs to logs/clip-ready.log and never needs a console."""
+    py = windowless_python(python_exe)
     scr = script or str(HERE / "simwatch.py")
     return f'""{py}" "{scr}" clip-ready "%filepath%" {angle}"'
 
@@ -2579,6 +2821,10 @@ def wait_file_ready(path: Path, timeout: float = 8.0, stable_sec: float = 0.6) -
 # --------------------------------------------------------------------------- clip-ready (Kinovea post-recording)
 
 CLIP_EVENTS_DIR = ".clip-events"  # <today>/.clip-events/*.json: clip-ready -> running watchdog notifications
+CLIP_READY_LOCK_TIMEOUT_SEC = 60.0   # how long a clip-ready run waits for the other angle's run
+CLIP_READY_LOCK_STALE_SEC = 120.0    # a lock older than this is from a crashed run (must exceed one run's work)
+CLIP_EVENTS_YESTERDAY_SEC = 900.0    # after midnight, the watchdog also drains yesterday's .clip-events this long
+CLIP_LINK_MAX_ATTEMPTS = 8           # watchdog-side retries for a clip link clip-ready could not write
 
 
 def angle_from_camalias(camalias: str | None, path: Path | None = None, cfg: dict | None = None) -> str:
@@ -2619,30 +2865,44 @@ def clip_library_name(shot: dict | None, angle: str, ext: str, number: int | Non
 
 
 def _has_angle_clip(folder: Path, number: int, angle: str) -> bool:
-    rx = re.compile(rf"^{int(number):03d}_.*_{angle}(?:-\d+)?\.[A-Za-z0-9]+$", re.I)
+    """A library file NNN_..._<ANGLE>[_2|-1].<ext> exists (only for clips with NO shot record)."""
+    rx = re.compile(rf"^{int(number):03d}_.*_{angle}(?:[_-]\d+)?\.[A-Za-z0-9]+$", re.I)
     return any(rx.match(p.name) for p in folder.glob(f"{int(number):03d}_*") if p.suffix.lower() in VIDEO_EXTS)
 
 
-def find_shot_for_clip(shots: list[dict], clip_time: float, angle: str, library_dir: Path,
-                       window_sec: float = 20.0) -> dict | None:
-    """Most recent shot within window_sec before the clip finished that has no `angle` clip yet."""
+def find_shot_for_clip(shots: list[dict], clip_time: float, angle: str, library_dir: Path | None = None,
+                       window_sec: float = 20.0, taken: set | None = None) -> dict | None:
+    """Most recent shot within window_sec before the clip finished that has no `angle` clip yet.
+
+    "Already clipped" comes from the shot record (clips{} / clip) plus `taken` {(ts, angle)} (clip-ready's
+    ledger, which also covers a link that failed to write) - never from file numbers, which repeat when
+    the launch monitor's ShotNumber resets. library_dir is unused (kept for callers)."""
     best = None
+    taken = taken or set()
     for s in shots:
         t = _shot_epoch(s)
         if t is None or not (clip_time - window_sec <= t <= clip_time + 2.0):
             continue
         if is_putt(s.get("club"), (s.get("ball") or {}).get("speed"), (s.get("ball") or {}).get("vla")):
             continue
-        if s.get("shot_num") is not None and _has_angle_clip(library_dir, int(s["shot_num"]), angle):
+        if shot_has_angle_clip(s, angle) or (s.get("ts"), angle) in taken:
             continue
         if best is None or t > _shot_epoch(best):
             best = s
     return best
 
 
+def clip_search_dates(clip_time: float, window_sec: float) -> list[str]:
+    """Day folders whose shots can match a clip finished at clip_time: its own day, plus the previous day
+    when the match window reaches back across midnight (23:59:58 shot, clip lands 00:00:05)."""
+    day = datetime.fromtimestamp(clip_time).strftime("%Y-%m-%d")
+    earliest = datetime.fromtimestamp(clip_time - window_sec).strftime("%Y-%m-%d")
+    return [day] if earliest == day else [day, earliest]
+
+
 class _FileLock:
     """Tiny cross-process lock (O_EXCL lock file, stale after `stale_sec`). Serializes clip-ready runs
-    (Kinovea fires DTL and FO commands at nearly the same moment)."""
+    (Kinovea fires DTL and FO commands at nearly the same moment) and shots.jsonl writers."""
 
     def __init__(self, path: Path, timeout: float = 10.0, stale_sec: float = 30.0):
         self.path, self.timeout, self.stale_sec = path, timeout, stale_sec
@@ -2678,7 +2938,11 @@ class _FileLock:
 
 def clip_ready(cfg: dict, src: Path, camalias: str | None, now: float | None = None, wait: bool = True) -> dict:
     """Organize one finished Kinovea recording: link to its shot, copy into the swing library + replay
-    folder with .kva swing lines, and drop a notification for the running watchdog. Idempotent per source."""
+    folder with .kva swing lines, and drop a notification for the running watchdog. Idempotent per source.
+
+    The library copy, the shot link and the watchdog event go to the SHOT's day folder (a clip that lands
+    just after midnight belongs to the previous day's shot); the replay copy goes to the clip's day (the
+    folder Kinovea's LiveReplay watches via %date%)."""
     src = Path(src)
     angle = angle_from_camalias(camalias, src, cfg)
     if not src.exists() or src.suffix.lower() not in VIDEO_EXTS:
@@ -2687,32 +2951,48 @@ def clip_ready(cfg: dict, src: Path, camalias: str | None, now: float | None = N
         LOG.warning("clip-ready: %s still locked/growing after timeout; continuing anyway", src.name)
     layout = ensure_swings_layout(cfg)
     vcfg = cfg.get("video", {}) or {}
-    bcfg = bridge_config(cfg)
-    raw = Path(str(bcfg.get("sessions_dir") or BRIDGE_DEFAULTS["sessions_dir"]))
-    store = ShotStore(raw if raw.is_absolute() else HERE / raw)
+    store = ShotStore(bridge_sessions_dir(cfg))
     try:
         clip_time = src.stat().st_mtime if now is None else now
     except OSError:
         clip_time = time.time()
-    date_str = datetime.fromtimestamp(clip_time).strftime("%Y-%m-%d")
-    lib = layout["sessions"] / date_str
-    lib.mkdir(parents=True, exist_ok=True)
-    ledger_path = lib / "clip_ready_ledger.json"
-    with _FileLock(lib / ".clip-ready.lock"):
-        try:
-            ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            ledger = {}
+    window = float(cfg_number(vcfg.get("clip_link_window_sec", 20.0), 20.0))
+    dates = clip_search_dates(clip_time, window)
+    clip_date = dates[0]
+    clip_lib = layout["sessions"] / clip_date
+    clip_lib.mkdir(parents=True, exist_ok=True)
+    ledger_path = clip_lib / "clip_ready_ledger.json"
+    # DTL and FO fire together; the first run copies ~100 MB twice and may decode the clip (OpenCV ball
+    # detect + path trace), so the second must be able to wait well past 10 s without stealing the lock.
+    # One lock at the Sessions root (not per day) so two angles straddling midnight still serialize.
+    with _FileLock(layout["sessions"] / ".clip-ready.lock", timeout=CLIP_READY_LOCK_TIMEOUT_SEC,
+                   stale_sec=CLIP_READY_LOCK_STALE_SEC):
+        ledgers: dict[str, dict] = {}
+        for d in dates:
+            try:
+                ledgers[d] = json.loads((layout["sessions"] / d / "clip_ready_ledger.json").read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                ledgers[d] = {}
+        ledger = ledgers[clip_date]
         key = str(src.resolve()).lower()
         prev = ledger.get(key)
-        if prev and (lib / prev["clip"]).exists():
+        if prev and (layout["sessions"] / str(prev.get("date") or clip_date) / prev["clip"]).exists():
             return {"status": "duplicate", **prev}
-        shots = store.read(date_str)
-        shot = find_shot_for_clip(shots, clip_time, angle, lib, float(vcfg.get("clip_link_window_sec", 20.0)))
+        taken = {(e.get("ts"), e.get("angle")) for led in ledgers.values() for e in led.values()
+                 if isinstance(e, dict) and e.get("ts")}
+        shots = [r for d in dates for r in store.read(d)]
+        shot = find_shot_for_clip(shots, clip_time, angle, None, window, taken)
+        shot_date = str(shot["ts"])[:10] if shot and shot.get("ts") else clip_date
+        lib = layout["sessions"] / shot_date
+        lib.mkdir(parents=True, exist_ok=True)
         number = None
         if not shot:
             other = "FO" if angle == "DTL" else "DTL"
             nums = [int(m.group(1)) for p in lib.glob("*") if (m := re.match(r"^(\d{3})_", p.name))]
+            # Also stay above recorded shot numbers so a later real shot never collides with this clip.
+            for s_ in store.read(shot_date):
+                if (n_ := _int_or_none(s_.get("shot_num"))) is not None:
+                    nums.append(n_)
             number = max(nums, default=0) + 1
             for p in sorted(lib.glob(f"*_{other}.*"), key=lambda q: q.stat().st_mtime, reverse=True)[:1]:
                 m = re.match(r"^(\d{3})_", p.name)
@@ -2731,25 +3011,27 @@ def clip_ready(cfg: dict, src: Path, camalias: str | None, now: float | None = N
             dest.with_suffix(".kva").write_text(kva_xml, encoding="utf-8")
         shutil.copy2(src, dest)
         # Replay folder (watched by LiveReplay): .kva first, then the video, so the observer finds both.
-        replay = unique_path(layout["sessions"] / date_str / angle / dest.name)
+        replay = unique_path(clip_lib / angle / dest.name)
         replay.parent.mkdir(parents=True, exist_ok=True)
         if kva_xml:
             replay.with_suffix(".kva").write_text(kva_xml, encoding="utf-8")
         shutil.copyfile(src, replay)
         linked = False
-        if shot and shot.get("ts") and (angle == "DTL" or not shot.get("clip")):
+        if shot and shot.get("ts"):
+            # Works with or without a watchdog: the link is written here, under the shots.jsonl lock. If it
+            # can't be (lock busy / file held), the event says linked=false and the watchdog retries it.
             try:
-                linked = store.set_clip(shot["ts"], dest.name)
+                linked = store.set_clip(shot["ts"], dest.name, angle)
             except OSError as e:
-                LOG.warning("clip-ready: could not link clip to shot: %s", e)
+                LOG.warning("clip-ready: could not link clip to shot (watchdog will retry): %s", e)
         result = {"status": "ok", "clip": dest.name, "angle": angle, "ts": (shot or {}).get("ts"),
-                  "linked": linked, "src": str(src), "replay": str(replay)}
-        ledger[key] = {"clip": dest.name, "angle": angle, "ts": result["ts"]}
+                  "date": shot_date, "linked": linked, "src": str(src), "replay": str(replay)}
+        ledger[key] = {"clip": dest.name, "angle": angle, "ts": result["ts"], "date": shot_date}
         write_text_if_changed(ledger_path, json.dumps(ledger, indent=1), backup=False)
         ev_dir = lib / CLIP_EVENTS_DIR
         ev_dir.mkdir(exist_ok=True)
         write_text_if_changed(ev_dir / f"{time.time_ns()}_{angle}.json", json.dumps(result), backup=False)
-    LOG.info("clip-ready: %s -> %s (shot %s, linked=%s)", src.name, dest.name, result["ts"], linked)
+    LOG.info("clip-ready: %s -> %s/%s (shot %s, linked=%s)", src.name, shot_date, dest.name, result["ts"], linked)
     return result
 
 
@@ -2764,8 +3046,12 @@ def cmd_clip_ready(config_path: Path, path: str | None, camalias: str | None) ->
         except SystemExit as e:
             LOG.error("clip-ready: config problem (%s); using defaults", e)
             cfg = {"video": {}, "bridge": {}}
-        clip_ready(cfg, Path(path.strip('"')), camalias)
-    except BaseException as e:  # never fail Kinovea's command
+        try:
+            clip_ready(cfg, Path(path.strip('"')), camalias)
+        except TimeoutError as e:
+            LOG.warning("clip-ready: %s; retrying once", e)
+            clip_ready(cfg, Path(path.strip('"')), camalias)
+    except BaseException as e:  # never fail Kinovea's command (raw capture stays in the capture folder)
         LOG.error("clip-ready failed for %s: %s", path, e, exc_info=not isinstance(e, (SystemExit, KeyboardInterrupt)))
     return 0
 
@@ -3872,6 +4158,8 @@ class ProjectorPiPController:
         try:
             hwnd = self._find_window()
             if not hwnd:
+                if not show:
+                    self.visible = False  # projector window is gone (OBS closed): nothing left on screen
                 return False
             if not show:
                 win32gui.ShowWindow(hwnd, win32con.SW_HIDE)
@@ -3925,8 +4213,9 @@ class ProjectorPiPController:
 
     def tick(self) -> None:
         if self.visible and not self.pinned and self.hide_at and time.time() >= self.hide_at:
-            self._apply_overlay(False)
-            LOG.info("Projector PiP auto-hidden")
+            # Log only a real hide: a failing hide is retried every tick (0.5 s) and must not flood the log.
+            if self._apply_overlay(False):
+                LOG.info("Projector PiP auto-hidden")
 
     def status_text(self) -> str:
         if self.visible and self.pinned:
@@ -3940,6 +4229,9 @@ class ProjectorPiPController:
 _OC_TOP_KEYS = ("ShotNumber", "BallData", "Player", "ShotDataOptions", "DeviceID")
 
 
+OC_DEDUP_WINDOW_SEC = 30.0  # an identical OpenConnect shot (same ShotNumber + ball data) within this is a repeat
+
+
 class OpenConnectMonitor:
     """Passively monitors OpenConnect (:921) loopback TCP traffic for shots & club changes."""
 
@@ -3948,8 +4240,7 @@ class OpenConnectMonitor:
         self.on_club_change = on_club_change
         self._stop = threading.Event()
         self._thread = None
-        self._last_shot_key = None
-        self._last_shot_ts = 0.0
+        self._recent_shots: dict[tuple, float] = {}  # dedup key -> time last seen (see _shot_dedup_key)
         self._last_club = None
         self._buf = ""
         self._last_seg_key = None
@@ -3984,20 +4275,25 @@ class OpenConnectMonitor:
             club = str(player["Club"]).strip()
             if club and club != self._last_club:
                 self._last_club = club
-                self.on_club_change(club)
+                try:
+                    self.on_club_change(club)
+                except Exception:  # a failed reference swap must not drop the shot in this same message
+                    log_throttled("oc-club-cb", f"club change to {club} failed", exc_info=True)
 
         ball = obj.get("BallData")
         opts = obj.get("ShotDataOptions") or {}
+        if opts.get("IsHeartBeat") is True or obj.get("IsHeartBeat") is True:
+            return  # connector keep-alive, never a shot (even if it repeats the last BallData)
         if isinstance(ball, dict):
             speed = float(ball.get("Speed") or 0)
             has_ball = opts.get("ContainsBallData", speed > 0)
-            if has_ball and speed > 0:
+            if has_ball and speed > 0:  # ContainsBallData=false (club-only / status message) is skipped
                 shot_num = obj.get("ShotNumber")
-                key = (shot_num, round(speed, 1))
+                key = self._shot_dedup_key(shot_num, ball, speed)
                 now = time.time()
-                if key != self._last_shot_key or (now - self._last_shot_ts) > 2.0:
-                    self._last_shot_key = key
-                    self._last_shot_ts = now
+                self._recent_shots = {k: t for k, t in self._recent_shots.items() if now - t <= OC_DEDUP_WINDOW_SEC}
+                if key not in self._recent_shots:
+                    self._recent_shots[key] = now
                     carry = ball.get("CarryDistance") or ball.get("TotalDistance")
                     try:
                         shot = openconnect_to_shot(obj, club=self._last_club)
@@ -4013,6 +4309,23 @@ class OpenConnectMonitor:
                         "shot": shot,  # full bridge shot record (see openconnect_to_shot), or None
                     })
 
+    @staticmethod
+    def _shot_dedup_key(shot_num, ball: dict, speed: float) -> tuple:
+        """The same shot is re-sent (GSPro echo, connector repeats, a GSPconnect reconnect) with the same
+        ShotNumber and identical ball data; a real new shot never repeats speed + spin + HLA exactly."""
+        spin = _num(ball.get("TotalSpin"))
+        if spin is None:
+            spin = _num(ball.get("BackSpin"))
+        return (shot_num, round(speed, 1), spin, _num(ball.get("HLA")))
+
+    def _safe_handle(self, obj) -> None:
+        """_handle_json, but a malformed message or a raising callback (e.g. a reference swap that hits an
+        OSError) is logged instead of propagating into _run() and killing the sniffer thread."""
+        try:
+            self._handle_json(obj)
+        except Exception:
+            log_throttled("oc-handle", "OpenConnect monitor: message handling failed", exc_info=True)
+
     def _feed_text(self, text: str) -> None:
         self._buf = (self._buf + text)[-32768:]
         dec = json.JSONDecoder()
@@ -4026,7 +4339,7 @@ class OpenConnectMonitor:
             try:
                 obj, end = dec.raw_decode(self._buf)
                 self._buf = self._buf[end:]
-                self._handle_json(obj)
+                self._safe_handle(obj)
             except json.JSONDecodeError:
                 recovered = False
                 search_pos = 1
@@ -4038,7 +4351,7 @@ class OpenConnectMonitor:
                         obj, end = dec.raw_decode(self._buf[pos:])
                         if isinstance(obj, dict) and any(k in obj for k in _OC_TOP_KEYS):
                             self._buf = self._buf[pos + end:]
-                            self._handle_json(obj)
+                            self._safe_handle(obj)
                             recovered = True
                             break
                     except json.JSONDecodeError:
@@ -4100,7 +4413,13 @@ class OpenConnectMonitor:
                     if seg_key == self._last_seg_key:
                         continue
                     self._last_seg_key = seg_key
-                    self._feed_text(payload.decode("utf-8", errors="ignore"))
+                    try:
+                        self._feed_text(payload.decode("utf-8", errors="ignore"))
+                    except Exception:
+                        # Belt and braces (_feed_text already isolates callbacks): one bad message must not
+                        # end shot detection for the rest of the session - nothing restarts this thread.
+                        self._buf = ""
+                        log_throttled("oc-feed", "OpenConnect monitor: failed to parse traffic", exc_info=True)
         finally:
             self.active = False
             try:
@@ -4119,10 +4438,12 @@ class OpenConnectMonitor:
 # <sessions_dir>/YYYY-MM-DD/shots.jsonl and pushed to the drills hub page over a local HTTP/SSE API.
 #
 # Shot record (version 2; the file/API also tolerate version-1 lines, see normalize_shot):
-#   {"ts": ISO8601 local with offset, "shot_num": int, "club": str|null,
+#   {"ts": ISO8601 local with offset, "shot_num": int (day-unique sequence assigned by ShotStore; names the
+#    clip files), "device_shot_num": int|null (the launch monitor's ShotNumber; can reset mid-day), "club": str|null,
 #    "ball": {"speed": mph, "carry": yd, "total": yd|null, "hla": deg, "vla": deg, "spin": rpm, "spin_axis": deg},
 #    "club_data": {"speed": mph, "path": deg, "face": deg, "aoa": deg}|null,
-#    "clip": str|null, "drill_id": str|null,
+#    "clip": str|null (primary clip: DTL preferred), "clips": {"DTL": str, "FO": str} (when linked),
+#    "drill_id": str|null, "demo": true (only on `bridge --demo` records),
 #    # v2: coaching context stamped from the hub's active context (POST /api/context); null when unset
 #    "feel_id": str|null, "block_id": str|null, "session_id": str|null,
 #    "phase": "warmup"|"cold"|"block"|"transfer"|"speed"|null, "cluster": int 0-999|null,
@@ -4136,7 +4457,8 @@ BRIDGE_VERSION = 2
 CONTEXT_PHASES = ("warmup", "cold", "block", "transfer", "speed")
 CONTEXT_FIELDS = ("drill_id", "feel_id", "block_id", "session_id", "phase", "cluster", "note")
 CONTEXT_NOTE_MAX = 200
-BRIDGE_DEFAULTS = {"enabled": True, "port": 8765, "sessions_dir": "Swings/Sessions"}
+BRIDGE_DEFAULTS = {"enabled": True, "port": 8765, "sessions_dir": "Swings/Sessions", "lan": False}
+BRIDGE_DEMO_SESSIONS_DIR = "Swings/Sessions-demo"  # `bridge --demo` (override: bridge.demo_sessions_dir)
 DRILL_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,80}$")
 _DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 BRIDGE_HUB = None  # the running ShotHub (if any); the watch loop drops its health summary here
@@ -4144,6 +4466,9 @@ DRILL_IDLE_TIMEOUT_SEC = 60.0  # clear active_drill after this long with zero SS
 BRIDGE_MAX_SUBSCRIBERS = 8     # concurrent /api/events streams; more get 503
 SSE_WRITE_TIMEOUT_SEC = 10.0   # a client that stops reading for this long is dropped
 BRIDGE_ALLOWED_HOSTS = ("127.0.0.1", "localhost")
+BRIDGE_TOKEN_PATH = HERE / "bridge_token.txt"  # phone pairing token for bridge.lan (gitignored, created on demand)
+BRIDGE_TOKEN_COOKIE = "simwatch_token"
+BRIDGE_LAN_FIREWALL_RULE = "SimWatch bridge LAN (phone)"
 
 
 def bridge_config(cfg: dict | None) -> dict:
@@ -4153,6 +4478,78 @@ def bridge_config(cfg: dict | None) -> dict:
     if isinstance(b, dict):
         out.update({k: v for k, v in b.items() if not k.startswith("_")})
     return out
+
+
+def bridge_lan_enabled(cfg: dict | None) -> bool:
+    return bridge_config(cfg).get("lan") is True
+
+
+def bridge_token(create: bool = True, path: Path | None = None) -> str | None:
+    """The LAN pairing token (bridge_token.txt). Created once (exclusive create, so two processes racing to
+    create it agree on one token); delete the file to revoke every paired phone."""
+    path = path or BRIDGE_TOKEN_PATH
+    for _ in range(2):
+        try:
+            tok = path.read_text(encoding="utf-8").strip()
+            if tok:
+                return tok
+        except OSError:
+            pass
+        if not create:
+            return None
+        try:
+            fd = os.open(str(path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        except FileExistsError:
+            time.sleep(0.05)  # another process is writing it: read theirs
+            continue
+        except OSError as e:
+            LOG.warning("could not create %s: %s", path.name, e)
+            return None
+        tok = secrets.token_urlsafe(24)
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(tok + "\n")
+        return tok
+    return None
+
+
+def lan_ipv4_candidates() -> list[str]:
+    """This PC's home-network IPv4 addresses, best first: the default-route address, then other private
+    addresses. Never loopback or 169.254.x (that is the Launch Pro's direct link, not Wi-Fi)."""
+    def usable(ip: str) -> bool:
+        try:
+            a = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        return a.version == 4 and a.is_private and not a.is_loopback and not a.is_link_local
+
+    out: list[str] = []
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect(("192.0.2.1", 9))  # UDP connect sends nothing; it only picks the outbound interface
+            ip = s.getsockname()[0]
+            if usable(ip):
+                out.append(ip)
+    except OSError:
+        pass
+    try:
+        for addrs in psutil.net_if_addrs().values():
+            for a in addrs:
+                if a.family == socket.AF_INET and usable(a.address) and a.address not in out:
+                    out.append(a.address)
+    except Exception:
+        pass
+    return out
+
+
+def bridge_phone_url(cfg: dict | None, create_token: bool = True) -> str | None:
+    """http://<LAN IP>:<port>/?token=... for a phone on the same Wi-Fi; None if lan is off or no LAN IP."""
+    if not bridge_lan_enabled(cfg):
+        return None
+    ips = lan_ipv4_candidates()
+    tok = bridge_token(create=create_token)
+    if not ips or not tok:
+        return None
+    return f"http://{ips[0]}:{int(bridge_config(cfg).get('port', 8765))}/?token={tok}"
 
 
 def valid_drill_id(value) -> bool:
@@ -4394,12 +4791,49 @@ def openconnect_to_shot(obj: dict, club: str | None = None, ts: str | None = Non
     }
 
 
+SHOTS_LOCK_NAME = ".shots.lock"   # <day>/.shots.lock: cross-process lock (watchdog appends vs clip-ready links)
+SHOTS_LOCK_TIMEOUT_SEC = 5.0
+SHOTS_LOCK_STALE_SEC = 15.0       # longer than any append/set_clip critical section (incl. replace retries)
+SHOTS_REPLACE_RETRY_SEC = 2.0     # os.replace PermissionError (AV / OneDrive / a reader) retry budget
+
+
+def _clip_name_angle(name) -> str | None:
+    """'DTL'/'FO' from a library clip name (NNN_..._DTL.mp4, ..._FO_2.mp4, ..._DTL-1.mp4), else None."""
+    m = re.search(r"_(DTL|FO)(?:[_-]\d+)?\.[A-Za-z0-9]+$", str(name or ""), re.I)
+    return m.group(1).upper() if m else None
+
+
+def shot_has_angle_clip(shot: dict, angle: str) -> bool:
+    """True when the shot RECORD already has a clip for `angle` (clips{} map, or a legacy `clip` name)."""
+    clips = shot.get("clips")
+    if isinstance(clips, dict) and clips.get(angle):
+        return True
+    return _clip_name_angle(shot.get("clip")) == angle
+
+
+def _int_or_none(v) -> int | None:
+    if v is None or isinstance(v, bool):
+        return None
+    try:
+        return int(v)
+    except (TypeError, ValueError):
+        return None
+
+
 class ShotStore:
     """Append-only daily shots.jsonl files: <sessions_dir>/YYYY-MM-DD/shots.jsonl.
 
     One JSON object per line. Setting a shot's clip later rewrites that day's file atomically
     (tmp + os.replace) - fine for a few hundred shots/day, and readers never see a half-written file.
     Shots are identified by their unique `ts`.
+
+    Two processes write this file (the watchdog appends shots; Kinovea's `clip-ready` links clips), so
+    append and set_clip both hold a cross-process lock (<day>/.shots.lock): otherwise a shot appended
+    between set_clip's read and its os.replace would be lost.
+
+    `shot_num` is a day-unique sequence (max in the file + 1) used for clip file names and shown by the
+    drills hub; the launch monitor's own ShotNumber (it can reset when GameChanger restarts) is kept as
+    `device_shot_num`.
     """
 
     def __init__(self, sessions_dir: Path):
@@ -4408,6 +4842,10 @@ class ShotStore:
 
     def path_for(self, date_str: str) -> Path:
         return self.sessions_dir / date_str / "shots.jsonl"
+
+    def _file_lock(self, date_str: str) -> "_FileLock":
+        return _FileLock(self.sessions_dir / date_str / SHOTS_LOCK_NAME, timeout=SHOTS_LOCK_TIMEOUT_SEC,
+                         stale_sec=SHOTS_LOCK_STALE_SEC)
 
     def _read_unlocked(self, date_str: str) -> list[dict]:
         path = self.path_for(date_str)
@@ -4432,32 +4870,70 @@ class ShotStore:
         with self._lock:
             return self._read_unlocked(date_str)
 
+    def _append_unlocked(self, shot: dict, date_str: str) -> None:
+        recs = self._read_unlocked(date_str)
+        if "device_shot_num" not in shot:
+            shot["device_shot_num"] = _int_or_none(shot.get("shot_num"))
+        shot["shot_num"] = max((n for r in recs if (n := _int_or_none(r.get("shot_num"))) is not None),
+                               default=0) + 1
+        path = self.path_for(date_str)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a", encoding="utf-8") as fh:
+            fh.write(json.dumps(shot, separators=(",", ":")) + "\n")
+
     def append(self, shot: dict) -> dict:
         shot.setdefault("ts", local_iso_now())
         date_str = str(shot["ts"])[:10]
         with self._lock:
-            if shot.get("shot_num") is None:
-                shot["shot_num"] = len(self._read_unlocked(date_str)) + 1
-            path = self.path_for(date_str)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            with path.open("a", encoding="utf-8") as fh:
-                fh.write(json.dumps(shot, separators=(",", ":")) + "\n")
+            try:
+                with self._file_lock(date_str):
+                    self._append_unlocked(shot, date_str)
+            except TimeoutError as e:
+                # Never drop a shot over a busy lock (e.g. a clip-ready run hung on OneDrive): an append-mode
+                # write is still safe unless a set_clip rewrite is racing it right now.
+                log_throttled("shots-lock", f"shots.jsonl lock busy ({e}); appending without it")
+                self._append_unlocked(shot, date_str)
         return shot
 
-    def set_clip(self, ts: str, clip: str) -> bool:
-        """Set `clip` on the shot whose ts matches. Returns True if a record was updated."""
+    def link_clip(self, ts: str, clip: str, angle: str | None = None) -> dict | None:
+        """Record `clip` on the shot whose ts matches; returns the updated record, or None if no match.
+
+        With an angle, clips[angle] is set and the primary `clip` only when it is DTL or there is none yet
+        (DTL preferred). Without one, `clip` is set unconditionally (legacy callers). May raise OSError
+        (TimeoutError when the cross-process lock stays busy)."""
         date_str = str(ts)[:10]
-        with self._lock:
+        with self._lock, self._file_lock(date_str):
             recs = self._read_unlocked(date_str)
-            hit = False
+            hit = None
             for rec in recs:
-                if rec.get("ts") == ts:
+                if rec.get("ts") != ts:
+                    continue
+                if angle:
+                    clips = rec.get("clips") if isinstance(rec.get("clips"), dict) else {}
+                    clips[angle] = clip
+                    rec["clips"] = clips
+                    if angle == "DTL" or not rec.get("clip"):
+                        rec["clip"] = clip
+                else:
                     rec["clip"] = clip
-                    hit = True
-            if hit:
+                hit = rec
+            if hit is not None:
                 data = "".join(json.dumps(r, separators=(",", ":")) + "\n" for r in recs)
-                write_text_if_changed(self.path_for(date_str), data, backup=False)
+                deadline = time.monotonic() + SHOTS_REPLACE_RETRY_SEC
+                while True:
+                    try:
+                        write_text_if_changed(self.path_for(date_str), data, backup=False)
+                        break
+                    except PermissionError:
+                        # Windows: os.replace fails while AV/OneDrive/a reader has the file open. Brief retry.
+                        if time.monotonic() >= deadline:
+                            raise
+                        time.sleep(0.1)
             return hit
+
+    def set_clip(self, ts: str, clip: str, angle: str | None = None) -> bool:
+        """Set `clip` on the shot whose ts matches. Returns True if a record was updated."""
+        return self.link_clip(ts, clip, angle) is not None
 
 
 _GSPRO_KEYS_LOCK = threading.Lock()
@@ -4527,6 +5003,7 @@ class ShotHub:
         self.last_shot_ts: str | None = None
         self.health: dict | None = None
         self.sniffer = None  # an OpenConnectMonitor (its .active flag is reported as sniffer_ok)
+        self.demo = False    # `bridge --demo`: synthetic shots, tagged "demo": true (kept out of real sessions)
         self.heartbeat_sec = 15.0
         self.max_subscribers = BRIDGE_MAX_SUBSCRIBERS
         self.drill_idle_timeout = DRILL_IDLE_TIMEOUT_SEC
@@ -4596,6 +5073,8 @@ class ShotHub:
         }
         if health is not None:
             doc["health"] = health
+        if self.demo:
+            doc["demo"] = True
         return doc
 
     def set_drill(self, drill_id: str | None) -> str | None:
@@ -4624,12 +5103,16 @@ class ShotHub:
         self.broadcast("status", self.status())
         return True
 
-    def set_clip(self, ts: str, clip: str) -> bool:
+    def set_clip(self, ts: str, clip: str, angle: str | None = None) -> bool:
         """Link a saved clip to its shot record and tell SSE clients (`clip` event). May raise OSError."""
-        hit = self.store.set_clip(ts, clip)
-        if hit:
+        rec = self.store.link_clip(ts, clip, angle)
+        if rec is None:
+            return False
+        if angle:
+            self.broadcast("clip", {"ts": ts, "clip": rec.get("clip"), "angle": angle, "clips": rec.get("clips")})
+        else:
             self.broadcast("clip", {"ts": ts, "clip": clip})
-        return hit
+        return True
 
     def record_shot(self, shot: dict) -> dict:
         """Tag with the active drill, persist, and push to SSE clients. Never raises."""
@@ -4640,6 +5123,8 @@ class ShotHub:
         for k in CONTEXT_FIELDS:
             if shot.get(k) is None:
                 shot[k] = ctx[k]
+        if self.demo:
+            shot["demo"] = True
         try:
             self.store.append(shot)
         except OSError as e:
@@ -4692,8 +5177,84 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
     # Residual risk (documented in README): a hostile page can produce Origin "null" from a sandboxed
     # iframe, so it could read shot data and set/clear the active drill tag. That is the price of keeping
     # the file:// page working without a token; it exposes golf numbers only, nothing on disk.
+    #
+    # LAN clients (bridge.lan true; anything not from 127.0.0.0/8) never get the rules above. They must present
+    # the pairing token (?token=... once, then the HttpOnly SameSite=Strict cookie) on EVERY request, static
+    # files included; their Host may then be an IP literal or this PC's hostname (a DNS-rebinding page can
+    # neither know the token nor receive the cookie, which is scoped to the real host), and an Origin, if sent,
+    # must be that same http://<Host>. With lan off the server binds 127.0.0.1, so no LAN client can connect.
     def log_message(self, fmt, *args):  # route access logs to DEBUG, not stderr
         LOG.debug("bridge %s - %s", self.address_string(), fmt % args)
+
+    def _client_is_loopback(self) -> bool:
+        try:
+            return ipaddress.ip_address(str(self.client_address[0]).split("%", 1)[0]).is_loopback
+        except ValueError:
+            return False
+
+    def _split_host(self) -> tuple[str, str]:
+        host = (self.headers.get("Host") or "").strip().lower()
+        if host.startswith("["):
+            name, _, rest = host[1:].partition("]")
+            return name, rest[1:] if rest.startswith(":") else ""
+        name, sep, port = host.rpartition(":")
+        return (name, port) if sep else (host, "")
+
+    def _lan_host_ok(self) -> bool:
+        name, port = self._split_host()
+        if not name or (port and port != str(self.server.server_address[1])):
+            return False
+        try:
+            ipaddress.ip_address(name)
+            return True  # an IP literal can't be a rebinding hostname
+        except ValueError:
+            pass
+        me = socket.gethostname().lower()
+        return bool(me) and (name == me or name.startswith(me + "."))
+
+    def _lan_token_ok(self) -> bool:
+        want = getattr(self.server, "lan_token", None)
+        if not want:
+            return False
+        q = urllib.parse.parse_qs(urllib.parse.urlsplit(self.path).query)
+        given = (q.get("token") or [""])[0]
+        if given and hmac.compare_digest(given.encode(), want.encode()):
+            self._set_token_cookie = True
+            return True
+        jar = http.cookies.SimpleCookie()
+        try:
+            jar.load(self.headers.get("Cookie") or "")
+        except http.cookies.CookieError:
+            return False
+        c = jar.get(BRIDGE_TOKEN_COOKIE)
+        return bool(c) and hmac.compare_digest(c.value.encode(), want.encode())
+
+    def _lan_parse_ok(self) -> bool:
+        """Access policy for a non-loopback client (see the class comment)."""
+        if not getattr(self.server, "lan_token", None):
+            self.close_connection = True
+            self._json(403, {"error": "LAN access is disabled (bridge.lan is false)"})
+            return False
+        if not self._lan_token_ok():
+            self.close_connection = True
+            self._json(401, {"error": "pairing token required: run `python simwatch.py phone` on the PC and "
+                                      "open the URL it prints"})
+            return False
+        if not self._lan_host_ok():
+            self.close_connection = True
+            self._json(421, {"error": "Host must be this PC's LAN IP or hostname"})
+            return False
+        origin = self.headers.get("Origin")
+        if origin is not None:
+            name, port = self._split_host()
+            host = f"[{name}]" if ":" in name else name
+            same = {f"http://{host}:{port}" if port else f"http://{host}"}
+            if origin.lower() not in same:
+                self.close_connection = True
+                self._json(403, {"error": "origin not allowed"})
+                return False
+            self._cors_origin = origin
+        return True
 
     def _allowed_http_origins(self) -> set[str]:
         port = self.server.server_address[1]
@@ -4712,8 +5273,11 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def parse_request(self):
         self._cors_origin = None
+        self._set_token_cookie = False
         if not super().parse_request():
             return False
+        if not self._client_is_loopback():
+            return self._lan_parse_ok()
         if not self._host_ok():
             self.close_connection = True
             self._json(421, {"error": "Host must be 127.0.0.1 or localhost"})
@@ -4730,6 +5294,10 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def end_headers(self):
         self.send_header("Vary", "Origin")
+        if getattr(self, "_set_token_cookie", False):
+            self._set_token_cookie = False
+            self.send_header("Set-Cookie", f"{BRIDGE_TOKEN_COOKIE}={self.server.lan_token}; Path=/; "
+                                           "Max-Age=31536000; HttpOnly; SameSite=Strict")
         origin = getattr(self, "_cors_origin", None)
         if origin:
             self.send_header("Access-Control-Allow-Origin", origin)
@@ -4804,10 +5372,12 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
         url = urllib.parse.urlsplit(self.path)
         if url.path not in ("/api/drill", "/api/context", "/api/gspro/club"):
             return self._json(404, {"error": "unknown endpoint"})
-        if url.path == "/api/gspro/club" and self.headers.get("Origin") is not None:
-            # Never allow browser/sandboxed-iframe Origin (including Origin: "null") to inject Windows keystrokes
+        if url.path == "/api/gspro/club" and (self.headers.get("Origin") is not None
+                                              or not self._client_is_loopback()):
+            # Keystroke injection stays on this PC: never from a browser/sandboxed-iframe Origin (including
+            # Origin: "null") and never from the LAN, even with the bridge.lan pairing token.
             self._cors_origin = None
-            return self._json(403, {"error": "cross-origin club switching not allowed"})
+            return self._json(403, {"error": "club switching is only allowed from this PC (no browser origin)"})
         ctype = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
         if ctype != "application/json":
             # Keeps this a preflighted request for browsers (see the policy note above).
@@ -4896,12 +5466,14 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
 
 
 class BridgeServer:
-    """ThreadingHTTPServer on 127.0.0.1 in a daemon thread. start() never raises (busy port -> logged)."""
+    """ThreadingHTTPServer on 127.0.0.1 in a daemon thread. start() never raises (busy port -> logged).
+    lan_token set (bridge.lan): binds 0.0.0.0 unless a host is given, and LAN clients must present the token."""
 
-    def __init__(self, hub: ShotHub, port: int = 8765, host: str = "127.0.0.1", static_dir: Path | None = None,
-                 cfg: dict | None = None):
+    def __init__(self, hub: ShotHub, port: int = 8765, host: str | None = None, static_dir: Path | None = None,
+                 lan_token: str | None = None, cfg: dict | None = None):
         self.hub = hub
-        self.host = host
+        self.lan_token = lan_token or None
+        self.host = host or ("0.0.0.0" if self.lan_token else "127.0.0.1")
         self.requested_port = int(port)
         self.static_dir = Path(static_dir) if static_dir else (HERE / "drills")
         self.cfg = cfg
@@ -4924,6 +5496,7 @@ class BridgeServer:
             return False
         httpd.daemon_threads = True
         httpd.hub = self.hub  # type: ignore[attr-defined]
+        httpd.lan_token = self.lan_token  # type: ignore[attr-defined]
         httpd.cfg = self.cfg  # type: ignore[attr-defined]
         self.hub.stopping.clear()
         self.httpd = httpd
@@ -4932,6 +5505,8 @@ class BridgeServer:
         self._thread.start()
         threading.Thread(target=self._reap, name="BridgeDrillReaper", daemon=True).start()
         LOG.info("Shot bridge listening on http://%s:%s/ (drills hub + /api/status)", self.host, self.port)
+        if self.lan_token:  # never log the token itself
+            LOG.info("Shot bridge LAN access ON (pairing token required); phone URL: python simwatch.py phone")
         return True
 
     def _reap(self) -> None:
@@ -4953,16 +5528,31 @@ class BridgeServer:
             self.httpd = None
 
 
-def start_bridge(cfg: dict, force: bool = False, port: int | None = None) -> tuple[ShotHub | None, BridgeServer | None]:
+def bridge_sessions_dir(cfg: dict | None, demo: bool = False) -> Path:
+    """Where shots.jsonl lives: bridge.sessions_dir, or (demo) bridge.demo_sessions_dir - never the real one."""
+    bcfg = bridge_config(cfg)
+    if demo:
+        raw = Path(str(bcfg.get("demo_sessions_dir") or BRIDGE_DEMO_SESSIONS_DIR))
+    else:
+        raw = Path(str(bcfg.get("sessions_dir") or BRIDGE_DEFAULTS["sessions_dir"]))
+    return raw if raw.is_absolute() else HERE / raw
+
+
+def start_bridge(cfg: dict, force: bool = False, port: int | None = None,
+                 demo: bool = False) -> tuple[ShotHub | None, BridgeServer | None]:
     """Create the hub + server from config. Returns (None, None) when disabled. Never raises."""
     global BRIDGE_HUB
     bcfg = bridge_config(cfg)
     if not force and not bcfg.get("enabled", True):
         return None, None
     try:
-        raw = Path(str(bcfg.get("sessions_dir") or BRIDGE_DEFAULTS["sessions_dir"]))
-        hub = ShotHub(ShotStore(raw if raw.is_absolute() else HERE / raw))
-        server = BridgeServer(hub, port=int(port if port is not None else bcfg.get("port", 8765)), cfg=cfg)
+        hub = ShotHub(ShotStore(bridge_sessions_dir(cfg, demo)))
+        hub.demo = demo
+        lan_token = bridge_token(create=True) if bridge_lan_enabled(cfg) else None
+        if bridge_lan_enabled(cfg) and not lan_token:
+            LOG.warning("bridge.lan is on but no pairing token could be created; serving 127.0.0.1 only")
+        server = BridgeServer(hub, port=int(port if port is not None else bcfg.get("port", 8765)),
+                              lan_token=lan_token, cfg=cfg)
     except Exception as e:
         LOG.warning("Shot bridge disabled: bad bridge config (%s)", e)
         return None, None
@@ -5386,15 +5976,19 @@ def demo_openconnect_message(n: int) -> dict:
 
 
 def cmd_bridge(cfg: dict, demo: bool = False, demo_interval: float = 4.0, port: int | None = None) -> None:
-    """Run only the shot bridge + OpenConnect sniffer (works off Windows; the sniffer just reports unavailable)."""
-    hub, server = start_bridge(cfg, force=True, port=port)
+    """Run only the shot bridge + OpenConnect sniffer (works off Windows; the sniffer just reports unavailable).
+
+    --demo: synthetic shots only, written to bridge.demo_sessions_dir (default Swings/Sessions-demo) and
+    tagged "demo": true; the real :921 sniffer is NOT started, so no real shot lands in the demo files."""
+    hub, server = start_bridge(cfg, force=True, port=port, demo=demo)
     if not hub or not server or not server.httpd:
         sys.exit("Shot bridge could not start (see log above).")
 
     sniffer = make_bridge_sniffer(hub)
-    sniffer.start()
+    if not demo:
+        sniffer.start()
     LOG.info("Bridge-only mode running%s (Ctrl+C to stop). Status: http://127.0.0.1:%s/api/status",
-             " with synthetic demo shots" if demo else "", server.port)
+             f" with synthetic demo shots -> {hub.store.sessions_dir}" if demo else "", server.port)
     n = 0
     try:
         while True:
@@ -5700,6 +6294,7 @@ class SwingSessionManager:
         self.cfg = cfg
         self.vcfg = cfg.get("video", {})
         self.current_club: str | None = None
+        self._swing_cat: str = club_category(None)  # category of the loaded reference (putter never changes it)
         self.active_reference: str = self.vcfg.get("default_reference", "My-Go-To")
         self.shot_counter = self._init_shot_counter()
         self.last_shot_info: dict | None = None
@@ -5712,11 +6307,13 @@ class SwingSessionManager:
         self._last_batch_ts: float = 0.0
         self._last_batch_angles: set[str] = set()
         self._retiled_on_first_clip = False
-        self._lock = threading.RLock()
-        # Serializes Kinovea relaunches (reference swap, debounced club reload). Lock order: _rig_lock, then _lock.
-        self._rig_lock = threading.RLock()
-        self._club_reload_timer: threading.Timer | None = None
-        self._loaded_ref_cat: str | None = club_category(self.current_club)
+        self._lock = threading.RLock()  # rig work (reference swaps, tiling, clip organising) - can be held for seconds
+        # Short-held lock for the shot path (trigger debounce, club, pending swap): the sniffer thread only
+        # ever takes this one, so a slow reference swap can never delay a capture trigger.
+        self._state_lock = threading.Lock()
+        self._pending_ref_club: str | None = None
+        self._ref_swap_thread: threading.Thread | None = None
+        self._ref_swap_sync = False  # tests: apply the swap inline instead of on the worker thread
         self.hub: ShotHub | None = None  # shot-data bridge (set by watch()/cmd_video() when enabled)
         self.shotlab: "ShotLabSupervisor | None" = None  # set by watch() when shotlab.enabled
 
@@ -5772,10 +6369,6 @@ class SwingSessionManager:
     def stop(self) -> None:
         if not self._started:
             return
-        with self._lock:
-            if self._club_reload_timer is not None:
-                self._club_reload_timer.cancel()
-                self._club_reload_timer = None
         self.oc_monitor.stop()
         self.hotkeys.stop()
         self._started = False
@@ -5798,72 +6391,103 @@ class SwingSessionManager:
                 folders.append(extra)
         return folders
 
-    def _apply_debounced_club_reload(self) -> None:
-        # _rig_lock (not _lock) is held across the relaunch, so shots/club events keep flowing meanwhile,
-        # but a concurrent reference swap (Alt+R) waits instead of relaunching Kinovea on top of us.
-        with self._rig_lock:
-            with self._lock:
-                self._club_reload_timer = None
-                if not self._started:
-                    return  # stop() raced the timer: never relaunch Kinovea after shutdown
-                club = self.current_club
-                new_cat = club_category(club)
-                prev_cat = self._loaded_ref_cat
-                if not club or new_cat == prev_cat or "Putter" in (new_cat, prev_cat):
-                    if new_cat != "Putter":
-                        self._loaded_ref_cat = new_cat
-                    return
-                self._loaded_ref_cat = new_cat
-                ref_name = self.active_reference  # read under the rig lock: reflects any swap that just finished
-            try:
-                setup_video_rig(self.cfg, ref_name=ref_name, club=club, launch=True, reload_ref=True)
-                tile_video_windows(self.cfg, wait_sec=4.0)
-            except Exception:
-                LOG.warning("Debounced Kinovea reference reload failed for club %s", club, exc_info=True)
-
     def _on_club_change(self, club: str) -> None:
+        """Sniffer thread: note the club and queue a reference swap; the swap itself (close/relaunch Kinovea
+        Reference + re-tile, several seconds) runs on a worker thread so a shot that follows the club change
+        is triggered immediately (Kinovea's pre-trigger buffer is only ~3 s)."""
         hub = self.hub
         if hub is not None:
-            hub.set_club(club)
-        with self._lock:
+            hub.set_club(club)  # ShotLab / drills hub see GSPro's club live (deduplicated, SSE `club` event)
+        start_worker = False
+        with self._state_lock:
+            if getattr(self, "_swing_cat", None) is None:
+                # Pin the last FULL-SWING category before current_club changes: Driver -> PT -> 7I must
+                # still swap the reference to Iron (the putter itself never swaps it).
+                self._swing_cat = club_category(self.current_club)
             self.current_club = club
             new_cat = club_category(club)
             LOG.info("Active club changed -> %s (%s)", club, new_cat)
-            if self._club_reload_timer is not None:
-                self._club_reload_timer.cancel()
-                self._club_reload_timer = None
-            # Putter: no capture and no reference swap; keep whatever full-swing reference is loaded.
-            if new_cat != self._loaded_ref_cat and "Putter" not in (new_cat, self._loaded_ref_cat):
-                timer = threading.Timer(1.5, self._apply_debounced_club_reload)
-                timer.daemon = True
-                self._club_reload_timer = timer
-                timer.start()
+            if new_cat == "Putter":
+                return  # no capture and no reference swap; keep whatever full-swing reference is loaded
+            self._pending_ref_club = club
+            if not getattr(self, "_ref_swap_sync", False) and getattr(self, "_ref_swap_thread", None) is None:
+                self._ref_swap_thread = threading.Thread(target=self._ref_swap_worker, name="ReferenceSwap",
+                                                         daemon=True)
+                start_worker = True
+        if getattr(self, "_ref_swap_sync", False):
+            self._apply_pending_ref_swap()
+        elif start_worker:
+            self._ref_swap_thread.start()
+
+    def _ref_swap_worker(self) -> None:
+        while True:
+            try:
+                self._apply_pending_ref_swap()
+            except Exception:
+                log_throttled("ref-swap", "reference swap after club change failed (retried on next club change)",
+                              exc_info=True)
+            with self._state_lock:
+                if self._pending_ref_club is None:
+                    self._ref_swap_thread = None  # under the lock, so _on_club_change starts a fresh worker
+                    return
+
+    def _apply_pending_ref_swap(self) -> bool:
+        """Swap the Reference clips to the latest pending club's category if it changed. Raises on failure
+        (the category is then not recorded, so the next club change retries the swap)."""
+        with self._lock:  # serialize with set_reference / bookmark rig work (never taken by the shot path)
+            with self._state_lock:
+                club, self._pending_ref_club = self._pending_ref_club, None
+                prev_cat = getattr(self, "_swing_cat", None) or club_category(None)
+            if club is None:
+                return False
+            new_cat = club_category(club)
+            if new_cat == "Putter" or new_cat == prev_cat:
+                return False
+            setup_video_rig(self.cfg, ref_name=self.active_reference, club=club, launch=True, reload_ref=True)
+            tile_video_windows(self.cfg, wait_sec=4.0)
+            # Record the category only once the swap succeeded, so a failed swap is retried next change.
+            with self._state_lock:
+                self._swing_cat = new_cat
+            return True
+
+    def _ref_club(self) -> str | None:
+        """Club used to resolve the reference clips: never the putter (there are no putter references),
+        so Driver -> PT -> Alt+R keeps resolving Driver references."""
+        club = self.current_club
+        if club and club_category(club) == "Putter":
+            return getattr(self, "_swing_cat", None) or "Iron"
+        return club
 
     def _on_openconnect_shot(self, info: dict) -> None:
+        # Fire the capture trigger FIRST: recording the shot (file I/O under a cross-process lock) and the
+        # PiP can wait, Kinovea's ~3 s pre-trigger buffer can't.
+        shot_rec = info.get("shot") if isinstance(info.get("shot"), dict) else {}
+        vla = (shot_rec.get("ball") or {}).get("vla") if shot_rec else None
+        putt = is_putt(info.get("club") or self.current_club, info.get("ball_speed"), vla)
+        if not putt:
+            self.trigger_capture()
         hub = self.hub
         if hub is not None and info.get("shot"):
             try:
                 info["shot"] = hub.record_shot(info["shot"])
             except Exception:
                 log_throttled("bridge-record", "shot bridge failed to record shot", exc_info=True)
-        with self._lock:
+        with self._state_lock:
             self.last_shot_info = info
         LOG.info(
             "Shot detected on :921 (club=%s, speed=%.1f mph, carry=%s)",
             info.get("club") or "-", info.get("ball_speed") or 0.0, info.get("carry"),
         )
-        shot_rec = info.get("shot") if isinstance(info.get("shot"), dict) else {}
-        vla = (shot_rec.get("ball") or {}).get("vla") if shot_rec else None
-        if is_putt(info.get("club") or self.current_club, info.get("ball_speed"), vla):
+        if putt:
             LOG.info("Putt - skipping video capture")
             return
-        self.trigger_capture()
         self.pip.show_for_shot()
 
     def trigger_capture(self) -> None:
         """2025: one UDP datagram (Kinovea's Delay/MaxDuration/quiet period do the rest).
-        Legacy: one ToggleRecording to start; RecordingSeconds (= pre + post) stops it - no stop toggle."""
-        with self._lock:
+        Legacy: one ToggleRecording to start; RecordingSeconds (= pre + post) stops it - no stop toggle.
+        Takes only the short _state_lock, never the rig lock a reference swap holds."""
+        with self._state_lock:
             now = time.time()
             post_sec = float(self.vcfg.get("post_trigger_sec", 1.5))
             pre_sec = float(self.vcfg.get("pre_trigger_sec", 3.0))
@@ -5913,37 +6537,84 @@ class SwingSessionManager:
             return "FO"
         return "DTL"
 
-    def _consume_clip_events(self) -> None:
-        """2025 backend: pick up `clip-ready` notifications (<today>/.clip-events/*.json) - remember the last
-        clips, push the SSE `clip` event via the hub (its set_clip rewrite is a no-op by then) and pop the PiP.
-        Kinovea's LiveReplay already loads the clip from the replay folder by itself."""
-        ev_dir = ensure_swings_layout(self.cfg)["today"] / CLIP_EVENTS_DIR
-        if not ev_dir.is_dir():
-            return
+    def _clip_event_dirs(self, now: float | None = None) -> list[Path]:
+        """Today's .clip-events, plus yesterday's for CLIP_EVENTS_YESTERDAY_SEC after midnight (a clip that
+        lands at 00:00:05 for a 23:59:58 shot writes its event into the shot's - yesterday's - folder)."""
+        sessions = ensure_swings_layout(self.cfg)["sessions"]
+        now = time.time() if now is None else now
+        today = datetime.fromtimestamp(now)
+        dirs = [sessions / today.strftime("%Y-%m-%d") / CLIP_EVENTS_DIR]
+        midnight = today.replace(hour=0, minute=0, second=0, microsecond=0)
+        if (today - midnight).total_seconds() < CLIP_EVENTS_YESTERDAY_SEC:
+            dirs.append(sessions / (midnight - timedelta(days=1)).strftime("%Y-%m-%d") / CLIP_EVENTS_DIR)
+        return dirs
+
+    def _clip_link_store(self) -> ShotStore:
+        if self.hub is not None:
+            return self.hub.store
+        if getattr(self, "_own_store", None) is None:
+            self._own_store = ShotStore(bridge_sessions_dir(self.cfg))
+        return self._own_store
+
+    def _apply_clip_link(self, ev: dict) -> bool:
+        """Write (or, if clip-ready already did, just broadcast) the shot<->clip link. True when done."""
+        try:
+            if self.hub is not None:
+                self.hub.set_clip(ev["ts"], str(ev["clip"]), ev.get("angle"))
+            elif not ev.get("linked"):
+                self._clip_link_store().set_clip(ev["ts"], str(ev["clip"]), ev.get("angle"))
+            return True
+        except OSError as e:
+            log_throttled("bridge-clip", f"could not link clip {ev.get('clip')} to shot {ev.get('ts')}: {e}")
+            return False
+
+    def _retry_clip_links(self, now: float | None = None) -> None:
+        now = time.time() if now is None else now
+        pending = getattr(self, "_pending_clip_links", None) or []
+        keep = []
+        for ev, attempts, next_at in pending:
+            if now < next_at:
+                keep.append((ev, attempts, next_at))
+            elif not self._apply_clip_link(ev):
+                if attempts + 1 < CLIP_LINK_MAX_ATTEMPTS:
+                    keep.append((ev, attempts + 1, now + min(60.0, 2.0 * (2 ** attempts))))
+                else:
+                    LOG.warning("Giving up linking clip %s to shot %s after %d attempts",
+                                ev.get("clip"), ev.get("ts"), attempts + 1)
+        self._pending_clip_links = keep
+
+    def _consume_clip_events(self, now: float | None = None) -> None:
+        """2025 backend: pick up `clip-ready` notifications (<day>/.clip-events/*.json) - remember the last
+        clips, push the SSE `clip` event via the hub and pop the PiP. When clip-ready could NOT write the
+        link (lock busy / shots.jsonl held on Windows) the event says linked=false and the link is written
+        here, retried with backoff. Kinovea's LiveReplay already loads the clip from the replay folder."""
+        self._retry_clip_links(now)
         got = False
-        for f in sorted(ev_dir.glob("*.json")):
-            try:
-                ev = json.loads(f.read_text(encoding="utf-8"))
-            except (OSError, ValueError):
-                ev = None
-            try:
-                f.unlink()
-            except OSError:
+        for ev_dir in self._clip_event_dirs(now):
+            if not ev_dir.is_dir():
                 continue
-            if not isinstance(ev, dict) or not ev.get("clip"):
-                continue
-            got = True
-            clip_path = ev_dir.parent / str(ev["clip"])
-            if ev.get("angle") == "FO":
-                self.last_saved_fo = clip_path
-            else:
-                self.last_saved_dtl = clip_path
-            if self.hub and ev.get("ts") and ev.get("linked"):
+            for f in sorted(ev_dir.glob("*.json")):
                 try:
-                    self.hub.set_clip(ev["ts"], str(ev["clip"]))
-                except OSError as e:
-                    log_throttled("bridge-clip", f"could not broadcast clip link: {e}")
-            LOG.info("Swing clip ready: %s", ev["clip"])
+                    ev = json.loads(f.read_text(encoding="utf-8"))
+                except (OSError, ValueError):
+                    ev = None
+                try:
+                    f.unlink()
+                except OSError:
+                    continue
+                if not isinstance(ev, dict) or not ev.get("clip"):
+                    continue
+                got = True
+                clip_path = ev_dir.parent / str(ev["clip"])
+                if ev.get("angle") == "FO":
+                    self.last_saved_fo = clip_path
+                else:
+                    self.last_saved_dtl = clip_path
+                if ev.get("ts") and not self._apply_clip_link(ev) and not ev.get("linked"):
+                    pending = getattr(self, "_pending_clip_links", None) or []
+                    pending.append((ev, 1, (time.time() if now is None else now) + 2.0))
+                    self._pending_clip_links = pending
+                LOG.info("Swing clip ready: %s", ev["clip"])
         if got:
             self.pip.show_for_shot()
             if not self._retiled_on_first_clip:
@@ -6022,11 +6693,12 @@ class SwingSessionManager:
                     else:
                         self.last_saved_fo = session_copy
                     LOG.info("Saved swing clip: %s", session_copy)
-                    # Link the clip to its shot record (DTL preferred; FO only if no clip yet).
-                    if self.hub and shot_rec and shot_rec.get("ts") and (angle == "DTL" or not shot_rec.get("clip")):
-                        shot_rec["clip"] = session_copy.name
+                    # Link the clip to its shot record (clips[angle]; primary `clip` DTL preferred).
+                    if self.hub and shot_rec and shot_rec.get("ts"):
+                        if angle == "DTL" or not shot_rec.get("clip"):
+                            shot_rec["clip"] = session_copy.name
                         try:
-                            self.hub.set_clip(shot_rec["ts"], session_copy.name)
+                            self.hub.set_clip(shot_rec["ts"], session_copy.name, angle)
                         except OSError as e:
                             log_throttled("bridge-clip", f"could not link clip to shot: {e}")
                 except OSError as e:
@@ -6043,7 +6715,7 @@ class SwingSessionManager:
             layout = ensure_swings_layout(self.cfg)
             dtl = self.last_saved_dtl or next(iter(_latest_clips_in(layout["sessions"], "DTL")), None)
             fo = self.last_saved_fo or next(iter(_latest_clips_in(layout["sessions"], "FO")), None)
-            club = club_override or self.current_club
+            club = club_override or self._ref_club()
             if not club:
                 for cand in (dtl, fo):
                     if cand:
@@ -6105,15 +6777,15 @@ class SwingSessionManager:
             return saved_dtl, saved_fo
 
     def set_reference(self, ref_name: str, launch_rig: bool = True) -> None:
-        with self._rig_lock, self._lock:
+        with self._lock:
             self.active_reference = ref_name
-            setup_video_rig(self.cfg, ref_name=ref_name, club=self.current_club, launch=launch_rig, reload_ref=launch_rig)
+            setup_video_rig(self.cfg, ref_name=ref_name, club=self._ref_club(), launch=launch_rig, reload_ref=launch_rig)
             if launch_rig:
                 tile_video_windows(self.cfg, wait_sec=4.0)
             LOG.info("Reference switched -> %s", ref_name)
 
     def cycle_reference(self) -> None:
-        with self._rig_lock, self._lock:
+        with self._lock:
             choices = ["My-Go-To"] + list(self.vcfg.get("pros", [])) + ["Last-Swing"]
             try:
                 idx = (choices.index(self.active_reference) + 1) % len(choices)
@@ -6177,8 +6849,9 @@ class SwingSessionManager:
         with self._lock:
             try:
                 # Legacy: Kinovea stops on its own (RecordingSeconds); this only expires the busy marker.
-                if self._stop_capture_at and time.time() >= self._stop_capture_at:
-                    self._stop_capture_at = 0.0
+                with self._state_lock:
+                    if self._stop_capture_at and time.time() >= self._stop_capture_at:
+                        self._stop_capture_at = 0.0
                 if allow_new_work:
                     if resolve_kinovea_backend(self.cfg) == "2025":
                         self._consume_clip_events()
@@ -6242,7 +6915,11 @@ def pause_active(cfg: dict | None = None, path: Path | None = None) -> bool:
     age = pause_age_sec(p)
     if age is None:
         return False
-    max_h = float((cfg or {}).get("pause_max_hours", 4) or 0)
+    try:
+        max_h = float((cfg or {}).get("pause_max_hours", 4) or 0)
+    except (TypeError, ValueError):
+        log_throttled("pause-max-hours", "config pause_max_hours is not a number; using 4")
+        max_h = 4.0
     if max_h > 0 and age > max_h * 3600:
         LOG.warning("PAUSE file is %.1f h old (limit %g h); ignoring and removing it - watchdog resumes.",
                     age / 3600, max_h)
@@ -6267,10 +6944,36 @@ class _WatchState:
         self.offline_ticks = 0        # consecutive ticks with ping AND device_tcp both failing
         self.device_attempts = 0      # device-only (GameChanger-only) recoveries since the device was last healthy
         self.device_next_at = 0.0     # earliest time the next device-only recovery may run
+        self.video_failures = 0       # consecutive video_mgr.start() failures (retried with backoff)
+        self.video_next_at = 0.0      # earliest time the next video_mgr.start() attempt may run
+        self.video_forced = False     # last seen state of the VIDEO_ON practice-video request (for logging)
 
-    def reset(self) -> None:
+    def reset(self, keep_video_backoff: bool = False) -> None:
         self.fails, self.level, self.last_status, self.gate_running = 0, 0, None, False
         self.offline_ticks = 0
+        if not keep_video_backoff:
+            self.video_failures, self.video_next_at = 0, 0.0
+
+
+VIDEO_START_BACKOFF_SEC = (15.0, 30.0, 60.0, 120.0, 300.0)  # retry delays after a failed video rig start
+
+
+def _ensure_video_started(st: _WatchState, video_mgr: SwingSessionManager | None) -> None:
+    """Start the video rig while the gate is up; a failed start is retried with backoff (not only after
+    the next GSPro restart) and logged once per attempt, never every tick."""
+    if not video_mgr or getattr(video_mgr, "_started", False) or time.time() < st.video_next_at:
+        return
+    try:
+        video_mgr.start(launch_rig=True)
+        if st.video_failures:
+            LOG.info("Video rig started after %d failed attempt(s)", st.video_failures)
+        st.video_failures, st.video_next_at = 0, 0.0
+    except Exception as e:
+        delay = VIDEO_START_BACKOFF_SEC[min(st.video_failures, len(VIDEO_START_BACKOFF_SEC) - 1)]
+        st.video_failures += 1
+        st.video_next_at = time.time() + delay
+        LOG.warning("Video rig start failed (%s: %s); retry #%d in %.0fs", type(e).__name__, e,
+                    st.video_failures, delay, exc_info=st.video_failures == 1)
 
 
 def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> None:
@@ -6280,16 +6983,30 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
     grace_sec = float(cfg.get("post_recover_grace_sec", 35))
     gate = cfg.get("only_when_running")
 
+    # VIDEO_ON (written by `simwatch.py video` / run_practice_video.bat while this daemon runs): keep the video
+    # rig up even without GSPro, until `simwatch.py video off` (or deleting the file).
+    forced = video_request_active()
+    if forced != st.video_forced:
+        st.video_forced = forced
+        LOG.info("Practice video request %s", "received (VIDEO_ON): starting the video rig regardless of GSPro"
+                 if forced else "cleared: the video rig follows GSPro again")
+    # A manager created only because of a request (video.enabled false) runs only while the request is up.
+    want_video = bool(video_mgr) and (forced or not getattr(video_mgr, "forced_only", False))
+    if video_mgr and not want_video:
+        video_mgr.stop()
+
     paused = pause_active(cfg)
     gate_up = (not gate) or bool(find_procs(gate))
     if paused or not gate_up:
-        if video_mgr and not gate_up:
+        if video_mgr and forced:
+            _ensure_video_started(st, video_mgr)
+        elif video_mgr and not gate_up:
             video_mgr.stop()
-        st.reset()
+        st.reset(keep_video_backoff=forced)
         write_status("paused" if paused else "waiting_for_gate", paused=paused, gate=gate, gate_up=gate_up,
-                     failing=[], level=0)
-        # Keep servicing pending stop-capture / PiP auto-hide, but start no new rig work.
-        _sleep_with_video(interval, video_mgr, allow_new_work=False)
+                     failing=[], level=0, video_request=forced)
+        # Keep servicing pending stop-capture / PiP auto-hide; new rig work only for a requested practice rig.
+        _sleep_with_video(interval, video_mgr, allow_new_work=forced and not paused)
         return
 
     if not st.gate_running:
@@ -6300,8 +7017,8 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
             run_actions(cfg["apps_by_key"]["gspro"], cfg)
             time.sleep(cfg.get("settle_sec", 15))
             st.grace_until = time.time() + grace_sec
-        if video_mgr:
-            video_mgr.start(launch_rig=True)
+    if want_video:
+        _ensure_video_started(st, video_mgr)  # first start, or a retry after a failed one
 
     if "gspro" in cfg["apps_by_key"] and (time.time() - st.last_cfg_attempt) >= 15.0:
         if WindowSpec(r"^GSPro Configuration$").exists(timeout=0):
@@ -6313,7 +7030,8 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
     res = evaluate_checks(cfg, verbose=False)
     state = "unknown"
     # Debounce "device offline": ping AND device_tcp must both fail on N consecutive ticks (default 3).
-    offline_need = max(1, int(cfg.get("device", {}).get("offline_ticks", 3)))
+    dev = cfg.get("device") if isinstance(cfg.get("device"), dict) else {}
+    offline_need = max(1, int(cfg_number(dev.get("offline_ticks", 3), 3)))
     st.offline_ticks = st.offline_ticks + 1 if res.get("device_offline_raw") else 0
     device_offline = st.offline_ticks >= offline_need
     device_suspect = bool(res.get("device_offline_raw")) and not device_offline
@@ -6334,7 +7052,14 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
             state = "device_offline"
         else:
             state = "device_check"
-        st.fails, st.last_status = 0, state
+        st.fails, st.level, st.last_status = 0, 0, state
+    elif res["only_device_failed"] and fsx_holds_device(cfg):
+        # The user is on FSX Pro, which holds the Launch Pro: an intentional state, not a failure.
+        if st.last_status != "fsx_holds_device":
+            LOG.info("FSX Pro is using the Launch Pro; leaving FSX Pro and GameChanger alone "
+                     "(run `python simwatch.py release-device` when done).")
+        st.fails, st.last_status = 0, "fsx_holds_device"
+        state = "fsx_holds_device"
     elif res["only_device_failed"] and time.time() < st.grace_until:
         if st.last_status != "discovery_grace":
             LOG.info("Waiting for GameChanger auto-discovery grace period (%ds remaining)...", int(max(0, st.grace_until - time.time())))
@@ -6364,6 +7089,13 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
                               f"Device-side check(s) still failing ({', '.join(res['failing']) or '?'}); "
                               f"next GameChanger-only restart in {int(st.device_next_at - time.time())}s",
                               every_sec=120.0)
+    elif time.time() < st.grace_until and st.level > 0:
+        # Just ran a recovery level: apps are still starting, so don't escalate to the next (heavier) level yet.
+        if st.last_status != "post_recover_grace":
+            LOG.info("Post-recovery grace (%ds remaining) before escalating further...",
+                     int(max(0, st.grace_until - time.time())))
+        st.last_status = "post_recover_grace"
+        state = "post_recover_grace"
     else:
         # A non-device link (GSPconnect, :9050, :921, a hung app) is failing: escalate even if the Launch
         # Pro is offline - then device checks are ignored when choosing the level.
@@ -6400,9 +7132,40 @@ def _watch_step(cfg, st: _WatchState, video_mgr: SwingSessionManager | None) -> 
     _sleep_with_video(interval, video_mgr)
 
 
+def _video_running(video_mgr) -> bool:
+    return bool(video_mgr) and bool(getattr(video_mgr, "_started", False))
+
+
+def _wire_companions(video_mgr, hub, shotlab) -> None:
+    """Give the video rig the ShotLab supervisor (Alt+S) and the bridge the hotkey list (ShotLab Keys pill)."""
+    if video_mgr is None:
+        return
+    video_mgr.shotlab = shotlab
+    hotkeys = getattr(video_mgr, "hotkeys", None)
+    if hub is not None and hotkeys is not None:
+        hub.hotkeys_fn = hotkeys.rows
+
+
+def _update_companion_status(cfg, shotlab, video_mgr) -> None:
+    """ShotLab supervision + status extras. Isolated: an error here must never skip the rig's _watch_step."""
+    try:
+        if shotlab is not None:
+            # Separate from the rig checks on purpose: ShotLab can never trigger GSPro/GameChanger recovery.
+            gate = cfg.get("only_when_running")
+            shotlab.tick((not gate) or bool(find_procs(gate)), paused=pause_active(cfg))
+            STATUS_EXTRAS["shotlab"] = shotlab.status()
+        hotkeys = getattr(video_mgr, "hotkeys", None)
+        if hotkeys is not None:
+            STATUS_EXTRAS["hotkeys"] = hotkeys.rows()
+    except Exception as e:
+        log_throttled("companion-status", f"ShotLab/hotkey status update failed: {e}", every_sec=300.0, exc_info=True)
+
+
 def watch(cfg, initial_grace: bool = False) -> None:
-    if not acquire_singleton_lock():
-        LOG.warning("Another SimWatch instance is already running; exiting.")
+    if not acquire_singleton_lock("watch"):
+        msg = already_running_message("watch")
+        LOG.warning(msg)
+        print(msg)
         return
     pause_active(cfg)  # clear a stale PAUSE at startup (logged)
 
@@ -6421,28 +7184,32 @@ def watch(cfg, initial_grace: bool = False) -> None:
     except Exception as e:  # optional feature: never block the watchdog from starting
         LOG.warning("ShotLab supervision disabled: %s", e)
         shotlab = None
-    if video_mgr:
-        video_mgr.shotlab = shotlab
-        if hub:
-            hub.hotkeys_fn = video_mgr.hotkeys.rows  # ShotLab's Keys pill reads these via /api/status
+    _wire_companions(video_mgr, hub, shotlab)
 
     st = _WatchState((time.time() + grace_sec) if initial_grace else 0.0)
     LOG.info("SimWatch running. Create a file named PAUSE next to this script to pause. Status: %s", STATUS_PATH)
     try:
         while True:
+            if stop_requested():
+                LOG.info("Stop requested (`simwatch.py stop`); shutting down cleanly.")
+                break
             try:
-                if bridge_sniffer is not None or shotlab is not None:
-                    gate = cfg.get("only_when_running")
-                    gate_up = (not gate) or bool(find_procs(gate))
-                    if bridge_sniffer is not None:  # same gate as the video rig: run while the gated app is up
-                        sync_bridge_sniffer(bridge_sniffer, gate_up)
-                    if shotlab is not None:
-                        # Separate from the rig checks on purpose: ShotLab can never trigger GSPro/GameChanger recovery.
-                        shotlab.tick(gate_up, paused=pause_active(cfg))
-                        STATUS_EXTRAS["shotlab"] = shotlab.status()
-                if video_mgr is not None:
-                    STATUS_EXTRAS["hotkeys"] = video_mgr.hotkeys.rows()
+                if video_request_active():
+                    if video_mgr is None:  # video.enabled is false: build a rig just for this request
+                        video_mgr = SwingSessionManager(cfg)
+                        video_mgr.forced_only = True
+                        video_mgr.hub = hub
+                        _wire_companions(video_mgr, hub, shotlab)
+                    # The rig's own :921 sniffer feeds the bridge; never run two (shots would be recorded twice).
+                    sync_bridge_sniffer(bridge_sniffer, False)
+                _update_companion_status(cfg, shotlab, video_mgr)
                 _watch_step(cfg, st, video_mgr)  # writes the status (incl. the extras above), then sleeps
+                if bridge_sniffer is not None:  # same gate as the video rig: run while the gated app is up
+                    gate = cfg.get("only_when_running")
+                    run_sniffer = ((not gate) or bool(find_procs(gate))) and not _video_running(video_mgr)
+                    sync_bridge_sniffer(bridge_sniffer, run_sniffer)
+                    if run_sniffer and hub is not None:
+                        hub.sniffer = bridge_sniffer  # a requested video rig may have pointed it at its own
             except (KeyboardInterrupt, SystemExit):
                 raise
             except Exception as e:
@@ -6521,8 +7288,10 @@ def wait_device_link(cfg, timeout: float) -> bool:
 
 def startup(cfg) -> None:
     """Cold start after a PC reboot: bring the whole chain up in order, then watch it."""
-    if not acquire_singleton_lock():
-        LOG.warning("Another SimWatch instance is already running; exiting.")
+    if not acquire_singleton_lock("startup"):
+        msg = already_running_message("startup")
+        LOG.warning(msg)
+        print(msg)
         return
     st = cfg.get("startup")
     if not st or not st.get("order"):
@@ -6539,7 +7308,7 @@ def startup(cfg) -> None:
             LOG.error("startup.order: unknown app key %r; skipping", key)
             continue
         if key == "integrator":
-            release_fsx_for_recovery(cfg)  # unattended: close FSX Pro if it holds the device, never click
+            release_fsx_for_recovery(cfg)  # FSX Pro holding the device is left alone (just logged)
         launch_app(cfg, app, 60)
     time.sleep(cfg.get("settle_sec", 15))
     LOG.info("Startup done:")
@@ -6639,11 +7408,39 @@ def print_hotkey_cheatsheet(cfg: dict) -> None:
         print("  (SimWatch is running without the video rig (video.enabled=false), so no hotkeys are active.)")
 
 
-def cmd_video(cfg: dict) -> None:
-    """Standalone TV-only practice mode: Kinovea 2x2 grid + hotkeys + shot/audio watcher."""
-    if not acquire_singleton_lock():
-        LOG.warning("Another SimWatch instance is already running; exiting.")
-        return
+def cmd_video(cfg: dict, mode: str | None = None) -> int:
+    """Practice video: Kinovea 2x2 grid + hotkeys + shot/audio watcher, no GSPro needed.
+
+    If the watch/startup daemon is running, hand off instead of fighting it: write VIDEO_ON so the daemon starts
+    its own video rig regardless of GSPro (kept on until `video off` / the file is deleted) and exit 0.
+    With no daemon running, run standalone in this console (Ctrl+C stops it)."""
+    mode = (mode or "on").strip().lower()
+    if mode not in ("on", "off"):
+        print(f"Invalid video mode {mode!r} (valid: on, off)")
+        return 2
+    if mode == "off":
+        had = clear_video_request()
+        d = running_daemon()
+        if d and d.get("command") == "video":
+            print(f"Standalone video mode is running (pid {d['pid']}): close its window / Ctrl+C, "
+                  "or run: python simwatch.py stop")
+        else:
+            print("Practice video request cleared; the video rig follows GSPro again." if had
+                  else "No practice video request was active.")
+        return 0
+    if not acquire_singleton_lock("video"):
+        d = running_daemon()
+        if d and d.get("command") == "video":
+            msg = f"Standalone video mode is already running (pid {d['pid']}); nothing to do."
+        else:
+            write_video_request()
+            who = f" (pid {d['pid']}, `{d['command']}`)" if d and d.get("pid") else ""
+            msg = (f"SimWatch is already running in the background{who}: asked it to start the video rig "
+                   "(no GSPro needed). It picks this up within a few seconds (after its startup sequence, if one "
+                   "is still running). The rig stays on until: python simwatch.py video off")
+        LOG.info(msg)
+        print(msg)
+        return 0
     mgr = SwingSessionManager(cfg)
     mgr.hub, bridge = start_bridge(cfg)
     mgr.start(launch_rig=True)
@@ -6651,6 +7448,9 @@ def cmd_video(cfg: dict) -> None:
     LOG.info("Standalone video mode running (Ctrl+C to stop).")
     try:
         while True:
+            if stop_requested():
+                LOG.info("Stop requested (`simwatch.py stop`); leaving standalone video mode.")
+                break
             if pause_active(cfg):
                 time.sleep(1)
                 continue
@@ -6662,6 +7462,7 @@ def cmd_video(cfg: dict) -> None:
         mgr.stop()
         if bridge:
             bridge.stop()
+    return 0
 
 
 # --------------------------------------------------------------------------- doctor
@@ -6788,6 +7589,15 @@ def doctor_report(config_path: Path) -> list[tuple[str, str, str]]:
             {"none": "not listening / no session (fine if the sim is not running)",
              "unknown": "could not enumerate sockets (try an admin shell)"}.get(st, st))
 
+    # phone access to the drills hub (bridge.lan)
+    if bridge_lan_enabled(cfg_raw):
+        url = bridge_phone_url(cfg_raw)
+        add(INFO if url else WARN, "bridge LAN (phone)",
+            f"on - open on your phone (same Wi-Fi): {url}" if url else
+            "on, but no home-network IPv4 address or pairing token found (Wi-Fi/Ethernet connected?)")
+    else:
+        add(INFO, "bridge LAN (phone)", "off (bridge.lan false: drills hub served to this PC only)")
+
     # scheduled task, sniffer, firewall, device adapter, power, ... (Windows only; SKIP elsewhere)
     rows.extend(doctor_system_rows(cfg_raw))
     return rows
@@ -6838,11 +7648,14 @@ ULTIMATE_GUID = "e9a42b02-d5df-448d-aa00-03f14749eb61"
 USB_SS = ("2a737441-1930-4402-8d77-b2bebba308a3", "48e6b7a6-50f5-4782-a5d4-53bb8f07e226")
 PCIE_ASPM = ("501a4d13-42af-4429-9fd1-a8218c268e20", "ee12f906-d277-404b-b6da-e5fa1a576df5")
 HOST_LINK_IP = "169.254.6.1"
+# Network List Manager policy key for "Unidentified Networks" (what secpol.msc writes): Category 1 = Private.
+NLM_UNIDENTIFIED_KEY = (r"HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\CurrentVersion\NetworkList\Signatures"
+                        r"\010103000F0000F0010000000F0000F0C967A3643C3AD745950DA7859209176EF5B87C875FA20DF21951640E807D7C24")
 PAUSE_STALE_SEC = 4 * 3600
 KINOVEA_MIN_VERSION = (2025, 1)
 DOCTOR_SYSTEM_CHECKS = ("scheduled task 'SimWatch'", "sniffer raw socket", "firewall", "GameChanger exe",
                         "device adapter", "device ping", "power", "FSX Pro device hold", "Kinovea version",
-                        "GameChanger OpenConnect target")
+                        "GameChanger OpenConnect target", "firewall: bridge LAN (phone)")
 
 
 def _run_cmd(args: list, timeout: float = 20) -> tuple[int, str]:
@@ -6921,6 +7734,73 @@ def firewall_programs(cfg: dict) -> dict[str, list[str]]:
     return progs
 
 
+# Inbound remote-address scope of SimWatch's firewall Allow rules (what `harden` sets, what `doctor` expects):
+# - python.exe: the :921 sniffer is a raw socket bound to 127.0.0.1 and the bridge serves 127.0.0.1 - loopback
+#   only. (Phone access over Wi-Fi gets its own port-only rule: BRIDGE_LAN_FIREWALL_RULE, TCP <port>, LocalSubnet.)
+# - GSPconnect.exe: :921 from GameChanger and :9050 to GSPro are both on this PC - loopback only.
+# - GameChanger.exe / FSX Pro.exe: talk to the Launch Pro at 169.254.x on the direct link (TCP replies are
+#   allowed statefully anyway) and may receive its UDP discovery/broadcasts, whose SOURCE is the device's
+#   169.254.x address; LocalSubnet also covers a Launch Pro joined to the home Wi-Fi instead of the direct link.
+#   169.254.0.0/16 is listed explicitly because LocalSubnet only contains it while the link adapter has its
+#   169.254 address (i.e. not during a replug/APIPA wait).
+FIREWALL_SCOPE_LOOPBACK = ("127.0.0.1",)
+FIREWALL_SCOPE_DEVICE = ("169.254.0.0/16", "LocalSubnet")
+
+
+def firewall_remote_scope(label: str) -> tuple[str, ...]:
+    """The -RemoteAddress list for a firewall_programs()/harden label."""
+    low = label.lower()
+    if low.startswith("python") or "gspconnect" in low:
+        return FIREWALL_SCOPE_LOOPBACK
+    return FIREWALL_SCOPE_DEVICE
+
+
+def _scope_networks(scope) -> tuple[list, set[str]]:
+    nets, keywords = [], set()
+    for e in scope:
+        if e == "127.0.0.1":
+            nets.append(ipaddress.ip_network("127.0.0.0/8"))  # any loopback address is as narrow as it gets
+        elif e[:1].isdigit():
+            nets.append(ipaddress.ip_network(e, strict=False))
+        else:
+            keywords.add(e.lower())
+    return nets, keywords
+
+
+def remote_scope_within(remote, expected) -> bool:
+    """Is a rule's RemoteAddress (Windows form: 'Any', 'LocalSubnet', '127.0.0.1', '169.254.0.0/255.255.0.0',
+    'a-b' ranges; list or comma-joined) no broader than `expected`? Unparseable -> False (treated as broad)."""
+    items = remote if isinstance(remote, (list, tuple)) else str(remote or "").split(",")
+    items = [str(i).strip() for i in items if str(i).strip()]
+    if not items:
+        return False
+    nets, keywords = _scope_networks(expected)
+
+    def ip_ok(ip) -> bool:
+        return any(ip.version == n.version and ip in n for n in nets)
+
+    for e in items:
+        low = e.lower()
+        if low in ("any", "*"):
+            return False
+        if not (low[:1].isdigit() or ":" in low):
+            if low.rstrip("46") not in keywords:  # LocalSubnet4/6 count as LocalSubnet
+                return False
+            continue
+        try:
+            if "-" in e:
+                lo, hi = (ipaddress.ip_address(x.strip()) for x in e.split("-", 1))
+                if not (ip_ok(lo) and ip_ok(hi)):
+                    return False
+            else:
+                net = ipaddress.ip_network(e, strict=False)
+                if not any(net.version == n.version and net.subnet_of(n) for n in nets):
+                    return False
+        except ValueError:
+            return False
+    return True
+
+
 def pause_file_row(age_sec: float | None, max_hours=4):
     """Doctor row for the PAUSE file given its age (pause_age_sec()) and config pause_max_hours."""
     if age_sec is None:
@@ -6973,8 +7853,15 @@ def evaluate_power(scheme_text: str, usb_idx: int | None, standby_idx: int | Non
     if aspm_idx is not None:
         rows.append((PASS, "PCIe link power mgmt (AC)", "off") if aspm_idx == 0 else
                     (WARN, "PCIe link power mgmt (AC)", f"level {aspm_idx} -> fix: {HARDEN_HINT}"))
-    on = [n for n, v in (("hibernate", hibernate), ("fast startup", hiberboot)) if v]
-    rows.append((PASS, "hibernate / fast startup", "off") if not on else
+    if hibernate is None and hiberboot is None:
+        rows.append((WARN, "hibernate / fast startup", "could not read setting"))
+        return rows
+    if hibernate == 0:  # fast startup needs the hiberfile: with hibernation off it can't run, whatever HiberbootEnabled says
+        on = []
+    else:
+        on = [n for n, v in (("hibernate", hibernate), ("fast startup", hiberboot)) if v]
+    rows.append((PASS, "hibernate / fast startup", "off" if hibernate != 0 or not hiberboot else
+                 "off (hibernation disabled, so fast startup can't run)") if not on else
                 (WARN, "hibernate / fast startup", f"{' + '.join(on)} on - restores stale USB NIC state "
                                                    "-> fix: powercfg /hibernate off"))
     return rows
@@ -7018,7 +7905,11 @@ def evaluate_task(info: dict) -> tuple[str, str, str]:
         problems.append("not run with highest privileges")
     if not problems:
         return (PASS, item, "registered, no time limit, runs on battery, highest privileges")
-    return (WARN, item, "; ".join(problems) + f" -> fix: {HARDEN_HINT}")
+    # harden's task step only changes Settings (time limit / battery); it can't enable the task or change its
+    # principal, so a disabled or non-elevated task needs install_autostart.bat (re-registers it).
+    reinstall = not info.get("enabled", True) or info.get("run_level") != "HighestAvailable"
+    fix = "rerun install_autostart.bat" if reinstall else HARDEN_HINT
+    return (WARN, item, "; ".join(problems) + f" -> fix: {fix}")
 
 
 def exe_location_issue(path: str) -> str | None:
@@ -7073,11 +7964,19 @@ def evaluate_firewall(rules: list, programs: dict[str, list[str]]) -> list[tuple
         allows = [r for r in mine if str(r.get("Action", "")).lower() == "allow"
                   and str(r.get("Direction", "")).lower() == "inbound"]
         item = f"firewall: {label}"
+        expected = firewall_remote_scope(label)
+        broad = [r for r in allows if "RemoteAddress" in r and not remote_scope_within(r["RemoteAddress"], expected)]
         if blocks:
             names = ", ".join(sorted({str(r.get("Name", "?")) for r in blocks}))[:80]
             rows.append((FAIL, item, f"Block rule(s): {names} -> fix: {HARDEN_HINT} (or delete them in wf.msc)"))
+        elif broad:
+            desc = "; ".join(sorted({f"{r.get('Name', '?')} (remote {r.get('RemoteAddress') or 'Any'})"
+                                     for r in broad}))[:160]
+            rows.append((WARN, item, f"inbound Allow broader than needed: {desc}; expected {','.join(expected)} -> "
+                                     f"fix: {HARDEN_HINT} narrows SimWatch's own rule; narrow or delete any "
+                                     "other listed rule in wf.msc"))
         elif allows:
-            rows.append((PASS, item, "inbound Allow rule present"))
+            rows.append((PASS, item, f"inbound Allow rule present (remote {','.join(expected)})"))
         else:
             rows.append((WARN, item, f"no inbound Allow rule -> fix: {HARDEN_HINT}"))
     return rows
@@ -7114,11 +8013,32 @@ def evaluate_adapter(info: dict | None, device_ip: str) -> list[tuple[str, str, 
                                                    f"-> fix: {HARDEN_HINT}"))
     prof = str(info.get("Profile") or "none")
     rows.append((PASS, "adapter network profile", prof) if prof in ("Private", "DomainAuthenticated") else
-                (WARN, "adapter network profile", f"{prof} -> fix: {HARDEN_HINT} (Private)"))
-    sleep = str(info.get("AllowSleep") or "")
-    rows.append((WARN, "adapter power mgmt", f"Windows may turn off the adapter -> fix: {HARDEN_HINT}")
-                if sleep.lower() == "enabled" else (PASS, "adapter power mgmt", sleep or "n/a"))
+                (WARN, "adapter network profile",
+                 f"{prof} -> fix: {HARDEN_HINT} (Private profile + Unidentified Networks policy = Private; a direct "
+                 "link is an 'Unidentified network' that Windows re-creates as Public after an adapter restart)"))
+    rows.append(evaluate_adapter_power(info.get("AllowSleep"), info.get("WmiPower")))
     return rows
+
+
+def evaluate_adapter_power(allow_sleep, wmi_enable) -> tuple[str, str, str]:
+    """allow_sleep: Get-NetAdapterPowerManagement AllowComputerToTurnOffDevice (Enabled/Disabled/Unsupported/'').
+    wmi_enable: root/wmi MSPower_DeviceEnable.Enable for the adapter ('True'/'False'/'' if unreadable) - this is the
+    Device Manager 'Allow the computer to turn off this device' checkbox, i.e. what actually lets Windows power it
+    off, so it wins when readable. Without it, only AllowComputerToTurnOffDevice=Enabled means 'may turn off'."""
+    item = "adapter power mgmt"
+    allow = str(allow_sleep or "").strip()
+    wmi = str(wmi_enable or "").strip().lower()
+    detail = f"AllowComputerToTurnOffDevice={allow or '?'}, MSPower_DeviceEnable={wmi_enable if wmi else '?'}"
+    fix = f"-> fix: {HARDEN_HINT}"
+    if wmi == "true":
+        return (WARN, item, f"Windows may turn off the adapter (Device Manager power checkbox on; {detail}) {fix}")
+    if wmi == "false":
+        return (PASS, item, f"off ({detail})")
+    if allow.lower() == "enabled":
+        return (WARN, item, f"Windows may turn off the adapter ({detail}) {fix}")
+    if allow.lower() == "disabled":
+        return (PASS, item, f"off ({detail})")
+    return (INFO, item, f"can't confirm ({detail}; run doctor as Administrator to read the WMI flag)")
 
 
 _HOSTPORT_RE = re.compile(r"(localhost|::1|\d{1,3}(?:\.\d{1,3}){3})\]?\s*[:,]\s*\"?(\d{2,5})\b", re.I)
@@ -7208,9 +8128,12 @@ $i = Get-NetIPInterface -InterfaceIndex $idx -AddressFamily IPv4
 $p = Get-NetConnectionProfile -InterfaceIndex $idx
 $pm = if ($a) {{ Get-NetAdapterPowerManagement -Name $a.Name }}
 $r32 = Get-NetRoute -DestinationPrefix "$ip/32"
+$w = if ($a -and $a.PnPDeviceID) {{ Get-CimInstance -Namespace root/wmi -ClassName MSPower_DeviceEnable |
+  Where-Object {{ $_.InstanceName -like "$($a.PnPDeviceID)*" }} | Select-Object -First 1 }}
 [pscustomobject]@{{Name=$a.Name; Desc=$a.InterfaceDescription; Status=[string]$a.Status; Index=$idx; Source=$src;
  Dhcp=[string]$i.Dhcp; Metric=$i.InterfaceMetric; Profile=[string]$p.NetworkCategory;
- AllowSleep=[string]$pm.AllowComputerToTurnOffDevice; Route32=[bool]$r32}} | ConvertTo-Json -Compress"""
+ AllowSleep=[string]$pm.AllowComputerToTurnOffDevice; WmiPower=$(if ($w) {{ [string]$w.Enable }} else {{ '' }});
+ Route32=[bool]$r32}} | ConvertTo-Json -Compress"""
     info = _ps_json(script, 30)
     return info if isinstance(info, dict) else None
 
@@ -7223,12 +8146,53 @@ $out = foreach ($f in (Get-NetFirewallApplicationFilter -PolicyStore ActiveStore
     Where-Object {{ $p -contains [Environment]::ExpandEnvironmentVariables($_.Program) }})) {{
   foreach ($r in ($f | Get-NetFirewallRule)) {{
     [pscustomobject]@{{Program=[Environment]::ExpandEnvironmentVariables($f.Program); Name=$r.DisplayName;
-      Direction=[string]$r.Direction; Action=[string]$r.Action; Enabled=[string]$r.Enabled}} }} }}
+      Direction=[string]$r.Direction; Action=[string]$r.Action; Enabled=[string]$r.Enabled;
+      RemoteAddress=(@(($r | Get-NetFirewallAddressFilter).RemoteAddress) -join ',')}} }} }}
 ConvertTo-Json -InputObject @($out) -Compress"""
     res = _ps_json(script, 60)
     if isinstance(res, dict):
         res = [res]
     return res if isinstance(res, list) else None
+
+
+def _bridge_lan_rule_info() -> list | None:
+    """[{Name, Enabled, Action, Profile, LocalPort, Protocol, RemoteAddress}] for BRIDGE_LAN_FIREWALL_RULE."""
+    script = f"""$ErrorActionPreference='SilentlyContinue'
+$out = foreach ($r in @(Get-NetFirewallRule -DisplayName {_psq(BRIDGE_LAN_FIREWALL_RULE)})) {{
+  $pf = $r | Get-NetFirewallPortFilter; $af = $r | Get-NetFirewallAddressFilter
+  [pscustomobject]@{{Name=$r.DisplayName; Enabled=[string]$r.Enabled; Action=[string]$r.Action;
+    Profile=[string]$r.Profile; Protocol=[string]$pf.Protocol; LocalPort=(@($pf.LocalPort) -join ',');
+    RemoteAddress=(@($af.RemoteAddress) -join ',')}} }}
+ConvertTo-Json -InputObject @($out) -Compress"""
+    res = _ps_json(script, 30)
+    if isinstance(res, dict):
+        res = [res]
+    return res if isinstance(res, list) else None
+
+
+def evaluate_bridge_lan_rule(lan_on: bool, rules: list | None, port: int) -> tuple[str, str, str]:
+    """Doctor row for the phone-access firewall rule (only wanted while bridge.lan is true)."""
+    item = "firewall: bridge LAN (phone)"
+    rules = [r for r in rules or [] if isinstance(r, dict)]
+    remove = f"Remove-NetFirewallRule -DisplayName {_psq(BRIDGE_LAN_FIREWALL_RULE)}"
+    if not lan_on:
+        if rules:
+            return (INFO, item, f"leftover rule while bridge.lan is off (harmless: the bridge binds 127.0.0.1) "
+                                f"-> remove (Administrator PowerShell): {remove}")
+        return (PASS, item, "no LAN rule (bridge.lan off)")
+    if not rules:
+        return (WARN, item, f"bridge.lan is on but no inbound rule for TCP {port}; the phone can't connect -> "
+                            f"fix: {HARDEN_HINT}")
+    for r in rules:
+        prof = str(r.get("Profile", "")).lower()
+        ok = (str(r.get("Enabled", "True")).lower() in ("true", "1") and str(r.get("Action", "")).lower() == "allow"
+              and str(r.get("LocalPort", "")).strip() == str(port) and str(r.get("Protocol", "")).upper() == "TCP"
+              and "public" not in prof and prof not in ("any", "")
+              and remote_scope_within(r.get("RemoteAddress"), ("LocalSubnet",)))
+        if not ok:
+            return (WARN, item, f"rule differs from TCP {port} / Private / LocalSubnet (port {r.get('LocalPort')}, "
+                                f"profile {r.get('Profile')}, remote {r.get('RemoteAddress')}) -> fix: {HARDEN_HINT}")
+    return (PASS, item, f"TCP {port} inbound, Private profile, LocalSubnet only")
 
 
 def _reg_hklm_dword(subkey: str, value: str) -> int | None:
@@ -7282,6 +8246,9 @@ def _doc_task(cfg):
 
 def _doc_sniffer(cfg):
     ok, msg = sniffer_probe()
+    if not ok and not _is_admin():
+        return [(WARN, "sniffer raw socket", f"{msg} (expected when not elevated; the SimWatch task runs elevated "
+                                              "- rerun doctor as Administrator to check for real)")]
     return [(PASS if ok else FAIL, "sniffer raw socket", msg)]
 
 
@@ -7292,6 +8259,13 @@ def _doc_firewall(cfg):
     if rules is None:
         return [(WARN, "firewall", "could not query rules (Get-NetFirewallApplicationFilter failed)")]
     return evaluate_firewall(rules, progs)
+
+
+def _doc_bridge_lan(cfg):
+    rules = _bridge_lan_rule_info()
+    if rules is None:
+        return [(WARN, "firewall: bridge LAN (phone)", "could not query rules (Get-NetFirewallRule failed)")]
+    return [evaluate_bridge_lan_rule(bridge_lan_enabled(cfg), rules, int(bridge_config(cfg).get("port", 8765)))]
 
 
 def _doc_gamechanger(cfg):
@@ -7313,12 +8287,24 @@ def _doc_device(cfg):
     return rows
 
 
+def parse_powercfg_a_hibernate(text: str) -> int | None:
+    """`powercfg /a` -> 0 if it says hibernation is off/unavailable, 1 if Hibernate is listed as available, else None."""
+    t = text or ""
+    if re.search(r"Hibernation has not been enabled|Hibernation is not available", t, re.I):
+        return 0
+    avail = re.split(r"not available", t, maxsplit=1, flags=re.I)[0]
+    return 1 if re.search(r"^\s*Hibernate\s*$", avail, re.I | re.M) else None
+
+
 def _doc_power(cfg):
     _, scheme = _run_cmd(["powercfg", "/getactivescheme"], 10)
     q = lambda sub, setting: parse_powercfg_ac_index(_run_cmd(["powercfg", "/query", "SCHEME_CURRENT", sub, setting], 10)[1])
+    hib = _reg_hklm_dword(r"SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled")
+    if hib is None:
+        hib = parse_powercfg_a_hibernate(_run_cmd(["powercfg", "/a"], 10)[1])
     return evaluate_power(
         scheme, q(*USB_SS), q("SUB_SLEEP", "STANDBYIDLE"), q(*PCIE_ASPM),
-        _reg_hklm_dword(r"SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled"),
+        hib,
         _reg_hklm_dword(r"SYSTEM\CurrentControlSet\Control\Session Manager\Power", "HiberbootEnabled"),
     )
 
@@ -7364,7 +8350,8 @@ def doctor_system_rows(cfg: dict) -> list[tuple[str, str, str]]:
         return [(SKIP, name, "Windows only") for name in DOCTOR_SYSTEM_CHECKS]
     rows: list[tuple[str, str, str]] = []
     for name, fn in zip(DOCTOR_SYSTEM_CHECKS, (_doc_task, _doc_sniffer, _doc_firewall, _doc_gamechanger, _doc_device,
-                                               None, _doc_power, _doc_fsx_hold, _doc_kinovea, _doc_oc_target)):
+                                               None, _doc_power, _doc_fsx_hold, _doc_kinovea, _doc_oc_target,
+                                               _doc_bridge_lan)):
         if fn is None:  # "device ping" is produced by _doc_device
             continue
         try:
@@ -7525,11 +8512,21 @@ def harden_steps(ctx: dict) -> list[tuple[str, str, bool]]:
         host = "169.254.6.2"
     steps: list[tuple[str, str, bool]] = []
     if dev:
+        # New-NetIPAddress refuses a DHCP-enabled interface ("Inconsistent parameters PolicyStore
+        # PersistentStore and Dhcp Enabled"), so DHCP must go off first - but if adding the static address
+        # then fails, DHCP is switched back on and the step stops before removing anything, so the adapter
+        # is never left with no address. Old addresses are removed only once the static one exists.
         steps.append((f"Static IP {host}/16 on '{alias}' (no ~60 s APIPA wait after a replug)",
-                      f"Set-NetIPInterface -InterfaceAlias {a} -AddressFamily IPv4 -Dhcp Disabled; "
+                      f"if (-not (Get-NetIPAddress -InterfaceAlias {a} -AddressFamily IPv4 -IPAddress '{host}' "
+                      f"-ErrorAction SilentlyContinue)) {{ "
+                      f"Set-NetIPInterface -InterfaceAlias {a} -AddressFamily IPv4 -Dhcp Disabled -ErrorAction Stop; "
+                      f"try {{ New-NetIPAddress -InterfaceAlias {a} -IPAddress {host} -PrefixLength 16 "
+                      f"-ErrorAction Stop | Out-Null }} "
+                      f"catch {{ Set-NetIPInterface -InterfaceAlias {a} -AddressFamily IPv4 -Dhcp Enabled "
+                      f"-ErrorAction SilentlyContinue; throw }} }} "
+                      f"else {{ Set-NetIPInterface -InterfaceAlias {a} -AddressFamily IPv4 -Dhcp Disabled }}; "
                       f"Get-NetIPAddress -InterfaceAlias {a} -AddressFamily IPv4 -ErrorAction SilentlyContinue | "
-                      f"Remove-NetIPAddress -Confirm:$false; "
-                      f"New-NetIPAddress -InterfaceAlias {a} -IPAddress {host} -PrefixLength 16", True))
+                      f"Where-Object {{ $_.IPAddress -ne '{host}' }} | Remove-NetIPAddress -Confirm:$false", True))
         steps.append((f"Persistent /32 route to the Launch Pro {dev} via '{alias}'",
                       f"Remove-NetRoute -DestinationPrefix '{dev}/32' -Confirm:$false -ErrorAction SilentlyContinue; "
                       f"New-NetRoute -DestinationPrefix '{dev}/32' -InterfaceAlias {a} -NextHop 0.0.0.0 -RouteMetric 1",
@@ -7537,24 +8534,50 @@ def harden_steps(ctx: dict) -> list[tuple[str, str, bool]]:
     steps.append((f"Interface metric 5 on '{alias}'",
                   f"Set-NetIPInterface -InterfaceAlias {a} -AddressFamily IPv4 -AutomaticMetric Disabled -InterfaceMetric 5",
                   True))
-    steps.append((f"Network profile Private on '{alias}' (if it errors for an 'Unidentified network', set "
-                  "secpol.msc > Network List Manager Policies > Unidentified Networks > Private)",
+    # Adapter-restarting steps (static IP above, power management here) must run BEFORE the profile steps:
+    # a restarted direct link comes back as an 'Unidentified network', which Windows re-creates as Public.
+    steps.append((f"Stop Windows powering off '{alias}' (adapter restarts briefly; also clears the Device Manager "
+                  "'Allow the computer to turn off this device' checkbox, which some drivers e.g. Intel I219-V ignore "
+                  "the cmdlet for)",
+                  f"Disable-NetAdapterPowerManagement -Name {a}; "
+                  f"$id = (Get-NetAdapter -Name {a}).PnPDeviceID; "
+                  "if ($id) { Get-CimInstance -Namespace root/wmi -ClassName MSPower_DeviceEnable | "
+                  "Where-Object { $_.InstanceName -like \"$id*\" } | Set-CimInstance -Property @{Enable=$false} }",
+                  True))
+    steps.append(("Unidentified networks default to Private (Network List Manager policy, same as secpol.msc > "
+                  "Network List Manager Policies > Unidentified Networks > Location type: Private; survives "
+                  "adapter restarts)",
+                  f"New-Item -Path {_psq(NLM_UNIDENTIFIED_KEY)} -Force | Out-Null; "
+                  f"New-ItemProperty -Path {_psq(NLM_UNIDENTIFIED_KEY)} -Name Category -PropertyType DWord -Value 1 "
+                  "-Force | Out-Null; "
+                  f"New-ItemProperty -Path {_psq(NLM_UNIDENTIFIED_KEY)} -Name CategoryReadOnly -PropertyType DWord "
+                  "-Value 0 -Force | Out-Null", False))
+    steps.append((f"Network profile Private on '{alias}' (after the adapter restarts above)",
                   f"Set-NetConnectionProfile -InterfaceAlias {a} -NetworkCategory Private", True))
     programs = ctx.get("programs") or {}
     for label, path in programs.items():
+        # Remove + recreate (not "add if missing"), so an older, broader SimWatch rule is narrowed in place.
         name = _psq(f"SimWatch allow {label}")
-        steps.append((f"Firewall inbound Allow for {label}",
+        scope = firewall_remote_scope(label)
+        steps.append((f"Firewall inbound Allow for {label} (remote {','.join(scope)} only)",
                       f"Get-NetFirewallRule -DisplayName {name} -ErrorAction SilentlyContinue | Remove-NetFirewallRule; "
                       f"New-NetFirewallRule -DisplayName {name} -Direction Inbound -Action Allow "
-                      f"-Program {_psq(path)} -Profile Any", False))
+                      f"-Program {_psq(path)} -Profile Private,Domain "
+                      f"-RemoteAddress {','.join(_psq(x) for x in scope)}", False))
+    if ctx.get("bridge_lan"):
+        port = int(ctx.get("bridge_port") or 8765)
+        name = _psq(BRIDGE_LAN_FIREWALL_RULE)
+        steps.append((f"Firewall inbound Allow TCP {port} for the drills hub on your phone (bridge.lan; Private "
+                      "profile, same subnet only)",
+                      f"Get-NetFirewallRule -DisplayName {name} -ErrorAction SilentlyContinue | Remove-NetFirewallRule; "
+                      f"New-NetFirewallRule -DisplayName {name} -Direction Inbound -Action Allow -Protocol TCP "
+                      f"-LocalPort {port} -Profile Private -RemoteAddress LocalSubnet", False))
     if programs:
         plist = ",".join(_psq(p) for p in programs.values())
         steps.append(("Remove firewall Block rules for those programs (created when a firewall prompt was cancelled)",
                       f"$p=@({plist}); Get-NetFirewallApplicationFilter | Where-Object "
                       "{ $p -contains [Environment]::ExpandEnvironmentVariables($_.Program) } | Get-NetFirewallRule | "
                       "Where-Object { $_.Action -eq 'Block' } | Remove-NetFirewallRule", False))
-    steps.append((f"Stop Windows powering off '{alias}' (adapter restarts briefly)",
-                  f"Disable-NetAdapterPowerManagement -Name {a}", True))
     if not ctx.get("ultimate_active"):
         steps.append(("Activate the High performance power plan (restores it if hidden)",
                       f"powercfg /setactive {HIGH_PERF_GUID}; if ($LASTEXITCODE -ne 0) "
@@ -7567,7 +8590,10 @@ def harden_steps(ctx: dict) -> list[tuple[str, str, bool]]:
                   f"powercfg /setacvalueindex SCHEME_CURRENT {PCIE_ASPM[0]} {PCIE_ASPM[1]} 0; "
                   "powercfg /setactive SCHEME_CURRENT", False))
     steps.append(("Never sleep on AC", "powercfg /change standby-timeout-ac 0", False))
-    steps.append(("Hibernate + fast startup off", "powercfg /hibernate off", False))
+    steps.append(("Hibernate + fast startup off",
+                  "powercfg /hibernate off; New-ItemProperty -Path "
+                  "'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Power' -Name HiberbootEnabled "
+                  "-PropertyType DWord -Value 0 -Force | Out-Null", False))
     if ctx.get("task_exists"):
         steps.append(("Scheduled task 'SimWatch': no time limit, runs on battery/UPS",
                       "$t = Get-ScheduledTask -TaskName 'SimWatch'; $s = $t.Settings; $s.ExecutionTimeLimit = 'PT0S'; "
@@ -7583,9 +8609,9 @@ def _detect_device_adapter(device_ip: str | None) -> str | None:
         info = _adapter_info(device_ip)
         if info and info.get("Name") and str(info.get("Source") or "").startswith("169.254."):
             return info["Name"]
-    rc, out = _ps("Get-NetAdapter | Where-Object { $_.Status -ne 'Disabled' -and $_.InterfaceDescription -match "
-                  "'RNDIS|Remote NDIS|USB' } | Select-Object -First 1 -ExpandProperty Name", 20)
-    return (out.strip() or None) if rc == 0 else None
+    # No guessing by description (RNDIS/USB): that can match a USB Ethernet/Wi-Fi dongle carrying the PC's
+    # internet, and the static-IP step would strip its address. Undetected -> the user passes the name.
+    return None
 
 
 def harden_context(cfg: dict, adapter: str | None = None) -> dict:
@@ -7595,7 +8621,8 @@ def harden_context(cfg: dict, adapter: str | None = None) -> dict:
         if not label.startswith("python.exe"):
             programs[label] = paths[0]
     ctx = {"adapter": adapter or _detect_device_adapter(dev.get("ip")), "device_ip": dev.get("ip"),
-           "host_ip": dev.get("host_ip"), "programs": programs, "ultimate_active": False, "task_exists": False}
+           "host_ip": dev.get("host_ip"), "programs": programs, "ultimate_active": False, "task_exists": False,
+           "bridge_lan": bridge_lan_enabled(cfg), "bridge_port": int(bridge_config(cfg).get("port", 8765))}
     if IS_WINDOWS:
         ctx["ultimate_active"] = parse_active_scheme(_run_cmd(["powercfg", "/getactivescheme"], 10)[1])[0] == ULTIMATE_GUID
         ctx["task_exists"] = _run_cmd(["schtasks", "/Query", "/TN", "SimWatch"], 15)[0] == 0
@@ -7614,6 +8641,9 @@ def cmd_harden(cfg: dict, apply: bool = False, adapter: str | None = None) -> in
     for i, (desc, cmd, _) in enumerate(steps, 1):
         print(f"\n[{i}] {desc}\n    {cmd}")
     if not apply:
+        if any(n for _, _, n in steps):
+            print("\nNote: the adapter steps drop GameChanger's Launch Pro session; --apply offers to restart "
+                  "GameChanger afterwards (or restart it yourself).")
         print("\nPaste these into an Administrator PowerShell, or run: python simwatch.py harden --apply (elevated).")
         return 0
     if not IS_WINDOWS:
@@ -7624,6 +8654,7 @@ def cmd_harden(cfg: dict, apply: bool = False, adapter: str | None = None) -> in
               f"  cd \"{HERE}\"\n  \"{sys.executable}\" simwatch.py harden --apply")
         return 1
     failed = 0
+    adapter_touched = False
     for i, (desc, cmd, needs_adapter) in enumerate(steps, 1):
         if needs_adapter and no_adapter:
             print(f"\n[{i}] SKIPPED (no adapter): {desc}")
@@ -7637,22 +8668,167 @@ def cmd_harden(cfg: dict, apply: bool = False, adapter: str | None = None) -> in
         if not ans.startswith("y"):
             LOG.info("harden step %d skipped: %s", i, desc)
             continue
-        rc, out = _ps(cmd, 120)
+        # Stop on the first error: PowerShell's exit code otherwise reflects only the last statement.
+        rc, out = _ps("$ErrorActionPreference = 'Stop'; " + cmd, 120)
         LOG.info("harden step %d rc=%s: %s | %s", i, rc, desc, out.strip()[-500:])
         print(f"  {'OK' if rc == 0 else f'FAILED (rc {rc})'}" + (f": {out.strip()[-300:]}" if out.strip() else ""))
         failed += rc != 0
+        adapter_touched |= needs_adapter
+    if adapter_touched:
+        harden_offer_integrator_restart(cfg)
     print(f"\nDone ({failed} failed; details in simwatch.log). Replug the Launch Pro, then run: python simwatch.py doctor")
     return 1 if failed else 0
 
 
+def harden_offer_integrator_restart(cfg: dict, wait_sec: float = 30.0) -> bool | None:
+    """After harden changed the device adapter, GameChanger keeps a dead Launch Pro session and doesn't reconnect.
+    If it's running, offer to restart it (kill, wait for device sockets to clear, relaunch) and report device_tcp.
+    None = not running/not configured or declined; else whether a device session came back."""
+    app = (cfg.get("apps_by_key") or {}).get("integrator") or _cfg_app(cfg, "integrator", "GameChanger.exe")
+    if not app or not app.get("process") or not find_procs(app["process"]):
+        return None
+    try:
+        ans = input(f"\nThe adapter changed, so GameChanger has lost its Launch Pro session.\n"
+                    f"  Restart GameChanger now? [y]es / [n]o: ").strip().lower()
+    except EOFError:
+        ans = "n"
+    if not ans.startswith("y"):
+        print("  Skipped - restart GameChanger yourself before hitting balls.")
+        return None
+    app = dict(app, key=app.get("key") or "integrator")
+    kill_app(app)
+    time.sleep(2)
+    wait_device_sockets_clear(cfg, cfg_number((cfg.get("device") or {}).get("socket_clear_sec", 10), 10))
+    launch_app(cfg, app, 45)
+    run_cfg = dict(cfg, apps_by_key=dict(cfg.get("apps_by_key") or {}, **{app["key"]: app}))
+    end = time.time() + wait_sec
+    while True:
+        ok, msg = check_device_tcp({"app": app["key"]}, run_cfg)
+        if ok or time.time() >= end:
+            break
+        time.sleep(2)
+    LOG.info("harden: GameChanger restarted; device_tcp %s: %s", "OK" if ok else "FAIL", msg)
+    print(f"  device_tcp: {'OK' if ok else 'FAIL'} - {msg}")
+    return ok
+
+
 # --------------------------------------------------------------------------- main
 
-def _configure_logging() -> None:
-    handlers: list[logging.Handler] = [logging.StreamHandler()]
+STATUS_LOG_PATTERNS = ("passive shot monitor", "Shot bridge", "Shot ", "Kinovea", "ERROR", "WARNING", "All green")
+
+
+def cmd_status(cfg: dict, tail: int = 15) -> int:
+    """Print bridge /api/status, today's shot count and the interesting tail of simwatch.log.
+
+    Exists so the rig can be checked with one shift-free command (remote-desktop sessions often drop Shift,
+    which rules out URLs, pipes and parentheses at the prompt)."""
+    import urllib.request
+    bcfg = bridge_config(cfg)
+    port = int(bcfg.get("port", 8765))
+    url = f"http://127.0.0.1:{port}/api/status"
     try:
-        handlers.append(
-            RotatingFileHandler(HERE / "simwatch.log", maxBytes=2_000_000, backupCount=3, encoding="utf-8")
-        )
+        with urllib.request.urlopen(url, timeout=3) as r:
+            print(f"Bridge {url}:")
+            print(json.dumps(json.loads(r.read().decode("utf-8")), indent=2))
+    except Exception as e:
+        print(f"Bridge {url}: not reachable ({e})")
+    raw = Path(str(bcfg.get("sessions_dir") or BRIDGE_DEFAULTS["sessions_dir"]))
+    shots = (raw if raw.is_absolute() else HERE / raw) / time.strftime("%Y-%m-%d") / "shots.jsonl"
+    try:
+        n = sum(1 for line in shots.read_text(encoding="utf-8").splitlines() if line.strip())
+        print(f"\nToday's shots: {n} in {shots}")
+    except OSError:
+        print(f"\nToday's shots: none yet ({shots} missing)")
+    log = HERE / "simwatch.log"
+    try:
+        lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        lines = []
+    hits = [l for l in lines if any(p in l for p in STATUS_LOG_PATTERNS)][-tail:]
+    print(f"\nLast {len(hits)} notable lines of {log.name}:")
+    for l in hits:
+        print("  " + l)
+    d = running_daemon()
+    print("\nSimWatch daemon: " + (f"running (pid {d['pid']}, `{d['command']}`)" if d else "not running"))
+    print("Practice video request (VIDEO_ON): " + ("ON - clear with: python simwatch.py video off"
+                                                  if video_request_active() else "off"))
+    if bridge_lan_enabled(cfg):
+        url = bridge_phone_url(cfg)
+        print(f"Phone URL (same Wi-Fi): {url or 'no home-network IPv4 address found'}")
+    return 0
+
+
+def print_ascii_qr(text: str) -> bool:
+    """Print a scannable QR code if the optional `qrcode` package is installed (pip install qrcode)."""
+    try:
+        import qrcode  # type: ignore
+    except ImportError:
+        return False
+    try:
+        qr = qrcode.QRCode(border=2)
+        qr.add_data(text)
+        qr.make(fit=True)
+        qr.print_ascii(invert=True)
+        return True
+    except Exception as e:
+        LOG.debug("QR print failed: %s", e)
+        return False
+
+
+def cmd_phone(cfg: dict) -> int:
+    """Print the drills-hub URL (with pairing token) for a phone on the same Wi-Fi."""
+    if not bridge_lan_enabled(cfg):
+        print("Phone access is off. To turn it on:\n"
+              "  1. In config.local.json (or config.json) set:  \"bridge\": {\"lan\": true}\n"
+              "  2. Restart SimWatch:  python simwatch.py stop   then run run_simwatch.bat (or reboot)\n"
+              "  3. Firewall rule (Administrator):  python simwatch.py harden --apply\n"
+              "  4. Run  python simwatch.py phone  again for the URL.")
+        return 1
+    url = bridge_phone_url(cfg)
+    if not url:
+        print("bridge.lan is on, but no home-network IPv4 address (or pairing token) was found. "
+              "Is the PC on Wi-Fi/Ethernet?")
+        return 1
+    print("Open this on your phone (same Wi-Fi). The token is remembered in a cookie after the first visit:\n")
+    print(f"  {url}\n")
+    others = lan_ipv4_candidates()[1:]
+    if others:
+        print("If that does not load, try the same URL with: " + ", ".join(others))
+    if not print_ascii_qr(url):
+        print("(For a scannable QR code here: pip install qrcode)")
+    print(f"\nRevoke every paired phone: delete {BRIDGE_TOKEN_PATH.name} and restart SimWatch.")
+    return 0
+
+
+CLIP_READY_LOG = HERE / "logs" / "clip-ready.log"
+CLIP_READY_LOG_MAX_BYTES = 1_000_000
+
+
+def clip_ready_log_handler(path: Path | None = None, max_bytes: int = CLIP_READY_LOG_MAX_BYTES) -> logging.Handler:
+    """clip-ready's own log file. It must not share simwatch.log: two processes each running a
+    RotatingFileHandler on one file collide on Windows (PermissionError on rollover). No in-process
+    rotation either (DTL + FO runs overlap): an oversized file is rolled once, best effort, at startup."""
+    path = path or CLIP_READY_LOG
+    path.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        if path.stat().st_size > max_bytes:
+            os.replace(path, path.with_name(path.name + ".1"))
+    except OSError:
+        pass  # missing, or the other angle's run has it open: just keep appending
+    return logging.FileHandler(path, encoding="utf-8")
+
+
+def _configure_logging(command: str | None = None) -> None:
+    handlers: list[logging.Handler] = []
+    if sys.stderr is not None:  # pythonw.exe (clip-ready from Kinovea) has no console
+        handlers.append(logging.StreamHandler())
+    try:
+        if command == "clip-ready":
+            handlers.append(clip_ready_log_handler())
+        else:
+            handlers.append(
+                RotatingFileHandler(HERE / "simwatch.log", maxBytes=2_000_000, backupCount=3, encoding="utf-8")
+            )
     except OSError:
         pass
     logging.basicConfig(
@@ -7679,7 +8855,7 @@ def main() -> None:
             "discover", "dump", "calibrate", "check", "recover", "watch", "startup", "stop",
             "displays", "reconnect", "release-device",
             "video", "bookmark", "reference", "obs-setup", "hotkeys", "drills", "lines", "save-lines",
-            "doctor", "bridge", "harden", "clip-ready", "shotlab",
+            "doctor", "bridge", "harden", "clip-ready", "status", "phone", "shotlab",
         ],
     )
     ap.add_argument("arg", nargs="?")
@@ -7694,12 +8870,12 @@ def main() -> None:
                     help="harden: run the commands (Administrator, asks before each); default is a dry run")
     a = ap.parse_args()
 
-    _configure_logging()
+    _configure_logging(a.command)
 
     if a.command == "clip-ready":  # Kinovea post-recording command: light, never fails (exit 0)
         sys.exit(cmd_clip_ready(Path(a.config), a.arg, a.arg2))
     if a.command == "stop":
-        stopped = stop_other_simwatch_instances()
+        stopped = request_stop()
         print(f"Stopped {stopped} running SimWatch background instance(s).")
         return
     if a.command == "drills":
@@ -7722,6 +8898,10 @@ def main() -> None:
         return calibrate()
 
     cfg = load_config(Path(a.config), command=a.command)
+    if a.command == "status":
+        sys.exit(cmd_status(cfg))
+    if a.command == "phone":
+        sys.exit(cmd_phone(cfg))
     if a.command == "bridge":
         return cmd_bridge(cfg, demo=a.demo, demo_interval=a.demo_interval, port=a.port)
     if a.command == "shotlab":
@@ -7773,7 +8953,7 @@ def main() -> None:
             pass
         run_checks(cfg)
     elif a.command == "video":
-        cmd_video(cfg)
+        sys.exit(cmd_video(cfg, a.arg))
     elif a.command == "bookmark":
         mgr = SwingSessionManager(cfg)
         dtl, fo = mgr.bookmark_last_swing(club_override=a.arg)

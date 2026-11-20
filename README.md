@@ -18,8 +18,11 @@ Everything in SimWatch is plain Windows scripting (Win32 API calls, `PrintWindow
 **Fresh machine:** follow [`SETUP.md`](SETUP.md). The short version:
 ```powershell
 setup.bat                      # creates .venv, installs deps, runs doctor, offers autostart
-python simwatch.py doctor      # PASS/WARN/FAIL table: config, exe paths, ports, scheduled task
+python simwatch.py doctor      # PASS/WARN/FAIL table: config, exe paths, ports, task, device link, power, firewall
+python simwatch.py harden      # dry-run plan to harden the Launch Pro link (static IP, power, firewall); --apply (elevated) runs it step by step
 ```
+
+Machine-specific paths go in `config.local.json` (gitignored; overlays `config.json`, see `config.local.example.json`). `python simwatch.py discover --write-local` detects exe paths and writes it for you.
 
 `config.json` is validated on load: `watch`/`startup` refuse to start on errors (unknown app keys, unknown check types, bad recovery references) instead of failing silently later. Exe paths are machine-specific — check them in `doctor` output.
 
@@ -58,7 +61,7 @@ A check must fail `fail_threshold` (default `3`) times in a row (checked every `
 - Whenever `integrator` is in the restart list, SimWatch first runs `fsx_disconnect` as a safety net so FSX Pro cannot hold port `9970`.
 - After restarting, SimWatch waits `settle_sec` (default `15` s) before resuming checks.
 - If all recovery levels fail, SimWatch sounds 3 alert beeps, logs an error, backs off for `giveup_backoff_sec` (`300` s / 5 minutes), and resets to level 0.
-- **Gating & Pausing:** The `watch` loop idles unless `only_when_running` (`GSPro.exe`) is running, and pauses whenever an empty file named `PAUSE` exists next to `simwatch.py`.
+- **Gating & Pausing:** The `watch` loop idles unless `only_when_running` (`GSPro.exe`) is running, and pauses whenever a file named `PAUSE` exists next to `simwatch.py` (a PAUSE older than `pause_max_hours`, default 4, is ignored and deleted).
 
 ---
 
@@ -73,7 +76,8 @@ If you need FSX Pro's own live connection (e.g. for firmware updates or calibrat
 python simwatch.py reconnect         # connect FSX Pro to the Launch Pro (takes it from GameChanger)
 python simwatch.py release-device    # disconnect FSX Pro so GameChanger can reconnect
 ```
-Automatic recovery also calls `fsx_disconnect` before every GameChanger restart as a safety net.
+Automatic recovery never closes or clicks FSX Pro. While FSX Pro holds the Launch Pro, the watchdog logs it and
+leaves FSX Pro and GameChanger alone (no GameChanger restarts) until you run `release-device` or close FSX Pro.
 
 ---
 
@@ -138,6 +142,29 @@ To remove the scheduled task:
 schtasks /Delete /TN "SimWatch" /F
 ```
 
+### One daemon at a time (stop / restart / practice video)
+
+Only one `watch`/`startup`/`video` daemon runs at a time (the `Local\SimWatchSingleton` mutex plus
+`simwatch_daemon.json`). A second copy **never kills the running one**:
+
+- A second `watch`/`startup` (e.g. double-clicking `run_simwatch.bat` while the sign-in task is running) prints
+  "SimWatch is already running ..." and exits 0.
+- **Restart** the background daemon (e.g. after `git pull`): `python simwatch.py stop`, then
+  `schtasks /Run /TN SimWatch` (or run `run_simwatch.bat`). `stop` writes `STOP_REQUEST`; the daemon notices it
+  within one loop (~5-10 s), shuts the bridge/rig down cleanly and exits 0. If it hasn't exited after 20 s (still
+  in its startup sequence, or hung) it is terminated. Either way `run_simwatch.bat` sees `STOP_REQUEST`, logs
+  "stopped by simwatch.py stop", deletes it and exits 0, so there is **no** "SimWatch did not start" box, no
+  task restart, and the task ends (so `schtasks /Run` works again). This also works from a non-elevated
+  prompt against the elevated task.
+- After a crash the mutex is gone, so the task's own restart (or the next sign-in) starts normally.
+- **Practice video** (`python simwatch.py video` / `run_practice_video.bat`) while the daemon runs: it writes a
+  `VIDEO_ON` file and exits 0. The daemon then starts its video rig (Kinovea grid, OBS PiP, hotkeys, :921 shot
+  capture) **even without GSPro**, and keeps it on until you run `python simwatch.py video off` (or delete
+  `VIDEO_ON`); after that the rig follows GSPro again (Kinovea windows stay open; close them yourself). This works
+  even with `video.enabled: false` and with the bridge disabled. `VIDEO_ON` is a request to the *current*
+  daemon: a newly started daemon deletes a leftover one. With no daemon running, `video` runs standalone in its
+  console as before (Ctrl+C or `simwatch.py stop` ends it).
+
 ---
 
 ## Helper Batch Scripts
@@ -146,7 +173,7 @@ schtasks /Delete /TN "SimWatch" /F
 |---|---|
 | `run_simwatch.bat` | Launches `python simwatch.py startup` in the repo directory (cold start + watch loop + video rig). |
 | `run_shotlab.bat` | Opens ShotLab by hand (dev/offline use; installs Electron on first run). Not needed day to day, since the watchdog launches it. |
-| `run_practice_video.bat` | Standalone TV-only practice mode (`python simwatch.py video`): 2x2 Kinovea grid + hotkeys without GSPro. |
+| `run_practice_video.bat` | Practice video (`python simwatch.py video`): 2x2 Kinovea grid + hotkeys without GSPro. If the background daemon is running it asks that daemon to start its rig (until `simwatch.py video off`) instead of starting a second copy. |
 | `open_drills.bat` | Opens the offline Golf Drills, Routines & Daily Delivery Hub webpage (`drills/index.html`). |
 | `install_autostart.bat` | Registers the `SimWatch` Task Scheduler job to run `run_simwatch.bat` at logon as admin. |
 | `reconnect_sim.bat` | Manual/diagnostic: runs `python simwatch.py reconnect` to attach FSX Pro to the Launch Pro. |
@@ -241,10 +268,14 @@ Open `drills/index.html` directly (or double-click `open_drills.bat`, run `pytho
 records every shot the OpenConnect (:921) sniffer sees and serves it to `drills/index.html`.
 
 - **Storage:** one JSON line per shot in `Swings/Sessions/YYYY-MM-DD/shots.jsonl`: `ts` (local ISO-8601 with
-  offset), `shot_num`, `club`, `ball` {speed, carry, total, hla, vla, spin, spin_axis}, `club_data`
-  {speed, path, face, aoa} or null, `clip` (session clip filename once Kinovea's recording is saved; DTL
-  preferred) and `drill_id`. Anything the launch monitor didn't send is `null`. Linking a clip rewrites that
-  day's file atomically.
+  offset), `shot_num` (day-unique sequence; also the `NNN_` of clip names), `device_shot_num` (the launch
+  monitor's ShotNumber, which can reset mid-day), `club`, `ball` {speed, carry, total, hla, vla, spin,
+  spin_axis}, `club_data` {speed, path, face, aoa} or null, `clip` (session clip filename once Kinovea's
+  recording is saved; DTL preferred), `clips` {DTL, FO} and `drill_id`. Anything the launch monitor didn't
+  send is `null`. Linking a clip rewrites that day's file atomically, under a lock file (`.shots.lock`)
+  shared by the watchdog and Kinovea's `clip-ready` command, so neither can drop the other's write.
+- **Shot detection:** OpenConnect heartbeats and messages with `ContainsBallData: false` are ignored; the
+  same shot re-sent within 30 s (same ShotNumber, ball speed, spin and HLA) is recorded once.
 - **API** (`http://127.0.0.1:8765`): `GET /api/status`, `GET /api/shots?date=YYYY-MM-DD`, `GET /api/events`
   (Server-Sent Events: `status`, `shot`, `clip` {ts, clip} when a saved clip is linked, 15s heartbeat; max 8
   clients, more get 503; a client that stops reading for 10s is dropped), `POST /api/drill
@@ -265,10 +296,29 @@ records every shot the OpenConnect (:921) sniffer sees and serves it to `drills/
   `shots.jsonl` themselves. With `video.enabled: false`, `watch` runs its own :921 sniffer for the bridge
   (only while the `only_when_running` app is up).
 - While a drill is active its id is stored on each shot and added to clip names as `_D-<id>`.
-- **Config:** `"bridge": {"enabled": true, "port": 8765, "sessions_dir": "Swings/Sessions"}`. A busy port is
-  logged and the watchdog carries on without the bridge.
+- **Config:** `"bridge": {"enabled": true, "port": 8765, "sessions_dir": "Swings/Sessions", "lan": false}`. A
+  busy port is logged and the watchdog carries on without the bridge.
+- **Phone over home Wi-Fi (opt-in, `bridge.lan: true`):** the bridge then listens on all interfaces
+  (`0.0.0.0:<port>`). Clients on this PC (127.0.0.1) behave exactly as above, no token. Every other client
+  must present the pairing token from `bridge_token.txt` (created on first use, gitignored) on **every**
+  request, static files included: pass it once as `?token=...` and the server sets an `HttpOnly;
+  SameSite=Strict` cookie (1 year) that the page's fetch/SSE calls then send automatically. Without it: 401.
+  For token-authenticated LAN clients the `Host` may be an IP literal or this PC's hostname (`name` or
+  `name.<suffix>`) on the bridge port (else 421), and an `Origin`, if sent, must be that same
+  `http://<host>:<port>` (else 403). A DNS-rebinding page can't know the token and never receives the
+  cookie (it's scoped to the real host), so the localhost protections are unchanged.
+  Setup: set `"bridge": {"lan": true}` in `config.local.json`, `simwatch.py stop` + restart, run
+  `simwatch.py harden --apply` (adds firewall rule "SimWatch bridge LAN (phone)": inbound TCP `<port>`,
+  Private profile, `RemoteAddress LocalSubnet` only; your home Wi-Fi must be a **Private** network), then
+  `python simwatch.py phone` prints `http://192.168.x.y:8765/?token=...` (plus a QR code if the optional
+  `qrcode` package is installed). `status` and `doctor` print the URL too. Revoke all paired phones: delete
+  `bridge_token.txt` and restart. With `lan` back to false, doctor reports a leftover firewall rule as INFO.
+  When served over http the drills page talks to `location.origin`; opened from `file://` it uses
+  `http://127.0.0.1:8765`.
 - **Testing:** `python simwatch.py bridge` runs only the server + sniffer; add `--demo` (optionally
   `--demo-interval 2`, `--port 8766`) to emit a synthetic shot every few seconds. The demo runs on macOS too.
+  Demo shots go to `Swings/Sessions-demo/` (`bridge.demo_sessions_dir`), are tagged `"demo": true`, and the
+  real :921 sniffer is not started, so demo and real shots never mix.
 
 ## Manual Setup & What We Need From You (One-Time Checklist)
 
@@ -341,14 +391,16 @@ With **`opencv-python`** installed (`detect_ball_in_mp4`), SimWatch reads Frame 
 All commands accept an optional `--config <path>` flag (defaults to `config.json` next to `simwatch.py`).
 
 ```powershell
-python simwatch.py doctor                # validate config, exe paths, ports, scheduled task (exit 1 on FAIL)
+python simwatch.py doctor                # validate config, paths, ports, task, device link, power, firewall (exit 1 on FAIL)
 python simwatch.py check                 # run every health check once and print results
 python simwatch.py watch                 # watch forever, escalate recovery, and run video rig
 python simwatch.py startup               # cold start everything in order, then watch
-python simwatch.py stop                  # stop any running background SimWatch daemons
+python simwatch.py stop                  # ask the background daemon to exit cleanly (forced after 20 s)
 python simwatch.py recover [level]       # run one recovery level now (default 0)
 python simwatch.py displays              # show detected displays and projector decision
-python simwatch.py video                 # standalone TV-only 2x2 Kinovea grid + hotkeys (no GSPro)
+python simwatch.py video [off]           # 2x2 Kinovea grid + hotkeys, no GSPro; hands off to a running daemon (VIDEO_ON)
+python simwatch.py status                # bridge status, today's shots, daemon + VIDEO_ON state, phone URL, log tail
+python simwatch.py phone                 # drills-hub URL (with pairing token) for a phone on your Wi-Fi (bridge.lan)
 python simwatch.py drills                # open the local Golf Drills & Daily Delivery Hub
 python simwatch.py bridge [--demo]       # run only the shot-data bridge (:8765) + :921 sniffer
 python simwatch.py shotlab               # open ShotLab now (or focus it); the watchdog adopts it
@@ -382,6 +434,7 @@ python simwatch.py calibrate             # hover over a green status light -> in
 - `drills/` — offline Golf Drills, Routines & Daily Delivery Hub (`index.html`, `drills_data.js`, `shorts/`)
 - `Swings/` — organized session recordings, `My-Go-To/`, `Pros/`, `Workspaces/`, and `OBS_SimWatch_SceneCollection.json`
 - `simwatch.log` — rotating runtime log file (UTF-8, level + thread name per line, full tracebacks, max 2 MB × 3 backups)
+- `logs/clip-ready.log` — Kinovea's post-recording `clip-ready` runs (separate file: two processes can't share one rotating log on Windows)
 - `simwatch_status.json` — rewritten every cycle: `timestamp`, `state` (`healthy`, `degraded`, `recovering`, `device_offline`, `backoff`, `paused`, `error`, …), failing checks, recovery level
 - `logs/launcher.log` — autostart (`run_simwatch.bat --no-pause`) output; a startup failure also pops a message box instead of closing silently
 - `*.bak` — one rolling backup written before SimWatch overwrites Kinovea preferences or the OBS scene collection (only when content changes)

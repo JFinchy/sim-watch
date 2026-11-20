@@ -33,3 +33,10 @@ Open `drills/index.html` over `file://` on the Windows sim PC (Chrome or Edge), 
 ## Pass criteria
 
 Faults list ranked drills with the right symptom text; queued drills appear in the matching block and are sent as `drill_id`; the aid warning fires above 3 distinct items; promote respects the 2-cue cap; pacing and cue timers start, stop and stop cleanly on leaving the view, closing the overlay or hiding the page; all three tone profiles are audible and distinct; clip start/end embed correctly; state persists across a reload and a backup round trip; no horizontal scroll at phone width.
+
+## Review fixes (2026-11-19)
+
+1. Turn on the cue repeater (V) and a transfer-mode pacing timer with speech on. Cues are spoken whole; pacing only beeps.
+2. In the recommender, deselect every environment chip. The last one stays on with the toast "Pick at least one environment".
+3. Paste `https://youtu.be/<id>?t=90` as a drill clip. The embed starts at 1:30. A non-YouTube URL shows no embed.
+4. A drill you edited before wave 3 now shows up under fault and phase filters.

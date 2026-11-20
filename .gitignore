@@ -47,3 +47,8 @@ shotlab/node_modules/
 shotlab/dist/
 shotlab/data/
 
+# Daemon coordination + phone pairing (runtime, per machine)
+simwatch_daemon.json
+VIDEO_ON
+STOP_REQUEST
+bridge_token.txt

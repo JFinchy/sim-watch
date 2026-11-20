@@ -33,3 +33,31 @@ commands work and don't break the Launch Pro link.
 - `harden --apply` steps succeed (or fail with a clear message) and the Launch Pro still connects after a replug and
   a reboot.
 - The overlay changes paths without touching `config.json`.
+
+## Rig run 2026-11-19 follow-ups
+
+Branch: `feature/coach-system` (working tree). After `harden --apply` on the onboard 'Ethernet' (Intel I219-V),
+`doctor` still showed profile Public, fast startup on, adapter power mgmt on, and GameChanger had no session.
+
+1. Elevated: `simwatch.py harden --apply`, answering `y` to all. Check that the power-management step (now also
+   clears MSPower_DeviceEnable) and the new "Unidentified networks default to Private" policy step run before the
+   "Network profile Private" step. With GameChanger running, expect a "Restart GameChanger now?" prompt at the end.
+   Answer `y` and expect `device_tcp: OK`.
+2. Elevated `doctor`: `adapter network profile` Private, `hibernate / fast startup` PASS ("off" or "hibernation
+   disabled, so fast startup can't run"), `adapter power mgmt` PASS showing `MSPower_DeviceEnable=False`.
+3. Reboot, then run `doctor` again. The profile must still be Private (the policy key persists).
+4. Dry run `simwatch.py harden` prints the GameChanger restart note.
+
+## Review fixes (2026-11-19)
+
+1. Unplug the Launch Pro and run `python simwatch.py harden`. It must say `device adapter: <not detected>` and must **not** pick a USB/Wi-Fi dongle. Adapter steps are skipped on `--apply` until you pass the name, e.g. `python simwatch.py harden "Ethernet 3" --apply`.
+2. On `--apply`, the static-IP step adds 169.254.6.1 before it removes the old addresses. A step that errors part-way now prints `FAILED`, not `OK`.
+3. Firewall rules are created as `Private,Domain` (check in wf.msc). The phone can still reach the drills hub bridge on :8765 over home Wi-Fi when that network is Private.
+4. Run `python simwatch.py doctor` from a non-admin terminal. The sniffer row is WARN ("expected when not elevated"), not FAIL.
+
+## Rig result 2026-11-19 (second run, commit 021c548)
+
+- `harden --apply`: all 18 steps `rc=0`. The GameChanger restart reconnected (`device_tcp: OK - integrator connected to 169.254.6.44:9971 (wired)`).
+- `doctor`: 40 passed, 1 warning, 0 failures. Profile Private, adapter power mgmt off (`MSPower_DeviceEnable=False`), fast startup off, static IP, /32 route metric 5, Kinovea v2025.2.0.0.
+  The only WARN was port 9970 with no session right after the GameChanger restart; 9971 was connected.
+- Still to do: follow-up step 3 (reboot, then `doctor`: profile still Private) and the "Review fixes" steps 1-4.

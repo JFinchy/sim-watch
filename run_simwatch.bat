@@ -23,6 +23,15 @@ if "%NOPAUSE%"=="1" (
 )
 set "RC=%errorlevel%"
 >>"%SW_LOG%" echo [%date% %time%] simwatch.py exited with code %RC%
+if exist "%~dp0STOP_REQUEST" (
+  rem "simwatch.py stop" asked it to exit: a deliberate stop, not a failure. Exit 0 so no error box,
+  rem no task restart, and the scheduled task ends (schtasks /Run /TN SimWatch works again).
+  >>"%SW_LOG%" echo [%date% %time%] stopped by simwatch.py stop ^(exit code %RC% ignored^)
+  del /q "%~dp0STOP_REQUEST" >nul 2>&1
+  echo [SimWatch] Stopped by simwatch.py stop.
+  if "%NOPAUSE%"=="0" pause
+  exit /b 0
+)
 if not "%RC%"=="0" (
   set "FAILMSG=simwatch.py startup failed with exit code %RC%."
   goto :fail

@@ -79,3 +79,23 @@ when video is off, and the `clip` SSE event. Run from the repo folder in PowerSh
 - The `file://` page still goes live and can set the drill (step 6).
 - The drill expires on its own about 60s after the page closes (step 7).
 - No shot is ever duplicated in `shots.jsonl` when two SimWatch processes are running (step 9).
+
+## Review fixes, round 2 (2026-11-19: two writers, demo dir, dedup)
+
+Branch: `feature/coach-system` (working tree). Files: `simwatch.py`, `tests/test_review_fixes.py`, `README.md`.
+
+1. **Two writers, no lost shots (A):** with the full rig running (`watch`, video on), hit 10 shots at a normal
+   pace. `shots.jsonl` has exactly 10 new lines, `shot_num` is consecutive, and every full swing has `clips`
+   {DTL, FO}. No `.shots.lock` file is left behind in `Swings\Sessions\<date>\` afterwards.
+2. **Link retried by the watchdog (A):** open today's `shots.jsonl` in a program that holds it locked (e.g.
+   `powershell -c "$f=[IO.File]::Open('<path>\shots.jsonl','Open','Read','None'); Start-Sleep 20; $f.Close()"`),
+   then hit a shot during those 20 s. `logs\clip-ready.log` says `could not link clip to shot (watchdog will
+   retry)`. Within about a minute after the lock is released, the shot's record has its `clip`/`clips` (the
+   watchdog wrote it). The new shot line itself is not lost.
+3. **Demo stays separate (D):** `python simwatch.py bridge --demo --port 8766`. Demo shots go to
+   `Swings\Sessions-demo\<date>\shots.jsonl` with `"demo": true`. `Swings\Sessions\<date>\shots.jsonl` doesn't
+   change. `curl.exe http://127.0.0.1:8766/api/status` shows `"demo": true` and `"sniffer_ok": false`.
+4. **Heartbeats / repeats (I):** leave GSPro idle for 2 minutes with the rig connected. No new lines appear in
+   `shots.jsonl`. Then hit a shot: exactly one line, even if GSPconnect reconnects within 30 s afterwards.
+
+Pass: no shot is lost or duplicated, clip links survive a busy file, and demo shots never reach the real sessions.

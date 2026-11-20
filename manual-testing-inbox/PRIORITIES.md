@@ -5,7 +5,7 @@
 - [ ] Watchdog hardening - see `watchdog-hardening.md`
 - [ ] Setup & launcher hardening - see `setup-ops.md`
 - [ ] Watchdog recovery reliability (device debounce, backoff, PAUSE expiry, 72h task limit) - see `watchdog-reliability.md`
-- [ ] Doctor checks, `harden`, config.local.json - see `doctor-hardening.md`
+- [ ] Doctor checks, `harden`, config.local.json - see `doctor-hardening.md` (2026-11-19 rig: harden 0 failed, doctor 40 pass / 1 warn / 0 fail; reboot persistence check still pending)
 
 ## Important
 
@@ -22,6 +22,7 @@
 - [ ] Drill recommender, pacing timer, cue repeater & tone profiles - see `pacing-cues-recommender.md`
 - [ ] ShotLab Electron desktop dashboard, club auto-detector & OBS Studio overlays - see `shotlab-desktop-obs.md`
 - [ ] SimWatch ↔ ShotLab integration (supervisor, Rig pill, setup/doctor) - see `shotlab-simwatch-integration.md`
+- [ ] Practice-video handoff, phone access (bridge.lan) & narrowed firewall rules - see `video-handoff-phone-firewall.md`
 
 ## Minor
 

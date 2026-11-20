@@ -62,3 +62,29 @@ Run `run_simwatch.bat` (or `python simwatch.py watch`) with GSPro up, and keep `
 Steps 1-3 restart exactly what's described (nothing / GSPconnect chain / GameChanger only, with the stated
 backoff); the cursor never moves during automatic recovery; a 5 h-old PAUSE is removed; the task XML shows
 PT0S, battery-safe settings and 3 restarts; putts log as `Putter`.
+
+## Follow-up: venv launcher parent (4d6e4e9) + review fixes
+
+Branch: `feature/coach-system` (4d6e4e9 + working tree)
+
+11. **Scheduled-task start survives the singleton check.** With a SimWatch already running from the task, run
+    `schtasks /Run /TN SimWatch` (or sign out/in). `logs\launcher.log` must NOT show `exited with code 15`, and
+    `simwatch.log` shows `stopping prior SimWatch process (pid N)` only for the OLD instance's pids. Afterwards
+    `Get-CimInstance Win32_Process -Filter "Name='python.exe'" | ? CommandLine -match 'simwatch.py' | select ProcessId,ParentProcessId,CommandLine`
+    shows exactly one launcher/child pair (the venv `Scripts\python.exe` and its base-interpreter child).
+12. **Manual start replaces the task instance.** From a non-task Administrator terminal run
+    `.venv\Scripts\python.exe simwatch.py watch`: the task's instance is stopped and this one keeps running.
+
+## Review fixes (2026-11-19)
+
+1. Kill GSPconnect while watch is running. After level 0 recovery, the log should show `Post-recovery grace` while it restarts, and must not jump to level 1 (GSPro restart) within the ~35 s grace.
+2. Set `"pause_max_hours": "four"` in config.local.json, then run watch. It starts, `doctor` warns, and a PAUSE file is still honored. Revert afterwards.
+
+## FSX Pro left alone (2026-11-19)
+
+Branch: `master`. User decision: automated recovery must not close FSX Pro.
+
+1. With SimWatch running and GSPro open, run `python simwatch.py reconnect` (FSX Pro takes the Launch Pro).
+2. Wait 2 minutes. `simwatch.log` should show `FSX Pro is using the Launch Pro; leaving FSX Pro and GameChanger alone`
+   once, with no `device recovery: restart GameChanger` lines, and FSX Pro must still be open.
+3. Run `python simwatch.py release-device`. Within about a minute GameChanger reconnects (or one device-only recovery runs) and the log returns to `All green.`

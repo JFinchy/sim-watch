@@ -40,8 +40,8 @@ override what differs:
       doubled backslashes.
 - [ ] Keys you may need: `apps[].exe` (`integrator` = GameChanger, `gspro_connect`, `gspro`, `fs_connector` = FSX Pro),
       `video.kinovea_exe`, `video.obs_exe`, `device.ip` (the Launch Pro address) and optionally `device.host_ip` (the PC
-      side of the link, default `169.254.6.1`). If you change the device IP, also override the `checks` entries that
-      carry an `ip`.
+      side of the link, default `169.254.6.1`). The device checks have no `ip` of their own and use `device.ip`, so
+      that one key is all you change. (Lists without a `key`, such as `checks`, are replaced whole by the overlay.)
 
 ## 4. GSPro side
 
@@ -58,10 +58,18 @@ Most dropped connections come from Windows power-saving the USB NIC, the APIPA a
 
 - [ ] Plug in the Launch Pro and power it on, then run `.venv\Scripts\python.exe simwatch.py harden`. This is a
       **dry run**: it prints the exact PowerShell for your PC, with the adapter detected automatically:
-      - a static `169.254.6.1/16` on the device adapter
+      - a static `169.254.6.1/16` on the device adapter (if adding it fails, DHCP is switched back on and no
+        existing address is removed, so the adapter is never left without one)
       - a persistent `/32` route to the device
-      - interface metric 5 and the Private network profile
-      - firewall Allow rules for python.exe, GameChanger, GSPconnect and FSX Pro, and removal of any matching Block rules
+      - interface metric 5 and the Private network profile, plus the Unidentified Networks = Private policy (a
+        direct-cabled link is an 'Unidentified network' that otherwise comes back Public after an adapter restart)
+      - firewall Allow rules, each limited to the remote addresses that program actually needs: python.exe (sniffer +
+        bridge) and GSPconnect `127.0.0.1` only (everything they talk to is on this PC); GameChanger and FSX Pro
+        `169.254.0.0/16,LocalSubnet` (the Launch Pro's direct link and its UDP discovery, or a Launch Pro on your
+        home Wi-Fi). Existing SimWatch rules are removed and recreated, so rerunning `--apply` narrows an older
+        rig. Plus removal of any matching Block rules
+      - only with `"bridge": {"lan": true}` (phone access to the drills hub): one more rule, inbound TCP 8765,
+        Private profile, `LocalSubnet` only
       - adapter power management off
       - USB selective suspend off and PCIe ASPM off
       - the High performance plan
@@ -70,7 +78,8 @@ Most dropped connections come from Windows power-saving the USB NIC, the APIPA a
 - [ ] Apply it from an **Administrator** terminal with `simwatch.py harden --apply`. It asks before each command and
       logs to `simwatch.log`. If the adapter isn't detected, pass its name from `Get-NetAdapter`:
       `simwatch.py harden "Ethernet 3" --apply`.
-- [ ] Unplug and replug the Launch Pro afterwards.
+- [ ] Unplug and replug the Launch Pro afterwards. If GameChanger was running, `--apply` offers to restart it (it
+      loses its Launch Pro session when the adapter changes).
 
 ## 6. Run as Administrator
 
@@ -98,6 +107,9 @@ run `simwatch.py obs-setup` for the scene collection.
 |---|---|
 | `sniffer raw socket` FAIL / drills hub shows no shots | Run elevated. Make sure GameChanger targets `127.0.0.1:921`. |
 | `firewall: ...` FAIL (Block rule) | Someone cancelled a firewall prompt. Run `simwatch.py harden --apply`, or delete the rule in `wf.msc`. |
+| `firewall: ...` WARN (broader than needed) | An Allow rule accepts more remote addresses than the program needs. `harden --apply` narrows SimWatch's own rule; narrow or delete any other rule it names (e.g. one an installer created) in `wf.msc`. |
+| `firewall: bridge LAN (phone)` WARN / INFO | WARN: `bridge.lan` is on but the TCP 8765 rule is missing or too broad: `harden --apply`. INFO: leftover rule with `lan` off; the row prints the `Remove-NetFirewallRule` command. |
+| "SimWatch is already running" | A daemon is already up (the sign-in task). Restart it with `simwatch.py stop`, then `schtasks /Run /TN SimWatch`. `run_practice_video.bat` asks that daemon to start the video rig; `simwatch.py video off` releases it. |
 | `FSX Pro device hold` FAIL | FSX Pro grabbed the Launch Pro. Run `release_device.bat` (or close FSX Pro). |
 | `GameChanger exe` WARN (Downloads / Zone.Identifier) | Move it to `C:\SimTools\GameChanger`, run `Unblock-File`, update `config.local.json`. |
 | `device adapter` / `device ping` WARN | Launch Pro off, asleep or unplugged. Replug it. After `harden`, the address is static, so no 60 s wait. |
@@ -108,8 +120,9 @@ run `simwatch.py obs-setup` for the scene collection.
 | `config.local.json` FAIL | Invalid JSON. Fix it or delete it and rerun `discover --write-local`. |
 | "no usable Python 3.10+ found" | Install Python, then run `setup.bat`. |
 
-- Logs: `simwatch.log` (repo root, rotating) and `logs\launcher.log`.
-- Pause the watchdog by creating a file named `PAUSE` next to `simwatch.py`. Delete it to resume.
+- Logs: `simwatch.log` (repo root, rotating), `logs\launcher.log` and `logs\clip-ready.log` (Kinovea's post-recording command).
+- Pause the watchdog by creating a file named `PAUSE` next to `simwatch.py`. Delete it to resume. A PAUSE older
+  than `pause_max_hours` (default 4) is ignored and deleted, so a forgotten one can't stop the watchdog for good.
 - `simwatch.py stop` stops background instances.
 
 ## Updating

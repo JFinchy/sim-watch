@@ -198,7 +198,7 @@ def test_system_rows_skip_off_windows(monkeypatch, real_cfg):
 def test_system_rows_survive_crashing_probe(monkeypatch, real_cfg):
     monkeypatch.setattr(sw, "IS_WINDOWS", True)
     for name in ("_doc_task", "_doc_sniffer", "_doc_firewall", "_doc_gamechanger", "_doc_device",
-                 "_doc_power", "_doc_fsx_hold", "_doc_kinovea", "_doc_oc_target"):
+                 "_doc_power", "_doc_fsx_hold", "_doc_kinovea", "_doc_oc_target", "_doc_bridge_lan"):
         monkeypatch.setattr(sw, name, lambda cfg: (_ for _ in ()).throw(RuntimeError("boom")))
     rows = sw.doctor_system_rows(real_cfg)
     assert rows and all(r[0] == sw.WARN and "boom" in r[2] for r in rows)
@@ -253,3 +253,155 @@ def test_cmd_harden_dry_run_off_windows(monkeypatch, capsys, real_cfg):
     out = capsys.readouterr().out
     assert "dry run" in out and "Ethernet 3" in out
     assert sw.cmd_harden(real_cfg, apply=True, adapter="Ethernet 3") == 1
+
+
+# ------------------------------------------------------------------ rig run 2026-11-19 follow-ups
+
+def _step_idx(steps, needle):
+    return next(i for i, (_, c, _) in enumerate(steps) if needle in c)
+
+
+def test_harden_profile_steps_after_adapter_restarts():
+    steps = sw.harden_steps(_ctx())
+    profile = _step_idx(steps, "-NetworkCategory Private")
+    policy = _step_idx(steps, "NetworkList\\Signatures")
+    for restarting in ("New-NetIPAddress", "Disable-NetAdapterPowerManagement"):
+        assert _step_idx(steps, restarting) < policy < profile
+
+
+def test_harden_unidentified_network_policy_step():
+    steps = sw.harden_steps(_ctx())
+    desc, cmd, needs_adapter = steps[_step_idx(steps, "NetworkList\\Signatures")]
+    key = ("'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows NT\\CurrentVersion\\NetworkList\\Signatures\\"
+           "010103000F0000F0010000000F0000F0C967A3643C3AD745950DA7859209176EF5B87C875FA20DF21951640E807D7C24'")
+    assert f"New-Item -Path {key} -Force" in cmd
+    assert f"New-ItemProperty -Path {key} -Name Category -PropertyType DWord -Value 1 -Force" in cmd
+    assert f"New-ItemProperty -Path {key} -Name CategoryReadOnly -PropertyType DWord -Value 0 -Force" in cmd
+    assert "Unidentified" in desc and needs_adapter is False
+
+
+def test_harden_power_steps_cover_wmi_and_hiberboot():
+    cmds = "\n".join(c for _, c, _ in sw.harden_steps(_ctx()))
+    assert "MSPower_DeviceEnable" in cmds and "Set-CimInstance -Property @{Enable=$false}" in cmds
+    assert "(Get-NetAdapter -Name 'Ethernet 3').PnPDeviceID" in cmds
+    assert "-Name HiberbootEnabled -PropertyType DWord -Value 0" in cmds
+
+
+def _hib_row(hibernate, hiberboot):
+    rows = sw.evaluate_power(f"GUID: {sw.ULTIMATE_GUID}  (Ultimate Performance)", 0, 0, 0, hibernate, hiberboot)
+    return next(r for r in rows if r[1] == "hibernate / fast startup")
+
+
+def test_fast_startup_ignored_when_hibernation_off():
+    assert _hib_row(0, 1)[0] == sw.PASS and "can't run" in _hib_row(0, 1)[2]
+    assert _hib_row(0, 0) == (sw.PASS, "hibernate / fast startup", "off")
+    assert _hib_row(1, 1)[0] == sw.WARN and "hibernate + fast startup" in _hib_row(1, 1)[2]
+    assert _hib_row(None, 1)[0] == sw.WARN and "fast startup on" in _hib_row(None, 1)[2]
+    assert _hib_row(None, 0)[0] == sw.PASS
+
+
+def test_parse_powercfg_a_hibernate():
+    off = ("The following sleep states are available on this system:\n    Standby (S3)\n\n"
+           "The following sleep states are not available on this system:\n    Hibernate\n"
+           "        Hibernation has not been enabled.\n    Fast Startup\n        Hibernation is not available.\n")
+    on = ("The following sleep states are available on this system:\n    Standby (S3)\n    Hibernate\n"
+          "    Fast Startup\n\nThe following sleep states are not available on this system:\n    Standby (S1)\n")
+    assert sw.parse_powercfg_a_hibernate(off) == 0
+    assert sw.parse_powercfg_a_hibernate(on) == 1
+    assert sw.parse_powercfg_a_hibernate("") is None
+
+
+@pytest.mark.parametrize("allow,wmi,status", [
+    ("Enabled", "", sw.WARN),          # cmdlet says on, WMI unreadable
+    ("Enabled", "True", sw.WARN),
+    ("Enabled", "False", sw.PASS),     # I219-V: cmdlet value stale, Device Manager checkbox (WMI) is off
+    ("Disabled", "", sw.PASS),
+    ("Disabled", "False", sw.PASS),
+    ("Disabled", "True", sw.WARN),     # checkbox still ticked: Windows can still power it off
+    ("Unsupported", "False", sw.PASS),
+    ("Unsupported", "True", sw.WARN),
+    ("Unsupported", "", sw.INFO),
+    ("", "", sw.INFO),
+])
+def test_evaluate_adapter_power_signals(allow, wmi, status):
+    row = sw.evaluate_adapter_power(allow, wmi)
+    assert row[0] == status and row[1] == "adapter power mgmt"
+    assert ("may turn off" in row[2]) == (status == sw.WARN)
+
+
+def test_adapter_profile_warn_mentions_unidentified_policy():
+    info = {"Name": "Ethernet", "Desc": "Intel(R) Ethernet Connection I219-V", "Status": "Up", "Source": "169.254.6.1",
+            "Dhcp": "Disabled", "Metric": 5, "Profile": "Public", "AllowSleep": "Enabled", "WmiPower": "False",
+            "Route32": True}
+    rows = {r[1]: r for r in sw.evaluate_adapter(info, "169.254.6.44")}
+    assert rows["adapter network profile"][0] == sw.WARN and "Unidentified" in rows["adapter network profile"][2]
+    assert rows["adapter power mgmt"][0] == sw.PASS
+
+
+def _apply_harness(monkeypatch, answers, gc_running=True, session_ok=True):
+    calls = []
+    monkeypatch.setattr(sw, "IS_WINDOWS", True)
+    monkeypatch.setattr(sw, "_is_admin", lambda: True)
+    monkeypatch.setattr(sw, "harden_context", lambda cfg, adapter=None: _ctx(adapter=adapter))
+    monkeypatch.setattr(sw, "_ps", lambda cmd, timeout=30: (calls.append(("ps", cmd)), (0, ""))[1])
+    it = iter(answers)
+    monkeypatch.setattr("builtins.input", lambda prompt="": (calls.append(("input", prompt)), next(it, "q"))[1])
+    monkeypatch.setattr(sw, "find_procs", lambda name: [object()] if gc_running else [])
+    monkeypatch.setattr(sw, "kill_app", lambda app, timeout=8: calls.append(("kill", app["key"])))
+    monkeypatch.setattr(sw, "launch_app", lambda cfg, app, t: calls.append(("launch", app["key"])))
+    monkeypatch.setattr(sw, "wait_device_sockets_clear", lambda cfg, timeout=10: calls.append(("sockets",)) or True)
+    monkeypatch.setattr(sw, "check_device_tcp",
+                        lambda chk, cfg: (calls.append(("tcp", chk["app"])),
+                                          (session_ok, "integrator connected to 169.254.6.44:9970"))[1])
+    monkeypatch.setattr(sw.time, "sleep", lambda s: None)
+    return calls
+
+
+def _gc_cfg():
+    app = {"key": "integrator", "process": "GameChanger.exe", "exe": r"C:\SimTools\GameChanger\GameChanger.exe"}
+    return {"apps": [app], "apps_by_key": {"integrator": app}, "device": {"ip": "169.254.6.44"}}
+
+
+def test_harden_apply_offers_gamechanger_restart_after_adapter_step(monkeypatch, capsys):
+    steps = sw.harden_steps(_ctx())
+    assert steps[0][2] is True  # first step touches the adapter
+    calls = _apply_harness(monkeypatch, ["y", "q", "y"])
+    assert sw.cmd_harden(_gc_cfg(), apply=True, adapter="Ethernet 3") == 0
+    kinds = [c[0] for c in calls]
+    assert ("kill", "integrator") in calls and ("launch", "integrator") in calls and ("tcp", "integrator") in calls
+    assert kinds.index("kill") < kinds.index("sockets") < kinds.index("launch") < kinds.index("tcp")
+    assert "device_tcp: OK" in capsys.readouterr().out
+
+
+def test_harden_apply_no_restart_offer_without_adapter_steps(monkeypatch):
+    steps = sw.harden_steps(_ctx())
+    answers = ["y" if not n else "n" for _, _, n in steps]  # run only the non-adapter steps
+    calls = _apply_harness(monkeypatch, answers)
+    sw.cmd_harden(_gc_cfg(), apply=True, adapter="Ethernet 3")
+    assert not any("Restart GameChanger" in c[1] for c in calls if c[0] == "input")
+    assert not any(c[0] in ("kill", "launch") for c in calls)
+
+
+def test_harden_restart_offer_declined_or_gc_not_running(monkeypatch):
+    calls = _apply_harness(monkeypatch, ["n"])
+    assert sw.harden_offer_integrator_restart(_gc_cfg()) is None
+    assert any("Restart GameChanger" in c[1] for c in calls if c[0] == "input")
+    assert not any(c[0] == "kill" for c in calls)
+    calls = _apply_harness(monkeypatch, ["y"], gc_running=False)
+    assert sw.harden_offer_integrator_restart(_gc_cfg()) is None
+    assert not calls
+
+
+def test_harden_dry_run_mentions_gamechanger_restart(monkeypatch, capsys, real_cfg):
+    monkeypatch.setattr(sw, "IS_WINDOWS", False)
+    sw.cmd_harden(real_cfg, apply=False, adapter="Ethernet 3")
+    assert "restart GameChanger" in capsys.readouterr().out
+
+
+def test_task_fix_hint_points_at_reinstall_when_harden_cannot_fix_it():
+    base = {"execution_time_limit": "PT0S", "disallow_on_batteries": False, "stop_on_batteries": False,
+            "enabled": True, "run_level": "HighestAvailable"}
+    assert "harden" in sw.evaluate_task(dict(base, execution_time_limit="PT72H"))[2]
+    for bad in ({"run_level": "LeastPrivilege"}, {"enabled": False}):
+        status, _, detail = sw.evaluate_task(dict(base, **bad))
+        assert status == sw.WARN and "install_autostart.bat" in detail and "harden" not in detail
