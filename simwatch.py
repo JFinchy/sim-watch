@@ -9809,6 +9809,24 @@ def _doc_oc_target(cfg):
     return [evaluate_openconnect_targets(found)]
 
 
+def disk_space_row(free_bytes: int, where: str = "C:") -> tuple[str, str, str]:
+    """Doctor row for free disk space: swing clips at 260 fps, logs and shot files all need room."""
+    gb = free_bytes / 1024 ** 3
+    item = f"free disk space ({where})"
+    fix = "-> fix: run `python simwatch.py space` to see what's using it, then delete or move files"
+    if gb < 2:
+        return (FAIL, item, f"{gb:.2f} GB free - Kinovea can't save clips, logs/shots may fail {fix}")
+    if gb < 10:
+        return (WARN, item, f"{gb:.1f} GB free - getting low {fix}")
+    return (PASS, item, f"{gb:.0f} GB free")
+
+
+def _doc_disk(cfg):
+    import shutil
+    drive = os.environ.get("SystemDrive", "C:")
+    return [disk_space_row(shutil.disk_usage(drive + "\\").free, drive)]
+
+
 def doctor_system_rows(cfg: dict) -> list[tuple[str, str, str]]:
     """Read-only Windows environment checks (each PASS/WARN/FAIL/INFO with a one-line fix). SKIP off Windows."""
     if not IS_WINDOWS:
@@ -9823,6 +9841,10 @@ def doctor_system_rows(cfg: dict) -> list[tuple[str, str, str]]:
             rows.extend(fn(cfg))
         except Exception as e:  # a broken probe must never take down the whole report
             rows.append((WARN, name, f"check crashed: {type(e).__name__}: {e}"))
+    try:
+        rows.extend(_doc_disk(cfg))
+    except Exception as e:
+        rows.append((WARN, "free disk space", f"check crashed: {type(e).__name__}: {e}"))
     return rows
 
 
@@ -10205,6 +10227,12 @@ def cmd_status(cfg: dict, tail: int = 15) -> int:
         print(f"\nToday's shots: {n} in {shots}")
     except OSError:
         print(f"\nToday's shots: none yet ({shots} missing)")
+    try:
+        import shutil
+        st, _item, msg = disk_space_row(shutil.disk_usage(HERE).free, str(HERE.anchor or HERE))
+        print(f"Disk: {st} {msg}")
+    except OSError:
+        pass
     log = HERE / "simwatch.log"
     try:
         lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -10299,6 +10327,83 @@ def clip_ready_log_handler(path: Path | None = None, max_bytes: int = CLIP_READY
     return logging.FileHandler(path, encoding="utf-8")
 
 
+def _dir_size(path: Path, budget: list) -> int:
+    """Total bytes under `path` (no symlinks/junctions; unreadable entries skipped). `budget` = [max entries]."""
+    total = 0
+    stack = [path]
+    while stack:
+        cur = stack.pop()
+        try:
+            with os.scandir(cur) as it:
+                for e in it:
+                    budget[0] -= 1
+                    if budget[0] < 0:
+                        return total
+                    try:
+                        if e.is_symlink():
+                            continue
+                        if e.is_dir(follow_symlinks=False):
+                            # Skip Windows junctions/reparse points (e.g. "Application Data") to avoid loops.
+                            st = e.stat(follow_symlinks=False)
+                            if getattr(st, "st_file_attributes", 0) & 0x400:
+                                continue
+                            stack.append(Path(e.path))
+                        else:
+                            total += e.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+    return total
+
+
+def _gb(n: float) -> str:
+    return f"{n / 1024 ** 3:7.1f} GB"
+
+
+def cmd_space(cfg: dict, top: int = 15) -> int:
+    """`simwatch.py space`: free disk space plus the biggest folders in the places that usually fill a sim PC
+    (swing captures, Kinovea, the user profile, GSPro, Program Files). Shift-free, read-only."""
+    import shutil
+    drive = Path(os.environ.get("SystemDrive", "C:") + "\\") if os.name == "nt" else Path("/")
+    try:
+        du = shutil.disk_usage(drive)
+        print(f"{drive}  used {_gb(du.used).strip()}  free {_gb(du.free).strip()}  of {_gb(du.total).strip()}")
+    except OSError as e:
+        print(f"could not read disk usage for {drive}: {e}")
+    home = Path.home()
+    roots = [HERE / "Swings", kinovea_capture_root(cfg), *_read_kinovea_capture_dirs()]
+    groups = [home, home / "AppData" / "Local", home / "AppData" / "Roaming", home / "OneDrive",
+              Path(os.environ.get("ProgramData", "C:\\ProgramData")), Path("C:\\GSProV1"),
+              Path(os.environ.get("ProgramFiles", "C:\\Program Files")),
+              Path(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")), Path("C:\\Windows\\Temp"),
+              home / "AppData" / "Local" / "Temp", Path("C:\\$Recycle.Bin")]
+    rows: list[tuple[int, Path]] = []
+    seen: set[str] = set()
+    print("Scanning (read-only, can take a minute or two)...")
+    for r in roots:
+        if r.exists() and str(r).lower() not in seen:
+            seen.add(str(r).lower())
+            rows.append((_dir_size(r, [3_000_000]), r))
+    for g in groups:
+        try:
+            children = [Path(e.path) for e in os.scandir(g) if e.is_dir(follow_symlinks=False)]
+        except OSError:
+            continue
+        for c in children:
+            key = str(c).lower()
+            if key in seen or any(key == str(x).lower() for x in groups):
+                continue  # don't double count a folder listed as its own group
+            seen.add(key)
+            rows.append((_dir_size(c, [3_000_000]), c))
+    rows.sort(key=lambda t: t[0], reverse=True)
+    print(f"\nBiggest folders (top {top}):")
+    for size, path in rows[:top]:
+        print(f"  {_gb(size)}  {path}")
+    print("\nNothing was deleted. Free space by removing what you don't need (or move swing captures to another drive).")
+    return 0
+
+
 def _configure_logging(command: str | None = None) -> None:
     handlers: list[logging.Handler] = []
     if sys.stderr is not None:  # pythonw.exe (clip-ready from Kinovea) has no console
@@ -10336,7 +10441,7 @@ def main() -> None:
             "discover", "dump", "calibrate", "check", "recover", "watch", "startup", "stop", "restart",
             "displays", "reconnect", "release-device",
             "video", "bookmark", "reference", "obs-setup", "hotkeys", "drills", "lines", "save-lines",
-            "doctor", "bridge", "harden", "clip-ready", "status", "phone", "shotlab", "keys",
+            "doctor", "bridge", "harden", "clip-ready", "status", "space", "phone", "shotlab", "keys",
         ],
     )
     ap.add_argument("arg", nargs="?")
@@ -10383,6 +10488,8 @@ def main() -> None:
     cfg = load_config(Path(a.config), command=a.command)
     if a.command == "status":
         sys.exit(cmd_status(cfg))
+    if a.command == "space":
+        sys.exit(cmd_space(cfg))
     if a.command == "phone":
         sys.exit(cmd_phone(cfg))
     if a.command == "keys":
