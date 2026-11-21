@@ -27,3 +27,12 @@ SimWatch now launches and supervises ShotLab alongside the rig, and ShotLab show
 - ShotLab comes up with the rig, never steals focus from GSPro, and is relaunched after a crash but not after you close it.
 - No ShotLab state ever appears in the rig's `failing` list or triggers a GSPro/GameChanger restart.
 - Rig pill tracks the watchdog state live.
+
+## Tempo sounds + rest between swings (2026-11-20)
+
+Branch: `master`. Files: `shotlab/renderer/audio.js`, `app.js`, `index.html`, `shotlab/main.js`, `shotlab/tests/tempo.test.js`.
+
+1. In ShotLab pick Tempo `24/8`, then cycle the sound dropdown (Tones, Woodblock, Click, Beep, Soft, Swoosh). Each changes from the next beat without restarting, and the three beats stay distinguishable (takeaway, top, impact).
+2. Set the rest to `8 s rest`. After the impact beat there is silence, a quiet low tick about 1 s before the next takeaway, then the next swing's beats. `Non-stop` returns to the continuous loop.
+3. Restart ShotLab: the sound and rest choices are remembered (the tempo itself starts Off).
+4. Rig speakers: Click and Woodblock are audible from the mat; Soft is quiet enough for Kids Asleep.

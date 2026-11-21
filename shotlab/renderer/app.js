@@ -383,6 +383,14 @@
     const isRunning = Boolean(audio && typeof audio.isTempoRunning === 'function' && audio.isTempoRunning());
     const runningPreset = isRunning && typeof audio.getTempoPreset === 'function' ? audio.getTempoPreset() : 'off';
     tempoSel.value = isRunning ? (runningPreset || '24/8') : 'off';
+    const tempoSettings = (state && state.settings) || {};
+    const soundSel = $('select-tempo-sound');
+    const gapSel = $('select-tempo-gap');
+    if (soundSel && document.activeElement !== soundSel) soundSel.value = tempoSettings.tempoSound || 'tones';
+    if (gapSel && document.activeElement !== gapSel) gapSel.value = String(tempoSettings.tempoGapSec || 0);
+    if (audio && typeof audio.setTempoOptions === 'function') {
+      audio.setTempoOptions({ sound: tempoSettings.tempoSound || 'tones', gapSec: tempoSettings.tempoGapSec || 0 });
+    }
 
     // Local DB pill
     const pillDb = $('pill-db');
@@ -1819,10 +1827,36 @@
       window.shotlabAPI.updateSettings({ tempoPreset: 'off' });
       showToast('Tour Tempo metronome stopped');
     } else {
-      if (audio && typeof audio.startTempo === 'function') audio.startTempo(preset);
+      if (audio && typeof audio.startTempo === 'function') audio.startTempo(preset, null, currentTempoOptions());
       window.shotlabAPI.updateSettings({ tempoPreset: preset });
-      showToast(`Tour Tempo ${preset} started`);
+      const opts = currentTempoOptions();
+      showToast(`Tour Tempo ${preset} started` + (opts.gapSec > 0 ? ` · ${opts.gapSec}s rest between swings` : ''));
     }
+  };
+
+  function currentTempoOptions() {
+    const soundSel = $('select-tempo-sound');
+    const gapSel = $('select-tempo-gap');
+    return {
+      sound: (soundSel && soundSel.value) || 'tones',
+      gapSec: Number((gapSel && gapSel.value) || 0) || 0,
+    };
+  }
+
+  // Tempo sound + rest between swings: apply live (next beat) and persist.
+  $('select-tempo-sound').onchange = (ev) => {
+    const audio = window.ShotLabAudio;
+    if (audio && typeof audio.setTempoOptions === 'function') audio.setTempoOptions({ sound: ev.target.value });
+    window.shotlabAPI.updateSettings({ tempoSound: ev.target.value });
+    const set = audio && audio.TEMPO_SOUNDS && audio.TEMPO_SOUNDS[ev.target.value];
+    showToast(`Tempo sound: ${set ? set.label : ev.target.value}`);
+  };
+  $('select-tempo-gap').onchange = (ev) => {
+    const gapSec = Number(ev.target.value) || 0;
+    const audio = window.ShotLabAudio;
+    if (audio && typeof audio.setTempoOptions === 'function') audio.setTempoOptions({ gapSec });
+    window.shotlabAPI.updateSettings({ tempoGapSec: gapSec });
+    showToast(gapSec > 0 ? `Tempo: ${gapSec}s rest between swings (quiet tick 1s before each)` : 'Tempo: non-stop');
   };
 
   // Mat Glance button & close

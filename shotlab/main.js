@@ -27,6 +27,13 @@ const DB_PATH = path.join(DATA_DIR, 'swings.sqlite');
 
 const VALID_PRACTICE_MODES = new Set(['real', 'almost', 'sore']);
 const VALID_TEMPO_PRESETS = new Set(['off', '24/8', '27/9', '21/7', '18/9']);
+const VALID_TEMPO_SOUNDS = new Set(['tones', 'woodblock', 'click', 'beep', 'soft', 'swoosh']);
+const MAX_TEMPO_GAP_SEC = 120;
+
+function sanitizeTempoGap(v) {
+  const n = Number(v);
+  return Number.isFinite(n) && n >= 0 ? Math.min(n, MAX_TEMPO_GAP_SEC) : 0;
+}
 const CONTEXT_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const SESSION_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -74,6 +81,8 @@ const runtime = {
     audioCaddie: false,
     audioChimes: true,
     tempoPreset: 'off',
+    tempoSound: 'tones',
+    tempoGapSec: 0, // rest between swings; 0 = non-stop loop
   },
   calibration: engine.createEmptyCalibration(98),
   shots: [],          // newest first, max 200 analyzed shots
@@ -265,6 +274,10 @@ function loadPersistedState() {
       if (typeof runtime.settings.tempoPreset !== 'string' || !VALID_TEMPO_PRESETS.has(runtime.settings.tempoPreset)) {
         runtime.settings.tempoPreset = 'off';
       }
+      if (typeof runtime.settings.tempoSound !== 'string' || !VALID_TEMPO_SOUNDS.has(runtime.settings.tempoSound)) {
+        runtime.settings.tempoSound = 'tones';
+      }
+      runtime.settings.tempoGapSec = sanitizeTempoGap(runtime.settings.tempoGapSec);
       // Explicit environment overrides always take precedence over saved ports
       if (Number.isFinite(ENV_SIMWATCH_PORT) && ENV_SIMWATCH_PORT > 0) {
         runtime.settings.simwatchPort = ENV_SIMWATCH_PORT;
@@ -1739,6 +1752,12 @@ function setupIpc() {
       }
       if (typeof patch.tempoPreset === 'string' && VALID_TEMPO_PRESETS.has(patch.tempoPreset.trim())) {
         runtime.settings.tempoPreset = patch.tempoPreset.trim();
+      }
+      if (typeof patch.tempoSound === 'string' && VALID_TEMPO_SOUNDS.has(patch.tempoSound.trim())) {
+        runtime.settings.tempoSound = patch.tempoSound.trim();
+      }
+      if (patch.tempoGapSec !== undefined && patch.tempoGapSec !== null && Number.isFinite(Number(patch.tempoGapSec))) {
+        runtime.settings.tempoGapSec = sanitizeTempoGap(patch.tempoGapSec);
       }
       if (typeof patch.practiceMode === 'string' && VALID_PRACTICE_MODES.has(patch.practiceMode)) {
         runtime.settings.practiceMode = patch.practiceMode;

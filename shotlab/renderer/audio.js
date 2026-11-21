@@ -41,6 +41,88 @@
     },
   };
 
+  /**
+   * Tempo sound sets: one sound per beat (takeaway, top, impact). `kind` picks the synth:
+   *   tone  = pitched oscillator ping
+   *   wood  = short pitched knock with a fast pitch drop (woodblock / clave feel)
+   *   noise = filtered noise burst (stick / shaker click, pitch-free)
+   */
+  const TEMPO_SOUNDS = {
+    tones: {
+      id: 'tones', label: 'Tones (rising)',
+      beats: [
+        { kind: 'tone', freq: 440, type: 'triangle', gain: 0.14, dur: 0.065 },
+        { kind: 'tone', freq: 660, type: 'triangle', gain: 0.16, dur: 0.065 },
+        { kind: 'tone', freq: 988, type: 'triangle', gain: 0.20, dur: 0.065 },
+      ],
+    },
+    woodblock: {
+      id: 'woodblock', label: 'Woodblock',
+      beats: [
+        { kind: 'wood', freq: 900, gain: 0.30, dur: 0.05 },
+        { kind: 'wood', freq: 1200, gain: 0.30, dur: 0.05 },
+        { kind: 'wood', freq: 1600, gain: 0.36, dur: 0.06 },
+      ],
+    },
+    click: {
+      id: 'click', label: 'Click (sharp)',
+      beats: [
+        { kind: 'noise', freq: 2500, gain: 0.35, dur: 0.025 },
+        { kind: 'noise', freq: 3500, gain: 0.35, dur: 0.025 },
+        { kind: 'noise', freq: 5000, gain: 0.45, dur: 0.03 },
+      ],
+    },
+    beep: {
+      id: 'beep', label: 'Beep (classic)',
+      beats: [
+        { kind: 'tone', freq: 880, type: 'sine', gain: 0.14, dur: 0.08 },
+        { kind: 'tone', freq: 880, type: 'sine', gain: 0.14, dur: 0.08 },
+        { kind: 'tone', freq: 1320, type: 'sine', gain: 0.18, dur: 0.12 },
+      ],
+    },
+    soft: {
+      id: 'soft', label: 'Soft (low, late night)',
+      beats: [
+        { kind: 'tone', freq: 220, type: 'sine', gain: 0.10, dur: 0.12 },
+        { kind: 'tone', freq: 277, type: 'sine', gain: 0.10, dur: 0.12 },
+        { kind: 'tone', freq: 330, type: 'sine', gain: 0.13, dur: 0.14 },
+      ],
+    },
+    swoosh: {
+      id: 'swoosh', label: 'Swoosh (sweep up/down)',
+      beats: [
+        { kind: 'tone', freq: 300, endFreq: 600, type: 'sine', gain: 0.12, dur: 0.18 },
+        { kind: 'tone', freq: 600, endFreq: 620, type: 'sine', gain: 0.10, dur: 0.05 },
+        { kind: 'tone', freq: 1400, endFreq: 500, type: 'triangle', gain: 0.20, dur: 0.12 },
+      ],
+    },
+  };
+
+  /** Rest between swings. 0 = the preset's own short loop (non-stop). */
+  const TEMPO_GAPS_SEC = [0, 3, 5, 8, 10, 15, 20, 30];
+  const READY_CUE_LEAD_MS = 1000;    // quiet "get ready" tick this long before the takeaway beat
+  const READY_CUE_MIN_GAP_SEC = 3;   // only when resting at least this long (non-stop loops need no warning)
+
+  /**
+   * Pure timing of one tempo cycle (ms from the takeaway beat), so it can be tested without audio.
+   * gapSec 0 keeps the preset's pauseMs; otherwise the rest after impact is gapSec seconds.
+   */
+  function tempoCycleTimings(preset = '24/8', gapSec = 0) {
+    const cfg = TEMPO_PRESETS[preset] || TEMPO_PRESETS['24/8'];
+    const gap = Number(gapSec);
+    const restMs = Number.isFinite(gap) && gap > 0 ? Math.min(gap, 120) * 1000 : cfg.pauseMs;
+    const impact = cfg.backswingMs + cfg.downswingMs;
+    const readyCue = Number.isFinite(gap) && gap >= READY_CUE_MIN_GAP_SEC;
+    return {
+      top: cfg.backswingMs,
+      impact,
+      next: impact + restMs,
+      // Ready tick for the NEXT swing, scheduled within this cycle (null when non-stop).
+      ready: readyCue ? impact + restMs - READY_CUE_LEAD_MS : null,
+      restMs,
+    };
+  }
+
   const SPOKEN_CLUBS = {
     DR: 'Driver',
     '3W': '3 wood',
@@ -68,6 +150,7 @@
   let tempoRunning = false;
   let activeTempoPreset = '24/8';
   let tempoTimers = [];
+  let tempoOptions = { sound: 'tones', gapSec: 0 };
 
   function getAudioContext() {
     if (typeof root === 'undefined') return null;
@@ -274,11 +357,56 @@
     return text;
   }
 
-  function playTempoClick(freq, gain = 0.16) {
-    const ctx = getAudioContext();
+  function scheduleNoiseClick(ctx, centerFreq, durationSec, peakGain) {
     if (!ctx) return;
-    // Short crisp percussive ping for clear cadence timing
-    scheduleTone(ctx, freq, 0, 0.065, { type: 'triangle', peakGain: gain, attackSec: 0.003 });
+    try {
+      const now = ctx.currentTime;
+      const len = Math.max(1, Math.floor(ctx.sampleRate * durationSec));
+      const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i += 1) data[i] = (Math.random() * 2 - 1) * (1 - i / len);
+      const src = ctx.createBufferSource();
+      src.buffer = buf;
+      const filt = ctx.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.frequency.setValueAtTime(centerFreq, now);
+      filt.Q.setValueAtTime(4, now);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(peakGain, now);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + durationSec);
+      src.connect(filt);
+      filt.connect(gain);
+      gain.connect(ctx.destination);
+      src.start(now);
+      src.stop(now + durationSec + 0.02);
+    } catch {
+      // ignore audio failures
+    }
+  }
+
+  function playTempoSound(beat) {
+    const ctx = getAudioContext();
+    if (!ctx || !beat) return;
+    if (beat.kind === 'noise') {
+      scheduleNoiseClick(ctx, beat.freq, beat.dur, beat.gain);
+    } else if (beat.kind === 'wood') {
+      // Woody knock: fast attack, quick downward pitch drop, short decay.
+      scheduleTone(ctx, beat.freq, 0, beat.dur, { type: 'sine', peakGain: beat.gain, attackSec: 0.001, endFreq: beat.freq * 0.6 });
+      scheduleTone(ctx, beat.freq * 2.7, 0, beat.dur * 0.5, { type: 'sine', peakGain: beat.gain * 0.3, attackSec: 0.001 });
+    } else {
+      scheduleTone(ctx, beat.freq, 0, beat.dur, {
+        type: beat.type || 'triangle', peakGain: beat.gain, attackSec: 0.003, endFreq: beat.endFreq || null,
+      });
+    }
+  }
+
+  function playTempoClick(freq, gain = 0.16) {
+    playTempoSound({ kind: 'tone', freq, type: 'triangle', gain, dur: 0.065 });
+  }
+
+  function playReadyCue() {
+    // Quiet, low, pitch-neutral tick: "next swing coming" without sounding like a tempo beat.
+    playTempoSound({ kind: 'tone', freq: 330, type: 'sine', gain: 0.05, dur: 0.05 });
   }
 
   function clearTempoTimers() {
@@ -293,55 +421,68 @@
     clearTempoTimers();
   }
 
+  function normalizeTempoOptions(opts = {}) {
+    const sound = TEMPO_SOUNDS[opts.sound] ? opts.sound : tempoOptions.sound;
+    const g = Number(opts.gapSec);
+    const gapSec = Number.isFinite(g) && g >= 0 ? Math.min(g, 120) : tempoOptions.gapSec;
+    return { sound: TEMPO_SOUNDS[sound] ? sound : 'tones', gapSec };
+  }
+
+  /** Change sound / rest between swings; applies from the next beat if the metronome is running. */
+  function setTempoOptions(opts = {}) {
+    tempoOptions = normalizeTempoOptions(opts);
+    return { ...tempoOptions };
+  }
+
+  function getTempoOptions() {
+    return { ...tempoOptions };
+  }
+
   /**
-   * Start Tour Tempo 3-tone cadence metronome:
-   *   1. Takeaway (440 Hz)
-   *   2. Top of Backswing (660 Hz)
-   *   3. Impact (988 Hz)
+   * Start the Tour Tempo 3-beat metronome: takeaway -> top of backswing -> impact, then rest.
+   * opts.sound picks a TEMPO_SOUNDS set; opts.gapSec > 0 rests that many seconds between swings
+   * (with a quiet ready tick 1 s before the next takeaway), 0 loops non-stop at the preset's pause.
    */
-  function startTempo(preset = '24/8', onBeat = null) {
+  function startTempo(preset = '24/8', onBeat = null, opts = null) {
     stopTempo();
+    if (opts) setTempoOptions(opts);
 
     const key = TEMPO_PRESETS[preset] ? preset : '24/8';
     const cfg = TEMPO_PRESETS[key];
     activeTempoPreset = key;
     tempoRunning = true;
 
+    const beat = (idx, name) => {
+      if (!tempoRunning) return;
+      const set = TEMPO_SOUNDS[tempoOptions.sound] || TEMPO_SOUNDS.tones;
+      playTempoSound(set.beats[idx]);
+      if (typeof onBeat === 'function') {
+        try { onBeat(name, cfg); } catch {}
+      }
+    };
+
     const fireCycle = () => {
       if (!tempoRunning) return;
       clearTempoTimers();
+      const t = tempoCycleTimings(key, tempoOptions.gapSec);  // re-read each cycle: live option changes apply
 
-      // Beat 1: Takeaway (440 Hz)
-      playTempoClick(440, 0.14);
-      if (typeof onBeat === 'function') {
-        try { onBeat('takeaway', cfg); } catch {}
+      beat(0, 'takeaway');
+      const tTop = setTimeout(() => beat(1, 'top'), t.top);
+      const tImpact = setTimeout(() => beat(2, 'impact'), t.impact);
+      tempoTimers.push(tTop, tImpact);
+      if (t.ready !== null) {
+        tempoTimers.push(setTimeout(() => {
+          if (!tempoRunning) return;
+          playReadyCue();
+          if (typeof onBeat === 'function') {
+            try { onBeat('ready', cfg); } catch {}
+          }
+        }, t.ready));
       }
-
-      // Beat 2: Top of Backswing (660 Hz)
-      const tTop = setTimeout(() => {
-        if (!tempoRunning) return;
-        playTempoClick(660, 0.16);
-        if (typeof onBeat === 'function') {
-          try { onBeat('top', cfg); } catch {}
-        }
-      }, cfg.backswingMs);
-
-      // Beat 3: Impact (988 Hz)
-      const tImpact = setTimeout(() => {
-        if (!tempoRunning) return;
-        playTempoClick(988, 0.20);
-        if (typeof onBeat === 'function') {
-          try { onBeat('impact', cfg); } catch {}
-        }
-      }, cfg.backswingMs + cfg.downswingMs);
-
-      // Next cycle
-      const tNext = setTimeout(() => {
+      tempoTimers.push(setTimeout(() => {
         if (!tempoRunning) return;
         fireCycle();
-      }, cfg.backswingMs + cfg.downswingMs + cfg.pauseMs);
-
-      tempoTimers.push(tTop, tImpact, tNext);
+      }, t.next));
     };
 
     fireCycle();
@@ -358,6 +499,11 @@
 
   const api = {
     TEMPO_PRESETS,
+    TEMPO_SOUNDS,
+    TEMPO_GAPS_SEC,
+    tempoCycleTimings,
+    setTempoOptions,
+    getTempoOptions,
     playGradeChime,
     buildShotSpeechText,
     speakShot,
