@@ -28,3 +28,12 @@ def test_disk_space_row_thresholds():
     assert sw.disk_space_row(int(0.05 * 1024 ** 3))[0] == sw.FAIL
     assert sw.disk_space_row(5 * 1024 ** 3)[0] == sw.WARN
     assert sw.disk_space_row(50 * 1024 ** 3)[0] == sw.PASS
+
+
+def test_space_folder_argument_lists_children(tmp_path, capsys):
+    (tmp_path / "vids").mkdir()
+    (tmp_path / "vids" / "a.mp4").write_bytes(b"0" * 3000)
+    (tmp_path / "note.txt").write_bytes(b"0" * 5)
+    assert sw.cmd_space({}, folder=str(tmp_path)) == 0
+    out = capsys.readouterr().out
+    assert out.index("vids") < out.index("note.txt")

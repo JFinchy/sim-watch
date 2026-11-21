@@ -10361,7 +10361,7 @@ def _gb(n: float) -> str:
     return f"{n / 1024 ** 3:7.1f} GB"
 
 
-def cmd_space(cfg: dict, top: int = 15) -> int:
+def cmd_space(cfg: dict, top: int = 15, folder: str | None = None) -> int:
     """`simwatch.py space`: free disk space plus the biggest folders in the places that usually fill a sim PC
     (swing captures, Kinovea, the user profile, GSPro, Program Files). Shift-free, read-only."""
     import shutil
@@ -10371,6 +10371,27 @@ def cmd_space(cfg: dict, top: int = 15) -> int:
         print(f"{drive}  used {_gb(du.used).strip()}  free {_gb(du.free).strip()}  of {_gb(du.total).strip()}")
     except OSError as e:
         print(f"could not read disk usage for {drive}: {e}")
+    if folder:  # `simwatch.py space <folder>`: size each child of that folder (files too), biggest first
+        base = Path(folder).expanduser()
+        rows_f: list[tuple[int, str]] = []
+        try:
+            entries = list(os.scandir(base))
+        except OSError as e:
+            print(f"cannot read {base}: {e}")
+            return 1
+        print(f"Scanning {base} (read-only)...")
+        for e in entries:
+            try:
+                size = (_dir_size(Path(e.path), [3_000_000]) if e.is_dir(follow_symlinks=False)
+                        else e.stat(follow_symlinks=False).st_size)
+            except OSError:
+                continue
+            rows_f.append((size, e.name + ("\\" if e.is_dir(follow_symlinks=False) else "")))
+        rows_f.sort(reverse=True)
+        print(f"\nBiggest items in {base} (top {top}):")
+        for size, name in rows_f[:top]:
+            print(f"  {_gb(size)}  {name}")
+        return 0
     home = Path.home()
     roots = [HERE / "Swings", kinovea_capture_root(cfg), *_read_kinovea_capture_dirs()]
     groups = [home, home / "AppData" / "Local", home / "AppData" / "Roaming", home / "OneDrive",
@@ -10489,7 +10510,7 @@ def main() -> None:
     if a.command == "status":
         sys.exit(cmd_status(cfg))
     if a.command == "space":
-        sys.exit(cmd_space(cfg))
+        sys.exit(cmd_space(cfg, folder=a.arg))
     if a.command == "phone":
         sys.exit(cmd_phone(cfg))
     if a.command == "keys":
