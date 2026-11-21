@@ -87,12 +87,16 @@
   /**
    * 2. Side-View Ballistic Trajectory SVG (Actual flight vs Center-Strike Potential ghost arc).
    */
-  function renderSideTrajectory(flight, potential, severity = 'green') {
+  function renderSideTrajectory(flight, potential, severity = 'green', references = [], visibleRefs = []) {
     const w = 360;
     const h = 132;
     const padL = 26, padR = 16, padT = 16, padB = 24;
     const pts = (flight && flight.points && flight.points.length >= 2) ? flight.points : [];
     const ghost = (potential && potential.ghostPoints && potential.ghostPoints.length >= 2) ? potential.ghostPoints : [];
+    const shown = new Set(Array.isArray(visibleRefs) ? visibleRefs : []);
+    const refs = (Array.isArray(references) ? references : [])
+      .filter((r) => r && shown.has(r.id) && Array.isArray(r.points) && r.points.length >= 2);
+    const refPts = refs.flatMap((r) => r.points);
 
     if (!pts.length) {
       return `<svg viewBox="0 0 ${w} ${h}" class="traj-svg"><text x="${w / 2}" y="${h / 2}" text-anchor="middle" fill="#64748b" font-size="12">Waiting for shot data...</text></svg>`;
@@ -101,12 +105,14 @@
     const maxX = Math.max(
       100,
       ...pts.map((p) => p.x),
-      ...ghost.map((p) => p.x)
+      ...ghost.map((p) => p.x),
+      ...refPts.map((p) => p.x)
     ) * 1.07;
     const maxY = Math.max(
       60,
       ...pts.map((p) => p.y),
-      ...ghost.map((p) => p.y)
+      ...ghost.map((p) => p.y),
+      ...refPts.map((p) => p.y)
     ) * 1.18;
 
     const sx = (x) => padL + (x / maxX) * (w - padL - padR);
@@ -142,6 +148,16 @@
           <line x1="${padL}" y1="${sy(100).toFixed(1)}" x2="${w - padR}" y2="${sy(100).toFixed(1)}" stroke="#1e293b" stroke-dasharray="3 4"/>
           <text x="4" y="${(sy(100) + 3).toFixed(1)}" fill="#475569" font-size="8">100ft</text>
         ` : ''}
+
+        <!-- Benchmark trajectories (toggleable: Tour / Scratch / Low HCP / Mid HCP), drawn under your shot -->
+        ${refs.map((r) => {
+          const land = r.points[r.points.length - 1];
+          const apex = r.points.reduce((b, p) => (p.y > b.y ? p : b), r.points[0]);
+          return `
+            <path d="${pathOf(r.points)}" fill="none" stroke="${r.color}" stroke-width="1.4" stroke-dasharray="${r.dash || '4 3'}" opacity="0.85"/>
+            <circle cx="${sx(apex.x).toFixed(1)}" cy="${sy(apex.y).toFixed(1)}" r="1.8" fill="${r.color}"/>
+            <circle cx="${sx(land.x).toFixed(1)}" cy="${(h - padB)}" r="2.2" fill="${r.color}"/>`;
+        }).join('')}
 
         <!-- Potential Ghost Arc (Center-Face Optimal) -->
         ${showGhost ? `

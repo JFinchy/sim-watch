@@ -29,6 +29,11 @@ const VALID_PRACTICE_MODES = new Set(['real', 'almost', 'sore']);
 const VALID_TEMPO_PRESETS = new Set(['off', '24/8', '27/9', '21/7', '18/9']);
 const VALID_TEMPO_SOUNDS = new Set(['tones', 'woodblock', 'click', 'beep', 'soft', 'swoosh']);
 const MAX_TEMPO_GAP_SEC = 120;
+const VALID_REF_LINES = new Set(['tour', 'scratch', 'low_hcp', 'mid_hcp']);
+
+function sanitizeRefLines(v) {
+  return Array.isArray(v) ? [...new Set(v.filter((x) => typeof x === 'string' && VALID_REF_LINES.has(x)))] : ['tour'];
+}
 
 function sanitizeTempoGap(v) {
   const n = Number(v);
@@ -83,6 +88,7 @@ const runtime = {
     tempoPreset: 'off',
     tempoSound: 'tones',
     tempoGapSec: 0, // rest between swings; 0 = non-stop loop
+    refLines: ['tour'], // benchmark trajectories shown on the flight chart
   },
   calibration: engine.createEmptyCalibration(98),
   shots: [],          // newest first, max 200 analyzed shots
@@ -278,6 +284,7 @@ function loadPersistedState() {
         runtime.settings.tempoSound = 'tones';
       }
       runtime.settings.tempoGapSec = sanitizeTempoGap(runtime.settings.tempoGapSec);
+      runtime.settings.refLines = sanitizeRefLines(runtime.settings.refLines);
       // Explicit environment overrides always take precedence over saved ports
       if (Number.isFinite(ENV_SIMWATCH_PORT) && ENV_SIMWATCH_PORT > 0) {
         runtime.settings.simwatchPort = ENV_SIMWATCH_PORT;
@@ -1758,6 +1765,9 @@ function setupIpc() {
       }
       if (patch.tempoGapSec !== undefined && patch.tempoGapSec !== null && Number.isFinite(Number(patch.tempoGapSec))) {
         runtime.settings.tempoGapSec = sanitizeTempoGap(patch.tempoGapSec);
+      }
+      if (Array.isArray(patch.refLines)) {
+        runtime.settings.refLines = sanitizeRefLines(patch.refLines);
       }
       if (typeof patch.practiceMode === 'string' && VALID_PRACTICE_MODES.has(patch.practiceMode)) {
         runtime.settings.practiceMode = patch.practiceMode;
