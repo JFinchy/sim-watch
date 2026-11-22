@@ -6704,6 +6704,8 @@ class ShotLabSupervisor:
             return
         if not self._installed():
             self.state, self.detail = "not_installed", "run setup.bat (or run_shotlab.bat once) to install Electron"
+            log_throttled("shotlab-missing", f"ShotLab not launched: {self.detail} "
+                          f"({shotlab_electron_exe(self.cfg)} missing)", every_sec=3600.0)
             return
         proc = self._launch()
         if proc is None:
