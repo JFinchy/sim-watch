@@ -54,19 +54,20 @@ function downsample(points, maxPts = 32) {
 
 /** Launch conditions for one reference line on one club, or null if unknown. */
 function referenceLaunch(lineId, clubCode) {
-  if (!CLUB_SPECS[clubCode]) return null;
-  if (lineId === 'tour') {
-    const t = TOUR_LAUNCH[clubCode];
+  if (typeof clubCode !== 'string' || !Object.hasOwn(CLUB_SPECS, clubCode)) return null;
+  if (typeof lineId !== 'string') return null;
+  if (lineId === 'tour' || lineId === 'tour_pro') {
+    const t = Object.hasOwn(TOUR_LAUNCH, clubCode) ? TOUR_LAUNCH[clubCode] : null;
     return t ? { ...t, source: t.estimate ? 'Tour estimate' : 'TrackMan PGA Tour avg' } : null;
   }
-  const tier = BENCHMARK_TIERS[lineId];
-  const drv = TIER_DRIVER_SPEED[lineId];
-  const tour = TOUR_LAUNCH[clubCode];
+  const tier = Object.hasOwn(BENCHMARK_TIERS, lineId) ? BENCHMARK_TIERS[lineId] : null;
+  const drv = Object.hasOwn(TIER_DRIVER_SPEED, lineId) ? TIER_DRIVER_SPEED[lineId] : null;
+  const tour = Object.hasOwn(TOUR_LAUNCH, clubCode) ? TOUR_LAUNCH[clubCode] : null;
   if (!tier || !drv || !tour) return null;
   // Anchored to the Tour line so tiers can never out-carry it: ball speed scales with the tier's driver
-  // club speed vs Tour's (and its smash offset); launch and spin get the tier's pads (less compression ->
-  // a touch higher with more spin).
-  const speedScale = (drv / TOUR_DRIVER_SPEED) * (1 + (tier.smashOffset || 0) / 1.45);
+  // club speed vs Tour's (and its smash offset relative to PGA Tour baseline); launch and spin get the tier's pads.
+  const tourSmashOffset = BENCHMARK_TIERS.tour_pro ? (BENCHMARK_TIERS.tour_pro.smashOffset || 0) : 0;
+  const speedScale = (drv / TOUR_DRIVER_SPEED) * (1 + ((tier.smashOffset || 0) - tourSmashOffset) / 1.45);
   return {
     ballSpeed: tour.ballSpeed * speedScale,
     vla: tour.vla + (tier.vlaPad || 0),
@@ -108,7 +109,7 @@ function referenceFlights(clubCode, altitudeFt = 0) {
       source: launch.source,
     });
   }
-  cache.set(key, out);
+  if (out.length > 0) cache.set(key, out);
   return out;
 }
 

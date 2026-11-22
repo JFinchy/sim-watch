@@ -810,10 +810,10 @@
             <button class="btn" data-win-src="render-3">03</button>
             <button class="btn" data-win-src="render-4">04</button>
             <button class="btn" data-win-src="render-5">05</button>
-            <button class="btn" data-win-src="render-6">06</button>
+            <button class="btn active" data-win-src="render-6">06</button>
             <button class="btn" data-win-src="render-7">07</button>
             <button class="btn" data-win-src="render-8">08</button>
-            <button class="btn active" data-win-src="render-9">09</button>
+            <button class="btn" data-win-src="render-9">09</button>
             <button class="btn" data-win-src="render-10">10</button>
             <button class="btn" data-win-src="render-11">11</button>
             <button class="btn" data-win-src="live-3d">Live 3D Canvas</button>
@@ -1080,12 +1080,13 @@
         {
           id: 'render-6',
           group: 'new',
-          isNew: true,
+          isNew: false,
+          isChosen: true,
           tag: 'Render 06',
           name: 'Matrix Telemetry + Impact Spin',
           src: 'assets/prototypes/icon_concept_6_matrix_telemetry.png',
           tight: false,
-          desc: 'New: Depth-of-field glowing phosphor emerald Matrix digits (6840, +2.8, 1.49, 168, 14.2) and vertical streams behind the spinning urethane ball.'
+          desc: 'Selected App Icon: Depth-of-field glowing phosphor emerald Matrix digits (6840, +2.8, 1.49, 168, 14.2) and vertical streams behind the spinning urethane ball.'
         },
         {
           id: 'render-7',
@@ -1142,7 +1143,7 @@
         }
       ];
 
-      let activeWinSource = 'render-9';
+      let activeWinSource = 'render-6';
       let activeFilter = 'all';
 
       function renderGallery() {
@@ -1157,7 +1158,7 @@
             <div class="render-card-top">
               <span class="render-id">
                 <span>${r.tag}</span>
-                ${r.isNew ? '<span class="new-badge">NEW</span>' : ''}
+                ${r.isChosen ? '<span class="new-badge" style="background:rgba(16,185,129,0.22);border-color:#10b981;color:#a7f3d0;">SELECTED APP ICON</span>' : r.isNew ? '<span class="new-badge">NEW</span>' : ''}
               </span>
               <span class="sel-tag">Active in Preview</span>
             </div>
@@ -2010,7 +2011,7 @@
       }
 
       renderGallery();
-      setWinSource('render-9');
+      setWinSource('render-6');
       syncControlsUI();
       requestAnimationFrame(tick);
     })();

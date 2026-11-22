@@ -33,11 +33,23 @@ const PGA_GREEN_FT = [
 
 // Tier baseline offset (strokes per shot relative to PGA Tour so 5-HCP & Scratch are meaningful)
 const TIER_SG_OFFSET = {
+  tour_pro: 0.0,
   scratch: 0.04,
   low_hcp: 0.14,
   mid_hcp: 0.30,
   personal: 0.14,
 };
+
+const NON_FAULT_DELIVERY_IDS = new Set([
+  'pure_compression',
+  'solid_delivery',
+  'tour_sweep',
+  'solid_driver',
+  'neutral_delivery',
+  'ball_flight_ok',
+  'no_data',
+  'unknown',
+]);
 
 function interp(table, x) {
   if (!Number.isFinite(x)) return table[table.length - 1][1];
@@ -82,6 +94,9 @@ function computeShotStrokesGained({
   practiceMode = 'real',
 }) {
   if (practiceMode === 'almost' || practiceMode === 'sore') {
+    const explanation = practiceMode === 'sore'
+      ? 'Strokes Gained paused in Gym-Sore / Recovery mode (tempo & light rehearsals).'
+      : 'Strokes Gained paused in Quiet / Foam-Ball mode (carry & spin are not real-ball calibrated).';
     return {
       sg: null,
       sgPga: null,
@@ -89,7 +104,7 @@ function computeShotStrokesGained({
       resultLie: 'practice',
       targetCarryYds: null,
       proximityYds: null,
-      explanation: 'Strokes Gained paused in Quiet / Foam-Ball mode (carry & spin are not real-ball calibrated).',
+      explanation,
     };
   }
 
@@ -108,8 +123,9 @@ function computeShotStrokesGained({
     };
   }
 
-  const safeTier = String(tierId || 'low_hcp');
-  const offset = TIER_SG_OFFSET[safeTier] ?? TIER_SG_OFFSET.low_hcp;
+  const rawTier = typeof tierId === 'string' ? tierId : 'low_hcp';
+  const safeTier = Object.hasOwn(TIER_SG_OFFSET, rawTier) ? rawTier : 'low_hcp';
+  const offset = TIER_SG_OFFSET[safeTier];
   const isTeeClub = clubSpec.category === 'driver' || clubSpec.category === 'wood';
 
   if (isTeeClub) {
@@ -194,7 +210,7 @@ function computeShotStrokesGained({
  */
 function computeDispersionStats(shots = [], { club = null } = {}) {
   const valid = (shots || []).filter(
-    (s) => Number.isFinite(s.carry_yds ?? s.carryYds) && Number.isFinite(s.offline_yds ?? s.offlineYds)
+    (s) => s && Number.isFinite(s.carry_yds ?? s.carryYds) && Number.isFinite(s.offline_yds ?? s.offlineYds)
   );
   const n = valid.length;
   if (n === 0) {
@@ -206,6 +222,10 @@ function computeDispersionStats(shots = [], { club = null } = {}) {
       stdCarry: null,
       stdOffline: null,
       ellipse80: null,
+      twoWayMiss: { detected: false, left80Yds: 0, right80Yds: 0, label: 'Need 5+ shots for corridor' },
+      cruiseSpeedBuckets: [],
+      optimalCruiseMph: null,
+      rootCauseAttribution: [],
       avgSg: null,
       totalSg: null,
       avgScore: null,
@@ -296,7 +316,7 @@ function computeDispersionStats(shots = [], { club = null } = {}) {
     const lost = s.left_on_table_yds ?? s.leftOnTableYds ?? 0;
     if (Number.isFinite(lost)) g.lostCarrySum += lost;
 
-    const loc = s.strike_location || s.strikeLocation || 'center';
+    const loc = s.strike_location || s.strikeLocation || 'unknown';
     strikeCounts[loc] = (strikeCounts[loc] || 0) + 1;
   }
 
@@ -304,6 +324,7 @@ function computeDispersionStats(shots = [], { club = null } = {}) {
     .map((g) => ({
       deliveryId: g.deliveryId,
       deliveryName: g.deliveryName,
+      isFault: !NON_FAULT_DELIVERY_IDS.has(g.deliveryId),
       count: g.count,
       pct: Math.round((g.count / n) * 100),
       avgSg: g.sgCount ? Math.round((g.sgSum / g.sgCount) * 100) / 100 : null,
@@ -311,6 +332,129 @@ function computeDispersionStats(shots = [], { club = null } = {}) {
       avgLostYds: Math.round((g.lostCarrySum / g.count) * 10) / 10,
     }))
     .sort((a, b) => ((a.totalSg ?? 0) - (b.totalSg ?? 0)) || (b.count - a.count));
+
+  // Two-Way Miss Detector across 80% lateral corridor
+  const left80Yds = Math.round((meanX - stdX * chi80) * 10) / 10;
+  const right80Yds = Math.round((meanX + stdX * chi80) * 10) / 10;
+  const twoWayDetected = n >= 5 && left80Yds < -6 && right80Yds > 6;
+  const fmtOff = (v) => (v > 0 ? `+${v}y` : `${v}y`);
+  const twoWayMiss = {
+    detected: twoWayDetected,
+    left80Yds,
+    right80Yds,
+    label: n < 5
+      ? 'Need 5+ shots for corridor'
+      : twoWayDetected
+        ? `Two-Way Miss (${fmtOff(left80Yds)} to ${fmtOff(right80Yds)})`
+        : `One-Way Playable (${fmtOff(left80Yds)} to ${fmtOff(right80Yds)})`,
+  };
+
+  // Cruise Speed Frontier (2 mph buckets vs Strokes Gained)
+  const speedBucketsMap = new Map();
+  for (const s of valid) {
+    const cs = Number(s.club_speed ?? s.clubSpeed);
+    if (!Number.isFinite(cs) || cs < 30) continue;
+    const bucketSpeed = Math.round(cs / 2) * 2;
+    if (!speedBucketsMap.has(bucketSpeed)) {
+      speedBucketsMap.set(bucketSpeed, { speedMph: bucketSpeed, n: 0, sgSum: 0, sgCount: 0, scoreSum: 0, scoreCount: 0, bigMisses: 0 });
+    }
+    const b = speedBucketsMap.get(bucketSpeed);
+    b.n += 1;
+    const sgv = s.sg_shot ?? s.sg;
+    if (typeof sgv === 'number' && Number.isFinite(sgv)) {
+      b.sgSum += sgv;
+      b.sgCount += 1;
+      if (sgv <= -0.25) b.bigMisses += 1;
+    }
+    if (typeof s.score === 'number' && Number.isFinite(s.score)) {
+      b.scoreSum += s.score;
+      b.scoreCount += 1;
+    }
+  }
+  const rawBuckets = [...speedBucketsMap.values()].sort((a, b) => a.speedMph - b.speedMph);
+  const bucketPairs = rawBuckets.map((raw) => ({
+    raw,
+    mapped: {
+      speedMph: raw.speedMph,
+      n: raw.n,
+      avgSg: raw.sgCount ? Math.round((raw.sgSum / raw.sgCount) * 100) / 100 : null,
+      avgScore: raw.scoreCount ? Math.round(raw.scoreSum / raw.scoreCount) : null,
+      bigMissPct: raw.sgCount ? Math.round((raw.bigMisses / raw.sgCount) * 100) : null,
+    },
+  }));
+  const cruiseSpeedBuckets = bucketPairs.map((p) => p.mapped);
+  const sgCruisePool = bucketPairs.filter((p) => p.mapped.avgSg !== null && p.raw.sgCount >= 2);
+  const cruiseFallbackPool = sgCruisePool.length ? sgCruisePool : bucketPairs.filter((p) => p.mapped.avgSg !== null);
+  const optimalCruiseBucket = cruiseFallbackPool.length
+    ? [...cruiseFallbackPool].sort((a, b) => (b.mapped.avgSg - a.mapped.avgSg) || (b.raw.sgCount - a.raw.sgCount) || (b.mapped.n - a.mapped.n))[0].mapped
+    : null;
+  const optimalCruiseMph = optimalCruiseBucket ? optimalCruiseBucket.speedMph : null;
+
+  // Root-Cause Causal Attribution (variance-weighted |R| across a single consistent outcome metric vs F2P, Path, AoA, Smash)
+  const attrDefs = [
+    { key: 'faceToPath', label: '|Face-to-Path| Control', getVal: (s) => { const v = s.face_to_path ?? s.faceToPath; return typeof v === 'number' && Number.isFinite(v) ? Math.abs(v) : null; }, detail: 'Curvature and start-line divergence vs path.' },
+    { key: 'smash', label: 'Center Contact (Smash)', getVal: (s) => { const v = s.smash; return typeof v === 'number' && Number.isFinite(v) ? v : null; }, detail: 'Sweet-spot energy transfer vs toe/heel/fat loss.' },
+    { key: 'path', label: 'Club Path Corridor', getVal: (s) => { const v = s.path; return typeof v === 'number' && Number.isFinite(v) ? Math.abs(v) : null; }, detail: 'Swing direction scatter in/out across target.' },
+    { key: 'aoa', label: 'Angle of Attack Window', getVal: (s) => { const v = s.aoa; return typeof v === 'number' && Number.isFinite(v) ? v : null; }, detail: 'Low-point depth and spin-loft control.' },
+  ];
+  const useSgOutcome = sgVals.length >= 3;
+  const getOutcome = (s) => {
+    if (useSgOutcome) {
+      const sgv = s.sg_shot ?? s.sg;
+      return (typeof sgv === 'number' && Number.isFinite(sgv)) ? sgv : null;
+    }
+    return (typeof s.score === 'number' && Number.isFinite(s.score)) ? s.score : null;
+  };
+  const rawImpacts = attrDefs
+    .map((def) => {
+      const pairs = [];
+      for (const s of valid) {
+        const xv = def.getVal(s);
+        const yv = getOutcome(s);
+        if (xv !== null && yv !== null) pairs.push([xv, yv]);
+      }
+      if (pairs.length < 3) return null;
+      const mx = pairs.reduce((a, p) => a + p[0], 0) / pairs.length;
+      const my = pairs.reduce((a, p) => a + p[1], 0) / pairs.length;
+      let num = 0, dx2 = 0, dy2 = 0;
+      for (const [xv, yv] of pairs) {
+        const dx = xv - mx;
+        const dy = yv - my;
+        num += dx * dy;
+        dx2 += dx * dx;
+        dy2 += dy * dy;
+      }
+      const r = (dx2 > 1e-9 && dy2 > 1e-9) ? Math.abs(num / Math.sqrt(dx2 * dy2)) : 0.1;
+      return { ...def, weight: Math.max(0.05, r * r + 0.05), n: pairs.length };
+    })
+    .filter(Boolean)
+    .sort((a, b) => b.weight - a.weight);
+  const totalAttrW = rawImpacts.reduce((a, x) => a + x.weight, 0) || 1;
+  let rootCauseAttribution = [];
+  if (rawImpacts.length > 0) {
+    const k = rawImpacts.length;
+    const rem = Math.max(0, 100 - 4 * k);
+    const items = rawImpacts.map((x, idx) => {
+      const exact = (x.weight / totalAttrW) * rem;
+      const base = Math.floor(exact);
+      return { x, idx, base, frac: exact - base, bonus: 0 };
+    });
+    let leftover = rem - items.reduce((a, it) => a + it.base, 0);
+    const byFrac = [...items].sort((a, b) => (b.frac - a.frac) || (a.idx - b.idx));
+    for (let i = 0; i < byFrac.length && leftover > 0; i += 1) {
+      byFrac[i].bonus += 1;
+      leftover -= 1;
+    }
+    rootCauseAttribution = items
+      .map((it) => ({
+        key: it.x.key,
+        label: it.x.label,
+        impactPct: 4 + it.base + it.bonus,
+        detail: it.x.detail,
+        samples: it.x.n,
+      }))
+      .sort((a, b) => b.impactPct - a.impactPct);
+  }
 
   const points = valid.slice(0, 120).map((s) => ({
     id: s.id,
@@ -341,6 +485,10 @@ function computeDispersionStats(shots = [], { club = null } = {}) {
       widthYds: width80,
       depthYds: depth80,
     } : null,
+    twoWayMiss,
+    cruiseSpeedBuckets,
+    optimalCruiseMph,
+    rootCauseAttribution,
     avgSg,
     totalSg,
     avgScore,
@@ -352,6 +500,7 @@ function computeDispersionStats(shots = [], { club = null } = {}) {
 }
 
 module.exports = {
+  NON_FAULT_DELIVERY_IDS,
   expectedStrokes,
   computeShotStrokesGained,
   computeDispersionStats,

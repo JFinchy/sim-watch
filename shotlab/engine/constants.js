@@ -188,6 +188,27 @@ const CLUB_SPECS = {
  * Users can toggle between Scratch, Low HCP (default), Mid HCP, and Personal Baseline.
  */
 const BENCHMARK_TIERS = {
+  tour_pro: {
+    id: 'tour_pro',
+    label: 'Tour Pro (PGA Avg)',
+    shortLabel: 'Tour Pro',
+    smashOffset: 0.03,
+    pathGreen: 1.8,
+    pathYellow: 3.2,
+    faceGreen: 1.2,
+    faceYellow: 2.5,
+    f2pGreen: 1.4,
+    f2pYellow: 2.8,
+    hlaGreen: 1.4,
+    hlaYellow: 2.8,
+    spinAxisGreen: 4.5,
+    spinAxisYellow: 9.0,
+    offlineGreenPct: 0.035,
+    offlineYellowPct: 0.065,
+    vlaPad: -0.3,
+    spinPad: -150,
+    aoaPad: -0.2,
+  },
   scratch: {
     id: 'scratch',
     label: 'Scratch (0–2 HCP)',
@@ -297,9 +318,9 @@ function normalizeClubCode(raw) {
   if (!raw || typeof raw !== 'string') return null;
   const cleaned = raw.trim().toLowerCase().replace(/[^a-z0-9]/g, '');
   if (!cleaned) return null;
-  if (CLUB_ALIASES[cleaned]) return CLUB_ALIASES[cleaned];
+  if (Object.hasOwn(CLUB_ALIASES, cleaned)) return CLUB_ALIASES[cleaned];
   const upper = cleaned.toUpperCase();
-  if (CLUB_SPECS[upper]) return upper;
+  if (Object.hasOwn(CLUB_SPECS, upper)) return upper;
   return null;
 }
 
@@ -327,9 +348,17 @@ function clubDistance(codeA, codeB) {
   return Math.abs(a - b);
 }
 
+const CLUB_CATEGORY_GROUPS = {
+  woods: ['DR', '3W', '5W'],
+  hybrids: ['4H'],
+  irons: ['4I', '5I', '6I', '7I', '8I', '9I'],
+  wedges: ['PW', 'GW', 'SW', 'LW'],
+};
+
 module.exports = {
   CLUB_ORDER,
   GSPRO_CLUB_ORDER,
+  CLUB_CATEGORY_GROUPS,
   CLUB_SPECS,
   BENCHMARK_TIERS,
   normalizeClubCode,

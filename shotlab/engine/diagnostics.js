@@ -13,6 +13,7 @@
 
 const { BENCHMARK_TIERS } = require('./constants');
 const { posteriorForClub } = require('./classifier');
+const { recommendDrillsForFault } = require('./drillsBridge');
 
 function round1(n) { return Math.round(n * 10) / 10; }
 function round2(n) { return Math.round(n * 100) / 100; }
@@ -919,7 +920,8 @@ function inferFaceStrike(metrics, dplane, clubSpec, calibration = null, practice
  * 5. Low-Handicap Priority Metric Grading (Green / Yellow / Red) with target ranges and hover explanations.
  */
 function gradeMetrics(metrics, flight, dplane, delivery, clubSpec, tierId = 'low_hcp', calibration = null, handedness = 'RH', potential = null, practiceMode = 'real', isPartialSwing = false) {
-  const tier = BENCHMARK_TIERS[tierId] || BENCHMARK_TIERS.low_hcp;
+  const safeTierKey = typeof tierId === 'string' && Object.hasOwn(BENCHMARK_TIERS, tierId) ? tierId : 'low_hcp';
+  const tier = BENCHMARK_TIERS[safeTierKey];
   const isLH = handedness === 'LH';
   const sign = isLH ? -1 : 1;
   const isAlmost = practiceMode === 'almost';
@@ -983,7 +985,7 @@ function gradeMetrics(metrics, flight, dplane, delivery, clubSpec, tierId = 'low
     label: 'Carry',
     priority: 1,
     value: carryVal > 0 ? `${Math.round(carryVal)}` : '—',
-    raw: carryVal,
+    raw: carryVal > 0 ? carryVal : null,
     unit: 'yds',
     grade: carryVal > 0 && Number.isFinite(effPct) ? (effPct >= 93 ? 'green' : effPct >= 86 ? 'yellow' : 'red') : 'neutral',
     source: carrySource,
@@ -994,8 +996,30 @@ function gradeMetrics(metrics, flight, dplane, delivery, clubSpec, tierId = 'low
       : `Computed by ShotLab 3D aerodynamic physics engine (${round1(carryVal)} yds carry, ${round1(flight.totalYds)} yds total) since Launch Monitor omitted CarryDistance.`,
   });
 
+  // 2b. Offline Dispersion (Yards Left / Right of target line)
+  const refCarry = (potential && Number.isFinite(potential.maxCarryAtSpeedYds) && potential.maxCarryAtSpeedYds > 20)
+    ? potential.maxCarryAtSpeedYds
+    : Math.max(80, Math.round(driverBase * clubSpec.speedRatio * 2.28));
+  const hasDirSignal = metrics.hla !== null || metrics.spinAxis !== null;
+  const offVal = carryVal > 0 && hasDirSignal && Number.isFinite(flight.offlineYds) ? flight.offlineYds : null;
+  const offGreenMax = Math.max(5, Math.round(refCarry * (tier.offlineGreenPct || 0.065)));
+  const offYellowMax = Math.max(offGreenMax + 4, Math.round(refCarry * (tier.offlineYellowPct || 0.12)));
+  cards.push({
+    key: 'offline',
+    label: 'Offline',
+    priority: 1,
+    value: offVal !== null ? (Math.abs(offVal) < 0.2 ? '0.0y' : `${Math.abs(offVal).toFixed(1)}y ${offVal < 0 ? 'L' : 'R'}`) : '—',
+    raw: offVal,
+    unit: '',
+    grade: gradeAbs(offVal, offGreenMax, offYellowMax),
+    source: offVal !== null ? 'physics' : (hasDirSignal ? 'physics' : 'missing'),
+    target: `±${offGreenMax}y`,
+    delta: offVal !== null ? (Math.abs(offVal) <= offGreenMax ? 'In Corridor' : `${offVal < 0 ? 'L' : 'R'} Miss`) : null,
+    tooltip: `Lateral yards Left (−) or Right (+) of target line. ${tier.shortLabel} corridor for ${clubSpec.label}: ±${offGreenMax} yds.`,
+  });
+
   // 3. Ball Speed
-  const bsGreenMin = round1(expBS * (tier.id === 'scratch' ? 0.98 : tier.id === 'mid_hcp' ? 0.92 : 0.95));
+  const bsGreenMin = round1(expBS * (tier.id === 'tour_pro' ? 0.99 : tier.id === 'scratch' ? 0.98 : tier.id === 'mid_hcp' ? 0.92 : 0.95));
   const bsYellowMin = round1(expBS * 0.89);
   cards.push({
     key: 'ballSpeed',
@@ -1047,8 +1071,8 @@ function gradeMetrics(metrics, flight, dplane, delivery, clubSpec, tierId = 'low
     target: `${fmtSigned(aoaGMin)}° to ${fmtSigned(aoaGMax)}°`,
     delta: metrics.aoa !== null ? `${fmtSigned(metrics.aoa - aoaIdeal)}°` : null,
     tooltip: clubSpec.category === 'driver'
-      ? `Measured by Launch Pro 1-dot. Low-handicap Driver goal: hit UP (+1° to +5°) to maximize launch while cutting spin.`
-      : `Measured by Launch Pro 1-dot. Low-handicap ${clubSpec.label} goal: strike DOWN (${clubSpec.aoa.min}° to ${clubSpec.aoa.max}°) for ball-first compression.`,
+      ? `Measured by Launch Pro 1-dot. ${tier.shortLabel} Driver goal: hit UP (+1° to +5°) to maximize launch while cutting spin.`
+      : `Measured by Launch Pro 1-dot. ${tier.shortLabel} ${clubSpec.label} goal: strike DOWN (${clubSpec.aoa.min}° to ${clubSpec.aoa.max}°) for ball-first compression.`,
   });
 
   // 6. Club Path (handedness-aware In-to-Out / Out-to-In!)
@@ -1174,35 +1198,41 @@ function gradeMetrics(metrics, flight, dplane, delivery, clubSpec, tierId = 'low
       : `Horizontal Launch Angle immediately off the face. Target within ±${hlaGreen}° for ${tier.shortLabel} accuracy.`,
   });
 
-  // 13. Est. Shaft Lean / Dynamic Loft
+  // 13. Est. Shaft Lean / Dynamic Loft (only graded when AoA is measured via 1-dot sticker)
   const leanGMin = clubSpec.shaftLean.min;
   const leanGMax = clubSpec.shaftLean.max;
+  const hasAoaForLean = metrics.aoa !== null && delivery.estShaftLean !== null;
   cards.push({
     key: 'shaftLean',
     label: 'Est. Shaft Lean',
     priority: 2,
-    value: delivery.estShaftLean !== null ? `${fmtSigned(delivery.estShaftLean)}°` : '—',
-    raw: delivery.estShaftLean,
+    value: hasAoaForLean ? `${fmtSigned(delivery.estShaftLean)}°` : '—',
+    raw: hasAoaForLean ? delivery.estShaftLean : null,
     unit: '',
-    grade: gradeRange(delivery.estShaftLean, leanGMin, leanGMax, leanGMin - 3.0, leanGMax + 3.5),
-    source: delivery.estShaftLean !== null ? 'estimated' : 'missing',
+    grade: hasAoaForLean ? gradeRange(delivery.estShaftLean, leanGMin, leanGMax, leanGMin - 3.0, leanGMax + 3.5) : 'neutral',
+    source: hasAoaForLean ? 'estimated' : 'missing',
     target: `${fmtSigned(leanGMin)}° to ${fmtSigned(leanGMax)}°`,
-    delta: delivery.estDynamicLoft !== null ? `Dyn ${delivery.estDynamicLoft}°` : null,
-    tooltip: `Static Loft (${clubSpec.staticLoft}°) minus Est. Dynamic Loft (${delivery.estDynamicLoft ?? '—'}°). Positive = forward shaft lean (compression). Negative = flipping / adding loft at impact.`,
+    delta: hasAoaForLean && delivery.estDynamicLoft !== null ? `Dyn ${delivery.estDynamicLoft}°` : null,
+    tooltip: hasAoaForLean
+      ? `Static Loft (${clubSpec.staticLoft}°) minus Est. Dynamic Loft (${delivery.estDynamicLoft ?? '—'}°). Positive = forward shaft lean (compression). Negative = flipping / adding loft at impact.`
+      : `Requires 1-dot Angle of Attack read to isolate forward shaft lean from Launch (VLA).`,
   });
 
   // 14. Descent Angle
+  const descVal = carryVal > 0 && typeof flight.descentAngleDeg === 'number' && Number.isFinite(flight.descentAngleDeg) && flight.descentAngleDeg > 0
+    ? flight.descentAngleDeg
+    : null;
   cards.push({
     key: 'descent',
     label: 'Descent Angle',
     priority: 3,
-    value: flight.descentAngleDeg ? `${flight.descentAngleDeg.toFixed(1)}°` : '—',
-    raw: flight.descentAngleDeg,
+    value: descVal !== null ? `${descVal.toFixed(1)}°` : '—',
+    raw: descVal,
     unit: '',
-    grade: gradeRange(flight.descentAngleDeg, clubSpec.descent.min, clubSpec.descent.max, clubSpec.descent.min - 5, clubSpec.descent.max + 5),
+    grade: descVal !== null ? gradeRange(descVal, clubSpec.descent.min, clubSpec.descent.max, clubSpec.descent.min - 5, clubSpec.descent.max + 5) : 'neutral',
     source: 'physics',
     target: `${clubSpec.descent.min}–${clubSpec.descent.max}°`,
-    delta: flight.apexFt ? `Apex ${Math.round(flight.apexFt)} ft` : null,
+    delta: descVal !== null && flight.apexFt ? `Apex ${Math.round(flight.apexFt)} ft` : null,
     tooltip: `Landing angle from ShotLab ball-flight physics. Irons need 45°+ to stop on firm greens; Driver wants 34–40° for optimal carry + roll.`,
   });
 
@@ -1231,6 +1261,60 @@ function gradeMetrics(metrics, flight, dplane, delivery, clubSpec, tierId = 'low
     }
   }
 
+  // Attach upper-right +/- Goal deltas and helpKey onto every metric card
+  const idealGoalByKey = {
+    carry: refCarry,
+    offline: 0,
+    smash: clubSpec.smash.ideal,
+    ballSpeed: expBS,
+    clubSpeed: expCS,
+    aoa: aoaIdeal,
+    path: 0,
+    face: 0,
+    faceToPath: 0,
+    vla: vlaIdeal,
+    backSpin: spIdeal,
+    spinAxis: 0,
+    hla: 0,
+    shaftLean: clubSpec.shaftLean.ideal,
+    descent: clubSpec.descent.ideal,
+  };
+  for (const c of cards) {
+    c.helpKey = c.key;
+    if (c.source === 'foam_na') {
+      c.goalDelta = 'Foam N/A';
+    } else if (c.source === 'missing' || c.raw === null || c.raw === undefined || !Number.isFinite(Number(c.raw))) {
+      c.goalDelta = c.source === 'missing' ? 'No Read' : '—';
+    } else if (isPartialSwing && ['ballSpeed', 'clubSpeed', 'carry'].includes(c.key)) {
+      c.goalDelta = 'Flighted';
+    } else {
+      const rVal = Number(c.raw);
+      const goalVal = idealGoalByKey[c.key];
+      if (c.key === 'carry') {
+        const diff = Math.round(rVal - goalVal);
+        c.goalDelta = `${diff >= 0 ? '+' : ''}${diff}y vs ${Math.round(goalVal)}y`;
+      } else if (c.key === 'offline') {
+        const dir = Math.abs(rVal) >= 0.1 ? (rVal < 0 ? ' L' : ' R') : '';
+        c.goalDelta = `${Math.abs(rVal).toFixed(1)}y${dir} / ±${offGreenMax}y`;
+      } else if (c.key === 'smash') {
+        const diff = rVal - smashG;
+        c.goalDelta = `${diff >= 0 ? '+' : ''}${diff.toFixed(2)} vs ${smashG.toFixed(2)}`;
+      } else if (c.key === 'backSpin') {
+        const diff = Math.round(rVal - goalVal);
+        c.goalDelta = `${diff >= 0 ? '+' : ''}${diff} rpm`;
+      } else if (['path', 'face', 'faceToPath', 'hla', 'spinAxis'].includes(c.key)) {
+        const tol = c.key === 'path' ? tier.pathGreen : c.key === 'face' ? tier.faceGreen : c.key === 'faceToPath' ? tier.f2pGreen : c.key === 'hla' ? hlaGreen : tier.spinAxisGreen;
+        c.goalDelta = Math.abs(rVal) <= tol ? `In ±${tol}°` : `${rVal >= 0 ? '+' : ''}${rVal.toFixed(1)}° / ±${tol}°`;
+      } else if (Number.isFinite(goalVal)) {
+        const diff = rVal - goalVal;
+        const unit = (c.key === 'ballSpeed' || c.key === 'clubSpeed') ? '' : '°';
+        c.goalDelta = `${diff >= 0 ? '+' : ''}${diff.toFixed(1)}${unit} vs ${round1(goalVal)}${unit}`;
+      } else {
+        c.goalDelta = c.delta || '';
+      }
+    }
+  }
+
   // Overall shot grade summary (Low-Handicap Score 0-100)
   const graded = cards.filter((c) => c.grade !== 'neutral');
   const weights = { 1: 2.0, 2: 1.2, 3: 0.7 };
@@ -1243,8 +1327,8 @@ function gradeMetrics(metrics, flight, dplane, delivery, clubSpec, tierId = 'low
     else if (c.grade === 'yellow') { earned += w * 0.55; yellows++; }
     else { reds++; }
   }
-  const score = possible > 0 ? Math.round((earned / possible) * 100) : 0;
-  const overallGrade = score >= 78 ? 'green' : score >= 52 ? 'yellow' : 'red';
+  const score = possible > 0 ? Math.round((earned / possible) * 100) : null;
+  const overallGrade = score === null ? 'neutral' : score >= 78 ? 'green' : score >= 52 ? 'yellow' : 'red';
 
   return {
     tierId: tier.id,
@@ -1263,10 +1347,358 @@ function gradeMetrics(metrics, flight, dplane, delivery, clubSpec, tierId = 'low
   };
 }
 
+/**
+ * 6. Coupled Lab Matrix — combines paired launch monitor signals into abstracted verdicts
+ *    such as "OVER-LAUNCHED · HIGH SPIN", "MAT-SAVED FAT RISK", and "OPTIMAL LAUNCH WINDOW".
+ */
+function diagnoseCoupledSignals(
+  metrics,
+  flight,
+  dplane,
+  delivery,
+  strike,
+  clubSpec,
+  potential,
+  practiceModeOrOpts = 'real',
+  matTypeArg = 'fiberbuilt',
+  handednessArg = 'RH'
+) {
+  const opts = (practiceModeOrOpts && typeof practiceModeOrOpts === 'object')
+    ? practiceModeOrOpts
+    : { practiceMode: practiceModeOrOpts, matType: matTypeArg, handedness: handednessArg };
+  const practiceMode = opts.practiceMode || 'real';
+  const matType = opts.matType || 'fiberbuilt';
+  const handedness = opts.handedness || 'RH';
+  const sign = handedness === 'LH' ? -1 : 1;
+
+  const isAlmost = practiceMode === 'almost';
+  const clubRead = metrics && metrics.clubRead !== false;
+  const vla = metrics ? metrics.vla : null;
+  const spin = metrics ? (metrics.backSpin ?? metrics.totalSpin) : null;
+  const smash = metrics ? metrics.smash : null;
+  const aoa = metrics ? metrics.aoa : null;
+  const hla = metrics ? metrics.hla : null;
+  const path = metrics ? metrics.path : null;
+  const clubSpeed = metrics ? metrics.clubSpeed : null;
+  const spinAxis = metrics ? metrics.spinAxis : null;
+  const f2p = dplane ? dplane.faceToPath : null;
+  const rhF2p = dplane && dplane._rh
+    ? dplane._rh.faceToPath
+    : (typeof f2p === 'number' && Number.isFinite(f2p) ? f2p * sign : null);
+  const rhSpinAxis = typeof spinAxis === 'number' && Number.isFinite(spinAxis) ? spinAxis * sign : null;
+  const isIronOrWedge = clubSpec && !['driver', 'wood'].includes(clubSpec.category);
+  const rawCarryNow = potential?.actualCarryYds
+    ?? metrics?.effectiveCarry
+    ?? (typeof metrics?.carry === 'number' && Number.isFinite(metrics.carry) && metrics.carry > 5 ? metrics.carry : null)
+    ?? flight?.carryYds
+    ?? 0;
+  const carryNow = Number.isFinite(Number(rawCarryNow)) ? Math.round(Number(rawCarryNow)) : 0;
+
+  // 1. Launch x Spin Window
+  let launchVerdict = 'OPTIMAL LAUNCH WINDOW';
+  let launchSev = 'green';
+  let launchTakeaway = `Launch (${vla !== null ? `${round1(vla)}°` : '—'}) & spin (${spin !== null ? `${Math.round(spin)} rpm` : '—'}) sit inside ${clubSpec.label} window.`;
+  if (isAlmost) {
+    launchVerdict = 'FOAM BALL · MUTED FLIGHT';
+    launchSev = 'neutral';
+    launchTakeaway = 'Foam ball ballistics paused — focus on start line and club delivery.';
+  } else if (vla !== null && vla <= 2.5) {
+    launchVerdict = 'TOPPED / WORM-BURNER';
+    launchSev = 'red';
+    launchTakeaway = 'Ball launched nearly flat along the turf — topped strike with minimal flight.';
+  } else if (vla === null || spin === null) {
+    launchVerdict = 'PARTIAL BALL DATA';
+    launchSev = 'neutral';
+    launchTakeaway = `Need both Launch (VLA) and Backspin to confirm ${clubSpec.label} trajectory window.`;
+  } else {
+    const highVla = vla > clubSpec.vla.max + 1.0;
+    const highSpin = spin > clubSpec.spin.max + 500;
+    const lowVla = vla < clubSpec.vla.min - 1.2;
+    const lowSpin = spin < clubSpec.spin.min - 500;
+    if (highVla && highSpin) {
+      launchVerdict = 'OVER-LAUNCHED · HIGH SPIN';
+      launchSev = 'red';
+      launchTakeaway = 'Added dynamic loft spiked both launch & spin, ballooning carry into wind.';
+    } else if (highVla || highSpin) {
+      launchVerdict = highVla ? 'HIGH LAUNCH BALLOON' : 'ELEVATED BACKSPIN';
+      launchSev = 'yellow';
+      launchTakeaway = highVla ? 'Slightly high launch for club — watch shaft lean.' : 'Elevated spin (possible heel/steep contact) trimming carry.';
+    } else if (lowVla && lowSpin) {
+      launchVerdict = 'LOW KNUCKLEBALL';
+      launchSev = 'red';
+      launchTakeaway = 'Under-launched with low spin — risks short diving carry or run-out.';
+    } else if (lowVla) {
+      launchVerdict = 'LOW TRAJECTORY WINDOW';
+      launchSev = 'yellow';
+      launchTakeaway = 'Flatter launch — good for wind knockdown if smash is crisp.';
+    } else if (lowSpin) {
+      launchVerdict = 'LOW SPIN FLYER';
+      launchSev = 'yellow';
+      launchTakeaway = 'Under-spun launch risks hot flyers that release past the target.';
+    }
+  }
+
+  // 2. Turf x AoA x Smash (Mat-Saved Fat detector)
+  let turfVerdict = 'PURE BALL-FIRST CONTACT';
+  let turfSev = 'green';
+  let turfRange = null;
+  let turfTakeaway = 'Clean energy transfer into the back of the ball with stable low point.';
+  if (!clubRead) {
+    turfVerdict = 'NO CLUB STICKER READ';
+    turfSev = 'neutral';
+    turfTakeaway = 'Add 1-dot club sticker on toe to verify Smash Factor & low point.';
+  } else if (isAlmost) {
+    const outOfAoa = aoa !== null && (aoa < clubSpec.aoa.min - 1.5 || aoa > clubSpec.aoa.max + 1.5);
+    if (aoa === null && path === null) {
+      turfVerdict = 'FOAM · PARTIAL CLUB DATA';
+      turfSev = 'neutral';
+      turfTakeaway = 'No AoA or Path telemetry on this foam swing.';
+    } else {
+      turfVerdict = outOfAoa ? 'FOAM · AOA OUT OF WINDOW' : 'FOAM · TURF DELIVERY';
+      turfSev = outOfAoa ? 'yellow' : 'green';
+      turfTakeaway = aoa !== null
+        ? `Measured AoA ${fmtSigned(aoa)}° and Path ${fmtSigned(path)}°.`
+        : `Measured Path ${fmtSigned(path)}° (AoA unavailable).`;
+    }
+  } else {
+    const smashDrop = smash !== null ? clubSpec.smash.ideal - smash : 0;
+    const isFat = strike && strike.location === 'fat';
+    const isSteep = aoa !== null && aoa <= clubSpec.aoa.min - 1.2;
+    if (isIronOrWedge && (isFat || (smashDrop >= 0.08 && isSteep))) {
+      const matScale = matType === 'divot' ? 0.72 : matType === 'fiberbuilt' ? 0.78 : 0.86;
+      const mid = Math.round(carryNow * matScale);
+      if (carryNow >= 15) {
+        const lo = Math.max(0, mid - 8);
+        const hi = Math.min(carryNow, Math.max(lo + 2, mid + 8));
+        turfRange = { lo, hi, mid: Math.min(carryNow, mid) };
+        turfTakeaway = `Sim mat bounced a heavy strike (${carryNow}y -> ~${turfRange.lo}–${turfRange.hi}y on real grass).`;
+      } else {
+        turfRange = null;
+        turfTakeaway = 'Severe heavy/topped strike — minimal carry even off a forgiving mat.';
+      }
+      turfVerdict = 'MAT-SAVED FAT RISK';
+      turfSev = 'red';
+    } else if (smash === null) {
+      turfVerdict = 'SHORT GAME / CHIP';
+      turfSev = 'neutral';
+      turfTakeaway = 'Low-speed short-game swing — smash factor grading paused.';
+    } else if (strike && (strike.severity === 'yellow' || strike.severity === 'red')) {
+      turfVerdict = String(strike.label || 'OFF-CENTER STRIKE').toUpperCase();
+      turfSev = strike.severity;
+      turfTakeaway = (strike.rationale && strike.rationale[0]) || 'Modest off-center strike detected.';
+    }
+  }
+
+  // 3. D-Plane Start Line x Face-to-Path
+  let dpVerdict = 'ON-TARGET D-PLANE SLOT';
+  let dpSev = 'green';
+  let dpTakeaway = 'Start line & curvature match a tight, playable fairway/green window.';
+  if (isAlmost) {
+    if (hla === null) {
+      dpVerdict = 'NO START LINE READ';
+      dpSev = 'neutral';
+      dpTakeaway = 'Start line (HLA) unavailable for ±1.5° Quiet Mode gate.';
+    } else if (Math.abs(hla) > 1.5) {
+      dpVerdict = Math.abs(hla) >= 2.8 ? 'OUTSIDE QUIET GATE' : 'DRIFTING PAST ±1.5° GATE';
+      dpSev = Math.abs(hla) >= 2.8 ? 'red' : 'yellow';
+      dpTakeaway = `Foam ball started ${fmtSigned(hla)}° outside the ±1.5° Quiet Mode gate.`;
+    } else {
+      dpTakeaway = `Inside ±1.5° Quiet Mode start-line gate (${fmtSigned(hla)}° HLA).`;
+    }
+  } else if (rhF2p !== null) {
+    if (Math.abs(rhF2p) >= 4.5) {
+      dpVerdict = rhF2p < 0 ? 'SNAP-HOOK / OVER-DRAW TRAP' : 'SEVERE SLICE / OPEN BLADE';
+      dpSev = 'red';
+      dpTakeaway = `Est. Face-to-Path (${fmtSigned(f2p)}°) creates excessive sideways spin.`;
+    } else if (rhSpinAxis !== null && Math.abs(rhSpinAxis) >= 16) {
+      dpVerdict = rhSpinAxis < 0 ? 'SEVERE HOOK GEAR CURVE' : 'SEVERE SLICE GEAR CURVE';
+      dpSev = 'red';
+      dpTakeaway = `Extreme spin axis (${fmtSigned(spinAxis)}°) overpowers modest F2P (${fmtSigned(f2p)}°).`;
+    } else if (hla !== null && Math.abs(hla) >= 5.0) {
+      dpVerdict = 'SEVERE START-LINE MISS';
+      dpSev = 'red';
+      dpTakeaway = `Start line (${fmtSigned(hla)}° HLA) missed target corridor off the face.`;
+    } else if (Math.abs(rhF2p) >= 2.6 || (hla !== null && Math.abs(hla) >= 3.2)) {
+      dpVerdict = 'DRIFTING CURVE / START LINE';
+      dpSev = 'yellow';
+      dpTakeaway = `HLA ${fmtSigned(hla)}° + F2P ${fmtSigned(f2p)}° widens dispersion cone.`;
+    }
+  } else if (hla === null && rhSpinAxis === null) {
+    dpVerdict = 'PARTIAL DIRECTION DATA';
+    dpSev = 'neutral';
+    dpTakeaway = 'Start line and curvature signals unavailable on this shot.';
+  } else {
+    const curveAbs = Number.isFinite(flight?.curveYds) ? Math.abs(flight.curveYds) : 0;
+    if (rhSpinAxis !== null && (Math.abs(rhSpinAxis) >= 15 || curveAbs >= 18)) {
+      dpVerdict = rhSpinAxis < 0 ? 'OVER-DRAW / HOOK CURVE' : 'SEVERE SLICE CURVE';
+      dpSev = 'red';
+      dpTakeaway = `Spin axis (${fmtSigned(spinAxis)}°) curves ${Math.round(curveAbs)}y without a club sticker read.`;
+    } else if ((hla !== null && Math.abs(hla) >= 2.8) || (rhSpinAxis !== null && Math.abs(rhSpinAxis) >= 8)) {
+      dpVerdict = 'START LINE / CURVE WIDE';
+      dpSev = 'yellow';
+      const parts = [];
+      if (hla !== null && Math.abs(hla) >= 2.8) parts.push(`${fmtSigned(hla)}° HLA`);
+      if (rhSpinAxis !== null && Math.abs(rhSpinAxis) >= 8) parts.push(`${fmtSigned(spinAxis)}° spin axis`);
+      dpTakeaway = `Ball flight drifted (${parts.join(', ')}).`;
+    }
+  }
+
+  // 4. Speed x Distance Efficiency
+  const lostYds = potential && Number.isFinite(potential.totalLeftOnTableYds) ? Math.round(potential.totalLeftOnTableYds) : 0;
+  let effVerdict = 'CRUISE EFFICIENCY';
+  let effSev = 'green';
+  let effTakeaway = clubRead
+    ? 'Converting club speed cleanly into optimal carry with minimal leak.'
+    : 'Carry aligns closely with center-strike ballistics (add 1-dot sticker for club speed).';
+  const missingFlightInputs = vla === null && spin === null && clubSpeed === null;
+  if (isAlmost) {
+    effVerdict = 'DISTANCE PAUSED (FOAM)';
+    effSev = 'neutral';
+    effTakeaway = 'Strokes Gained & carry potential pause in Kids-Asleep mode.';
+  } else if (missingFlightInputs) {
+    effVerdict = 'PARTIAL FLIGHT DATA';
+    effSev = 'neutral';
+    effTakeaway = 'Need launch/spin or club speed to compute distance potential.';
+  } else if (lostYds >= 14) {
+    effVerdict = `LEFT ON TABLE (−${lostYds}Y)`;
+    effSev = 'red';
+    effTakeaway = (potential && potential.reasons && potential.reasons[0]) || `${lostYds} yds forfeited from strike/launch loss.`;
+  } else if (lostYds >= 6) {
+    effVerdict = `MODEST YARDAGE LEAK (−${lostYds}Y)`;
+    effSev = 'yellow';
+    effTakeaway = (potential && potential.reasons && potential.reasons[0]) || `${lostYds} yds available via tighter contact or window.`;
+  }
+
+  const showTurfSmash = !isAlmost && smash !== null;
+  const turfDelta = isAlmost
+    ? (aoa !== null ? `AoA ${fmtSigned(aoa)}°` : 'Quiet mode')
+    : (turfRange ? `${turfRange.lo}–${turfRange.hi}y turf` : (smash !== null ? `Smash ${smash.toFixed(2)}` : (clubRead ? 'Slow Chip' : 'No Sticker')));
+
+  return {
+    turfCarryRange: turfRange,
+    cards: [
+      {
+        id: 'launchSpin',
+        title: 'Launch × Spin Window',
+        helpKey: 'vla',
+        severity: launchSev,
+        verdict: launchVerdict,
+        delta: isAlmost ? 'Quiet Mode' : (vla !== null ? `${vla.toFixed(1)}° / ${spin !== null ? `${Math.round(spin)}` : '—'}` : '—'),
+        rows: [
+          { label: 'Launch (VLA)', value: isAlmost ? '—' : (vla !== null ? `${vla.toFixed(1)}°` : '—') },
+          { label: 'Backspin', value: isAlmost ? '—' : (spin !== null ? `${Math.round(spin).toLocaleString()} rpm` : '—') },
+          { label: 'Apex / Desc', value: isAlmost ? '—' : `${Math.round(flight.apexFt || 0)}ft / ${(flight.descentAngleDeg || 0).toFixed(1)}°` },
+        ],
+        takeaway: launchTakeaway,
+      },
+      {
+        id: 'turfStrike',
+        title: 'Turf × AoA × Smash',
+        helpKey: 'smash',
+        severity: turfSev,
+        verdict: turfVerdict,
+        delta: turfDelta,
+        rows: [
+          { label: 'Smash Factor', value: showTurfSmash ? smash.toFixed(2) : '—' },
+          { label: 'Angle of Attack', value: aoa !== null ? `${fmtSigned(aoa)}°` : '—' },
+          { label: 'Inferred Strike', value: strike ? strike.label : '—' },
+        ],
+        takeaway: turfTakeaway,
+      },
+      {
+        id: 'dplaneShape',
+        title: 'Start Line × Face-to-Path',
+        helpKey: 'faceToPath',
+        severity: dpSev,
+        verdict: dpVerdict,
+        delta: f2p !== null ? `F2P ${fmtSigned(f2p)}°` : (hla !== null ? `HLA ${fmtSigned(hla)}°` : '—'),
+        rows: [
+          { label: 'Start Line (HLA)', value: hla !== null ? `${fmtSigned(hla)}°` : '—' },
+          { label: 'Club Path', value: path !== null ? `${fmtSigned(path)}°` : '—' },
+          { label: 'Est. Face-to-Path', value: f2p !== null ? `${fmtSigned(f2p)}°` : '—' },
+        ],
+        takeaway: dpTakeaway,
+      },
+      {
+        id: 'speedEfficiency',
+        title: 'Speed × Distance Potential',
+        helpKey: 'carry',
+        severity: effSev,
+        verdict: effVerdict,
+        delta: isAlmost ? 'Quiet Mode' : missingFlightInputs ? 'Partial Data' : `${carryNow}y vs ${Math.round(potential?.maxCarryAtSpeedYds || 0)}y`,
+        rows: [
+          { label: 'Actual Carry', value: isAlmost ? '—' : `${carryNow} yds` },
+          { label: 'Center Potential', value: isAlmost ? '—' : (potential?.centerStrikeCarryYds ? `${Math.round(potential.centerStrikeCarryYds)} yds` : '—') },
+          { label: 'Left on Table', value: isAlmost ? '—' : `${lostYds} yds` },
+        ],
+        takeaway: effTakeaway,
+      },
+    ],
+  };
+}
+
+/**
+ * 7. Root-Cause Fault Coach — turns delivery + strike verdict into Likely Reasons,
+ *    Feels to Try, and matched Drills Hub exercises.
+ */
+function buildFaultCoach(delivery, strike, dplane, metrics, clubSpec, drills = [], practiceMode = 'real') {
+  const delId = delivery && delivery.id ? delivery.id : null;
+  const stLoc = strike && strike.location ? strike.location : null;
+  const faultMap = {
+    flipping_floater: 'flipping_floater',
+    early_cast: 'early_cast',
+    over_hold: 'over_hold',
+    steep_dig: 'steep_dig',
+    steep_chop: 'steep_chop',
+    pop_up: 'pop_up',
+    low_hook_trap: 'low_hook_trap',
+    hooded_trap: 'hooded_trap',
+  };
+  let faultKey = (typeof delId === 'string' && Object.hasOwn(faultMap, delId)) ? faultMap[delId] : null;
+  if (!faultKey && stLoc && ['toe', 'heel', 'thin', 'fat'].includes(stLoc)) {
+    faultKey = `strike_${stLoc}`;
+  }
+
+  const likelyCauses = [];
+  if (delivery && Array.isArray(delivery.evidence)) {
+    for (const ev of delivery.evidence.slice(0, 2)) likelyCauses.push(ev);
+  }
+  if (strike && (strike.severity === 'yellow' || strike.severity === 'red') && Array.isArray(strike.rationale) && strike.rationale[0]) {
+    likelyCauses.push(strike.rationale[0]);
+  }
+  if (!likelyCauses.length) {
+    likelyCauses.push(delivery?.tagline || 'Mechanics look balanced and repeatable.');
+  }
+
+  const cueTexts = (delivery && Array.isArray(delivery.cues) && delivery.cues.length)
+    ? delivery.cues.slice(0, 2)
+    : ['Maintain balanced tempo and center-face contact'];
+  const feelsToTry = cueTexts.map((cue, idx) => ({
+    id: `coach_${delId || stLoc || 'stock'}_${idx + 1}`,
+    label: cue.length > 48 ? `${cue.slice(0, 45)}…` : cue,
+    cue,
+  }));
+
+  const recommendedDrills = faultKey && Array.isArray(drills) && drills.length
+    ? recommendDrillsForFault(faultKey, drills, { practiceMode, club: clubSpec?.code, limit: 3 })
+    : [];
+
+  return {
+    headline: delivery?.name || 'Delivery Check',
+    severity: delivery?.severity || 'neutral',
+    faultKey,
+    likelyCauses,
+    feelsToTry,
+    recommendedDrills,
+  };
+}
+
 module.exports = {
   analyzeDPlane,
   classifyShotShape,
   diagnoseDelivery,
   inferFaceStrike,
   gradeMetrics,
+  diagnoseCoupledSignals,
+  buildFaultCoach,
 };

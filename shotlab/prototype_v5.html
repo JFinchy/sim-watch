@@ -6,26 +6,27 @@
 <title>ShotLab v5 Studio — Unified Golf Performance OS &amp; Drills Bridge</title>
 <style>
   :root {
-    --bg: #05070b;
-    --bg-stage: #090d16;
-    --bg-rail: rgba(12, 16, 25, 0.9);
-    --bg-well: rgba(6, 9, 15, 0.82);
-    --hairline: rgba(255, 255, 255, 0.085);
-    --hairline-hi: rgba(0, 229, 255, 0.38);
-    --spec: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    --white: #f8fafc;
-    --text: #e2e8f0;
-    --slate: #8b9bb4;
-    --dim: #5d6a82;
-    --cyan: #00e5ff;
-    --cyan-soft: rgba(0, 229, 255, 0.13);
+    --bg: #050608;
+    --bg-stage: #090b10;
+    --bg-rail: rgba(11, 13, 18, 0.94);
+    --bg-elev: #151922;
+    --bg-well: rgba(6, 7, 10, 0.88);
+    --hairline: rgba(255, 255, 255, 0.075);
+    --hairline-hi: rgba(255, 255, 255, 0.19);
+    --spec: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+    --white: #f4f6f9;
+    --text: #dde2ea;
+    --slate: #8a94a6;
+    --dim: #576070;
+    --cyan: #38bdf8;
+    --cyan-soft: rgba(56, 189, 248, 0.11);
     --crimson: #ef233c;
     --crimson-hi: #ff4a5f;
-    --crimson-soft: rgba(239, 35, 60, 0.15);
-    --emerald: #10f296;
-    --emerald-soft: rgba(16, 242, 150, 0.14);
-    --amber: #ffb800;
-    --amber-soft: rgba(255, 184, 0, 0.14);
+    --crimson-soft: rgba(239, 35, 60, 0.14);
+    --emerald: #10b981;
+    --emerald-soft: rgba(16, 185, 129, 0.14);
+    --amber: #f59e0b;
+    --amber-soft: rgba(245, 158, 11, 0.14);
     --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
     --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   }
@@ -36,8 +37,8 @@
     padding: 0;
     min-height: 100vh;
     background:
-      radial-gradient(ellipse 90% 42% at 50% -10%, rgba(239, 35, 60, 0.05), transparent 62%),
-      radial-gradient(ellipse 80% 45% at 50% -5%, rgba(0, 229, 255, 0.06), transparent 68%),
+      radial-gradient(ellipse 80% 36% at 50% -10%, rgba(239, 35, 60, 0.05), transparent 62%),
+      radial-gradient(ellipse 65% 32% at 85% 4%, rgba(16, 185, 129, 0.04), transparent 58%),
       var(--bg);
     color: var(--text);
     font-family: var(--sans);
@@ -114,12 +115,12 @@
   }
   .chart-tooltip.open { display: block; }
 
-  /* Unified 2-Row Broadcast Topbar */
+  /* Unified 2-Row Hardware Photometry Topbar */
   .topbar {
     position: sticky;
     top: 0;
     z-index: 40;
-    background: rgba(5, 7, 11, 0.92);
+    background: rgba(6, 7, 9, 0.94);
     backdrop-filter: blur(18px);
     border-bottom: 1px solid var(--hairline);
   }
@@ -134,42 +135,46 @@
     flex-wrap: wrap;
   }
   .topbar-sub {
-    border-top: 1px solid rgba(255, 255, 255, 0.05);
-    background: rgba(9, 13, 22, 0.8);
+    border-top: 1px solid rgba(255, 255, 255, 0.045);
+    background: rgba(9, 11, 16, 0.92);
     padding: 6px 18px;
   }
-  .brand { display: flex; align-items: center; gap: 9px; }
-  .brand-mark {
-    width: 26px; height: 26px; border-radius: 6px;
-    background: linear-gradient(135deg, rgba(239, 35, 60, 0.22), rgba(0, 229, 255, 0.08));
-    border: 1px solid rgba(239, 35, 60, 0.48);
-    display: grid; place-items: center;
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-icon-wrap {
+    width: 30px; height: 30px; border-radius: 7px;
+    overflow: hidden; flex-shrink: 0;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
   }
-  .brand-mark span { width: 7px; height: 7px; border-radius: 50%; background: var(--crimson); box-shadow: 0 0 10px var(--crimson); }
+  .brand-icon-wrap img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .brand-name { font-weight: 900; letter-spacing: 0.14em; font-size: 13.5px; color: var(--white); }
   .brand-tag {
     font-family: var(--mono); font-size: 9.5px; font-weight: 700; letter-spacing: 0.08em;
-    color: var(--cyan); padding: 2px 6px; border-radius: 4px;
-    border: 1px solid rgba(0, 229, 255, 0.32); background: rgba(0, 229, 255, 0.08);
+    color: var(--emerald); padding: 2px 6px; border-radius: 4px;
+    border: 1px solid rgba(16, 185, 129, 0.34); background: rgba(16, 185, 129, 0.09);
   }
 
   .lifecycle-nav {
-    display: inline-flex; background: rgba(12, 16, 25, 0.96);
+    display: inline-flex; background: #07080b;
     border: 1px solid var(--hairline); border-radius: 9px; padding: 3px; gap: 3px; box-shadow: var(--spec);
   }
   .mode-btn {
     border: 1px solid transparent; background: transparent; color: var(--slate);
     padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer;
-    display: inline-flex; align-items: center; gap: 6px;
+    display: inline-flex; align-items: center; gap: 6px; transition: color 0.13s, background-color 0.13s;
   }
   .mode-btn:hover { color: var(--white); background: rgba(255, 255, 255, 0.04); }
-  .mode-btn.active { color: var(--white); background: rgba(0, 229, 255, 0.14); border-color: rgba(0, 229, 255, 0.36); }
+  .mode-btn.active {
+    color: var(--white);
+    background: var(--bg-elev);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: inset 0 -2px 0 var(--crimson), var(--spec);
+  }
   .mode-idx { font-family: var(--mono); font-size: 10px; color: var(--dim); }
-  .mode-btn.active .mode-idx { color: var(--cyan); }
+  .mode-btn.active .mode-idx { color: var(--emerald); }
 
   .mode-banner {
-    display: none; border-top: 1px solid rgba(0, 229, 255, 0.26);
-    background: linear-gradient(90deg, rgba(0, 229, 255, 0.11), rgba(12, 16, 25, 0.96), rgba(0, 229, 255, 0.11));
+    display: none; border-top: 1px solid rgba(245, 158, 11, 0.28);
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.09), rgba(11, 13, 18, 0.96), rgba(245, 158, 11, 0.09));
     padding: 5px 18px; font-size: 11.5px; color: var(--white);
   }
   .mode-banner.open { display: block; }
@@ -181,16 +186,21 @@
 
   .rail {
     background: var(--bg-rail); backdrop-filter: blur(14px);
-    border: 1px solid var(--hairline); border-radius: 11px; padding: 14px 16px;
-    box-shadow: var(--spec), 0 12px 32px rgba(0, 0, 0, 0.42);
+    border: 1px solid var(--hairline); border-radius: 10px; padding: 14px 16px;
+    box-shadow: var(--spec), 0 10px 28px rgba(0, 0, 0, 0.45);
   }
   .stage-hero {
     position: relative;
-    background: radial-gradient(circle at 50% 0%, rgba(0, 229, 255, 0.055), rgba(9, 13, 22, 0.98) 65%);
-    border: 1px solid var(--hairline); border-radius: 13px; overflow: hidden;
-    box-shadow: var(--spec), 0 20px 50px rgba(0, 0, 0, 0.56);
+    background: linear-gradient(180deg, #0b0d12 0%, #060709 100%);
+    border: 1px solid var(--hairline-hi); border-radius: 12px; overflow: hidden;
+    box-shadow: var(--spec), 0 22px 52px rgba(0, 0, 0, 0.62);
   }
-  .sub-well { background: var(--bg-well); border: 1px solid var(--hairline); border-radius: 9px; padding: 10px 12px; }
+  .sub-well { background: var(--bg-well); border: 1px solid var(--hairline); border-radius: 8px; padding: 10px 12px; }
+  kbd {
+    display: inline-block; padding: 1px 5px; font-family: var(--mono); font-size: 9.5px; font-weight: 700;
+    border-radius: 4px; background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14);
+    color: var(--slate); line-height: 1.3;
+  }
 
   .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 13px; }
   .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 13px; }
@@ -215,24 +225,25 @@
 
   /* Controls & Badges */
   .btn {
-    border: 1px solid var(--hairline); background: rgba(255, 255, 255, 0.045); color: var(--white);
+    border: 1px solid var(--hairline); background: var(--bg-elev); color: var(--white);
     padding: 6px 11px; border-radius: 7px; font-size: 11.5px; font-weight: 600; cursor: pointer;
     display: inline-flex; align-items: center; gap: 5px;
     transition: background-color 0.14s, border-color 0.14s, color 0.14s;
   }
-  .btn:hover { background: rgba(255, 255, 255, 0.09); border-color: rgba(255, 255, 255, 0.2); }
+  .btn:hover { background: #1e2430; border-color: rgba(255, 255, 255, 0.22); }
   .btn-xs { padding: 3px 7px; font-size: 10.5px; border-radius: 5px; }
   .btn-sm { padding: 4px 9px; font-size: 11px; border-radius: 6px; }
-  .btn-cyan { background: var(--cyan-soft); border-color: rgba(0, 229, 255, 0.45); color: var(--cyan); }
-  .btn-cyan:hover { background: rgba(0, 229, 255, 0.24); color: var(--white); }
-  .btn-emerald { background: var(--emerald-soft); border-color: rgba(16, 242, 150, 0.45); color: var(--emerald); }
-  .btn-crimson { background: var(--crimson-soft); border-color: rgba(239, 35, 60, 0.48); color: var(--crimson-hi); }
-  .btn-amber { background: var(--amber-soft); border-color: rgba(255, 184, 0, 0.45); color: var(--amber); }
-  .btn.is-on { background: rgba(0, 229, 255, 0.2); border-color: var(--cyan); color: var(--white); }
-  .btn.is-cold { background: rgba(255, 184, 0, 0.16); border-color: rgba(255, 184, 0, 0.5); color: var(--amber); }
+  .btn-cyan { background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.24); color: var(--white); }
+  .btn-cyan:hover { background: rgba(255, 255, 255, 0.14); border-color: rgba(255, 255, 255, 0.36); color: var(--white); }
+  .btn-emerald { background: var(--emerald-soft); border-color: rgba(16, 185, 129, 0.45); color: #6ee7b7; }
+  .btn-crimson { background: rgba(239, 35, 60, 0.88); border-color: var(--crimson-hi); color: #fff; }
+  .btn-crimson:hover { background: var(--crimson); }
+  .btn-amber { background: var(--amber-soft); border-color: rgba(245, 158, 11, 0.45); color: #fcd34d; }
+  .btn.is-on { background: rgba(16, 185, 129, 0.18); border-color: rgba(16, 185, 129, 0.55); color: #a7f3d0; }
+  .btn.is-cold { background: rgba(245, 158, 11, 0.16); border-color: rgba(245, 158, 11, 0.5); color: var(--amber); }
 
   .seg {
-    display: inline-flex; background: rgba(6, 8, 13, 0.85);
+    display: inline-flex; background: #06070a;
     border: 1px solid var(--hairline); border-radius: 7px; padding: 2px; gap: 2px;
   }
   .seg button {
@@ -240,23 +251,23 @@
     padding: 4px 10px; border-radius: 5px; font-size: 11px; font-weight: 600; cursor: pointer;
   }
   .seg button:hover { color: var(--white); }
-  .seg button.active { background: rgba(0, 229, 255, 0.16); color: var(--cyan); }
+  .seg button.active { background: var(--bg-elev); color: var(--white); box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08); }
 
   select, input[type="text"], input[type="number"] {
-    background: #080c14; border: 1px solid var(--hairline); border-radius: 7px;
+    background: #07080c; border: 1px solid var(--hairline); border-radius: 7px;
     padding: 5px 9px; font-size: 11.5px; color: var(--white);
   }
-  input[type="range"] { accent-color: var(--cyan); cursor: pointer; }
+  input[type="range"] { accent-color: var(--crimson); cursor: pointer; }
 
   .badge {
     display: inline-flex; align-items: center; gap: 5px;
     padding: 2.5px 8px; border-radius: 5px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
     border: 1px solid var(--hairline); background: rgba(255, 255, 255, 0.04); color: var(--slate);
   }
-  .badge-cyan { color: var(--cyan); border-color: rgba(0, 229, 255, 0.34); background: var(--cyan-soft); }
-  .badge-green { color: var(--emerald); border-color: rgba(16, 242, 150, 0.36); background: var(--emerald-soft); }
-  .badge-yellow { color: var(--amber); border-color: rgba(255, 184, 0, 0.38); background: var(--amber-soft); }
-  .badge-red { color: var(--crimson-hi); border-color: rgba(239, 35, 60, 0.42); background: var(--crimson-soft); }
+  .badge-cyan { color: #cbd5e1; border-color: rgba(255, 255, 255, 0.18); background: rgba(255, 255, 255, 0.07); }
+  .badge-green { color: #6ee7b7; border-color: rgba(16, 185, 129, 0.36); background: var(--emerald-soft); }
+  .badge-yellow { color: #fcd34d; border-color: rgba(245, 158, 11, 0.38); background: var(--amber-soft); }
+  .badge-red { color: #fca5a5; border-color: rgba(239, 35, 60, 0.42); background: var(--crimson-soft); }
   .hw-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--emerald); box-shadow: 0 0 8px var(--emerald); }
 
   /* Upper-Right +/- Goal Delta Badge */
@@ -318,7 +329,7 @@
   @media (max-width: 1060px) { .broadcast-grid { grid-template-columns: 1fr; } }
   .tracer-pane {
     position: relative; min-height: 335px;
-    background: radial-gradient(ellipse at 50% 85%, rgba(0, 229, 255, 0.07), #05080f 70%);
+    background: radial-gradient(ellipse at 50% 85%, rgba(16, 185, 129, 0.04), #050608 72%);
     border-right: 1px solid var(--hairline);
   }
   @media (max-width: 1060px) { .tracer-pane { border-right: none; border-bottom: 1px solid var(--hairline); } }
@@ -326,20 +337,35 @@
 
   .telemetry-pane {
     padding: 14px 16px; display: flex; flex-direction: column; justify-content: space-between; gap: 11px;
-    background: linear-gradient(180deg, rgba(12, 16, 25, 0.7), rgba(5, 7, 11, 0.95));
+    background: linear-gradient(180deg, rgba(11, 13, 18, 0.85), rgba(5, 6, 8, 0.98));
   }
   .hero-carry-card {
     position: relative;
-    background: rgba(6, 9, 15, 0.6);
+    background: rgba(6, 7, 10, 0.82);
     border: 1px solid var(--hairline);
     border-radius: 9px;
     padding: 10px 12px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 10px;
+    gap: 12px;
   }
-  .hero-carry { font-family: var(--mono); font-size: clamp(2.8rem, 4.1vw, 3.9rem); font-weight: 800; line-height: 0.95; letter-spacing: -0.04em; color: var(--white); }
+  .hero-ball-stage {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  #prac-ball-canvas {
+    width: 96px;
+    height: 96px;
+    border-radius: 22%;
+    background: #06070a;
+    border: 1px solid var(--hairline-hi);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.65);
+    display: block;
+  }
+  .hero-carry { font-family: var(--mono); font-size: clamp(2.6rem, 3.8vw, 3.6rem); font-weight: 800; line-height: 0.95; letter-spacing: -0.04em; color: var(--white); }
   .hero-carry .unit { font-size: 1.05rem; font-weight: 600; color: var(--slate); margin-left: 3px; }
 
   .kpi-quad { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -361,19 +387,19 @@
 
   .chyron {
     border-top: 1px solid var(--hairline);
-    background: linear-gradient(90deg, rgba(0, 229, 255, 0.1), rgba(9, 13, 22, 0.98) 55%);
+    background: linear-gradient(90deg, rgba(255, 255, 255, 0.04), rgba(9, 11, 16, 0.98) 55%);
     padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
   }
-  .chyron.sev-red { background: linear-gradient(90deg, rgba(239, 35, 60, 0.16), rgba(9, 13, 22, 0.98) 55%); border-top-color: rgba(239, 35, 60, 0.42); }
-  .chyron.sev-yellow { background: linear-gradient(90deg, rgba(255, 184, 0, 0.14), rgba(9, 13, 22, 0.98) 55%); border-top-color: rgba(255, 184, 0, 0.4); }
-  .chyron.sev-green { background: linear-gradient(90deg, rgba(16, 242, 150, 0.14), rgba(9, 13, 22, 0.98) 55%); border-top-color: rgba(16, 242, 150, 0.38); }
+  .chyron.sev-red { background: linear-gradient(90deg, rgba(239, 35, 60, 0.14), rgba(9, 11, 16, 0.98) 55%); border-top-color: rgba(239, 35, 60, 0.45); }
+  .chyron.sev-yellow { background: linear-gradient(90deg, rgba(245, 158, 11, 0.12), rgba(9, 11, 16, 0.98) 55%); border-top-color: rgba(245, 158, 11, 0.42); }
+  .chyron.sev-green { background: linear-gradient(90deg, rgba(16, 185, 129, 0.13), rgba(9, 11, 16, 0.98) 55%); border-top-color: rgba(16, 185, 129, 0.4); }
 
   .shot-tape { display: flex; gap: 7px; overflow-x: auto; padding-bottom: 4px; }
   .tape-pill { flex: 0 0 auto; border: 1px solid var(--hairline); background: var(--bg-well); border-left: 3px solid var(--dim); border-radius: 7px; padding: 6px 10px; cursor: pointer; text-align: left; }
   .tape-pill.green { border-left-color: var(--emerald); }
   .tape-pill.yellow { border-left-color: var(--amber); }
   .tape-pill.red { border-left-color: var(--crimson); }
-  .tape-pill.active { outline: 1px solid var(--cyan); background: rgba(0, 229, 255, 0.08); }
+  .tape-pill.active { outline: 1px solid rgba(255, 255, 255, 0.35); background: rgba(255, 255, 255, 0.06); }
 
   /* Coupled Lab Cards & Fault Coach */
   .coupled-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(265px, 1fr)); gap: 10px; }
@@ -433,6 +459,7 @@
   tr.bag-row-active { background: rgba(0, 229, 255, 0.08); }
   tr.bag-row-click { cursor: pointer; }
   tr.bag-row-click:hover { background: rgba(255, 255, 255, 0.03); }
+  tr.row-empty { opacity: 0.48; }
 
   .bar-row { margin-bottom: 10px; }
   .bar-top { display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 4px; gap: 8px; }
@@ -500,12 +527,12 @@
   .dlg-inner { padding: 17px 19px; }
 
   .toast {
-    position: fixed; bottom: 18px; right: 18px; z-index: 95;
+    position: fixed; inset: auto 18px 18px auto; margin: 0; z-index: 95;
     background: rgba(12, 16, 25, 0.96); border: 1px solid var(--cyan); color: var(--white);
     padding: 9px 14px; border-radius: 8px; font-weight: 600; font-size: 12px;
     box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55); opacity: 0; transform: translateY(10px); pointer-events: none; transition: opacity 0.18s, transform 0.18s;
   }
-  .toast.show { opacity: 1; transform: none; }
+  .toast.show, .toast:popover-open { opacity: 1; transform: none; }
 
   @media print {
     body * { visibility: hidden !important; }
@@ -528,15 +555,15 @@
   <div class="topbar-row">
     <div class="flex-row">
       <div class="brand">
-        <div class="brand-mark"><span></span></div>
+        <div class="brand-icon-wrap"><img src="assets/icon-64.png" alt="ShotLab" width="30" height="30" /></div>
         <span class="brand-name">SHOTLAB</span>
-        <span class="brand-tag">v5 STUDIO</span>
+        <span class="brand-tag">TELEMETRY OS</span>
       </div>
       <span class="badge badge-green" id="pill-bridge"><span class="hw-dot"></span>Bridge :8765</span>
       <span class="badge badge-cyan" id="pill-sniffer">:921 Sniffer</span>
       <span class="badge badge-green" id="pill-rig">Rig: Ready</span>
       <span class="badge badge-cyan" id="pill-gspro">GSPro: 7I</span>
-      <button type="button" class="btn btn-xs" id="glob-btn-keys">&#9000; Shortcuts</button>
+      <button type="button" class="btn btn-xs" id="glob-btn-keys">Shortcuts</button>
     </div>
 
     <nav class="lifecycle-nav" id="lifecycle-nav" aria-label="Session lifecycle">
@@ -547,10 +574,10 @@
     </nav>
 
     <div class="flex-row">
-      <button type="button" class="btn btn-sm" id="glob-btn-obs">&#128225; OBS (11)</button>
+      <button type="button" class="btn btn-sm" id="glob-btn-obs">OBS (11)</button>
       <button type="button" class="btn btn-sm" id="glob-btn-csv">FSX CSV</button>
-      <button type="button" class="btn btn-sm" id="glob-btn-settings">&#9881; Settings</button>
-      <button type="button" class="btn btn-sm btn-cyan" id="glob-btn-drills">&#128214; Drills [D]</button>
+      <button type="button" class="btn btn-sm" id="glob-btn-settings">Settings</button>
+      <button type="button" class="btn btn-sm btn-cyan" id="glob-btn-drills">Drills <kbd>D</kbd></button>
     </div>
   </div>
 
@@ -563,18 +590,19 @@
           <button type="button" data-pm="sore">Gym-Sore</button>
         </div>
         <button type="button" class="btn btn-sm btn-emerald" id="glob-feel-pill">Block: The Throw (Day 4/7)</button>
-        <button type="button" class="btn btn-sm btn-amber" id="glob-park-btn">&#127359; Park It [P]</button>
+        <button type="button" class="btn btn-sm btn-amber" id="glob-park-btn">Park It <kbd>P</kbd></button>
       </div>
       <div class="flex-row">
         <div class="seg" id="glob-tier-seg" role="group" aria-label="Benchmark tier">
+          <button type="button" data-tier="tour_pro">Tour Pro</button>
           <button type="button" data-tier="scratch">Scratch</button>
           <button type="button" class="active" data-tier="low_hcp">Low HCP</button>
           <button type="button" data-tier="mid_hcp">Mid HCP</button>
           <button type="button" data-tier="personal">Personal</button>
         </div>
-        <button type="button" class="btn btn-sm" id="glob-btn-tempo">&#9201; Tempo &amp; Voice [T]</button>
+        <button type="button" class="btn btn-sm" id="glob-btn-tempo">Tempo &amp; Voice <kbd>T</kbd></button>
         <button type="button" class="btn btn-sm" id="glob-btn-cold">DB: Mature (1,428)</button>
-        <span class="badge" id="glob-phone-badge">&#128241; Mobile Drills Synced</span>
+        <span class="badge" id="glob-phone-badge">Mobile Drills Synced</span>
       </div>
     </div>
   </div>
@@ -664,8 +692,8 @@
             <button type="button" data-min="45">45m</button>
           </div>
           <span class="badge badge-green" id="plan-aid-guard">2 / 3 Training Aids</span>
-          <button type="button" class="btn" id="plan-btn-checkin">&#9971; 60-Sec Round Check-In</button>
-          <button type="button" class="btn btn-cyan" id="plan-btn-start">&#9654; Start Coached Session</button>
+          <button type="button" class="btn" id="plan-btn-checkin">60-Sec Round Check-In</button>
+          <button type="button" class="btn btn-emerald" id="plan-btn-start">&#9654; Start Coached Session</button>
         </div>
       </div>
       <div id="plan-checkin-banner" class="sub-well" style="display:none;margin-bottom:10px;border-color:rgba(255,184,0,0.42);"></div>
@@ -734,14 +762,14 @@
             <option value="high_soft">High Soft</option>
           </select>
         </label>
-        <button type="button" class="btn btn-sm is-on" id="prac-goal-toggle">&#9673; Dotted Goal: ON</button>
+        <button type="button" class="btn btn-sm is-on" id="prac-goal-toggle">Dotted Goal: ON</button>
         <div class="seg" id="prac-density-seg">
           <button type="button" class="active" data-d="mat">10-Ft Mat [M]</button>
           <button type="button" data-d="coach">Coach</button>
           <button type="button" data-d="lab">Lab</button>
         </div>
         <select id="prac-shot-select" aria-label="Select simulated shot"></select>
-        <button type="button" class="btn btn-cyan" id="prac-sim-next">&#9889; Strike Ball</button>
+        <button type="button" class="btn btn-crimson" id="prac-sim-next">Strike Ball</button>
       </div>
     </div>
 
@@ -846,8 +874,8 @@
               <h3>Shapley |F2P| Stroke-Leak Attribution</h3>
             </div>
             <div class="flex-row">
-              <button type="button" class="btn btn-xs" id="rev-attr-drill-btn">&#128214; Drills</button>
-              <button type="button" class="btn btn-cyan btn-xs" id="rev-train-btn">&#127919; Train This &rarr;</button>
+              <button type="button" class="btn btn-xs" id="rev-attr-drill-btn">Drills</button>
+              <button type="button" class="btn btn-cyan btn-xs" id="rev-train-btn">Train This &rarr;</button>
             </div>
           </div>
           <p class="muted" id="rev-attr-summary" style="margin:0 0 10px;"></p>
@@ -873,6 +901,24 @@
           <div id="rev-retention-cards" class="mt-8"></div>
         </div>
         <div class="rail" id="rev-block-verdict-box"></div>
+      </div>
+
+      <!-- Delivery Faults by Cost (Root-Cause Stroke-Leak Ranking) -->
+      <div class="rail mt-14">
+        <div class="head-row">
+          <div>
+            <span class="kicker">ROOT-CAUSE STROKE-LEAK RANKING &middot; CLICK ANY FAULT FOR DRILLS</span>
+            <h3>Delivery Faults by Cost</h3>
+          </div>
+          <div class="flex-row">
+            <div class="seg" id="rev-leaks-filter-seg" role="group" aria-label="Filter delivery patterns">
+              <button type="button" class="active" data-lf="all">All Patterns</button>
+              <button type="button" data-lf="faults">Faults Only</button>
+            </div>
+            <span class="badge">Sorted by Total SG Impact</span>
+          </div>
+        </div>
+        <div id="rev-fault-leaks"></div>
       </div>
     </div>
 
@@ -1185,7 +1231,7 @@
     <div class="rail mt-14">
       <div class="head-row">
         <div><span class="kicker">Bucketed by % Full Club Speed (62% / 74% / 86% / 98%) &middot; Smash &ge; 1.15 Filtered</span><h3>Wedge Clock Matrix &amp; Yardage Card</h3></div>
-        <button type="button" class="btn btn-cyan btn-sm" id="bag-open-card">&#128424; Printable Pocket Card</button>
+        <button type="button" class="btn btn-cyan btn-sm" id="bag-open-card">Printable Pocket Card</button>
       </div>
       <div class="grid-dna"><div class="wedge-matrix" id="bag-wedge-matrix"></div><div class="sub-well" id="bag-wedge-detail"></div></div>
     </div>
@@ -1229,21 +1275,21 @@
 
 <dialog id="dlg-tempo" closedby="any" aria-labelledby="dlg-tempo-title"><div class="dlg-inner"><div class="head-row"><div><span class="kicker">Lookahead Web Audio + Arbitrated Speech</span><h2 id="dlg-tempo-title">Tour Tempo, Pacing &amp; Voice Caddie</h2></div><button type="button" class="btn btn-sm" id="dlg-tempo-close">Close</button></div><div class="grid-dna"><div class="sub-well"><div class="grid-3"><div><span class="kicker">11 Presets</span><select id="tmp-preset" style="width:100%;margin-top:3px;" aria-label="Tempo preset"><option value="27/9">27/9 (3:1)</option><option value="24/8" selected>24/8 (3:1)</option><option value="21/7">21/7 (3:1)</option><option value="30/10">30/10 (3:1)</option><option value="18/9">18/9 (2:1)</option><option value="16/8">16/8 (2:1)</option><option value="14/7">14/7 (2:1)</option><option value="20/10">20/10 (Putt)</option></select></div><div><span class="kicker">Sound</span><select id="tmp-sound" style="width:100%;margin-top:3px;" aria-label="Tempo sound"><option value="tones">Tones</option><option value="woodblock">Woodblock</option><option value="click">Click</option><option value="beep">Beep</option><option value="soft">Soft Thud</option><option value="swoosh">Swoosh</option></select></div><div><span class="kicker">Rest Gap</span><select id="tmp-gap" style="width:100%;margin-top:3px;" aria-label="Rest gap"><option value="0">Non-stop</option><option value="3" selected>3s (+1s tick)</option><option value="5">5s</option><option value="10">10s</option><option value="20">20s</option><option value="30">30s</option></select></div></div><div class="flex-row mt-12" style="justify-content:space-between;"><div class="flex-row"><div class="tempo-orb" id="tmp-orb"><span id="tmp-orb-phase">READY</span></div><div><strong style="display:block;">Lookahead Scheduler</strong><span class="mono muted" id="tmp-rep-count">Reps: 0</span></div></div><button type="button" class="btn btn-cyan" id="tmp-toggle-play">&#9654; Start Tempo</button></div></div><div class="sub-well"><span class="kicker">Pacing &amp; Speech Arbiter</span><select id="tmp-pacing-mode" style="width:100%;margin-top:6px;" aria-label="Pacing mode"><option value="block">Block Pacing (2&ndash;5s)</option><option value="transfer">Transfer Pacing (15&ndash;20s)</option></select><div style="display:flex;flex-direction:column;gap:6px;margin-top:9px;"><label class="badge" style="cursor:pointer;"><input type="checkbox" id="tmp-caddie-en" checked /> Post-Shot Audio Caddie</label><label class="badge" style="cursor:pointer;"><input type="checkbox" id="tmp-cue-voice-en" /> Pre-Shot Cue Repeater [V]</label><label class="badge" style="cursor:pointer;"><input type="checkbox" id="tmp-single-source" checked /> Single-Source Desktop Lock</label></div></div></div></div></dialog>
 
-<dialog id="dlg-feel-guard" closedby="any" aria-labelledby="dlg-feel-title"><div class="dlg-inner"><div class="head-row"><div><span class="kicker">Anti-Feel-Cycling Governance</span><h2 id="dlg-feel-title">Active 7-Day Block &amp; Parking Lot</h2></div><button type="button" class="btn btn-sm" id="dlg-feel-close">Close</button></div><div class="sub-well" id="fg-block-info"></div><div class="sub-well mt-12" style="border-color:rgba(239,35,60,0.38);"><span class="kicker" style="color:var(--crimson-hi);">Mid-Block Switch Guard (Requires Logged Reason)</span><div class="grid-2 mt-8"><select id="fg-switch-sel" aria-label="Select replacement feel"><option value="the-throw">The Throw (Active · Day 4/7)</option><option value="lead-wrist-flat">Lead Wrist Flat Through Impact</option><option value="cruise-98">98 mph Smooth Transition</option><option value="sternum-ahead">Sternum Ahead of Ball</option></select><input type="text" id="fg-switch-reason" placeholder="Reason to break 7-day block..." aria-label="Switch reason" /></div><div class="flex-row mt-8" style="justify-content:flex-end;"><button type="button" class="btn btn-crimson btn-sm" id="fg-apply-switch">Override Block &amp; Switch</button></div></div><div class="sub-well mt-12"><span class="kicker" style="color:var(--amber);">&#127359; Park It — Save Breakthrough Without Switching Feel</span><div class="flex-row mt-8"><input type="text" id="fg-park-input" placeholder="e.g., Trail elbow tucked on P5..." style="flex:1;" aria-label="Park idea" /><button type="button" class="btn btn-amber btn-sm" id="fg-park-add">Park Idea</button></div><div id="fg-park-list" class="mt-8"></div></div></div></dialog>
+<dialog id="dlg-feel-guard" closedby="any" aria-labelledby="dlg-feel-title"><div class="dlg-inner"><div class="head-row"><div><span class="kicker">Anti-Feel-Cycling Governance</span><h2 id="dlg-feel-title">Active 7-Day Block &amp; Parking Lot</h2></div><button type="button" class="btn btn-sm" id="dlg-feel-close">Close</button></div><div class="sub-well" id="fg-block-info"></div><div class="sub-well mt-12" style="border-color:rgba(239,35,60,0.38);"><span class="kicker" style="color:var(--crimson-hi);">Mid-Block Switch Guard (Requires Logged Reason)</span><div class="grid-2 mt-8"><select id="fg-switch-sel" aria-label="Select replacement feel"><option value="the-throw">The Throw (Active · Day 4/7)</option><option value="lead-wrist-flat">Lead Wrist Flat Through Impact</option><option value="cruise-98">98 mph Smooth Transition</option><option value="sternum-ahead">Sternum Ahead of Ball</option></select><input type="text" id="fg-switch-reason" placeholder="Reason to break 7-day block..." aria-label="Switch reason" /></div><div class="flex-row mt-8" style="justify-content:flex-end;"><button type="button" class="btn btn-crimson btn-sm" id="fg-apply-switch">Override Block &amp; Switch</button></div></div><div class="sub-well mt-12"><span class="kicker" style="color:var(--amber);">Park It — Save Breakthrough Without Switching Feel</span><div class="flex-row mt-8"><input type="text" id="fg-park-input" placeholder="e.g., Trail elbow tucked on P5..." style="flex:1;" aria-label="Park idea" /><button type="button" class="btn btn-amber btn-sm" id="fg-park-add">Park Idea</button></div><div id="fg-park-list" class="mt-8"></div></div></div></dialog>
 
-<dialog id="dlg-cal" closedby="any" aria-labelledby="dlg-cal-title"><div class="dlg-inner"><div class="head-row"><div><span class="kicker">Bayesian Club-ID Posterior Builder</span><h2 id="dlg-cal-title">10-Minute Bag Calibration Wizard</h2></div><div class="flex-row"><span class="badge badge-cyan" id="cal-readiness-pill">87%</span><button type="button" class="btn btn-sm" id="dlg-cal-close">Close</button></div></div><div id="cal-foam-warn" class="sub-well" style="display:none;margin-bottom:10px;border-color:rgba(0,229,255,0.45);color:var(--cyan);">Kids-Asleep Firewall ON &mdash; calibration paused.</div><div class="cal-grid" id="cal-heatmap"></div><div class="sub-well mt-12"><div class="head-row" style="margin-bottom:6px;"><div><h3 id="cal-wiz-title">4H</h3><p class="muted" id="cal-wiz-desc" style="margin:3px 0 0;font-size:11.5px;"></p></div><button type="button" class="btn btn-emerald btn-sm" id="cal-sim-shot">&#9889; Simulate Confirmed Shot</button></div><div class="flex-row" id="cal-wiz-dots"></div></div></div></dialog>
+<dialog id="dlg-cal" closedby="any" aria-labelledby="dlg-cal-title"><div class="dlg-inner"><div class="head-row"><div><span class="kicker">Bayesian Club-ID Posterior Builder</span><h2 id="dlg-cal-title">10-Minute Bag Calibration Wizard</h2></div><div class="flex-row"><span class="badge badge-cyan" id="cal-readiness-pill">87%</span><button type="button" class="btn btn-sm" id="dlg-cal-close">Close</button></div></div><div id="cal-foam-warn" class="sub-well" style="display:none;margin-bottom:10px;border-color:rgba(245,158,11,0.45);color:var(--amber);">Kids-Asleep Firewall ON &mdash; calibration paused.</div><div class="cal-grid" id="cal-heatmap"></div><div class="sub-well mt-12"><div class="head-row" style="margin-bottom:6px;"><div><h3 id="cal-wiz-title">4H</h3><p class="muted" id="cal-wiz-desc" style="margin:3px 0 0;font-size:11.5px;"></p></div><button type="button" class="btn btn-emerald btn-sm" id="cal-sim-shot">Simulate Confirmed Shot</button></div><div class="flex-row" id="cal-wiz-dots"></div></div></div></dialog>
 
 <dialog id="dlg-csv" closedby="any" aria-labelledby="dlg-csv-title"><div class="dlg-inner"><div class="head-row"><div><span class="kicker">FSX Pro / FSX 2020 Bridge</span><h2 id="dlg-csv-title">FSX CSV Import &amp; Live Watcher</h2></div><button type="button" class="btn btn-sm" id="dlg-csv-close">Close</button></div><p class="muted" style="margin:0 0 10px;">Import exported FSX CSV sessions or watch <code>LastShot.csv</code> live:</p><div class="flex-row"><button type="button" class="btn btn-cyan" id="csv-import-btn">Import FSX CSV</button><button type="button" class="btn btn-emerald" id="csv-watch-btn">Watch LastShot.csv Live</button><button type="button" class="btn" id="csv-stop-btn" style="display:none;">Stop Watching</button></div><p class="mono muted mt-12" id="csv-status-msg">Idle &mdash; SimWatch live bridge active.</p></div></dialog>
 
 <dialog id="dlg-settings" closedby="any" aria-labelledby="dlg-settings-title"><div class="dlg-inner"><div class="head-row"><div><span class="kicker">v2 Rig + Mat Physics + Hands-Free Deck</span><h2 id="dlg-settings-title">Settings, Custom Lofts &amp; Foot Pedals</h2></div><button type="button" class="btn btn-sm" id="dlg-settings-close">Close</button></div><div class="grid-3"><div><span class="kicker">Driver Baseline (mph)</span><input type="number" id="set-driver-speed" value="98" min="65" max="135" style="width:100%;margin-top:3px;" aria-label="Driver baseline speed" /></div><div><span class="kicker">Handedness</span><select id="set-hand" style="width:100%;margin-top:3px;" aria-label="Handedness"><option value="RH">Right-Handed (RH)</option><option value="LH">Left-Handed (LH)</option></select></div><div><span class="kicker">Altitude (ft)</span><input type="number" id="set-altitude" value="0" min="0" max="8000" step="100" style="width:100%;margin-top:3px;" aria-label="Altitude" /></div><div><span class="kicker">Auto-Switch Conf (%)</span><input type="number" id="set-autoswitch-conf" value="90" min="70" max="99" style="width:100%;margin-top:3px;" aria-label="Auto switch confidence" /></div><div><span class="kicker">OBS Auto-Hide (sec)</span><input type="number" id="set-obs-autohide" value="0" min="0" max="300" style="width:100%;margin-top:3px;" aria-label="OBS autohide" /></div><div><span class="kicker">Hitting Mat Type</span><select id="set-mat-type" style="width:100%;margin-top:3px;" aria-label="Mat type"><option value="fiberbuilt">Fiberbuilt Grass</option><option value="divot">Divot Action Strip</option><option value="cce">CCE Tight Turf</option></select></div></div><div class="flex-row mt-12"><label class="badge" style="cursor:pointer;"><input type="checkbox" id="set-audio-chimes" checked /> Grade Chimes</label><label class="badge" style="cursor:pointer;"><input type="checkbox" id="set-audio-caddie" checked /> Audio Caddie</label><label class="badge" style="cursor:pointer;"><input type="checkbox" id="set-silent-cam" /> Silent 240fps Camera</label></div><div class="sub-well mt-12"><span class="kicker" style="margin-bottom:6px;">Custom Static Lofts (&deg;)</span><div id="set-lofts-grid" style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;"></div></div><div class="sub-well mt-12"><span class="kicker" style="margin-bottom:6px;">Hands-Free Bluetooth 3-Pedal Deck &amp; Voice</span><div class="pedal-deck" id="set-pedals"><button type="button" class="pedal" data-cmd="Pedal F13: Confirmed active club">&#10003; Confirm (F13)</button><button type="button" class="pedal" data-cmd="Pedal F14: Opened Video Compare">&#9654; Compare (F14)</button><button type="button" class="pedal" data-cmd="Pedal F15: Promoted My-Go-To">&#9733; Go-To (F15)</button></div><div class="flex-row mt-8" id="set-voice"><button type="button" class="btn btn-xs" data-cmd="Voice: Confirmed 6-Iron">&ldquo;Confirm 6 Iron&rdquo;</button><button type="button" class="btn btn-xs" data-cmd="Voice: Parked idea">&ldquo;Park This Idea&rdquo;</button><button type="button" class="btn btn-xs" data-cmd="Voice: Toggled Kids Asleep" data-action="toggle-almost">&ldquo;Kids Asleep Mode&rdquo;</button></div><div id="set-log" class="mono mt-8" style="font-size:10.5px;color:var(--cyan);"></div></div><div class="flex-row mt-12" style="justify-content:space-between;"><button type="button" class="btn btn-crimson btn-sm" id="set-reset-cal">Reset Calibration</button><button type="button" class="btn btn-cyan" id="set-save-btn">Save Settings</button></div></div></dialog>
 
-<dialog id="dlg-wedge" closedby="any" aria-labelledby="dlg-wedge-title"><div class="dlg-inner"><div class="head-row"><div><span class="kicker">DECADE 3&Prime;&times;5&Prime; Pocket Card</span><h2 id="dlg-wedge-title">Personal Wedge Clock Matrix</h2></div><div class="flex-row no-print"><button type="button" class="btn btn-cyan btn-sm" id="wedge-print-btn">&#128424; Print / Save PDF</button><button type="button" class="btn btn-sm" id="dlg-wedge-close">Close</button></div></div><div id="wedge-print-body"></div></div></dialog>
+<dialog id="dlg-wedge" closedby="any" aria-labelledby="dlg-wedge-title"><div class="dlg-inner"><div class="head-row"><div><span class="kicker">DECADE 3&Prime;&times;5&Prime; Pocket Card</span><h2 id="dlg-wedge-title">Personal Wedge Clock Matrix</h2></div><div class="flex-row no-print"><button type="button" class="btn btn-cyan btn-sm" id="wedge-print-btn">Print / Save PDF</button><button type="button" class="btn btn-sm" id="dlg-wedge-close">Close</button></div></div><div id="wedge-print-body"></div></div></dialog>
 
 <dialog id="dlg-checkin" closedby="any" aria-labelledby="dlg-checkin-title"><div class="dlg-inner"><div class="head-row"><div><span class="kicker">Outdoor &harr; Sim Loop</span><h2 id="dlg-checkin-title">60-Sec Post-Round Check-In</h2></div><button type="button" class="btn btn-sm" id="dlg-checkin-close">Close</button></div><div class="flex-row" style="margin-bottom:10px;"><label class="muted">Round Score: <input type="number" id="checkin-score" value="79" min="62" max="125" style="width:68px;" aria-label="Round score" /></label></div><div class="grid-2" id="checkin-checks"><label class="sub-well" style="cursor:pointer;display:flex;align-items:center;gap:8px;"><input type="checkbox" value="driver_ob" checked /> Driver Two-Way Miss / OB</label><label class="sub-well" style="cursor:pointer;display:flex;align-items:center;gap:8px;"><input type="checkbox" value="fat_irons" /> Fat Approach Shots</label><label class="sub-well" style="cursor:pointer;display:flex;align-items:center;gap:8px;"><input type="checkbox" value="wedge_dist" /> Wedge Distance Control</label><label class="sub-well" style="cursor:pointer;display:flex;align-items:center;gap:8px;"><input type="checkbox" value="pressure_close" checked /> Closing-Hole Tension</label></div><div class="flex-row mt-12" style="justify-content:flex-end;"><button type="button" class="btn btn-cyan" id="checkin-apply">Update Prescription &amp; Log Round</button></div></div></dialog>
 
 <dialog id="dlg-keys" closedby="any" aria-labelledby="dlg-keys-title"><div class="dlg-inner"><div class="head-row"><div><span class="kicker">Zero-Collision Unified Bindings</span><h2 id="dlg-keys-title">Keyboard &amp; Pedal Shortcuts</h2></div><button type="button" class="btn btn-sm" id="dlg-keys-close">Close</button></div><table><thead><tr><th>Trigger</th><th>Action</th></tr></thead><tbody id="keys-table-body"></tbody></table></div></dialog>
 
-<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="toast" id="toast" popover="manual" role="status" aria-live="polite"></div>
 
 <script>
 (function () {
@@ -1270,8 +1316,19 @@
     const el = $('toast');
     el.textContent = msg;
     el.classList.add('show');
+    if (typeof el.showPopover === 'function') {
+      try {
+        if (el.matches(':popover-open')) el.hidePopover();
+        el.showPopover();
+      } catch {}
+    }
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.remove('show'), 2700);
+    toastTimer = setTimeout(() => {
+      el.classList.remove('show');
+      if (typeof el.hidePopover === 'function') {
+        try { if (el.matches(':popover-open')) el.hidePopover(); } catch {}
+      }
+    }, 2700);
   }
 
   // ==================== UNIFIED STATE STORE ====================
@@ -1364,6 +1421,7 @@
       speed: 98.0,
       hoverSpeed: null,
       selectedFaultIdx: 0,
+      faultsOnly: false,
       decClub: '7I',
       decMode: 'real',
       trendMetric: 'avgScore',
@@ -1588,7 +1646,7 @@
     if (shot.foam) return { grade: 'yellow', label: 'Foam Ball' };
     const map = { DR: [1.45, 1.40, 'Ideal 1.47'], '4H': [1.38, 1.33, 'Ideal 1.40'], '7I': [1.35, 1.30, 'Ideal 1.38'], PW: [1.24, 1.19, 'Ideal 1.26'], SW: [1.19, 1.14, 'Ideal 1.21'] };
     const [hi, mid, lbl] = map[shot.club] || [1.34, 1.29, 'Ideal 1.36'];
-    const tShift = state.tier === 'scratch' ? 0.02 : state.tier === 'mid_hcp' ? -0.03 : 0;
+    const tShift = state.tier === 'tour_pro' ? 0.03 : state.tier === 'scratch' ? 0.02 : state.tier === 'mid_hcp' ? -0.03 : 0;
     return { grade: shot.smash >= hi + tShift ? 'green' : shot.smash >= mid + tShift ? 'yellow' : 'red', label: shot.partial ? 'Partial Guard' : lbl };
   }
 
@@ -1761,8 +1819,7 @@
               fill="rgba(15,23,42,0.42)" stroke="rgba(255,255,255,0.14)" stroke-width="1" />
         ${[52, 62, 72, 82, 92, 102].map((y) => `
           <line x1="78" y1="${y}" x2="108" y2="${y}" stroke="rgba(226,232,240,0.34)" stroke-width="1.3" stroke-linecap="round" />
-          <line x1="162" y1="${y}" x2="196" y2="${y}" stroke="rgba(226,232,240,0.34)" stroke-width="1.3" stroke-linecap="round" />`).join('')}
-        <text x="198" y="106" fill="rgba(226,232,240,0.45)" font-size="8" font-family="monospace" font-weight="700">${esc(club)} ${esc(loft)}</text>`;
+          <line x1="162" y1="${y}" x2="196" y2="${y}" stroke="rgba(226,232,240,0.34)" stroke-width="1.3" stroke-linecap="round" />`).join('')}`;
     } else if (kind === 'hybrid') {
       headMarkup = `
         <path d="M 42 8 L 54 8 L 60 66 L 46 68 Z" fill="url(#${uid}_ferrule)" />
@@ -1772,8 +1829,7 @@
               fill="url(#${uid}_ti)" stroke="#64748b" stroke-width="1.7" />
         <path d="M 56 64 C 86 48, 182 46, 212 64 C 180 54, 88 54, 56 64 Z" fill="#090d16" opacity="0.92" />
         ${[68, 76, 84, 92, 100].map((y, i) => `
-          <line x1="76" y1="${y}" x2="196" y2="${y}" stroke="${i === 4 ? '#f8fafc' : 'rgba(226,232,240,0.38)'}" stroke-width="${i === 4 ? 1.8 : 1.3}" stroke-linecap="round" />`).join('')}
-        <text x="190" y="114" fill="rgba(226,232,240,0.5)" font-size="8" font-family="monospace" font-weight="700">${esc(club)} ${esc(loft)}</text>`;
+          <line x1="76" y1="${y}" x2="196" y2="${y}" stroke="${i === 4 ? '#f8fafc' : 'rgba(226,232,240,0.38)'}" stroke-width="${i === 4 ? 1.8 : 1.3}" stroke-linecap="round" />`).join('')}`;
     } else if (kind === 'wedge') {
       headMarkup = `
         <path d="M 46 6 L 58 6 L 63 82 L 49 84 Z" fill="url(#${uid}_ferrule)" />
@@ -1784,8 +1840,7 @@
               fill="url(#${uid}_ti)" stroke="#94a3b8" stroke-width="1.7" />
         <!-- Full-Face Micro-Grooves -->
         ${[44, 52, 60, 68, 76, 84, 92, 100, 108].map((y, i) => `
-          <line x1="72" y1="${y}" x2="${y < 55 ? 210 : 204}" y2="${y}" stroke="${i === 8 ? '#f8fafc' : 'rgba(248,250,252,0.38)'}" stroke-width="${i === 8 ? 1.8 : 1.25}" stroke-linecap="round" />`).join('')}
-        <text x="176" y="116" fill="rgba(15,23,42,0.75)" font-size="8.5" font-family="monospace" font-weight="800">${esc(club)} ${esc(loft)}</text>`;
+          <line x1="72" y1="${y}" x2="${y < 55 ? 210 : 204}" y2="${y}" stroke="${i === 8 ? '#f8fafc' : 'rgba(248,250,252,0.38)'}" stroke-width="${i === 8 ? 1.8 : 1.25}" stroke-linecap="round" />`).join('')}`;
     } else {
       headMarkup = `
         <path d="M 45 6 L 57 6 L 63 80 L 49 82 Z" fill="url(#${uid}_ferrule)" />
@@ -1797,9 +1852,11 @@
         <!-- Top-Line Bevel -->
         <path d="M 64 46 L 204 34" stroke="rgba(255,255,255,0.42)" stroke-width="1.5" stroke-linecap="round" />
         ${[52, 60, 68, 76, 84, 92, 100, 108].map((y, i) => `
-          <line x1="76" y1="${y}" x2="196" y2="${y}" stroke="${i === 7 ? '#f8fafc' : 'rgba(226,232,240,0.42)'}" stroke-width="${i === 7 ? 1.8 : 1.3}" stroke-linecap="round" />`).join('')}
-        <text x="180" y="116" fill="rgba(226,232,240,0.55)" font-size="8" font-family="monospace" font-weight="800">${esc(club)} ${esc(loft)}</text>`;
+          <line x1="76" y1="${y}" x2="196" y2="${y}" stroke="${i === 7 ? '#f8fafc' : 'rgba(226,232,240,0.42)'}" stroke-width="${i === 7 ? 1.8 : 1.3}" stroke-linecap="round" />`).join('')}`;
     }
+
+    const stampX = isLH ? 22 : w - 22;
+    const stampAnchor = isLH ? 'start' : 'end';
 
     return `
       <svg viewBox="0 0 ${w} ${h}" width="100%" style="background:#05080f;border-radius:9px;border:1px solid var(--hairline);" aria-label="Realistic ${esc(kind)} clubface impact map">
@@ -1827,11 +1884,12 @@
           <line x1="${cx - 9}" y1="${cy}" x2="${cx + 9}" y2="${cy}" stroke="rgba(148,163,184,0.45)" stroke-width="0.9" />
           <line x1="${cx}" y1="${cy - 9}" x2="${cx}" y2="${cy + 9}" stroke="rgba(148,163,184,0.45)" stroke-width="0.9" />
           <!-- Thermal Compression Decal -->
-          ${shot.ballOnly ? '' : `
+          ${(shot.ballOnly || shot.foam) ? '' : `
             <circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="22" fill="url(#${uid}_hit)" />
             <circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="8" fill="none" stroke="rgba(248,250,252,0.65)" stroke-width="1" stroke-dasharray="2 2" />
             <circle cx="${hx.toFixed(1)}" cy="${hy.toFixed(1)}" r="5" fill="${col}" stroke="#f8fafc" stroke-width="1.5" />`}
         </g>
+        <text x="${stampX}" y="116" text-anchor="${stampAnchor}" fill="rgba(226,232,240,0.58)" font-size="8" font-family="monospace" font-weight="800">${esc(club)} ${esc(loft)}</text>
         <text x="10" y="143" fill="#8b9bb4" font-size="9" font-family="monospace">${isLH ? 'TOE' : 'HEEL'}</text>
         <text x="${w / 2}" y="143" text-anchor="middle" fill="${col}" font-size="9.5" font-weight="700" font-family="monospace">${esc(shot.strikeLoc.mm)} · ${esc(shot.strikeLoc.label)}</text>
         <text x="${w - 10}" y="143" text-anchor="end" fill="#8b9bb4" font-size="9" font-family="monospace">${isLH ? 'HEEL' : 'TOE'}</text>
@@ -1937,7 +1995,7 @@
             ${shot.tryFeels.map((f, i) => `
               <div class="flex-row" style="justify-content:space-between;margin-top:7px;gap:6px;flex-wrap:nowrap;">
                 <span style="font-size:11.5px;">&ldquo;${esc(f)}&rdquo;</span>
-                <button type="button" class="btn btn-xs btn-amber" data-park-feel="${i}" title="Park in Parking Lot without breaking your 7-day block">&#127359; Park</button>
+                <button type="button" class="btn btn-xs btn-amber" data-park-feel="${i}" title="Park in Parking Lot without breaking your 7-day block">Park</button>
               </div>`).join('')}
           </div>
           <div class="sub-well">
@@ -2026,7 +2084,8 @@
   }
 
   function computeClubConditions(c, cond) {
-    if (cond.lie === 'rough' && c.club === 'DR') return { club: c.club, teeOnly: true, flier: false, carry: c.carry, roll: c.roll, total: c.carry + c.roll, diffCarry: 0, aimOff: 0 };
+    if (!c || !c.n || !c.carry) return { club: c.club, empty: true, teeOnly: false, flier: false, carry: 0, roll: 0, total: 0, diffCarry: 0, aimOff: 0 };
+    if (cond.lie === 'rough' && c.club === 'DR') return { club: c.club, empty: false, teeOnly: true, flier: false, carry: c.carry, roll: c.roll, total: c.carry + c.roll, diffCarry: 0, aimOff: 0 };
     const spinNorm = clamp((c.spin - 2300) / 8400, 0, 1);
     const windMult = cond.wind < 0 ? 1 + cond.wind * (0.0088 + spinNorm * 0.0074) : 1 + cond.wind * (0.0062 - spinNorm * 0.0024);
     const airMult = 1 + (cond.alt / 1000) * 0.0125 + (cond.temp - 70) * 0.0017;
@@ -2094,6 +2153,7 @@
     document.querySelectorAll('#lifecycle-nav .mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === target));
     document.querySelectorAll('.mode-panel').forEach((p) => p.classList.toggle('active', p.id === `mode-${target}`));
     if (target !== 'review' || state.review.sub !== 'video') stopGhostRaf();
+    updateTensionVignette();
     if (target === 'practice') drawTracerCanvas(SHOTS[state.practice.shotIdx], state.practice.choreoPct);
     if (target === 'review' && state.review.sub === 'video') renderVideoLab();
   }
@@ -2262,10 +2322,10 @@
   $('prac-goal-toggle').addEventListener('click', () => {
     state.practice.showGoalArc = !state.practice.showGoalArc;
     $('prac-goal-toggle').classList.toggle('is-on', state.practice.showGoalArc);
-    $('prac-goal-toggle').textContent = state.practice.showGoalArc ? '◉ Dotted Goal: ON' : '○ Dotted Goal: OFF';
+    $('prac-goal-toggle').textContent = state.practice.showGoalArc ? 'Dotted Goal: ON' : 'Dotted Goal: OFF';
     drawTracerCanvas(SHOTS[state.practice.shotIdx], state.practice.choreoPct);
   });
-  document.querySelectorAll('#prac-sub-seg button').forEach((b) => b.addEventListener('click', () => { state.practice.sub = b.dataset.sub; renderPractice(); }));
+  document.querySelectorAll('#prac-sub-seg button').forEach((b) => b.addEventListener('click', () => { state.practice.sub = b.dataset.sub; updateTensionVignette(); renderPractice(); }));
   document.querySelectorAll('#prac-density-seg button').forEach((b) => b.addEventListener('click', () => { state.practice.density = b.dataset.d; renderPractice(); }));
   $('prac-mission-clear').addEventListener('click', () => { state.practice.mission = null; renderPractice(); });
   $('prac-mission-open-drill').addEventListener('click', () => { if (state.practice.mission && state.practice.mission.drillId) state.drawer.selDrillId = state.practice.mission.drillId; setDrawerOpen(true); });
@@ -2299,17 +2359,36 @@
     const ctx = canvas.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, cssW, cssH);
 
     const horizonY = cssH * 0.24, groundY = cssH * 0.90, cx = cssW * 0.5;
-    const skyG = ctx.createLinearGradient(0, 0, 0, horizonY); skyG.addColorStop(0, '#05070b'); skyG.addColorStop(1, '#0c1626');
+    const skyG = ctx.createLinearGradient(0, 0, 0, horizonY); skyG.addColorStop(0, '#040507'); skyG.addColorStop(1, '#090c12');
     ctx.fillStyle = skyG; ctx.fillRect(0, 0, cssW, horizonY);
-    const turfG = ctx.createLinearGradient(0, horizonY, 0, cssH); turfG.addColorStop(0, '#071411'); turfG.addColorStop(1, '#04070b');
+    const turfG = ctx.createLinearGradient(0, horizonY, 0, cssH); turfG.addColorStop(0, '#090c11'); turfG.addColorStop(1, '#050608');
     ctx.fillStyle = turfG; ctx.fillRect(0, horizonY, cssW, cssH - horizonY);
+
+    // Subtle depth-of-field Matrix telemetry columns in upper bay corners (Render 06 DNA)
+    ctx.save();
+    ctx.font = '700 11px ui-monospace, SFMono-Regular, Menlo, monospace';
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.16)';
+    ctx.fillText(String(shot.spin || 6400), 16, 52);
+    ctx.fillText(shot.smash ? shot.smash.toFixed(2) : '—', 16, 68);
+    ctx.fillStyle = 'rgba(16, 185, 129, 0.14)';
+    ctx.textAlign = 'right';
+    ctx.fillText(`${shot.vla}° VLA`, cssW - 16, 30);
+    ctx.fillText(`${shot.ballSpeed} mph`, cssW - 16, 46);
+    ctx.restore();
 
     ctx.save();
     ctx.beginPath(); ctx.moveTo(cx - cssW * 0.09, horizonY); ctx.lineTo(cx + cssW * 0.09, horizonY); ctx.lineTo(cx + cssW * 0.42, cssH); ctx.lineTo(cx - cssW * 0.42, cssH); ctx.closePath();
-    ctx.fillStyle = 'rgba(16, 242, 150, 0.04)'; ctx.fill();
-    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.font = '10px monospace'; ctx.fillStyle = 'rgba(139,155,180,0.55)';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.018)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1; ctx.font = '10px monospace'; ctx.fillStyle = 'rgba(138,148,166,0.55)';
     [0.25, 0.5, 0.75, 0.92].forEach((d, idx) => { const y = lerp(groundY, horizonY + 12, d), hw = lerp(cssW * 0.44, cssW * 0.1, d); ctx.beginPath(); ctx.ellipse(cx, y, hw, lerp(14, 4, d), 0, Math.PI, Math.PI * 2); ctx.stroke(); ctx.fillText(`${[50, 125, 200, 275][idx]}y`, cx + hw - 26, y + 3); });
-    ctx.setLineDash([4, 6]); ctx.strokeStyle = 'rgba(0,229,255,0.22)'; ctx.beginPath(); ctx.moveTo(cx, groundY); ctx.lineTo(cx, horizonY); ctx.stroke(); ctx.restore();
+    ctx.setLineDash([4, 6]); ctx.strokeStyle = 'rgba(255,255,255,0.16)'; ctx.beginPath(); ctx.moveTo(cx, groundY); ctx.lineTo(cx, horizonY); ctx.stroke();
+    // Subtle crimson launch tee beacon
+    ctx.setLineDash([]);
+    ctx.fillStyle = 'rgba(239, 35, 60, 0.35)';
+    ctx.beginPath(); ctx.ellipse(cx, groundY, 10, 3.5, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#ef233c';
+    ctx.beginPath(); ctx.arc(cx, groundY, 2.5, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
 
     const goals = computeShotGoals(shot, state.practice.intentShape);
     const maxDist = Math.max(260, shot.carry + 30, goals.carry + 30);
@@ -2391,6 +2470,224 @@
     ctx.fillStyle = '#f8fafc'; ctx.font = 'bold 11px monospace';
     ctx.fillText(`${shot.club} · ${shot.shape} · ${shot.offline === 0 ? '0y' : Math.abs(shot.offline) + 'y ' + (shot.offline > 0 ? 'R' : 'L')}`, 20, 28);
   }
+
+  // ==================== LIVE 3D SPINNING GOLF BALL + MATRIX BACKDROP (RENDER 06 DNA) ====================
+  const BallRenderer = (() => {
+    const NUM_DIMPLES = 332;
+    const CM_RES = 64; // crisp & instant startup bake (<8ms)
+    const CM_STRIDE = 4;
+    const DIMPLE_RAD = 0.145;
+    let cubeFaces = null;
+    let offBuf = null;
+    let rafId = 0;
+    let angle = 0;
+    let lastNow = 0;
+
+    function faceUVToVec(face, u, v) {
+      let x = 0, y = 0, z = 0;
+      if (face === 0) { x = 1; y = -v; z = -u; }
+      else if (face === 1) { x = -1; y = -v; z = u; }
+      else if (face === 2) { x = u; y = 1; z = v; }
+      else if (face === 3) { x = u; y = -1; z = -v; }
+      else if (face === 4) { x = u; y = -v; z = 1; }
+      else { x = -u; y = -v; z = -1; }
+      const inv = 1 / Math.hypot(x, y, z);
+      return [x * inv, y * inv, z * inv];
+    }
+
+    function ensureCubeMap() {
+      if (cubeFaces) return;
+      const golden = Math.PI * (3 - Math.sqrt(5));
+      const dimples = new Float32Array(NUM_DIMPLES * 3);
+      for (let i = 0; i < NUM_DIMPLES; i += 1) {
+        const y = 1 - (i / (NUM_DIMPLES - 1)) * 2;
+        const r = Math.sqrt(Math.max(0, 1 - y * y));
+        const th = golden * i;
+        dimples[i * 3] = Math.cos(th) * r;
+        dimples[i * 3 + 1] = y;
+        dimples[i * 3 + 2] = Math.sin(th) * r;
+      }
+      cubeFaces = Array.from({ length: 6 }, () => new Float32Array(CM_RES * CM_RES * CM_STRIDE));
+      for (let f = 0; f < 6; f += 1) {
+        const buf = cubeFaces[f];
+        for (let py = 0; py < CM_RES; py += 1) {
+          const v = ((py + 0.5) / CM_RES) * 2 - 1;
+          for (let px = 0; px < CM_RES; px += 1) {
+            const u = ((px + 0.5) / CM_RES) * 2 - 1;
+            const [vx, vy, vz] = faceUVToVec(f, u, v);
+            let bestDot = -1, bestIdx = 0;
+            for (let i = 0; i < NUM_DIMPLES; i += 1) {
+              const d = vx * dimples[i * 3] + vy * dimples[i * 3 + 1] + vz * dimples[i * 3 + 2];
+              if (d > bestDot) { bestDot = d; bestIdx = i; }
+            }
+            const cx = dimples[bestIdx * 3], cy = dimples[bestIdx * 3 + 1], cz = dimples[bestIdx * 3 + 2];
+            const q = Math.acos(Math.min(1, bestDot)) / DIMPLE_RAD;
+            let nx = vx, ny = vy, nz = vz, depth = 0;
+            if (q < 1.0) {
+              const bowl = 1 - q * q;
+              depth = bowl * bowl;
+              const tx = vx - bestDot * cx, ty = vy - bestDot * cy, tz = vz - bestDot * cz;
+              const tLen = Math.hypot(tx, ty, tz);
+              if (tLen > 1e-5) {
+                const k = (0.72 * q * (1 - q * q * 0.68)) / tLen;
+                nx = vx - tx * k; ny = vy - ty * k; nz = vz - tz * k;
+                const nInv = 1 / Math.hypot(nx, ny, nz);
+                nx *= nInv; ny *= nInv; nz *= nInv;
+              }
+            }
+            const idx = (py * CM_RES + px) * CM_STRIDE;
+            buf[idx] = nx; buf[idx + 1] = ny; buf[idx + 2] = nz; buf[idx + 3] = depth;
+          }
+        }
+      }
+    }
+
+    function sampleCM(x, y, z) {
+      const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z);
+      let face = 0, u = 0, v = 0;
+      if (ax >= ay && ax >= az) {
+        if (x > 0) { face = 0; u = -z / ax; v = -y / ax; } else { face = 1; u = z / ax; v = -y / ax; }
+      } else if (ay >= ax && ay >= az) {
+        if (y > 0) { face = 2; u = x / ay; v = z / ay; } else { face = 3; u = x / ay; v = -z / ay; }
+      } else {
+        if (z > 0) { face = 4; u = x / az; v = -y / az; } else { face = 5; u = -x / az; v = -y / az; }
+      }
+      const px = Math.max(0, Math.min(CM_RES - 1, ((u + 1) * 0.5 * CM_RES) | 0));
+      const py = Math.max(0, Math.min(CM_RES - 1, ((v + 1) * 0.5 * CM_RES) | 0));
+      const idx = (py * CM_RES + px) * CM_STRIDE;
+      const buf = cubeFaces[face];
+      return [buf[idx], buf[idx + 1], buf[idx + 2], buf[idx + 3]];
+    }
+
+    function spinMat(axisRad, ang) {
+      const ux = Math.cos(axisRad), uy = Math.sin(axisRad);
+      const c = Math.cos(ang), s = Math.sin(ang), t = 1 - c;
+      return [t * ux * ux + c, t * ux * uy, uy * s, t * ux * uy, t * uy * uy + c, -ux * s, -uy * s, ux * s, c];
+    }
+
+    function drawFrame(canvas, shot, ang) {
+      if (!canvas) return;
+      ensureCubeMap();
+      const size = canvas.width;
+      const ctx = canvas.getContext('2d');
+      if (!offBuf || offBuf.c.width !== size) {
+        const c = document.createElement('canvas'); c.width = size; c.height = size;
+        const bctx = c.getContext('2d');
+        offBuf = { c, ctx: bctx, img: bctx.createImageData(size, size) };
+      }
+
+      const half = size * 0.5, ballR = size * 0.36;
+      const axisRad = ((shot.spinAxis || 0) * 0.8 * Math.PI) / 180;
+      const m = spinMat(axisRad, ang);
+
+      // Map strikeLoc to sphere coordinates (default lower-left compression zone for aesthetic)
+      const noSpot = Boolean(shot.ballOnly || shot.foam);
+      const sx = noSpot ? 0 : clamp((shot.strikeLoc?.x || 0) * 1.15 - 0.34, -0.78, 0.78);
+      const sy = noSpot ? 0 : clamp(-(shot.strikeLoc?.y || 0) * 1.15 + 0.32, -0.78, 0.78);
+      const sz = Math.sqrt(Math.max(0.08, 1 - sx * sx - sy * sy));
+      const radCos = Math.cos((32 * Math.PI) / 180);
+
+      const data = offBuf.img.data;
+      const kLx = 0.48, kLy = -0.58, kLz = 0.66;
+      const rLx = -0.82, rLy = -0.35, rLz = 0.45;
+      const hx = kLx, hy = kLy, hz = kLz + 1, hInv = 1 / Math.hypot(hx, hy, hz);
+
+      for (let py = 0; py < size; py += 1) {
+        const dy = (py + 0.5 - half) / ballR;
+        for (let px = 0; px < size; px += 1) {
+          const oi = (py * size + px) * 4;
+          const dx = (px + 0.5 - half) / ballR;
+          const r2 = dx * dx + dy * dy;
+          if (r2 >= 1.0) {
+            const distOut = Math.sqrt(r2) - 1.0;
+            if (!noSpot && distOut < 0.22) {
+              const halo = Math.exp(-distOut * 16);
+              const dotH = Math.max(0, (dx * sx + dy * sy) * 0.9);
+              data[oi] = 255; data[oi + 1] = 42; data[oi + 2] = 60;
+              data[oi + 3] = Math.min(255, halo * (20 + dotH * 155));
+            } else {
+              data[oi] = 0; data[oi + 1] = 0; data[oi + 2] = 0; data[oi + 3] = 0;
+            }
+            continue;
+          }
+          const dz = Math.sqrt(1 - r2);
+          const aa = Math.min(1, (1 - Math.sqrt(r2)) * ballR * 0.9);
+          const ox = m[0] * dx + m[3] * dy + m[6] * dz;
+          const oy = m[1] * dx + m[4] * dy + m[7] * dz;
+          const oz = m[2] * dx + m[5] * dy + m[8] * dz;
+          const [dnx, dny, dnz, dDepth] = sampleCM(ox, oy, oz);
+          const nx = m[0] * dnx + m[1] * dny + m[2] * dnz;
+          const ny = m[3] * dnx + m[4] * dny + m[5] * dnz;
+          const nz = m[6] * dnx + m[7] * dny + m[8] * dnz;
+
+          const diffKey = Math.max(0, nx * kLx + ny * kLy + nz * kLz);
+          const diffRim = Math.max(0, nx * rLx + ny * rLy + nz * rLz);
+          const fresnel = Math.pow(1 - Math.max(0, nz), 3.2);
+          const spec = Math.pow(Math.max(0, (nx * hx + ny * hy + nz * hz) * hInv), 34);
+          const ao = 1 - dDepth * 0.35;
+
+          let r = 238 * (0.14 + 0.78 * diffKey + 0.22 * diffRim) * ao + spec * 195 + fresnel * 34;
+          let g = 242 * (0.15 + 0.78 * diffKey + 0.24 * diffRim) * ao + spec * 198 + fresnel * 64;
+          let b = 247 * (0.18 + 0.78 * diffKey + 0.28 * diffRim) * ao + spec * 205 + fresnel * 44;
+
+          if (!noSpot) {
+            const impDot = dx * sx + dy * sy + dz * sz;
+            if (impDot > radCos * 0.85) {
+              const nd = Math.max(0, Math.min(1, (1 - impDot) / Math.max(0.001, 1 - radCos)));
+              const heat = Math.pow(1 - nd, 1.85);
+              const core = Math.pow(Math.max(0, 1 - nd * 1.45), 2.5);
+              const dg = 1 + dDepth * 0.45;
+              r = r * Math.max(0.15, 1 - heat * 0.82) + (255 * heat * 0.95 + 255 * core * 0.4) * dg;
+              g = g * Math.max(0.06, 1 - heat * 0.92) + (30 * heat + 135 * core) * dg;
+              b = b * Math.max(0.06, 1 - heat * 0.92) + (48 * heat + 40 * core);
+            }
+          }
+          data[oi] = clamp(r, 0, 255); data[oi + 1] = clamp(g, 0, 255); data[oi + 2] = clamp(b, 0, 255); data[oi + 3] = Math.round(aa * 255);
+        }
+      }
+      offBuf.ctx.putImageData(offBuf.img, 0, 0);
+
+      ctx.clearRect(0, 0, size, size);
+      ctx.save();
+      ctx.beginPath(); ctx.roundRect(0, 0, size, size, size * 0.22); ctx.clip();
+      const bg = ctx.createRadialGradient(half, half * 0.65, 4, half, half, size * 0.7);
+      bg.addColorStop(0, '#10151f'); bg.addColorStop(1, '#050608');
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, size, size);
+
+      // Phosphor green Matrix digits behind ball (Render 06 DNA)
+      ctx.font = '800 10px ui-monospace, SFMono-Regular, Menlo, monospace';
+      ctx.fillStyle = 'rgba(16, 185, 129, 0.82)';
+      ctx.shadowColor = 'rgba(16, 185, 129, 0.7)'; ctx.shadowBlur = 4;
+      ctx.fillText(String(shot.spin || '—'), 10, 20);
+      ctx.fillText(shot.smash ? shot.smash.toFixed(2) : '—', size - 34, 20);
+      ctx.fillText(shot.path !== null ? `${shot.path > 0 ? '+' : ''}${shot.path}` : '—', 10, size - 12);
+      ctx.fillText(`${shot.vla}°`, size - 32, size - 12);
+      ctx.shadowBlur = 0;
+
+      ctx.drawImage(offBuf.c, 0, 0);
+      ctx.beginPath(); ctx.roundRect(1, 1, size - 2, size - 2, size * 0.21);
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.14)'; ctx.lineWidth = 1.2; ctx.stroke();
+      ctx.restore();
+    }
+
+    function start() {
+      cancelAnimationFrame(rafId);
+      lastNow = performance.now();
+      const step = (now) => {
+        const dt = Math.min(0.05, (now - lastNow) / 1000);
+        lastNow = now;
+        const c = $('prac-ball-canvas');
+        if (c && state.mode === 'practice' && state.practice.sub === 'range') {
+          const s = SHOTS[state.practice.shotIdx];
+          if (!prefersReducedMotion()) angle += dt * (0.7 + ((s.spin || 5000) / 11000) * 4.5);
+          drawFrame(c, s, angle);
+        }
+        rafId = requestAnimationFrame(step);
+      };
+      rafId = requestAnimationFrame(step);
+    }
+    return { start };
+  })();
 
   function radialScoreRingSvg(score, sev) {
     const col = sev === 'green' ? '#10f296' : sev === 'yellow' ? '#ffb800' : '#ef233c';
@@ -2477,13 +2774,15 @@
 
     $('prac-telemetry-pane').innerHTML = `
       <div class="hero-carry-card">
-        <span class="goal-delta ${carryGrade}">${carryDelta >= 0 ? '+' : ''}${carryDelta}y vs ${goals.carry}y</span>
         <div>
-          <div class="flex-row"><span class="kicker">${esc(s.clubLabel)} &middot; Carry</span><button type="button" class="q-btn" data-metric-help="carry" aria-label="Explain carry">?</button></div>
+          <div class="flex-row" style="gap:6px;flex-wrap:wrap;"><span class="kicker">${esc(s.clubLabel)} &middot; Carry</span><button type="button" class="q-btn" data-metric-help="carry" aria-label="Explain carry">?</button><span class="goal-delta ${carryGrade}" style="position:static;">${carryDelta >= 0 ? '+' : ''}${carryDelta}y vs ${goals.carry}y</span></div>
           <div class="hero-carry"><span id="prac-hero-carry-num">${s.carry}</span><span class="unit">yds</span></div>
           <div class="mono muted" style="font-size:11px;margin-top:3px;">Total ${s.total}y &middot; Ball ${s.ballSpeed} &middot; CS ${s.clubSpeed ?? '—'} &middot; VLA ${s.vla}° &middot; ${s.spin} rpm</div>
         </div>
-        ${radialScoreRingSvg(s.score, s.sev)}
+        <div class="hero-ball-stage">
+          <canvas id="prac-ball-canvas" width="96" height="96" title="Live 3D Spin &amp; Impact Zone"></canvas>
+          ${radialScoreRingSvg(s.score, s.sev)}
+        </div>
       </div>
 
       <div class="kpi-quad">
@@ -2524,7 +2823,7 @@
 
     const chyron = $('prac-chyron');
     chyron.className = `chyron sev-${s.sev}`;
-    chyron.innerHTML = `<div style="flex:1;min-width:250px;"><div style="font-weight:750;font-size:13px;color:var(--white);">${esc(s.verdict)}</div><div class="mono" style="font-size:11px;color:var(--cyan);margin-top:2px;">&#127919; ${esc(s.cue)}</div></div>
+    chyron.innerHTML = `<div style="flex:1;min-width:250px;"><div style="font-weight:750;font-size:13px;color:var(--white);">${esc(s.verdict)}</div><div class="mono" style="font-size:11px;color:var(--emerald);margin-top:2px;">CUE: ${esc(s.cue)}</div></div>
       <div class="flex-row">${s.ballOnly ? '<span class="badge badge-yellow">Ball-Only</span>' : ''}${s.partial ? '<span class="badge badge-cyan">Partial Guard</span>' : ''}${turf ? `<span class="badge badge-red">&#9888; Mat-Fat: Grass ${turf.lo}–${turf.hi}y</span>` : ''}</div>`;
 
     // Density Extra Views
@@ -2682,7 +2981,10 @@
   }
 
   // ==================== 2B: PRESSURE GATE + CHOKE AUTOPSY ====================
-  function updateTensionVignette() { $('tension-vignette').classList.toggle('active', state.pressure.streak === 4 && !state.pressure.mutedVignette); }
+  function updateTensionVignette() {
+    const show = state.mode === 'practice' && state.practice.sub === 'pressure' && state.pressure.streak === 4 && !state.pressure.mutedVignette;
+    $('tension-vignette').classList.toggle('active', show);
+  }
   function handlePressureAction(made) {
     const pr = state.pressure; if (pr.locked) return;
     if (made) {
@@ -2883,8 +3185,8 @@
         <path d="${areaPath}" fill="url(#pareto_area)" />
         ${pts.map((p) => `<circle cx="${xOf(p.sp).toFixed(1)}" cy="${yOf(p.sg).toFixed(1)}" r="${state.coldStart ? 4 : 2.6}" fill="${p.sp >= d.cliff ? 'rgba(239,35,60,0.48)' : p.sp >= d.sweetLo && p.sp <= d.sweetHi ? 'rgba(16,242,150,0.48)' : 'rgba(0,229,255,0.34)'}" />`).join('')}
         <path d="${curvePath}" fill="none" stroke="${state.coldStart ? '#ffb800' : '#00e5ff'}" stroke-width="3" stroke-linecap="round" ${state.coldStart ? 'stroke-dasharray="6 4"' : ''} />
-        <line x1="${cx.toFixed(1)}" y1="${padT}" x2="${cx.toFixed(1)}" y2="${H - padB}" stroke="${dotCol}" stroke-dasharray="3 3" />
-        <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6" fill="${dotCol}" stroke="#05070b" stroke-width="2" />
+        <line id="rev-pareto-line" x1="${cx.toFixed(1)}" y1="${padT}" x2="${cx.toFixed(1)}" y2="${H - padB}" stroke="${dotCol}" stroke-dasharray="3 3" />
+        <circle id="rev-pareto-dot" cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6" fill="${dotCol}" stroke="#05070b" stroke-width="2" />
         ${state.coldStart ? '' : `<text x="${(xOf(d.sweetLo) + 5).toFixed(1)}" y="${padT + 14}" fill="#10f296" font-size="9.5" font-weight="700">CRUISE GEAR</text><text x="${(xOf(d.cliff) + 5).toFixed(1)}" y="${padT + 14}" fill="#ef233c" font-size="9.5" font-weight="700">CLIFF</text>`}
         <text x="8" y="${(yOf(0) + 3).toFixed(1)}" fill="#8b9bb4" font-size="9" font-family="monospace">0.00</text>
         <text x="8" y="${(yOf(0.2) + 3).toFixed(1)}" fill="#10f296" font-size="9" font-family="monospace">+0.20</text>
@@ -2893,6 +3195,29 @@
         <text x="${W - padR - 46}" y="${H - 8}" fill="#5d6a82" font-size="10" font-family="monospace">${d.maxS} mph</text>
       </svg>`;
 
+    const updateParetoReadout = (sp) => {
+      const sg = d.curveFn(sp);
+      const sw = sp >= d.sweetLo && sp <= d.sweetHi;
+      const cl = sp >= d.cliff;
+      const dc = sw ? '#10f296' : cl ? '#ef233c' : '#ffb800';
+      const px = xOf(sp), py = yOf(sg);
+      const ln = $('rev-pareto-line'), dt = $('rev-pareto-dot');
+      if (ln) { ln.setAttribute('x1', px.toFixed(1)); ln.setAttribute('x2', px.toFixed(1)); ln.setAttribute('stroke', dc); }
+      if (dt) { dt.setAttribute('cx', px.toFixed(1)); dt.setAttribute('cy', py.toFixed(1)); dt.setAttribute('fill', dc); }
+      $('rev-speed-val').textContent = `${sp.toFixed(1)} mph`;
+      $('rev-speed-zone').textContent = state.coldStart ? 'Low Confidence (n=11)' : sw ? 'Optimal Cruise Gear' : cl ? '⚠ Over-Swing Cliff!' : 'Controlled';
+      $('rev-speed-zone').style.color = state.coldStart ? 'var(--amber)' : sw ? 'var(--emerald)' : cl ? 'var(--crimson-hi)' : 'var(--amber)';
+
+      const carryProj = Math.round(d.baseCarry + (sp - d.defaultS) * (state.review.club === 'DR' ? 2.4 : 1.7) - (cl ? (sp - d.cliff) * 2.2 : 0));
+      const fwPct = clamp(Math.round(74 - Math.max(0, sp - d.sweetHi) * 7.5 - Math.max(0, d.sweetLo - sp) * 1.2), 18, 88);
+      const bigMiss = clamp(Math.round(8 + Math.max(0, sp - d.sweetHi) * 6.8), 4, 58);
+      $('rev-speed-kpis').innerHTML = `
+        <div class="sub-well"><span class="kicker">Proj. SG</span><strong class="mono" style="color:${dc};">${sg >= 0 ? '+' : ''}${sg.toFixed(2)}</strong></div>
+        <div class="sub-well"><span class="kicker">Proj. Carry</span><strong class="mono">${carryProj}y</strong></div>
+        <div class="sub-well"><span class="kicker">Target Hit %</span><strong class="mono">${fwPct}%</strong></div>
+        <div class="sub-well"><span class="kicker">Big Miss %</span><strong class="mono" style="color:${bigMiss > 22 ? 'var(--crimson-hi)' : 'var(--emerald)'};">${bigMiss}%</strong></div>`;
+    };
+
     const pSvg = $('rev-pareto-interactive');
     pSvg.addEventListener('pointermove', (ev) => {
       const r = pSvg.getBoundingClientRect(), ux = clamp(((ev.clientX - r.left) / r.width) * W, padL, W - padR);
@@ -2900,18 +3225,11 @@
       state.review.hoverSpeed = sp;
       const sg = d.curveFn(sp);
       showChartTip(ev, `<strong>${d.label} · ${sp.toFixed(1)} mph</strong><div class="mono" style="color:${sg >= 0 ? '#10f296' : '#ef233c'};">Exp SG: ${sg >= 0 ? '+' : ''}${sg.toFixed(2)}</div><div class="muted">${sp >= d.cliff ? '⚠ Over-Swing Cliff' : sp >= d.sweetLo && sp <= d.sweetHi ? '✓ Cruise Zone' : 'Controlled'}</div>`);
-      renderDNA();
+      updateParetoReadout(sp);
     });
-    pSvg.addEventListener('pointerleave', () => { hideChartTip(); if (state.review.hoverSpeed !== null) { state.review.hoverSpeed = null; renderDNA(); } });
+    pSvg.addEventListener('pointerleave', () => { hideChartTip(); if (state.review.hoverSpeed !== null) { state.review.hoverSpeed = null; updateParetoReadout(state.review.speed); } });
 
-    const carryProj = Math.round(d.baseCarry + (activeSpeed - d.defaultS) * (state.review.club === 'DR' ? 2.4 : 1.7) - (overCliff ? (activeSpeed - d.cliff) * 2.2 : 0));
-    const fwPct = clamp(Math.round(74 - Math.max(0, activeSpeed - d.sweetHi) * 7.5 - Math.max(0, d.sweetLo - activeSpeed) * 1.2), 18, 88);
-    const bigMiss = clamp(Math.round(8 + Math.max(0, activeSpeed - d.sweetHi) * 6.8), 4, 58);
-    $('rev-speed-kpis').innerHTML = `
-      <div class="sub-well"><span class="kicker">Proj. SG</span><strong class="mono" style="color:${dotCol};">${sgNow >= 0 ? '+' : ''}${sgNow.toFixed(2)}</strong></div>
-      <div class="sub-well"><span class="kicker">Proj. Carry</span><strong class="mono">${carryProj}y</strong></div>
-      <div class="sub-well"><span class="kicker">Target Hit %</span><strong class="mono">${fwPct}%</strong></div>
-      <div class="sub-well"><span class="kicker">Big Miss %</span><strong class="mono" style="color:${bigMiss > 22 ? 'var(--crimson-hi)' : 'var(--emerald)'};">${bigMiss}%</strong></div>`;
+    updateParetoReadout(activeSpeed);
 
     $('rev-attr-summary').textContent = state.coldStart ? 'Preliminary n=11 snapshot — stabilizes at n ≥ 25.' : d.summary;
     $('rev-attr-bars').innerHTML = d.attrs.map((a, idx) => `
@@ -2963,7 +3281,48 @@
         <button type="button" class="btn btn-xs btn-emerald" data-verdict="KEEP">Keep</button><button type="button" class="btn btn-xs btn-amber" data-verdict="PARK">Park</button><button type="button" class="btn btn-xs btn-crimson" data-verdict="RETIRE">Retire</button><button type="button" class="btn btn-xs btn-cyan" data-verdict="EXTEND">Extend +7d</button>
       </div>`;
     $('rev-block-verdict-box').querySelectorAll('[data-verdict]').forEach((b) => b.addEventListener('click', () => { if (b.dataset.verdict === 'EXTEND') state.block.totalDays += 7; showToast(`Logged Verdict: ${b.dataset.verdict}`); syncGlobalChrome(); renderDNA(); }));
+
+    // Delivery Faults by Cost (Root-Cause Stroke-Leak Ranking)
+    document.querySelectorAll('#rev-leaks-filter-seg button').forEach((b) => b.classList.toggle('active', (b.dataset.lf === 'faults') === state.review.faultsOnly));
+    const rc = state.review.club;
+    const rawLeaks = [
+      { id: 'pure_compression', name: 'Pure Compression', shots: rc === 'DR' ? 118 : rc === 'PW' ? 84 : 162, avgSg: rc === 'DR' ? 0.14 : 0.11, good: true, fault: 'all' },
+      { id: 'flipping_floater', name: 'Flipping Floater', shots: rc === 'DR' ? 28 : rc === 'PW' ? 18 : 42, avgSg: -0.38, lostYds: 14.2, good: false, fault: 'early-release-scoop' },
+      { id: 'low_hook_trap', name: rc === 'DR' ? 'Over-Speed Snap Hook' : 'Over-Hold / Pull Trap', shots: rc === 'DR' ? 24 : rc === 'PW' ? 11 : 26, avgSg: -0.52, lostYds: 9.8, good: false, fault: 'driver-hook' },
+      { id: 'steep_dig', name: 'Mat-Saved Fat / Steep Chop', shots: rc === 'PW' ? 6 : 14, avgSg: -0.31, lostYds: 16.5, good: false, fault: 'low-point-fat' },
+    ];
+    const sumLeakShots = Math.max(1, rawLeaks.reduce((a, l) => a + l.shots, 0));
+    const leaksAll = rawLeaks
+      .map((l) => ({ ...l, pct: Math.round((l.shots / sumLeakShots) * 100), totalSg: +(l.shots * l.avgSg).toFixed(2) }))
+      .sort((a, b) => a.totalSg - b.totalSg);
+    const leaksShown = state.review.faultsOnly ? leaksAll.filter((l) => !l.good) : leaksAll;
+    const maxLeakShots = Math.max(1, ...leaksShown.map((l) => l.shots));
+    $('rev-fault-leaks').innerHTML = leaksShown.map((l) => {
+      const wPct = Math.max(8, Math.round((l.shots / maxLeakShots) * 100));
+      const barCol = l.good ? 'var(--emerald)' : l.avgSg <= -0.40 ? 'var(--crimson-hi)' : 'var(--amber)';
+      const sgCol = l.avgSg >= 0 ? 'var(--emerald)' : 'var(--crimson-hi)';
+      return `
+        <div class="sub-well" data-leak-fault="${esc(l.fault)}" style="margin-bottom:8px;cursor:pointer;padding:10px 12px;">
+          <div class="flex-row" style="justify-content:space-between;margin-bottom:6px;">
+            <strong style="color:var(--white);">${esc(l.name)}</strong>
+            <span class="mono" style="font-size:11.5px;">
+              ${l.shots} shots (${l.pct}%) &middot;
+              <span style="color:${sgCol};">Avg SG ${l.avgSg >= 0 ? '+' : ''}${l.avgSg.toFixed(2)}</span> &middot;
+              Total ${l.totalSg >= 0 ? '+' : ''}${l.totalSg.toFixed(2)}${l.lostYds ? ` &middot; &minus;${l.lostYds}y` : ''}
+            </span>
+          </div>
+          <div class="bar-track" style="height:6px;background:rgba(255,255,255,0.06);">
+            <div class="bar-fill" style="width:${wPct}%;background:${barCol};"></div>
+          </div>
+        </div>`;
+    }).join('');
+    $('rev-fault-leaks').querySelectorAll('[data-leak-fault]').forEach((el) => el.addEventListener('click', () => {
+      state.drawer.selDrillId = null;
+      setDrawerOpen(true, el.dataset.leakFault || 'all');
+    }));
   }
+
+  document.querySelectorAll('#rev-leaks-filter-seg button').forEach((b) => b.addEventListener('click', () => { state.review.faultsOnly = b.dataset.lf === 'faults'; renderDNA(); }));
 
   // ==================== 3B: FULL-SCALE DECADE DISPERSION STUDIO ====================
   function renderDecadeDispersion() {
@@ -3099,10 +3458,10 @@
       ctx.fillStyle = 'rgba(16,242,150,0.06)'; ctx.beginPath(); ctx.moveTo(464, 334); ctx.lineTo(260, 100); ctx.lineTo(310, 82); ctx.closePath(); ctx.fill();
       ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(239,35,60,0.5)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(328, 114); ctx.lineTo(328, 340); ctx.stroke(); ctx.restore();
     }
-    const r = state.review, wipeX760 = r.wipe * 760, ghCol = r.ghost === 'pro' ? '#f8fafc' : '#10f296';
-    ctx.save(); if (r.wipe < 0.99) { ctx.beginPath(); ctx.rect(wipeX760, 0, 760 - wipeX760, H); ctx.clip(); }
+    const r = state.review, isLH = state.handedness === 'LH', splitX = isLH ? (1 - r.wipe) * 760 : r.wipe * 760, ghCol = r.ghost === 'pro' ? '#f8fafc' : '#10f296';
+    ctx.save(); if (r.wipe < 0.99) { ctx.beginPath(); if (isLH) ctx.rect(0, 0, splitX, H); else ctx.rect(splitX, 0, 760 - splitX, H); ctx.clip(); }
     const ghPose = drawKinematicGolfer(ctx, r.pct, r.ghost, ghCol, r.wipe < 0.99 ? 0.92 : r.opacity, camFO); ctx.restore();
-    ctx.save(); if (r.wipe < 0.99) { ctx.beginPath(); ctx.rect(0, 0, wipeX760, H); ctx.clip(); }
+    ctx.save(); if (r.wipe < 0.99) { ctx.beginPath(); if (isLH) ctx.rect(splitX, 0, 760 - splitX, H); else ctx.rect(0, 0, splitX, H); ctx.clip(); }
     const curPose = drawKinematicGolfer(ctx, r.pct, 'current', '#00e5ff', 0.96, camFO); ctx.restore(); ctx.restore();
 
     const wipePx = r.wipe * W;
@@ -3278,7 +3637,7 @@
   }));
   $('rev-speed-slider').addEventListener('input', (e) => { state.review.speed = Number(e.target.value); state.review.hoverSpeed = null; renderDNA(); });
   $('rev-train-btn').addEventListener('click', () => { const d = DNA_DATA[state.review.club]; launchMission(`Fix #1 Leak: ${d.label}`, 'driver-startline-fairway-challenge', 'pressure', state.review.club === 'DR' ? 1 : 2, 'DNA FIX'); });
-  $('rev-attr-drill-btn').addEventListener('click', () => { const a = DNA_DATA[state.review.club].attrs[state.review.selectedFaultIdx]; setDrawerOpen(true, (a && a.fault) || 'all'); });
+  $('rev-attr-drill-btn').addEventListener('click', () => { const a = DNA_DATA[state.review.club].attrs[state.review.selectedFaultIdx]; state.drawer.selDrillId = null; setDrawerOpen(true, (a && a.fault) || 'all'); });
   $('rev-btn-sync').addEventListener('click', () => showToast('Synced 47 recent SimWatch shots + Kinovea clips'));
   $('rev-export-md').addEventListener('click', () => showToast('Exported ShotLab_Coach_Debrief.md!'));
   $('rev-export-packet').addEventListener('click', () => {
@@ -3318,19 +3677,26 @@
     $('bag-deleted-badge').className = `badge ${delCount ? 'badge-yellow' : ''}`;
 
     const rows = getFilteredBagRows();
+    if (!rows.some((r) => r.club === b.selectedClub) && rows[0]) {
+      b.selectedClub = rows[0].club;
+    }
     const withAdj = rows.map((base) => ({ base, adj: computeClubConditions(base, b) }));
-    const iron7 = withAdj.find((r) => r.base.club === '7I') || withAdj[0];
-    if (iron7) $('bag-summary-pill').textContent = `${iron7.base.club}: ${iron7.adj.carry}y Carry (${iron7.base.n} shots)`;
+    const iron7 = withAdj.find((r) => r.base.club === '7I' && r.base.n > 0) || withAdj.find((r) => r.base.n > 0) || withAdj[0];
+    if (iron7) $('bag-summary-pill').textContent = `${iron7.base.club}: ${iron7.base.n ? `${iron7.adj.carry}y Carry` : '—'} (${iron7.base.n} shots)`;
 
-    // Compute gaps in natural bag order before sorting
-    const byOrder = [...withAdj].sort((a, x) => a.base.order - x.base.order);
+    // Compute gaps in natural bag order across populated clubs before sorting
+    const popOrder = [...withAdj].filter((it) => it.base.n > 0 && it.adj.carry > 0).sort((a, x) => a.base.order - x.base.order);
     const gapMap = new Map();
-    byOrder.forEach((item, idx) => { gapMap.set(item.base.club, byOrder[idx + 1] ? item.adj.carry - byOrder[idx + 1].adj.carry : null); });
+    popOrder.forEach((item, idx) => { gapMap.set(item.base.club, popOrder[idx + 1] ? item.adj.carry - popOrder[idx + 1].adj.carry : null); });
 
-    // Apply user column sort
+    // Apply user column sort (push 0-shot rows to bottom on numeric cols)
     const sorted = [...withAdj].sort((a, x) => {
       const k = b.sortKey, dir = b.sortDir === 'asc' ? 1 : -1;
-      const val = (it) => k === 'order' ? it.base.order : k === 'club' ? it.base.order : k === 'carry' ? it.adj.carry : k === 'total' ? it.adj.total : k === 'gap' ? (gapMap.get(it.base.club) ?? -99) : it.base[k];
+      if (k !== 'order' && k !== 'club') {
+        if (!a.base.n && x.base.n) return 1;
+        if (a.base.n && !x.base.n) return -1;
+      }
+      const val = (it) => k === 'order' ? it.base.order : k === 'club' ? it.base.order : k === 'carry' ? it.adj.carry : k === 'total' ? it.adj.total : k === 'gap' ? (gapMap.get(it.base.club) ?? -999) : it.base[k];
       return (val(a) - val(x)) * dir;
     });
 
@@ -3349,19 +3715,21 @@
 
     $('bag-gapping-tbody').innerHTML = sorted.map(({ base, adj }) => {
       const gap = gapMap.get(base.club), sel = base.club === b.selectedClub;
-      return `<tr class="bag-row-click ${sel ? 'bag-row-active' : ''}" data-bag-club="${esc(base.club)}">
+      const emp = !base.n;
+      return `<tr class="bag-row-click ${emp ? 'row-empty' : ''} ${sel ? 'bag-row-active' : ''}" data-bag-club="${esc(base.club)}">
         <td><strong class="mono" style="color:var(--cyan);">${esc(base.club)}</strong></td>
-        <td class="num">${base.n}</td><td class="num"><strong>${adj.carry}y</strong></td>
-        <td class="num">${gap !== null ? gap + 'y' : '—'}</td><td class="num">${adj.total}y</td>
-        <td class="num">${base.ball}</td><td class="num">${base.smash}</td><td class="num">${base.spin}</td>
-        <td class="num">${base.desc}&deg;</td><td class="num">&plusmn;${base.w80}y</td>
-        <td class="num" style="color:${base.sg >= 0 ? 'var(--emerald)' : 'var(--crimson-hi)'};">${base.sg >= 0 ? '+' : ''}${base.sg.toFixed(2)}</td>
+        <td class="num">${base.n}</td><td class="num"><strong>${emp ? '—' : `${adj.carry}y`}</strong></td>
+        <td class="num">${!emp && gap != null ? gap + 'y' : '—'}</td><td class="num">${emp ? '—' : `${adj.total}y`}</td>
+        <td class="num">${emp ? '—' : base.ball}</td><td class="num">${emp ? '—' : base.smash}</td><td class="num">${emp ? '—' : base.spin}</td>
+        <td class="num">${emp ? '—' : `${base.desc}&deg;`}</td><td class="num">${emp ? '—' : `&plusmn;${base.w80}y`}</td>
+        <td class="num" style="color:${emp ? 'var(--slate)' : base.sg >= 0 ? 'var(--emerald)' : 'var(--crimson-hi)'};">${emp ? '—' : `${base.sg >= 0 ? '+' : ''}${base.sg.toFixed(2)}`}</td>
         <td class="mono dim">${esc(base.hm)}</td></tr>`;
     }).join('');
     $('bag-gapping-tbody').querySelectorAll('[data-bag-club]').forEach((tr) => tr.addEventListener('click', () => { state.bag.selectedClub = tr.dataset.bagClub; renderBag(); }));
 
-    // Conditions Warp Bars
-    $('bag-bars').innerHTML = sorted.map(({ base, adj }) => {
+    // Conditions Warp Bars (skip 0-shot clubs cleanly)
+    const warpRows = sorted.filter(({ base, adj }) => base.n > 0 && !adj.empty);
+    $('bag-bars').innerHTML = warpRows.length ? warpRows.map(({ base, adj }) => {
       if (adj.teeOnly) return `<div style="display:grid;grid-template-columns:44px 1fr 140px 84px;gap:9px;align-items:center;margin-bottom:7px;opacity:0.5;"><strong class="mono">DR</strong><div style="height:13px;background:rgba(255,255,255,0.05);border-radius:4px;padding-left:8px;font-size:10px;">Tee Only (N/A from 2&Prime; Rough)</div><div class="mono" style="text-align:right;">${base.carry}y/${base.total}y</div><div class="mono dim" style="text-align:right;">Tee Only</div></div>`;
       const cp = clamp((adj.carry / 305) * 100, 2, 98), rp = clamp((Math.max(0, adj.roll) / 305) * 100, 0, 100 - cp), sm = clamp((base.carry / 305) * 100, 2, 98);
       const col = adj.flier ? '#ffb800' : adj.diffCarry > 2 ? '#10f296' : adj.diffCarry < -2 ? '#ef233c' : '#00e5ff';
@@ -3369,7 +3737,7 @@
         <div style="position:relative;height:13px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;"><div style="position:absolute;top:2px;bottom:2px;left:0;width:${cp.toFixed(1)}%;background:${col};"></div><div style="position:absolute;top:2px;bottom:2px;left:${cp.toFixed(1)}%;width:${rp.toFixed(1)}%;background:repeating-linear-gradient(45deg,${col}66,${col}66 3px,transparent 3px,transparent 6px);"></div><div style="position:absolute;top:0;bottom:0;left:${sm.toFixed(1)}%;width:2px;background:#f8fafc;opacity:0.75;"></div></div>
         <div class="mono" style="font-size:11px;text-align:right;"><strong>${adj.carry}y</strong><span class="dim">/${adj.total}y</span> ${adj.flier ? '<span class="badge badge-yellow" style="padding:1px 4px;font-size:8.5px;">FLIER</span>' : `<span style="color:${col};">(${adj.diffCarry >= 0 ? '+' : ''}${adj.diffCarry})</span>`}</div>
         <div class="mono muted" style="font-size:10px;text-align:right;">${adj.aimOff === 0 ? 'Aim 0y' : `Aim ${Math.abs(adj.aimOff)}y ${adj.aimOff > 0 ? 'L' : 'R'}`}</div></div>`;
-    }).join('');
+    }).join('') : '<div class="sub-well muted">No shots match current window/mode/quality filter.</div>';
 
     // Per-Club Shot Inspector & Delete Manager
     const selRow = rows.find((r) => r.club === b.selectedClub) || rows[0];
@@ -3377,7 +3745,7 @@
       $('bag-shot-manager').innerHTML = `
         <div class="head-row">
           <div><span class="kicker">SQLite Shot Manager &middot; Delete Bad Reads or Mishits Live</span><h3>${esc(selRow.club)} Recorded Shots (${selRow.shots.length} matching filters)</h3></div>
-          <span class="mono muted" style="font-size:11px;">Avg Carry: ${selRow.carry}y · Smash ${selRow.smash}</span>
+          <span class="mono muted" style="font-size:11px;">Avg Carry: ${selRow.n ? `${selRow.carry}y · Smash ${selRow.smash}` : '—'}</span>
         </div>
         <div style="max-height:175px;overflow-y:auto;">
           <table><thead><tr><th>Age</th><th class="num">Carry</th><th class="num">Offline</th><th class="num">Smash</th><th class="num">Score</th><th>Tag</th><th class="num">Action</th></tr></thead>
@@ -3442,14 +3810,15 @@
   // ==================== SLIDE-OVER DRILL DRAWER & 9 MODALS ====================
   function renderDrawer() {
     const list = DRILLS_DATA.filter((d) => (state.drawer.fault === 'all' || d.faultTags.includes(state.drawer.fault)) && (state.drawer.env === 'all' || d.envs.includes(state.drawer.env)));
-    const active = DRILLS_DATA.find((d) => d.id === state.drawer.selDrillId) || list[0] || DRILLS_DATA[0];
+    const active = list.find((d) => d.id === state.drawer.selDrillId) || list[0] || DRILLS_DATA[0];
+    state.drawer.selDrillId = active ? active.id : null;
     $('drawer-list').innerHTML = list.map((d) => `<button type="button" class="clip-item ${d.id === active.id ? 'active' : ''}" data-did="${esc(d.id)}"><div class="flex-row" style="justify-content:space-between;"><strong style="color:var(--white);">${esc(d.title)}</strong><span class="badge">${esc(d.aids.join(', '))}</span></div><div class="muted" style="font-size:11px;margin-top:2px;">${esc(d.keyFeel)}</div></button>`).join('');
     $('drawer-list').querySelectorAll('[data-did]').forEach((b) => b.addEventListener('click', () => { state.drawer.selDrillId = b.dataset.did; renderDrawer(); }));
     $('drawer-detail').innerHTML = `<span class="kicker">Key Feel &amp; Target</span><h3 style="margin:2px 0 6px;">${esc(active.title)}</h3><p style="margin:0 0 6px;"><strong>Feel:</strong> ${esc(active.keyFeel)}</p><p class="muted" style="margin:0 0 6px;font-size:11.5px;"><strong>Why:</strong> ${esc(active.why)}</p><div class="mono" style="font-size:11px;color:var(--cyan);">HackMotion: ${esc(active.hackmotion)}</div><div class="mono" style="font-size:11px;color:var(--emerald);margin:4px 0 8px;">Kinovea: ${esc(active.checkpoints)}</div><div class="flex-row" style="justify-content:space-between;"><span class="badge badge-cyan">${esc(active.target.label)}</span><button type="button" class="btn btn-xs btn-cyan" id="drawer-queue-btn">Run in Practice &rarr;</button></div>`;
     $('drawer-queue-btn').addEventListener('click', () => { setDrawerOpen(false); launchMission(active.title, active.id, 'range', 2, 'DRILL FOCUS'); });
   }
-  $('drawer-fault-filter').addEventListener('change', (e) => { state.drawer.fault = e.target.value; renderDrawer(); });
-  $('drawer-env-filter').addEventListener('change', (e) => { state.drawer.env = e.target.value; renderDrawer(); });
+  $('drawer-fault-filter').addEventListener('change', (e) => { state.drawer.fault = e.target.value; state.drawer.selDrillId = null; renderDrawer(); });
+  $('drawer-env-filter').addEventListener('change', (e) => { state.drawer.env = e.target.value; state.drawer.selDrillId = null; renderDrawer(); });
 
   function renderObsModal() {
     $('obs-challenge-widget').style.display = $('obs-tog-chal').checked ? 'block' : 'none';
@@ -3546,6 +3915,7 @@
   renderReview();
   renderBag();
   renderObsModal();
+  BallRenderer.start();
 })();
 </script>
 </body>

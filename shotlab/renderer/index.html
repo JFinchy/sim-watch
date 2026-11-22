@@ -4,794 +4,1007 @@
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' http://127.0.0.1:*;" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ShotLab — Golf Launch Monitor Intelligence &amp; OBS Studio Suite</title>
+  <title>ShotLab — Broadcast Coaching OS &amp; Launch Monitor Studio</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <!-- TOP COMMAND BAR -->
+  <div class="tension-vignette" id="tension-vignette" aria-hidden="true"></div>
+
+  <!-- UNIFIED 2-ROW BROADCAST TOPBAR -->
   <header class="topbar">
-    <div class="topbar-left">
-      <div class="brand">
-        <span class="brand-dot"></span>
-        <span class="brand-name">SHOTLAB</span>
-        <span class="brand-sub">COACHING OS</span>
+    <div class="topbar-row">
+      <div class="topbar-left">
+        <div class="brand">
+          <img src="../assets/icon-64.png" alt="ShotLab" width="26" height="26" class="brand-icon" />
+          <span class="brand-name">SHOTLAB</span>
+          <span class="brand-sub">TELEMETRY OS</span>
+        </div>
+
+        <nav class="lifecycle-nav" id="lifecycle-nav" aria-label="Primary sections">
+          <button type="button" class="mode-btn" data-mode="plan"><span class="mode-num">01</span>Plan</button>
+          <button type="button" class="mode-btn active" data-mode="practice"><span class="mode-num">02</span>Practice</button>
+          <button type="button" class="mode-btn" data-mode="review"><span class="mode-num">03</span>Review</button>
+          <button type="button" class="mode-btn" data-mode="bag"><span class="mode-num">04</span>My Bag</button>
+        </nav>
+
+        <div class="status-pills">
+          <span id="pill-bridge" class="pill pill-muted"><span class="dot"></span> Bridge</span>
+          <span id="pill-sniffer" class="pill pill-muted">:921 Sniffer</span>
+          <span id="pill-rig" class="pill pill-muted">Rig: —</span>
+          <button type="button" id="pill-keys" class="pill pill-cyan pill-btn">Keys</button>
+          <span id="pill-gspro-club" class="pill pill-cyan">GSPro: —</span>
+        </div>
       </div>
-      <div class="status-pills">
-        <span id="pill-bridge" class="pill pill-muted" title="Connection to SimWatch local bridge (127.0.0.1:8765)">
-          <span class="dot"></span> Bridge: Waiting
-        </span>
-        <span id="pill-sniffer" class="pill pill-muted" title="Passive OpenConnect (:921) GameChanger -> GSPro packet sniffer">
-          :921 Sniffer
-        </span>
-        <span id="pill-rig" class="pill pill-muted" title="SimWatch watchdog verdict for the sim chain (Launch Pro, GameChanger, GSPconnect, GSPro)">
-          Rig: —
-        </span>
-        <span id="pill-keys" class="pill pill-cyan" title="SimWatch global hotkeys (hover). Press Alt+H anywhere to show them on screen.">
-          ⌨ Alt+H shortcuts
-        </span>
-        <span id="pill-gspro-club" class="pill pill-cyan" title="Active club currently reported by GSPro OpenConnect (Code 201)">
-          GSPro: —
-        </span>
+
+      <div class="topbar-right">
+        <select id="demo-select" aria-label="Select simulated shot"></select>
+        <button type="button" class="btn btn-sm btn-crimson" id="btn-fire-demo">Test Shot</button>
+        <button type="button" class="btn btn-sm" id="btn-obs">OBS (11)</button>
+        <button type="button" class="btn btn-sm" id="btn-csv">FSX CSV</button>
+        <button type="button" class="btn btn-sm" id="btn-settings">Settings</button>
+        <button type="button" class="btn btn-sm btn-cyan" id="btn-drills">Drills [D]</button>
       </div>
     </div>
 
-    <div class="topbar-center">
-      <div class="tier-group" role="group" aria-label="Benchmark tier">
-        <button class="tier-btn" data-tier="scratch" title="Scratch (0-2 HCP) strictness">Scratch</button>
-        <button class="tier-btn active" data-tier="low_hcp" title="Low Handicap (5-8 HCP) target windows">Low HCP</button>
-        <button class="tier-btn" data-tier="mid_hcp" title="Mid Handicap (10-18 HCP) improvement windows">Mid HCP</button>
-        <button class="tier-btn" data-tier="personal" title="Personal calibrated baseline (falls back to Low HCP until calibrated)">Personal</button>
+    <div class="topbar-sub">
+      <div class="topbar-row" style="padding:0;">
+        <div class="flex-row">
+          <div class="seg" id="glob-mode-seg" role="group" aria-label="Practice mode">
+            <button type="button" class="active" data-pm="real">Real Balls</button>
+            <button type="button" data-pm="almost">Kids Asleep</button>
+            <button type="button" data-pm="sore">Gym-Sore</button>
+          </div>
+          <select id="select-active-feel" aria-label="Active swing feel">
+            <option value="">No Feel Tagged</option>
+          </select>
+          <button type="button" class="btn btn-sm btn-amber" id="glob-park-btn">Park It [P]</button>
+        </div>
+
+        <div class="flex-row">
+          <div class="seg" id="glob-tier-seg" role="group" aria-label="Benchmark tier">
+            <button type="button" data-tier="tour_pro">Tour Pro</button>
+            <button type="button" data-tier="scratch">Scratch</button>
+            <button type="button" class="active" data-tier="low_hcp">Low HCP</button>
+            <button type="button" data-tier="mid_hcp">Mid HCP</button>
+            <button type="button" data-tier="personal">Personal</button>
+          </div>
+          <button type="button" class="btn btn-sm" id="btn-audio-caddie">Voice</button>
+          <button type="button" class="btn btn-sm" id="btn-tempo-dlg">Tempo</button>
+          <button type="button" class="btn btn-sm btn-cyan" id="btn-mat-glance">Mat Glance [M]</button>
+          <button type="button" class="pill pill-db" id="pill-db">DB: 0 swings</button>
+        </div>
       </div>
     </div>
 
-    <div class="topbar-right">
-      <div class="demo-controls">
-        <select id="demo-select" aria-label="Select demo shot archetype"></select>
-        <button id="btn-fire-demo" class="btn btn-primary" title="Simulate a realistic Bushnell Launch Pro shot">
-          ▶ Test Shot
-        </button>
+    <div class="mode-banner" id="glob-mode-banner">
+      <div class="mode-banner-inner">
+        <span id="glob-mode-banner-text"></span>
+        <span class="badge badge-cyan" id="glob-mode-banner-tag">ACTIVE</span>
       </div>
-      <button id="btn-obs" class="btn btn-accent" title="OBS Studio transparent Browser Source URLs">
-        OBS Overlays
-      </button>
-      <button id="btn-csv" class="btn btn-ghost" title="Import or watch FSX Pro / FSX 2020 CSV">
-        FSX CSV
-      </button>
-      <button id="btn-settings" class="btn btn-ghost" title="Bag lofts, Driver speed baseline &amp; GSPro Auto-Switch">
-        ⚙ Settings
-      </button>
     </div>
   </header>
 
-  <!-- SUB-HEADER MODE, NAVIGATION & PRACTICE CONTEXT BAR -->
-  <nav class="subbar" aria-label="Views and Practice Context">
-    <div class="subbar-left">
-      <div class="tab-group" role="tablist" aria-label="ShotLab Views">
-        <button class="tab-btn active" data-tab="live" role="tab" aria-selected="true" aria-controls="tab-live">Live Telemetry</button>
-        <button class="tab-btn" data-tab="patterns" role="tab" aria-selected="false" aria-controls="tab-patterns">Patterns &amp; Dispersion</button>
-        <button class="tab-btn" data-tab="gapping" role="tab" aria-selected="false" aria-controls="tab-gapping">Bag Gapping</button>
-        <button class="tab-btn" data-tab="video" role="tab" aria-selected="false" aria-controls="tab-video">Video Compare</button>
+  <main class="shell">
+    <!-- ==================== 01 PLAN ==================== -->
+    <section class="mode-panel" id="mode-plan">
+      <div class="grid-3">
+        <div class="rail">
+          <span class="kicker">Pre-Session Readiness · Drills Hub Sync</span>
+          <h3 style="margin:2px 0 8px;">Body State Check</h3>
+          <div class="grid-3">
+            <div>
+              <span class="kicker">Hamstrings</span>
+              <select id="plan-body-ham" style="width:100%;" aria-label="Hamstring tightness">
+                <option value="0">0 · Loose</option>
+                <option value="1" selected>1 · Mild</option>
+                <option value="2">2 · Tight</option>
+                <option value="3">3 · Flare</option>
+              </select>
+            </div>
+            <div>
+              <span class="kicker">Ankle</span>
+              <select id="plan-body-ankle" style="width:100%;" aria-label="Ankle soreness">
+                <option value="ok" selected>OK</option>
+                <option value="sore">Sore</option>
+                <option value="flare">Flare</option>
+              </select>
+            </div>
+            <div>
+              <span class="kicker">Energy</span>
+              <select id="plan-body-energy" style="width:100%;" aria-label="Energy level">
+                <option value="5">5 · Fresh</option>
+                <option value="4" selected>4 · Ready</option>
+                <option value="3">3 · Flat</option>
+                <option value="2">2 · Low</option>
+              </select>
+            </div>
+          </div>
+          <div id="plan-body-warn" class="sub-well mt-8" style="font-size:11.5px;"></div>
+        </div>
+
+        <div class="rail">
+          <div class="head-row" style="margin-bottom:6px;">
+            <div>
+              <span class="kicker">Strict 2-Cue Cap On The Mat</span>
+              <h3>Active Swing Cues</h3>
+            </div>
+            <button type="button" class="btn btn-xs btn-cyan" id="plan-swap-cue">⇄ Swap Cue</button>
+          </div>
+          <div id="plan-cues-list"></div>
+        </div>
+
+        <div class="rail">
+          <div class="head-row" style="margin-bottom:6px;">
+            <div>
+              <span class="kicker">SQLite Club Trends</span>
+              <h3>Active Club Focus</h3>
+            </div>
+            <span class="badge badge-cyan" id="plan-summary-pill">—</span>
+          </div>
+          <div id="plan-focus-summary" class="sub-well" style="font-size:11.5px;"></div>
+        </div>
       </div>
-    </div>
 
-    <div class="subbar-right">
-      <div class="mode-group" role="group" aria-label="Practice Mode">
-        <button class="mode-btn active" data-mode="real" title="Real golf balls — full carry, spin, and Strokes Gained">Real Balls</button>
-        <button class="mode-btn" data-mode="almost" title="Kids Asleep / Foam Balls — focus on HLA start line, club path, and AoA">Kids Asleep</button>
+      <div class="rail">
+        <div class="head-row">
+          <div>
+            <span class="kicker">SQLite Top Stroke-Leaks + Drills Hub Prescription</span>
+            <h2>Today’s Coached Session Plan</h2>
+          </div>
+          <div class="flex-row">
+            <div class="seg" id="plan-dur-seg">
+              <button type="button" data-min="15">15m</button>
+              <button type="button" class="active" data-min="20">20m</button>
+              <button type="button" data-min="30">30m</button>
+            </div>
+            <button type="button" class="btn btn-sm" id="plan-btn-checkin">⛳ 60s Check-In</button>
+            <button type="button" class="btn btn-sm btn-cyan" id="plan-btn-start">▶ Start in Practice</button>
+          </div>
+        </div>
+        <div id="plan-rx-blocks"></div>
       </div>
 
-      <select id="select-active-feel" class="sub-select" aria-label="Active swing feel" title="Tag incoming shots with an Active Feel for A/B testing in Patterns Lab">
-        <option value="">No Feel Tagged</option>
-      </select>
+      <div class="grid-2">
+        <div class="rail">
+          <div class="head-row">
+            <div>
+              <span class="kicker">91-Day Consistency Grid · Real SQLite History</span>
+              <h3>Practice Cadence</h3>
+            </div>
+            <span class="badge" id="plan-heatmap-badge">—</span>
+          </div>
+          <div class="heatmap-wrap" id="plan-heatmap-91"></div>
+        </div>
 
-      <button id="btn-audio-caddie" class="btn btn-ghost btn-sm" title="Toggle hands-free spoken shot callouts (Audio Caddie)">
-        🔊 Voice
-      </button>
+        <div class="rail">
+          <div class="head-row">
+            <div>
+              <span class="kicker">Anti-Feel-Cycling Vault</span>
+              <h3>Parking Lot Ideas</h3>
+            </div>
+            <button type="button" class="btn btn-xs btn-amber" id="plan-add-park">+ Capture</button>
+          </div>
+          <div id="plan-parking-list"></div>
+        </div>
+      </div>
+    </section>
 
-      <select id="select-tempo" class="sub-select sub-select-sm" aria-label="Tour Tempo metronome" title="3:1 Tour Tempo audio metronome">
-        <option value="off">Tempo: Off</option>
-        <option value="24/8">24/8</option>
-        <option value="27/9">27/9</option>
-        <option value="21/7">21/7</option>
-        <option value="18/9">18/9</option>
-      </select>
+    <!-- ==================== 02 PRACTICE ==================== -->
+    <section class="mode-panel active" id="mode-practice">
+      <div class="mission-strip" id="prac-mission-strip">
+        <div class="flex-row">
+          <span class="badge badge-cyan" id="prac-mission-badge">BLOCK</span>
+          <strong id="prac-mission-title" style="color:#fff;">—</strong>
+          <span class="badge badge-green" id="prac-mission-target">—</span>
+        </div>
+        <div class="flex-row">
+          <button type="button" class="btn btn-xs btn-cyan" id="prac-mission-drill">Open Drill</button>
+          <button type="button" class="btn btn-xs" id="prac-mission-clear">End Mission</button>
+        </div>
+      </div>
 
-      <select id="select-tempo-sound" class="sub-select sub-select-sm" aria-label="Tempo sound" title="Tempo sound: what the 3 beats (takeaway, top, impact) sound like">
-        <option value="tones">Tones</option>
-        <option value="woodblock">Woodblock</option>
-        <option value="click">Click</option>
-        <option value="beep">Beep</option>
-        <option value="soft">Soft</option>
-        <option value="swoosh">Swoosh</option>
-      </select>
-
-      <select id="select-tempo-gap" class="sub-select sub-select-sm" aria-label="Rest between swings" title="Rest between swings. Non-stop loops continuously; with a rest, a quiet tick plays 1 s before the next swing">
-        <option value="0">Non-stop</option>
-        <option value="3">3 s rest</option>
-        <option value="5">5 s rest</option>
-        <option value="8">8 s rest</option>
-        <option value="10">10 s rest</option>
-        <option value="15">15 s rest</option>
-        <option value="20">20 s rest</option>
-        <option value="30">30 s rest</option>
-      </select>
-
-      <button id="btn-mat-glance" class="btn btn-accent btn-sm" title="10-foot readable Mat Glance mode (Hotkey: M)">
-        Mat Glance (M)
-      </button>
-
-      <button id="pill-db" class="pill pill-db" title="Local SQLite Swing Database — click to sync historical SimWatch sessions">
-        DB: 0 swings
-      </button>
-
-      <button id="btn-export-debrief" class="btn btn-ghost btn-sm" title="Export Markdown Coach Debrief report">
-        Export Debrief
-      </button>
-    </div>
-  </nav>
-
-  <!-- MAIN COCKPIT -->
-  <main class="cockpit">
-    <!-- ==================== TAB 1: LIVE TELEMETRY ==================== -->
-    <section id="tab-live" class="tab-panel active" role="tabpanel">
-      <!-- FAULT-STREAK DRILL PRESCRIPTION BANNER -->
       <div id="fault-streak-banner" class="fault-banner hidden" role="status" aria-live="polite"></div>
 
-      <!-- ROW 1: 4 BOXED INTELLIGENCE PANELS -->
-      <section class="grid-top">
-        <!-- BOX 1: SHOT SHAPE & FLIGHT LAB -->
-        <article class="card card-shape" id="box-shape">
+      <div class="rail" style="padding:9px 13px;">
+        <div class="head-row" style="margin-bottom:0;">
+          <div class="flex-row">
+            <div class="seg" id="prac-sub-seg">
+              <button type="button" class="active" data-psub="range">Live Telemetry</button>
+              <button type="button" data-psub="challenge">Challenge Arena (7 Modes)</button>
+            </div>
+            <label class="muted" style="font-size:11px;display:inline-flex;align-items:center;gap:5px;">Shape Goal:
+              <select id="prac-intent-shape" aria-label="Intended shot shape">
+                <option value="stock">Stock</option>
+                <option value="draw">Draw</option>
+                <option value="fade">Fade</option>
+                <option value="stinger">Low Stinger</option>
+                <option value="high">High Soft</option>
+              </select>
+            </label>
+            <button type="button" class="btn btn-xs btn-emerald" id="prac-goal-toggle">◉ Dotted Goal: ON</button>
+          </div>
+          <div class="flex-row">
+            <div class="seg" id="prac-lab-seg">
+              <button type="button" class="active" data-lmode="coupled">Coupled Matrix + Full</button>
+              <button type="button" data-lmode="raw">Scorecard Grid Only</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PRIMARY 5-KPI HERO STRIP WITH +/- GOAL DELTAS -->
+      <div class="kpi-strip" id="prac-kpi-strip"></div>
+
+      <!-- CHALLENGE ARENA PANEL (SHOWN IN CHALLENGE SUB-MODE) -->
+      <div class="rail" id="prac-challenge-panel" style="display:none;"></div>
+
+      <!-- 4 BROADCAST TELEMETRY BOXES -->
+      <div class="grid-4-live">
+        <!-- BOX 1: SHOT SHAPE & TRAJECTORY -->
+        <article class="card" id="box-shape">
           <div class="card-head">
             <div class="card-title-wrap">
-              <span class="card-kicker">SHOT SHAPE &amp; FLIGHT</span>
-              <h2 id="shape-name" class="card-title">—</h2>
+              <span class="kicker">SHOT SHAPE &amp; BALL FLIGHT</span>
+              <h3 id="shape-name">—</h3>
             </div>
-            <div class="head-badges">
-              <span id="shape-sg-pill" class="tag tag-neutral hidden" title="Per-shot Strokes Gained">SG —</span>
-              <span id="shape-quiet-badge" class="tag tag-purple hidden" title="Kids Asleep / Foam-ball mode">Quiet Mode</span>
-              <span id="shape-height-tag" class="tag tag-neutral">—</span>
-              <span class="info-pill" id="shape-why-trigger">? Why</span>
+            <div class="flex-row">
+              <span id="shape-sg-pill" class="tag hidden">SG —</span>
+              <span id="shape-quiet-badge" class="tag tag-purple hidden">Quiet</span>
+              <span id="shape-height-tag" class="tag">—</span>
+              <button type="button" class="q-btn" id="shape-why-trigger" aria-label="Shot shape details">?</button>
             </div>
           </div>
           <div class="shape-body">
             <div id="shape-icon-wrap" class="shape-icon-wrap"></div>
             <div class="shape-stats">
-              <div class="mini-stat">
-                <span class="mini-label">CARRY</span>
-                <span id="stat-carry" class="mini-val hero-num">—</span>
-                <span id="stat-total" class="mini-sub">Total — yds</span>
+              <div>
+                <span class="mini-label">CARRY / TOTAL</span>
+                <div id="stat-carry" class="hero-num">—</div>
+                <div id="stat-total" class="muted mono" style="font-size:10.5px;">Total — yds</div>
               </div>
               <div class="mini-stat-row">
-                <div class="mini-stat">
-                  <span class="mini-label">CURVE</span>
-                  <span id="stat-curve" class="mini-val">—</span>
-                </div>
-                <div class="mini-stat">
-                  <span class="mini-label">OFFLINE</span>
-                  <span id="stat-offline" class="mini-val">—</span>
-                </div>
-                <div class="mini-stat">
-                  <span class="mini-label">APEX</span>
-                  <span id="stat-apex" class="mini-val">—</span>
-                </div>
+                <div><span class="mini-label">CURVE</span><span id="stat-curve" class="mini-val">—</span></div>
+                <div><span class="mini-label">OFFLINE</span><span id="stat-offline" class="mini-val">—</span></div>
+                <div><span class="mini-label">APEX</span><span id="stat-apex" class="mini-val">—</span></div>
               </div>
-              <p id="shape-desc" class="micro-desc">Hit a shot or click Test Shot to analyze ball flight.</p>
+              <div id="shape-desc" class="muted" style="font-size:11px;">Hit a ball or press Test Shot.</div>
             </div>
           </div>
           <div id="side-traj-wrap" class="side-traj-wrap"></div>
         </article>
 
-        <!-- BOX 2: CLUB AUTO-DETECTOR & CALIBRATION LAB -->
-        <article class="card card-club" id="box-club">
+        <!-- BOX 2: CLUB AUTO-DETECTOR -->
+        <article class="card" id="box-club">
           <div class="card-head">
             <div class="card-title-wrap">
-              <span class="card-kicker">CLUB AUTO-DETECTOR</span>
-              <div class="club-headline">
-                <h2 id="club-pred-name" class="card-title">—</h2>
-                <span id="club-conf-badge" class="conf-badge">—%</span>
+              <span class="kicker">CLUB AUTO-DETECTOR</span>
+              <div class="flex-row">
+                <h3 id="club-pred-name">—</h3>
+                <span id="club-conf-badge" class="badge badge-cyan">—%</span>
               </div>
             </div>
-            <div class="head-badges">
+            <div class="flex-row">
               <span id="club-source-tag" class="tag tag-cyan">AUTO</span>
-              <span class="info-pill" id="club-why-trigger">? Math</span>
+              <button type="button" class="q-btn" id="club-why-trigger" aria-label="Club math">?</button>
             </div>
           </div>
-
-          <div id="club-top3" class="club-top3"></div>
-
-          <!-- Feedback Loop: Confirm / Actually Hit -->
-          <div class="confirm-section">
-            <div class="confirm-bar">
-              <button id="btn-confirm-pred" class="btn btn-green btn-sm">✓ Confirm Guess</button>
-              <button id="btn-sync-gspro" class="btn btn-ghost btn-sm" title="Send I/K keystrokes via SimWatch to switch GSPro to this club">
-                ⇄ Sync GSPro
-              </button>
-              <label class="autoswitch-toggle" title="Auto-switch GSPro when confidence ≥ threshold">
-                <input type="checkbox" id="chk-autoswitch" />
-                <span>Auto-Switch</span>
+          <div id="club-top3"></div>
+          <div class="sub-well">
+            <div class="flex-row" style="justify-content:space-between;">
+              <div class="flex-row">
+                <button type="button" class="btn btn-xs btn-green" id="btn-confirm-pred">✓ Confirm</button>
+                <button type="button" class="btn btn-xs" id="btn-sync-gspro">⇄ GSPro</button>
+              </div>
+              <label style="font-size:10.5px;color:var(--text-dim);display:inline-flex;align-items:center;gap:4px;">
+                <input type="checkbox" id="chk-autoswitch" /> Auto-Switch
               </label>
             </div>
-            <div class="actual-club-strip">
-              <span class="strip-label">Actually hit:</span>
-              <div id="club-picker-grid" class="club-picker-grid"></div>
-            </div>
+            <div id="club-picker-grid" class="club-picker-grid"></div>
           </div>
-
-          <!-- Rolling Accuracy Progress toward 90% -->
-          <div class="cal-stats-bar">
-            <div class="cal-stat">
-              <span class="cal-label">Exact Acc</span>
-              <span id="cal-exact" class="cal-val">—</span>
-            </div>
-            <div class="cal-stat">
-              <span class="cal-label">±1 Club</span>
-              <span id="cal-within1" class="cal-val">—</span>
-            </div>
-            <div class="cal-stat">
-              <span class="cal-label">≥85% Conf</span>
-              <span id="cal-highconf" class="cal-val">—</span>
-            </div>
-            <div class="cal-stat">
-              <span class="cal-label">Confirmed</span>
-              <span id="cal-count" class="cal-val">0</span>
-            </div>
+          <div class="grid-4" style="gap:6px;font-size:11px;">
+            <div class="sub-well" style="padding:5px 7px;"><span class="kicker">Exact</span><strong id="cal-exact" class="mono">—</strong></div>
+            <div class="sub-well" style="padding:5px 7px;"><span class="kicker">±1 Club</span><strong id="cal-within1" class="mono">—</strong></div>
+            <div class="sub-well" style="padding:5px 7px;"><span class="kicker">≥85%</span><strong id="cal-highconf" class="mono">—</strong></div>
+            <div class="sub-well" style="padding:5px 7px;"><span class="kicker">Conf</span><strong id="cal-count" class="mono">0</strong></div>
           </div>
-          <div class="cal-progress-wrap" title="Target: 90%+ rolling accuracy for hands-free GSPro club switching">
+          <div class="cal-progress-wrap">
             <div id="cal-progress-fill" class="cal-progress-fill" style="width:0%"></div>
-            <span class="cal-goal-line" style="left:90%" title="90% Auto-Switch Goal"></span>
+            <span class="cal-goal-line" style="left:90%"></span>
           </div>
         </article>
 
-        <!-- BOX 3: DELIVERY & RELEASE COACH (FLIPPING / CASTING / OVER-HOLD) -->
-        <article class="card card-delivery" id="box-delivery">
+        <!-- BOX 3: RELEASE & DELIVERY COACH -->
+        <article class="card" id="box-delivery">
           <div class="card-head">
             <div class="card-title-wrap">
-              <span class="card-kicker">RELEASE &amp; DELIVERY COACH</span>
-              <h2 id="delivery-name" class="card-title">—</h2>
+              <span class="kicker">RELEASE &amp; DELIVERY COACH</span>
+              <h3 id="delivery-name">—</h3>
             </div>
-            <div class="head-badges">
-              <span id="delivery-conf" class="tag tag-neutral">—</span>
-              <span class="info-pill" id="delivery-why-trigger">? Why</span>
+            <div class="flex-row">
+              <span id="delivery-conf" class="tag">—</span>
+              <button type="button" class="q-btn" id="delivery-why-trigger" aria-label="Delivery evidence">?</button>
             </div>
           </div>
-
           <div class="delivery-body">
             <div id="dplane-wrap" class="dplane-wrap"></div>
-            <div class="delivery-details">
-              <p id="delivery-tagline" class="delivery-tagline">—</p>
+            <div style="flex:1;min-width:0;">
+              <p id="delivery-tagline" class="muted" style="margin:0;font-size:11px;">—</p>
               <div class="loft-pills">
-                <div class="loft-pill">
-                  <span class="lp-lbl">Est. Dyn Loft</span>
-                  <span id="val-dynloft" class="lp-val">—</span>
-                </div>
-                <div class="loft-pill">
-                  <span class="lp-lbl">Shaft Lean</span>
-                  <span id="val-shaftlean" class="lp-val">—</span>
-                </div>
-                <div class="loft-pill">
-                  <span class="lp-lbl">Spin Loft</span>
-                  <span id="val-spinloft" class="lp-val">—</span>
-                </div>
+                <div class="loft-pill"><span class="lp-lbl">Dyn Loft</span><span id="val-dynloft" class="lp-val">—</span></div>
+                <div class="loft-pill"><span class="lp-lbl">Shaft Lean</span><span id="val-shaftlean" class="lp-val">—</span></div>
+                <div class="loft-pill"><span class="lp-lbl">Spin Loft</span><span id="val-spinloft" class="lp-val">—</span></div>
               </div>
             </div>
           </div>
-          <div id="delivery-cues" class="cues-box"></div>
+          <div id="delivery-cues" class="sub-well" style="font-size:11px;"></div>
         </article>
 
-        <!-- BOX 4: FACE STRIKE & DISTANCE LEFT ON THE TABLE -->
-        <article class="card card-strike" id="box-strike">
+        <!-- BOX 4: PHOTOREALISTIC FACE STRIKE & POTENTIAL -->
+        <article class="card" id="box-strike">
           <div class="card-head">
             <div class="card-title-wrap">
-              <span class="card-kicker">STRIKE &amp; DISTANCE POTENTIAL</span>
-              <h2 id="strike-label" class="card-title">—</h2>
+              <span class="kicker">CLUBFACE STRIKE &amp; POTENTIAL</span>
+              <h3 id="strike-label">—</h3>
             </div>
-            <div class="head-badges">
-              <span id="strike-conf" class="tag tag-neutral">—</span>
-              <span class="info-pill" id="strike-why-trigger">? Why</span>
+            <div class="flex-row">
+              <span id="strike-conf" class="tag">—</span>
+              <button type="button" class="q-btn" id="strike-why-trigger" aria-label="Strike rationale">?</button>
             </div>
           </div>
-
           <div class="strike-body">
             <div id="clubface-wrap" class="clubface-wrap"></div>
-            <div class="potential-panel">
-              <div class="pot-row">
-                <span class="pot-lbl">Actual Carry</span>
-                <span id="pot-actual" class="pot-val">—</span>
-              </div>
-              <div class="pot-row pot-highlight">
-                <span class="pot-lbl">Center-Face Potential</span>
-                <span id="pot-center" class="pot-val">—</span>
-              </div>
-              <div class="pot-row">
-                <span class="pot-lbl">Max @ Current Speed</span>
-                <span id="pot-max" class="pot-val">—</span>
-              </div>
-              <div class="pot-row pot-cyan">
-                <span class="pot-lbl">Ceiling (+5 mph CS)</span>
-                <span id="pot-speed" class="pot-val">—</span>
-              </div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;font-size:11px;">
+              <div class="sub-well" style="padding:5px 8px;display:flex;justify-content:space-between;"><span class="dim">Actual Carry</span><strong id="pot-actual" class="mono">—</strong></div>
+              <div class="sub-well" style="padding:5px 8px;display:flex;justify-content:space-between;border-color:var(--cyan-bd);"><span class="dim">Center Strike</span><strong id="pot-center" class="mono">—</strong></div>
+              <div class="sub-well" style="padding:5px 8px;display:flex;justify-content:space-between;"><span class="dim">Max @ Speed</span><strong id="pot-max" class="mono">—</strong></div>
+              <div class="sub-well" style="padding:5px 8px;display:flex;justify-content:space-between;"><span class="dim">+5 mph Ceiling</span><strong id="pot-speed" class="mono" style="color:var(--cyan);">—</strong></div>
             </div>
           </div>
-
-          <div id="pot-reasons" class="pot-reasons"></div>
+          <div id="pot-reasons" class="sub-well" style="font-size:11px;"></div>
         </article>
-      </section>
+      </div>
 
-      <!-- ROW 2: LOW-HANDICAP PRIORITY METRICS (RED / YELLOW / GREEN BOXED GRID) -->
-      <section class="card card-scorecard">
-        <div class="scorecard-head">
-          <div class="scorecard-title-group">
-            <span class="card-kicker">LOW-HANDICAP PRIORITY METRICS</span>
-            <span id="scorecard-tier-label" class="tier-pill">Low Handicap (5–8 HCP)</span>
-            <span id="session-summary-chip" class="tag tag-neutral hidden">Session: —</span>
-            <span class="legend-hint">Hover any tile for coaching rationale &amp; target window</span>
+      <!-- COUPLED LAB TELEMETRY MATRIX -->
+      <div class="rail" id="prac-coupled-rail">
+        <div class="head-row">
+          <div>
+            <span class="kicker">Abstracted Diagnostic Signal Pairing</span>
+            <h3>Coupled Lab Matrix</h3>
           </div>
-          <div class="score-summary">
-            <span id="sum-green" class="count-chip chip-green">0 Green</span>
-            <span id="sum-yellow" class="count-chip chip-yellow">0 Yellow</span>
-            <span id="sum-red" class="count-chip chip-red">0 Red</span>
-            <div class="overall-score">
-              <span class="os-lbl">SHOT SCORE</span>
-              <span id="overall-score-num" class="os-num">—</span>
-            </div>
+          <span class="badge badge-cyan" id="prac-mat-badge">Mat: Fiberbuilt</span>
+        </div>
+        <div id="prac-coupled-wrap"></div>
+      </div>
+
+      <!-- 15-METRIC PRIORITY R/Y/G GRID -->
+      <div class="rail">
+        <div class="head-row">
+          <div class="flex-row">
+            <span class="kicker" style="margin:0;">PRIORITY METRICS &amp; TARGET DELTAS</span>
+            <span id="scorecard-tier-label" class="badge badge-cyan">Low HCP</span>
+            <span id="session-summary-chip" class="badge hidden">Session</span>
+          </div>
+          <div class="flex-row">
+            <span id="sum-green" class="badge badge-green">0 Green</span>
+            <span id="sum-yellow" class="badge badge-yellow">0 Yellow</span>
+            <span id="sum-red" class="badge badge-red">0 Red</span>
+            <span class="muted" style="font-size:10px;font-weight:800;">SCORE</span>
+            <strong id="overall-score-num" class="mono" style="font-size:20px;color:#fff;">—</strong>
           </div>
         </div>
-
-        <div id="data-quality-note" class="dq-note hidden" role="status"></div>
+        <div id="data-quality-note" class="sub-well hidden" style="margin-bottom:8px;border-color:var(--yellow-bd);"></div>
         <div id="metrics-grid" class="metrics-grid"></div>
-      </section>
+      </div>
 
-      <!-- ROW 3: SESSION SHOT TAPE -->
-      <section class="card card-history">
-        <div class="history-head">
-          <span class="card-kicker">SESSION SHOT TAPE (CLICK ANY SHOT TO INSPECT)</span>
-          <div class="history-actions">
-            <span id="csv-watch-indicator" class="tag tag-neutral hidden">Watching CSV</span>
-            <button id="btn-clear-session" class="btn btn-ghost btn-xs" title="Clear current session tape (keeps your personal club calibration)">Clear Tape</button>
+      <!-- ROOT-CAUSE FAULT COACH (REASONS -> FEELS TO TRY -> DRILLS HUB) -->
+      <div class="rail" id="prac-fault-coach"></div>
+
+      <!-- SESSION SHOT TAPE -->
+      <div class="rail">
+        <div class="head-row" style="margin-bottom:8px;">
+          <span class="kicker" style="margin:0;">SESSION SHOT TAPE · CLICK TO RE-INSPECT</span>
+          <div class="flex-row">
+            <span id="csv-watch-indicator" class="tag hidden">Watching CSV</span>
+            <button type="button" class="btn btn-xs" id="btn-clear-session">Clear Tape</button>
           </div>
         </div>
         <div id="history-tape" class="history-tape"></div>
-      </section>
+      </div>
     </section>
 
-    <!-- ==================== TAB 2: PATTERNS & DISPERSION LAB ==================== -->
-    <section id="tab-patterns" class="tab-panel hidden" role="tabpanel">
-      <div class="card filter-bar">
-        <div class="filter-bar-left">
-          <span class="card-kicker" style="margin:0;">PATTERNS &amp; DECADE DISPERSION LAB</span>
-          <label class="inline-filter">
-            <span>Club</span>
-            <select id="pat-club"></select>
-          </label>
-          <label class="inline-filter">
-            <span>Mode</span>
-            <select id="pat-mode">
+    <!-- ==================== 03 REVIEW ==================== -->
+    <section class="mode-panel" id="mode-review">
+      <div class="rail">
+        <div class="head-row">
+          <div>
+            <span class="kicker">SQLite Historical Analytics &amp; Kinovea Video Studio</span>
+            <h2>Performance Review</h2>
+          </div>
+          <div class="flex-row">
+            <select id="rev-club-filter" aria-label="Review club filter"></select>
+            <select id="rev-mode-filter" aria-label="Review mode filter">
               <option value="real">Real Balls</option>
               <option value="almost">Kids Asleep</option>
               <option value="all">All Modes</option>
             </select>
-          </label>
-          <label class="inline-filter">
-            <span>Window</span>
-            <select id="pat-days">
-              <option value="7">Last 7 Days</option>
-              <option value="30">Last 30 Days</option>
-              <option value="90" selected>Last 90 Days</option>
-              <option value="0">All Time</option>
-            </select>
-          </label>
+            <div class="seg" id="rev-days-seg">
+              <button type="button" data-days="7">7d</button>
+              <button type="button" data-days="30" class="active">30d</button>
+              <button type="button" data-days="90">90d</button>
+              <button type="button" data-days="0">All</button>
+            </div>
+            <button type="button" class="btn btn-sm" id="rev-btn-sync">↻ Sync History</button>
+            <button type="button" class="btn btn-sm btn-cyan" id="rev-export-md">⬇ Debrief (.md)</button>
+          </div>
         </div>
-        <div class="filter-bar-right">
-          <button id="btn-pat-sync" class="btn btn-ghost btn-sm">↻ Sync SimWatch History</button>
-          <button id="btn-pat-export" class="btn btn-accent btn-sm">⬇ Export Debrief (.md)</button>
+
+        <div class="grid-4" id="rev-exec-kpis"></div>
+
+        <div class="seg mt-12" id="rev-sub-seg" role="tablist">
+          <button type="button" class="active" data-sub="dna" role="tab" aria-selected="true">Swing DNA &amp; Fault Cost</button>
+          <button type="button" data-sub="decade" role="tab" aria-selected="false">DECADE 2D Dispersion</button>
+          <button type="button" data-sub="video" role="tab" aria-selected="false">Video Compare &amp; Go-To</button>
+          <button type="button" data-sub="trends" role="tab" aria-selected="false">Trends &amp; SG Profile</button>
+          <button type="button" data-sub="highlights" role="tab" aria-selected="false">★ Highlights</button>
         </div>
       </div>
 
-      <div class="patterns-grid">
-        <!-- 2D DECADE DISPERSION PLOT -->
-        <article class="card">
-          <div class="card-head">
-            <div class="card-title-wrap">
-              <span class="card-kicker">2D DECADE DISPERSION &amp; AIM ENGINE</span>
-              <h2 id="pat-disp-title" class="card-title">Shot Dispersion Cone</h2>
+      <!-- 3A: SWING DNA + DELIVERY FAULTS BY COST -->
+      <div id="rev-view-dna">
+        <div class="grid-dna">
+          <div class="rail">
+            <div class="head-row">
+              <div>
+                <span class="kicker">SQLite Club Speed vs. Strokes Gained</span>
+                <h3>Cruise Speed Frontier</h3>
+              </div>
+              <span class="badge badge-green" id="rev-cruise-pill">—</span>
             </div>
-            <span id="pat-disp-n" class="tag tag-cyan">0 shots</span>
+            <div id="rev-cruise-svg"></div>
+          </div>
+
+          <div class="rail">
+            <div class="head-row">
+              <div>
+                <span class="kicker">Statistical Variance vs Scoring Impact</span>
+                <h3>Causal Root-Cause Attribution</h3>
+              </div>
+              <span class="badge" id="rev-miss-pill">—</span>
+            </div>
+            <div id="rev-attr-bars"></div>
+          </div>
+        </div>
+
+        <div class="grid-dna mt-12">
+          <!-- DELIVERY FAULTS BY COST -->
+          <div class="rail">
+            <div class="head-row">
+              <div>
+                <span class="kicker">ROOT-CAUSE STROKE-LEAK RANKING</span>
+                <h3>Delivery Faults by Cost</h3>
+              </div>
+              <div class="flex-row">
+                <div class="seg" id="rev-leaks-filter-seg">
+                  <button type="button" class="active" data-lf="all">All Patterns</button>
+                  <button type="button" data-lf="faults">Faults Only</button>
+                </div>
+                <span class="badge">Sorted by Total SG Impact</span>
+              </div>
+            </div>
+            <div id="rev-fault-leaks"></div>
+          </div>
+
+          <!-- A/B ACTIVE FEEL VERDICTS -->
+          <div class="rail">
+            <div class="head-row">
+              <div>
+                <span class="kicker">A/B ACTIVE FEEL VERDICTS</span>
+                <h3>Which Swing Feel Wins?</h3>
+              </div>
+              <span class="badge badge-green">Data-Backed</span>
+            </div>
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Active Feel</th>
+                    <th class="num">N</th>
+                    <th class="num">Score</th>
+                    <th class="num">Avg SG</th>
+                    <th class="num">Smash</th>
+                    <th class="num">Carry</th>
+                    <th class="num">80% W</th>
+                    <th class="num">Fault %</th>
+                  </tr>
+                </thead>
+                <tbody id="rev-feels-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3B: DECADE 2D DISPERSION -->
+      <div id="rev-view-decade" style="display:none;">
+        <div class="rail">
+          <div class="head-row">
+            <div>
+              <span class="kicker">2D Covariance Cone &amp; Target Line Optimizer</span>
+              <h3 id="pat-disp-title">Shot Dispersion Cone</h3>
+            </div>
+            <span id="pat-disp-n" class="badge badge-cyan">0 shots</span>
           </div>
           <div class="disp-layout">
             <div id="pat-dispersion-svg" class="disp-svg-wrap"></div>
-            <div class="disp-stats-col">
-              <div id="pat-summary-stats" class="disp-stats-grid"></div>
-              <div class="decade-advice-box">
-                <strong>DECADE Aim Recommendation</strong>
-                <p id="pat-decade-advice">Loading swing pattern data…</p>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div class="grid-2" id="pat-summary-stats"></div>
+              <div class="sub-well" style="border-color:var(--cyan-bd);">
+                <span class="kicker" style="color:var(--cyan);">DECADE Aim Recommendation</span>
+                <p id="pat-decade-advice" style="margin:4px 0 0;">Loading pattern metrics…</p>
               </div>
+              <div class="sub-well" id="pat-strike-dist"></div>
             </div>
           </div>
-        </article>
-
-        <!-- ROOT-CAUSE STROKE-LEAK RANKING -->
-        <article class="card">
-          <div class="card-head">
-            <div class="card-title-wrap">
-              <span class="card-kicker">ROOT-CAUSE STROKE-LEAK RANKING</span>
-              <h2 class="card-title">Delivery Faults by Cost</h2>
-            </div>
-            <span class="tag tag-neutral">Sorted by Total SG Impact</span>
-          </div>
-          <div id="pat-fault-leaks" class="fault-leaks-list"></div>
-        </article>
-
-        <!-- A/B ACTIVE FEEL VERDICTS TABLE -->
-        <article class="card">
-          <div class="card-head">
-            <div class="card-title-wrap">
-              <span class="card-kicker">A/B ACTIVE FEEL VERDICTS</span>
-              <h2 class="card-title">Which Swing Feel Actually Wins?</h2>
-            </div>
-            <span class="tag tag-green">Data-Backed Proof</span>
-          </div>
-          <div class="table-wrap">
-            <table class="data-table" id="pat-feels-table">
-              <thead>
-                <tr>
-                  <th>Active Feel</th>
-                  <th class="num">N</th>
-                  <th class="num">Avg Score</th>
-                  <th class="num">Avg SG</th>
-                  <th class="num">Smash</th>
-                  <th class="num">Carry</th>
-                  <th class="num">80% Width</th>
-                  <th class="num">Fault %</th>
-                </tr>
-              </thead>
-              <tbody id="pat-feels-tbody"></tbody>
-            </table>
-          </div>
-        </article>
-
-        <!-- MULTI-SESSION TREND SPARKLINE + WARMUP & FATIGUE CURVE -->
-        <article class="card">
-          <div class="card-head">
-            <div class="card-title-wrap">
-              <span class="card-kicker">LONGITUDINAL SKILL &amp; STAMINA</span>
-              <h2 class="card-title">Session Trends &amp; Fatigue Curve</h2>
-            </div>
-            <div class="trend-metric-group" role="group" aria-label="Trend metric">
-              <button class="trend-metric-btn active" data-metric="avgScore">Score</button>
-              <button class="trend-metric-btn" data-metric="avgSmash">Smash</button>
-              <button class="trend-metric-btn" data-metric="avgSg">SG</button>
-              <button class="trend-metric-btn" data-metric="avgCarry">Carry</button>
-              <button class="trend-metric-btn" data-metric="faultPct">Fault %</button>
-            </div>
-          </div>
-          <div id="pat-trend-svg" class="trend-svg-wrap"></div>
-          <div class="fatigue-section">
-            <span class="card-kicker">WARMUP &amp; FATIGUE CURVE (WITHIN-SESSION SHOT INDEX)</span>
-            <div id="pat-fatigue-bars" class="fatigue-bars"></div>
-          </div>
-        </article>
-      </div>
-    </section>
-
-    <!-- ==================== TAB 3: 14-CLUB BAG GAPPING ==================== -->
-    <section id="tab-gapping" class="tab-panel hidden" role="tabpanel">
-      <div class="card filter-bar">
-        <div class="filter-bar-left">
-          <span class="card-kicker" style="margin:0;">14-CLUB BAG GAPPING &amp; STOPPING POWER</span>
-          <label class="inline-filter">
-            <span>Mode</span>
-            <select id="gap-mode">
-              <option value="real">Real Balls</option>
-              <option value="almost">Kids Asleep</option>
-              <option value="all">All Modes</option>
-            </select>
-          </label>
-          <label class="inline-filter">
-            <span>Window</span>
-            <select id="gap-days">
-              <option value="30">Last 30 Days</option>
-              <option value="90">Last 90 Days</option>
-              <option value="180" selected>Last 180 Days</option>
-              <option value="0">All Time</option>
-            </select>
-          </label>
-        </div>
-        <div class="filter-bar-right">
-          <span id="gap-summary-badge" class="tag tag-cyan">0 / 14 clubs tracked</span>
-          <button id="btn-gap-refresh" class="btn btn-ghost btn-sm">↻ Refresh</button>
         </div>
       </div>
 
-      <article class="card">
-        <div class="table-wrap">
-          <table class="data-table gapping-table">
-            <thead>
-              <tr>
-                <th>Club</th>
-                <th class="num">N</th>
-                <th class="num">Avg Carry</th>
-                <th style="min-width:170px;">Carry Yardage Ladder</th>
-                <th>Gap to Next</th>
-                <th class="num">Total</th>
-                <th class="num">Ball Spd</th>
-                <th class="num">Smash</th>
-                <th class="num">Backspin</th>
-                <th class="num">Descent</th>
-                <th>Stopping Power</th>
-                <th class="num">80% Width</th>
-                <th class="num">Avg SG</th>
-              </tr>
-            </thead>
-            <tbody id="gapping-tbody"></tbody>
-          </table>
-        </div>
-      </article>
-    </section>
-
-    <!-- ==================== TAB 4: VIDEO COMPARE & GO-TO ==================== -->
-    <section id="tab-video" class="tab-panel hidden" role="tabpanel">
-      <div class="card filter-bar">
-        <div class="filter-bar-left">
-          <span class="card-kicker" style="margin:0;">SYNCED KINOVEA VIDEO &amp; COMPARE VS BEST</span>
-          <label class="inline-filter">
-            <span>Club</span>
-            <select id="vid-club"></select>
-          </label>
-          <button id="btn-vid-refresh" class="btn btn-ghost btn-sm">↻ Refresh Clips</button>
-        </div>
-
-        <div class="video-controls-bar" id="vid-controls-bar">
-          <button id="btn-vid-play" class="btn btn-primary btn-sm">▶ Play Synced</button>
-          <div class="speed-group" role="group" aria-label="Playback speed">
-            <button class="speed-btn" data-speed="0.25">0.25×</button>
-            <button class="speed-btn active" data-speed="0.5">0.5×</button>
-            <button class="speed-btn" data-speed="1">1×</button>
-          </div>
-          <button id="btn-vid-prev-frame" class="btn btn-ghost btn-sm" title="Step back 1 frame (-1/60s)">◀ -1f</button>
-          <button id="btn-vid-next-frame" class="btn btn-ghost btn-sm" title="Step forward 1 frame (+1/60s)">+1f ▶</button>
-          <span id="vid-time-readout" class="vid-time-readout">0.00s</span>
-          <button id="btn-promote-goto" class="btn btn-green btn-sm" disabled title="Pin this swing as a My-Go-To reference clip">
-            ★ Promote to My-Go-To
-          </button>
-        </div>
-      </div>
-
-      <!-- Empty State when no Kinovea clips exist -->
-      <article id="vid-empty-state" class="card empty-state-card hidden">
-        <h3>No Kinovea Swing Clips Linked Yet</h3>
-        <p class="micro-desc">
-          When SimWatch is running alongside Kinovea dual-camera capture, every shot automatically links its
-          <strong>Down-the-Line (_DTL.mp4)</strong> and <strong>Face-On (_FO.mp4)</strong> slow-motion clips inside
-          <code>Swings/Sessions/YYYY-MM-DD/</code>.
-        </p>
-        <div class="empty-actions">
-          <button id="btn-vid-sync-empty" class="btn btn-primary">↻ Sync SimWatch History</button>
-        </div>
-      </article>
-
-      <!-- Active Split-Screen Video Workspace -->
-      <div id="vid-workspace" class="video-workspace">
-        <!-- Left Sidebar: Recent Video-Linked Shots -->
-        <aside class="card video-list-card">
-          <div class="card-head">
-            <span class="card-kicker">RECENT VIDEO SHOTS</span>
-            <span id="vid-list-count" class="tag tag-cyan">0</span>
-          </div>
-          <div id="vid-clips-list" class="vid-clips-list"></div>
-        </aside>
-
-        <!-- Right Main Area: Dual-Angle Current Player + Compare vs Best -->
-        <div class="video-main-col">
-          <!-- Dual-Angle Current Shot -->
-          <div class="video-dual-grid">
-            <article class="card video-player-card">
-              <div class="card-head">
-                <div class="card-title-wrap">
-                  <span class="card-kicker">CURRENT SHOT — DOWN THE LINE (DTL)</span>
-                  <h3 id="vid-dtl-title" class="vid-card-title">—</h3>
-                </div>
-                <span id="vid-dtl-badge" class="tag tag-cyan">DTL</span>
-              </div>
-              <div class="video-frame">
-                <video id="vid-player-dtl" controls playsinline preload="metadata"></video>
-                <div id="vid-dtl-missing" class="video-missing hidden">No DTL clip linked for this shot.</div>
-              </div>
-            </article>
-
-            <article class="card video-player-card">
-              <div class="card-head">
-                <div class="card-title-wrap">
-                  <span class="card-kicker">CURRENT SHOT — FACE ON (FO)</span>
-                  <h3 id="vid-fo-title" class="vid-card-title">—</h3>
-                </div>
-                <span id="vid-fo-badge" class="tag tag-cyan">FO</span>
-              </div>
-              <div class="video-frame">
-                <video id="vid-player-fo" controls playsinline preload="metadata"></video>
-                <div id="vid-fo-missing" class="video-missing hidden">No FO clip linked for this shot.</div>
-              </div>
-            </article>
-          </div>
-
-          <!-- Compare vs Personal Best -->
-          <article class="card video-compare-card">
-            <div class="card-head">
-              <div class="card-title-wrap">
-                <span class="card-kicker">COMPARE VS PERSONAL BEST BENCHMARK</span>
-                <h2 id="vid-best-headline" class="card-title">Personal Best Comparison</h2>
-              </div>
-              <label class="autoswitch-toggle" title="Include Personal Best video in synced Play/Pause &amp; frame stepping">
-                <input type="checkbox" id="chk-sync-best" checked />
-                <span>Sync Best Video</span>
-              </label>
+      <!-- 3C: REAL KINOVEA VIDEO COMPARE & MY-GO-TO -->
+      <div id="rev-view-video" style="display:none;">
+        <div class="rail" style="margin-bottom:12px;">
+          <div class="head-row" style="margin-bottom:0;">
+            <div class="flex-row">
+              <span class="kicker" style="margin:0;">SYNCED KINOVEA VIDEO &amp; PERSONAL BEST</span>
+              <select id="vid-club" aria-label="Video club filter"></select>
+              <button type="button" class="btn btn-xs" id="btn-vid-refresh">↻ Refresh Clips</button>
             </div>
-            <div class="compare-best-grid">
-              <div class="best-video-col">
-                <div class="video-frame video-frame-sm">
-                  <video id="vid-player-best" controls playsinline preload="metadata"></video>
-                  <div id="vid-best-missing" class="video-missing hidden">No Personal Best video available for this club yet.</div>
-                </div>
-                <div id="vid-best-meta" class="micro-desc" style="margin-top:6px;">—</div>
+            <div class="flex-row">
+              <button type="button" class="btn btn-sm btn-primary" id="btn-vid-play">▶ Play Synced</button>
+              <div class="seg" id="vid-speed-seg">
+                <button type="button" class="speed-btn" data-speed="0.25">0.25×</button>
+                <button type="button" class="speed-btn active" data-speed="0.5">0.5×</button>
+                <button type="button" class="speed-btn" data-speed="1">1×</button>
               </div>
-              <div class="best-delta-col">
+              <button type="button" class="btn btn-xs" id="btn-vid-prev-frame">◀ -1f</button>
+              <button type="button" class="btn btn-xs" id="btn-vid-next-frame">+1f ▶</button>
+              <span id="vid-time-readout" class="mono muted">0.00s</span>
+              <button type="button" class="btn btn-sm btn-green" id="btn-promote-goto" disabled>★ Promote to My-Go-To</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="vid-empty-state" class="rail hidden">
+          <h3>No Kinovea Swing Clips Linked Yet</h3>
+          <p class="muted">When SimWatch runs alongside Kinovea dual-camera capture, shots automatically link <code>_DTL.mp4</code> and <code>_FO.mp4</code> inside <code>Swings/Sessions/YYYY-MM-DD/</code>.</p>
+          <button type="button" class="btn btn-sm btn-cyan" id="btn-vid-sync-empty">↻ Sync SimWatch History</button>
+        </div>
+
+        <div id="vid-workspace" class="video-workspace">
+          <div class="rail">
+            <div class="head-row">
+              <span class="kicker" style="margin:0;">RECENT VIDEO SHOTS</span>
+              <span id="vid-list-count" class="badge badge-cyan">0</span>
+            </div>
+            <div id="vid-clips-list" class="vid-clips-list"></div>
+          </div>
+
+          <div>
+            <div class="video-dual-grid">
+              <div class="rail">
+                <span class="kicker">CURRENT SHOT — DTL</span>
+                <div id="vid-dtl-title" style="font-weight:800;margin-bottom:6px;">—</div>
+                <div class="video-frame">
+                  <video id="vid-player-dtl" controls playsinline preload="metadata"></video>
+                  <div id="vid-dtl-missing" class="video-missing hidden">No DTL clip linked.</div>
+                </div>
+              </div>
+              <div class="rail">
+                <span class="kicker">CURRENT SHOT — FACE ON</span>
+                <div id="vid-fo-title" style="font-weight:800;margin-bottom:6px;">—</div>
+                <div class="video-frame">
+                  <video id="vid-player-fo" controls playsinline preload="metadata"></video>
+                  <div id="vid-fo-missing" class="video-missing hidden">No FO clip linked.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="rail">
+              <div class="head-row">
+                <div>
+                  <span class="kicker">COMPARE VS PERSONAL BEST BENCHMARK</span>
+                  <h3 id="vid-best-headline">Personal Best Comparison</h3>
+                </div>
+                <label style="font-size:11px;display:inline-flex;align-items:center;gap:5px;">
+                  <input type="checkbox" id="chk-sync-best" checked /> Sync Best Video
+                </label>
+              </div>
+              <div class="grid-2">
+                <div>
+                  <div class="video-frame" style="min-height:180px;">
+                    <video id="vid-player-best" controls playsinline preload="metadata"></video>
+                    <div id="vid-best-missing" class="video-missing hidden">No Personal Best clip available yet.</div>
+                  </div>
+                  <div id="vid-best-meta" class="muted mono mt-8" style="font-size:11px;">—</div>
+                </div>
                 <div class="table-wrap">
-                  <table class="data-table delta-table">
-                    <thead>
-                      <tr>
-                        <th>Metric</th>
-                        <th class="num">Current</th>
-                        <th class="num">Personal Best</th>
-                        <th class="num">Delta</th>
-                      </tr>
-                    </thead>
+                  <table class="data-table">
+                    <thead><tr><th>Metric</th><th class="num">Current</th><th class="num">Best</th><th class="num">Delta</th></tr></thead>
                     <tbody id="vid-delta-tbody"></tbody>
                   </table>
                 </div>
               </div>
             </div>
-          </article>
+          </div>
         </div>
+      </div>
+
+      <!-- 3D: TRENDS, DIVERGING SG & FATIGUE -->
+      <div id="rev-view-trends" style="display:none;">
+        <div class="rail">
+          <div class="head-row">
+            <div>
+              <span class="kicker">Smooth Cubic-Spline Longitudinal Progression</span>
+              <h3>Multi-Session Trendline</h3>
+            </div>
+            <div class="seg" id="rev-trend-seg">
+              <button type="button" class="active" data-metric="avgScore">Score</button>
+              <button type="button" data-metric="avgSmash">Smash</button>
+              <button type="button" data-metric="avgSg">SG</button>
+              <button type="button" data-metric="avgCarry">Carry</button>
+              <button type="button" data-metric="faultPct">Fault %</button>
+            </div>
+          </div>
+          <div id="rev-trend-svg"></div>
+        </div>
+
+        <div class="grid-2 mt-12">
+          <div class="rail">
+            <div class="head-row">
+              <div><span class="kicker">Strokes Gained Profile</span><h3>OTT vs Approach vs Wedges</h3></div>
+              <span class="badge badge-cyan">SQLite Aggregate</span>
+            </div>
+            <div id="rev-sg-cat-svg"></div>
+          </div>
+          <div class="rail">
+            <div class="head-row">
+              <div><span class="kicker">Within-Session Stamina</span><h3>Warmup &amp; Fatigue Curve</h3></div>
+              <span class="badge" id="rev-fat-badge">—</span>
+            </div>
+            <div id="pat-fatigue-bars"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 3E: HIGHLIGHTS -->
+      <div id="rev-view-highlights" style="display:none;">
+        <div class="rail">
+          <div class="head-row">
+            <div><span class="kicker">Standout Strikes &amp; Promoted My-Go-To Swings</span><h3>Session Highlights</h3></div>
+            <span class="badge badge-green" id="rev-hl-count">—</span>
+          </div>
+          <div class="grid-3" id="rev-highlights-grid"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ==================== 04 MY BAG ==================== -->
+    <section class="mode-panel" id="mode-bag">
+      <div class="head-row" style="margin-bottom:0;">
+        <div>
+          <span class="kicker">SQLite 14-Club Gapping · Filter, Sort, Trim Outliers &amp; Delete Shots Live</span>
+          <h2 style="margin:0;">My Bag &amp; Shot Data Manager</h2>
+        </div>
+        <div class="flex-row">
+          <div class="seg" id="bag-view-seg">
+            <button type="button" class="active" data-bview="table">13-Col Gapping &amp; Shot Manager</button>
+            <button type="button" data-bview="warp">Conditions Warp Bars</button>
+          </div>
+          <span class="badge badge-cyan" id="bag-summary-pill">0 / 14 clubs</span>
+          <button type="button" class="btn btn-sm btn-green" id="bag-cal-btn">Calibration</button>
+        </div>
+      </div>
+
+      <!-- SORT / FILTER / TRIM / RESTORE TOOLBAR -->
+      <div class="rail" id="bag-filters-bar">
+        <div class="head-row" style="margin-bottom:0;">
+          <div class="flex-row">
+            <label class="muted">Window:
+              <select id="bag-days" aria-label="Bag days window">
+                <option value="7">Last 7 Days</option>
+                <option value="30">Last 30 Days</option>
+                <option value="90" selected>Last 90 Days</option>
+                <option value="180">Last 180 Days</option>
+                <option value="0">All Time</option>
+              </select>
+            </label>
+            <label class="muted">Mode:
+              <select id="bag-mode-filter" aria-label="Bag mode filter">
+                <option value="real">Real Balls</option>
+                <option value="almost">Kids Asleep</option>
+                <option value="all">All Modes</option>
+              </select>
+            </label>
+            <label class="muted">Quality:
+              <select id="bag-qual-filter" aria-label="Bag quality filter">
+                <option value="all">All Shots</option>
+                <option value="full">Full Club Read Only</option>
+                <option value="center">Center Strikes Only</option>
+              </select>
+            </label>
+            <label class="muted">Category:
+              <select id="bag-cat-filter" aria-label="Bag category filter">
+                <option value="all">All 14 Clubs</option>
+                <option value="woods">Woods</option>
+                <option value="hybrids">Hybrids</option>
+                <option value="irons">Irons</option>
+                <option value="wedges">Wedges</option>
+              </select>
+            </label>
+          </div>
+          <div class="flex-row">
+            <button type="button" class="btn btn-sm" id="bag-trim-btn">✂ Trim Outliers (±2σ): OFF</button>
+            <button type="button" class="btn btn-sm btn-amber" id="bag-restore-btn">↺ Restore Deleted (<span id="bag-del-count">0</span>)</button>
+            <button type="button" class="btn btn-sm" id="bag-refresh-btn">↻ Refresh</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- CONDITIONS WARP PANEL -->
+      <div class="rail" id="bag-warp-view" style="display:none;">
+        <div class="head-row">
+          <div><span class="kicker">Aerodynamic What-If Modifiers (Visual Adjustment)</span><h3>Course Conditions Warp</h3></div>
+          <button type="button" class="btn btn-xs" id="bag-warp-reset">Reset Sea Level</button>
+        </div>
+        <div class="grid-4">
+          <label class="sub-well">Wind Head/Tail (<strong id="bag-wind-lbl" class="mono">0 mph</strong>)<input type="range" id="bag-wind" min="-20" max="20" step="2" value="0" style="width:100%;" /></label>
+          <label class="sub-well">Temperature (<strong id="bag-temp-lbl" class="mono">70°F</strong>)<input type="range" id="bag-temp" min="40" max="100" step="5" value="70" style="width:100%;" /></label>
+          <label class="sub-well">Altitude (<strong id="bag-alt-lbl" class="mono">0 ft</strong>)<input type="range" id="bag-alt" min="0" max="7000" step="500" value="0" style="width:100%;" /></label>
+          <label class="sub-well">Lie<select id="bag-lie" style="width:100%;margin-top:4px;"><option value="fairway">Fairway (100%)</option><option value="rough">Light Rough (94%)</option><option value="flyer">Flyer (+6%)</option></select></label>
+        </div>
+      </div>
+
+      <!-- SORTABLE 13-COLUMN GAPPING TABLE -->
+      <div class="rail">
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead id="bag-thead"></thead>
+            <tbody id="bag-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- PER-CLUB SQLITE SHOT MANAGER (DELETE BAD READS LIVE) -->
+      <div class="rail" id="bag-shot-manager-rail">
+        <div class="head-row">
+          <div>
+            <span class="kicker">PER-CLUB SQLITE SHOT MANAGER · CLICK CLUB ROW ABOVE TO INSPECT</span>
+            <h3 id="bag-mgr-title">Recorded Shots</h3>
+          </div>
+          <select id="bag-mgr-club" aria-label="Shot manager club filter"></select>
+        </div>
+        <div class="table-wrap" style="max-height:320px;overflow-y:auto;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Date / Time</th>
+                <th>Club</th>
+                <th class="num">Carry</th>
+                <th class="num">Offline</th>
+                <th class="num">Smash</th>
+                <th class="num">Spin</th>
+                <th>Shape / Delivery</th>
+                <th class="num">SG</th>
+                <th class="num">Action</th>
+              </tr>
+            </thead>
+            <tbody id="bag-shots-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- WEDGE CLOCK MATRIX -->
+      <div class="rail">
+        <div class="head-row">
+          <div><span class="kicker">7:30 / 9:00 / 10:30 / Full Clock Matrix</span><h3>Wedge Yardage Card</h3></div>
+          <button type="button" class="btn btn-sm btn-cyan" id="bag-open-wedge-print">🖨 Print Pocket Card</button>
+        </div>
+        <div class="table-wrap" id="bag-wedge-matrix"></div>
       </div>
     </section>
   </main>
 
-  <!-- FULLSCREEN MAT GLANCE OVERLAY (10-FOOT READABLE, HOTKEY: M) -->
+  <!-- FULLSCREEN 10-FT MAT GLANCE OVERLAY -->
   <div id="mat-glance-overlay" class="mat-glance hidden" role="dialog" aria-modal="true" aria-label="Mat Glance View">
     <div class="mg-header">
-      <div class="mg-header-left">
+      <div class="flex-row">
         <span id="mg-club" class="mg-club-badge">—</span>
-        <span id="mg-mode" class="tag tag-cyan">Real Balls</span>
-        <span id="mg-feel" class="tag tag-green hidden"></span>
+        <span id="mg-mode" class="badge badge-green">Real Balls</span>
+        <span id="mg-feel" class="badge badge-cyan hidden"></span>
       </div>
-      <button id="btn-mg-close" class="btn btn-ghost">✕ Close Mat Glance (Esc / M)</button>
+      <button type="button" id="btn-mg-close" class="btn">✕ Close Mat Glance (Esc / M)</button>
     </div>
-
     <div class="mg-hero">
-      <div id="mg-shape-svg" class="mg-shape-svg"></div>
-      <div class="mg-hero-center">
-        <div class="mg-kicker">SHOT SHAPE</div>
+      <div id="mg-shape-svg"></div>
+      <div>
+        <div class="kicker">SHOT SHAPE</div>
         <div id="mg-shape-name" class="mg-shape-name">Waiting for Shot</div>
-        <div id="mg-shape-sub" class="mg-shape-sub">Hit a ball on Launch Pro or press Test Shot</div>
+        <div id="mg-shape-sub" class="mg-shape-sub">Hit a ball on Launch Pro or click Test Shot</div>
       </div>
-      <div id="mg-score-ring" class="mg-score-ring"></div>
+      <div id="mg-score-ring"></div>
     </div>
-
     <div id="mg-stats-grid" class="mg-stats-grid"></div>
-
     <div id="mg-delivery-box" class="mg-delivery-box">
-      <div class="mg-del-title" id="mg-del-name">—</div>
-      <div class="mg-del-cue" id="mg-del-cue">—</div>
+      <div id="mg-del-name" class="mg-del-title">—</div>
+      <div id="mg-del-cue" class="mg-del-cue">—</div>
     </div>
   </div>
 
-  <!-- SMART FLOATING HOVER POPOVER -->
+  <!-- SLIDE-OVER DRILLS HUB DRAWER -->
+  <div class="drawer-backdrop" id="drawer-backdrop"></div>
+  <aside class="drawer" id="drawer-drills" aria-label="Drills Hub Library">
+    <div class="drawer-head">
+      <div><span class="kicker">REPO DRILLS BRIDGE · 50+ DRILLS</span><h3 style="margin:0;">Drills Hub Coach</h3></div>
+      <button type="button" class="btn btn-sm" id="drawer-close">✕ Close</button>
+    </div>
+    <div class="drawer-body">
+      <div class="flex-row" style="margin-bottom:10px;">
+        <select id="drawer-fault-filter" style="flex:1;" aria-label="Filter drills by fault">
+          <option value="all">All Faults</option>
+          <option value="flipping_floater">Flipping / Early Release</option>
+          <option value="early_cast">Early Cast</option>
+          <option value="over_hold">Over-Hold Block</option>
+          <option value="steep_dig">Steep Dig / Mat Fat</option>
+          <option value="steep_chop">Steep Chop / Out-to-In</option>
+          <option value="pop_up">Driver Pop-Up</option>
+          <option value="low_hook_trap">Low Snap Hook</option>
+          <option value="hooded_trap">Hooded Hook / Pull Trap</option>
+          <option value="strike_toe">Toe Strike</option>
+          <option value="strike_heel">Heel Strike</option>
+          <option value="strike_fat">Heavy / Fat Strike</option>
+          <option value="strike_thin">Thin Strike</option>
+        </select>
+        <select id="drawer-mode-filter" aria-label="Filter drills by mode">
+          <option value="all">All Modes</option>
+          <option value="real">Real Balls</option>
+          <option value="almost">Kids Asleep</option>
+          <option value="sore">Gym-Sore</option>
+        </select>
+      </div>
+      <div id="drawer-detail" class="sub-well" style="margin-bottom:10px;border-color:var(--cyan-bd);"></div>
+      <div id="drawer-list"></div>
+    </div>
+  </aside>
+
+  <!-- NATIVE DIALOGS (<dialog closedby="any">) -->
+  <dialog class="studio-dlg" id="dlg-obs" closedby="any">
+    <div class="head-row">
+      <div><span class="kicker">100% Transparent Browser Sources (127.0.0.1)</span><h3>OBS Studio Overlays (11 Widgets)</h3></div>
+      <button type="button" class="btn btn-sm" data-close-dlg="dlg-obs">✕</button>
+    </div>
+    <div id="obs-server-warning" class="sub-well hidden" style="border-color:var(--red-bd);margin-bottom:8px;"></div>
+    <div id="obs-url-list"></div>
+  </dialog>
+
+  <dialog class="studio-dlg" id="dlg-tempo" closedby="any">
+    <div class="head-row">
+      <div><span class="kicker">3:1 &amp; 2:1 Audio Metronome · 6 Sound Sets · Rest Between Swings</span><h3>Tour Tempo &amp; Voice</h3></div>
+      <button type="button" class="btn btn-sm" data-close-dlg="dlg-tempo">✕</button>
+    </div>
+    <div class="grid-2">
+      <label class="sub-well">Preset<select id="select-tempo" style="width:100%;margin-top:4px;"><option value="off">Off</option><option value="24/8">24/8 Tour (3:1)</option><option value="27/9">27/9 Smooth (3:1)</option><option value="21/7">21/7 Brisk (3:1)</option><option value="18/9">18/9 Short Game (2:1)</option></select></label>
+      <label class="sub-well">Sound Set<select id="select-tempo-sound" style="width:100%;margin-top:4px;"><option value="tones">Tones (rising)</option><option value="woodblock">Woodblock</option><option value="click">Click (sharp)</option><option value="beep">Beep (classic)</option><option value="soft">Soft (late night)</option><option value="swoosh">Swoosh</option></select></label>
+      <label class="sub-well">Rest Gap<select id="select-tempo-gap" style="width:100%;margin-top:4px;"><option value="0">Non-stop</option><option value="3">3 s rest</option><option value="5">5 s rest</option><option value="8">8 s rest</option><option value="10">10 s rest</option><option value="15">15 s rest</option><option value="20">20 s rest</option><option value="30">30 s rest</option></select></label>
+      <div class="sub-well" style="display:flex;flex-direction:column;justify-content:center;gap:6px;">
+        <button type="button" class="btn btn-cyan" id="btn-tempo-toggle">▶ Start / Stop Tempo</button>
+        <div class="muted mono" id="tmp-status-txt" style="font-size:11px;">Ready</div>
+      </div>
+    </div>
+  </dialog>
+
+  <dialog class="studio-dlg" id="dlg-cal" closedby="any">
+    <div class="head-row">
+      <div><span class="kicker">Empirical Bayes Welford Gaussian Priors (≥3 shots locks club)</span><h3>Bag Club Calibration Status</h3></div>
+      <button type="button" class="btn btn-sm" data-close-dlg="dlg-cal">✕</button>
+    </div>
+    <div id="cal-clubs-badges" class="flex-row"></div>
+    <div class="flex-row mt-12" style="justify-content:flex-end;">
+      <button type="button" class="btn btn-sm btn-danger" id="btn-reset-cal">Reset Calibration</button>
+    </div>
+  </dialog>
+
+  <dialog class="studio-dlg" id="dlg-csv" closedby="any">
+    <div class="head-row">
+      <div><span class="kicker">FSX Pro / FSX 2020 Export &amp; Live File Watcher</span><h3>FSX CSV Import</h3></div>
+      <button type="button" class="btn btn-sm" data-close-dlg="dlg-csv">✕</button>
+    </div>
+    <p class="muted">Import an FSX CSV session once or watch <code>LastShot.csv</code> live.</p>
+    <div class="flex-row">
+      <button type="button" class="btn btn-primary" id="btn-csv-import-once">Import FSX CSV Session</button>
+      <button type="button" class="btn btn-cyan" id="btn-csv-watch">Watch LastShot.csv Live</button>
+      <button type="button" class="btn hidden" id="btn-csv-stop">Stop Watching</button>
+    </div>
+    <p id="csv-status-msg" class="muted mono mt-8" style="font-size:11px;"></p>
+  </dialog>
+
+  <dialog class="studio-dlg" id="dlg-settings" closedby="any">
+    <div class="head-row">
+      <div><span class="kicker">Profile, Mat Type, Auto-Switch &amp; Static Lofts</span><h3>ShotLab Settings</h3></div>
+      <button type="button" class="btn btn-sm" data-close-dlg="dlg-settings">✕</button>
+    </div>
+    <div class="grid-2">
+      <label class="sub-well">Driver Baseline Speed (mph)<input type="number" id="set-driver-speed" min="65" max="135" step="1" style="width:100%;margin-top:4px;" /></label>
+      <label class="sub-well">Handedness<select id="set-handedness" style="width:100%;margin-top:4px;"><option value="RH">Right-Handed (RH)</option><option value="LH">Left-Handed (LH)</option></select></label>
+      <label class="sub-well">Altitude (ft)<input type="number" id="set-altitude" min="0" max="8000" step="100" style="width:100%;margin-top:4px;" /></label>
+      <label class="sub-well">Hitting Mat Type<select id="set-mat-type" style="width:100%;margin-top:4px;"><option value="fiberbuilt">Fiberbuilt Strip</option><option value="divot">Divot Action</option><option value="firm">Firm Turf</option></select></label>
+      <label class="sub-well">GSPro Auto-Switch Conf (%)<input type="number" id="set-autoswitch-conf" min="70" max="99" step="1" style="width:100%;margin-top:4px;" /></label>
+      <label class="sub-well">OBS Auto-Hide (sec, 0=stay)<input type="number" id="set-obs-autohide" min="0" max="300" step="1" style="width:100%;margin-top:4px;" /></label>
+    </div>
+    <div class="flex-row mt-8">
+      <label class="sub-well" style="flex:1;"><input type="checkbox" id="set-audio-chimes" /> R/Y/G Grade Chimes</label>
+      <label class="sub-well" style="flex:1;"><input type="checkbox" id="set-audio-caddie" /> Voice Caddie</label>
+    </div>
+    <div class="mt-12">
+      <span class="kicker">Custom Static Lofts (°)</span>
+      <div id="custom-lofts-grid" class="grid-4" style="gap:6px;"></div>
+    </div>
+    <div class="flex-row mt-12" style="justify-content:flex-end;">
+      <button type="button" class="btn" data-close-dlg="dlg-settings">Cancel</button>
+      <button type="button" class="btn btn-primary" id="btn-save-settings">Save Settings</button>
+    </div>
+  </dialog>
+
+  <dialog class="studio-dlg" id="dlg-checkin" closedby="any">
+    <div class="head-row">
+      <div><span class="kicker">Post-Round Scoring Reflection</span><h3>60-Second Round Check-In</h3></div>
+      <button type="button" class="btn btn-sm" data-close-dlg="dlg-checkin">✕</button>
+    </div>
+    <div class="grid-2">
+      <label class="sub-well">Round Score<input type="number" id="chk-round-score" min="55" max="130" value="79" style="width:100%;margin-top:4px;" /></label>
+      <label class="sub-well">Biggest Stroke Cost<select id="chk-round-struggle" style="width:100%;margin-top:4px;"><option value="driver_ob">Driver Big Miss / Hooks</option><option value="approach_fat">Iron Strike / Fat Shots</option><option value="wedges">Wedge Distance Control</option><option value="pressure_close">Pressure Closing Holes</option></select></label>
+    </div>
+    <div class="flex-row mt-12" style="justify-content:flex-end;">
+      <button type="button" class="btn btn-primary" id="btn-save-checkin">Save Check-In</button>
+    </div>
+  </dialog>
+
+  <dialog class="studio-dlg" id="dlg-park" closedby="any">
+    <div class="head-row">
+      <div><span class="kicker">Capture New Thought Without Breaking Active 7-Day Block</span><h3>Park It Idea Capture</h3></div>
+      <button type="button" class="btn btn-sm" data-close-dlg="dlg-park">✕</button>
+    </div>
+    <textarea id="park-input" rows="3" placeholder="e.g., Trail elbow stays forward of hip at P6..." style="width:100%;"></textarea>
+    <div class="flex-row mt-12" style="justify-content:flex-end;">
+      <button type="button" class="btn btn-amber" id="btn-save-park">🅿 Save to Parking Lot</button>
+    </div>
+  </dialog>
+
+  <dialog class="studio-dlg" id="dlg-wedge" closedby="any">
+    <div class="head-row">
+      <div><span class="kicker">Printable Course Pocket Card</span><h3>Wedge Clock Matrix</h3></div>
+      <div class="flex-row">
+        <button type="button" class="btn btn-sm btn-primary" id="btn-print-wedge">🖨 Print</button>
+        <button type="button" class="btn btn-sm" data-close-dlg="dlg-wedge">✕</button>
+      </div>
+    </div>
+    <div id="wedge-print-body"></div>
+  </dialog>
+
+  <dialog class="studio-dlg" id="dlg-keys" closedby="any">
+    <div class="head-row">
+      <div><span class="kicker">ShotLab Studio + SimWatch Global Keys</span><h3>Keyboard Shortcuts</h3></div>
+      <button type="button" class="btn btn-sm" data-close-dlg="dlg-keys">✕</button>
+    </div>
+    <div id="keys-dlg-body"></div>
+  </dialog>
+
+  <!-- POPOVERS & TOAST -->
+  <div id="metric-popover" class="metric-popover" role="dialog" aria-hidden="true"></div>
   <div id="hover-popover" class="hover-popover hidden" role="tooltip"></div>
-
-  <!-- TOAST BANNER -->
-  <div id="toast" class="toast hidden"></div>
-
-  <!-- OBS STUDIO MODAL -->
-  <div id="modal-obs" class="modal-backdrop hidden">
-    <div class="modal modal-wide">
-      <div class="modal-head">
-        <h3>OBS Studio — Transparent Browser Source Overlays</h3>
-        <button class="modal-close" data-close="modal-obs">✕</button>
-      </div>
-      <div id="obs-server-warning" class="obs-warning hidden"></div>
-      <p class="modal-intro">
-        In OBS Studio: <strong>Sources → + → Browser</strong>, paste any URL below, and set the recommended Width × Height.
-        All widgets have <strong>100% transparent backgrounds</strong> and update live over local SSE on every shot!
-      </p>
-      <div id="obs-url-list" class="obs-url-list"></div>
-      <div class="modal-foot">
-        <button class="btn btn-primary" data-close="modal-obs">Done</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- FSX CSV MODAL -->
-  <div id="modal-csv" class="modal-backdrop hidden">
-    <div class="modal">
-      <div class="modal-head">
-        <h3>FSX Pro / FSX 2020 CSV Import &amp; Live Watcher</h3>
-        <button class="modal-close" data-close="modal-csv">✕</button>
-      </div>
-      <p class="modal-intro">
-        When playing GSPro with GameChanger, ShotLab automatically receives every shot live via SimWatch (:921 → :8765).
-        If you practice in <strong>FSX Pro</strong> or <strong>FSX 2020</strong>, you can import an exported CSV or watch <code>LastShot.csv</code> live:
-      </p>
-      <div class="csv-actions">
-        <button id="btn-csv-import-once" class="btn btn-primary">Import FSX CSV Session</button>
-        <button id="btn-csv-watch" class="btn btn-accent">Watch LastShot.csv Live</button>
-        <button id="btn-csv-stop" class="btn btn-ghost hidden">Stop Watching</button>
-      </div>
-      <p id="csv-status-msg" class="micro-desc"></p>
-    </div>
-  </div>
-
-  <!-- SETTINGS & BAG CALIBRATION MODAL -->
-  <div id="modal-settings" class="modal-backdrop hidden">
-    <div class="modal modal-wide">
-      <div class="modal-head">
-        <h3>Player Profile, Bag Specs &amp; GSPro Auto-Switch</h3>
-        <button class="modal-close" data-close="modal-settings">✕</button>
-      </div>
-      <div class="settings-grid">
-        <label class="field">
-          <span>Baseline Driver Club Speed (mph)</span>
-          <input type="number" id="set-driver-speed" min="65" max="135" step="1" value="98" />
-          <small>Scales initial club-detection priors before your personal calibration fills in.</small>
-        </label>
-        <label class="field">
-          <span>Handedness</span>
-          <select id="set-handedness">
-            <option value="RH">Right-Handed (RH)</option>
-            <option value="LH">Left-Handed (LH)</option>
-          </select>
-          <small>Mirrors draw/fade, pull/push, clubface, and path directions.</small>
-        </label>
-        <label class="field">
-          <span>Elevation / Altitude (ft)</span>
-          <input type="number" id="set-altitude" min="0" max="8000" step="100" value="0" />
-          <small>Adjusts air density in the 3D aerodynamic physics engine.</small>
-        </label>
-        <label class="field">
-          <span>GSPro Auto-Switch Min Confidence (%)</span>
-          <input type="number" id="set-autoswitch-conf" min="70" max="99" step="1" value="90" />
-          <small>Only sends I/K keys to GSPro when club confidence meets or exceeds this threshold.</small>
-        </label>
-        <label class="field">
-          <span>OBS Overlay Auto-Hide (seconds)</span>
-          <input type="number" id="set-obs-autohide" min="0" max="300" step="1" value="0" />
-          <small>0 = stay visible; e.g. 12 = fade out OBS overlays 12s after each shot.</small>
-        </label>
-        <div class="field">
-          <span>Audio Feedback</span>
-          <div class="audio-checks">
-            <label class="chk-inline"><input type="checkbox" id="set-audio-chimes" /> Grade Chimes</label>
-            <label class="chk-inline"><input type="checkbox" id="set-audio-caddie" /> Voice Caddie</label>
-          </div>
-          <small>Plays subtle R/Y/G grade chime or spoken shot summary on each new swing.</small>
-        </div>
-      </div>
-      <div class="cal-clubs-section">
-        <h4>Custom Static Lofts (°) — Leave blank for default spec (improves Shaft Lean / Flipping accuracy)</h4>
-        <div id="custom-lofts-grid" class="custom-lofts-grid"></div>
-      </div>
-      <div class="cal-clubs-section">
-        <h4>Calibrated Clubs (3+ Confirmed Shots = Personal Gaussian Locked)</h4>
-        <div id="cal-clubs-badges" class="cal-clubs-badges"></div>
-      </div>
-      <div class="modal-foot">
-        <button id="btn-reset-cal" class="btn btn-danger">Reset Calibration Data</button>
-        <div class="spacer"></div>
-        <button class="btn btn-ghost" data-close="modal-settings">Cancel</button>
-        <button id="btn-save-settings" class="btn btn-primary">Save Settings</button>
-      </div>
-    </div>
-  </div>
+  <div id="chart-tooltip" class="chart-tooltip"></div>
+  <div id="toast" class="toast" popover="manual" role="status" aria-live="polite"></div>
 
   <script src="svg.js"></script>
+  <script src="charts.js"></script>
+  <script src="challenges.js"></script>
   <script src="audio.js"></script>
   <script src="app.js"></script>
 </body>

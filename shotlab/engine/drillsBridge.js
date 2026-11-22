@@ -84,6 +84,14 @@ function loadDrillsHubData(repoRoot) {
         { id: 'sore', label: 'Gym-Sore / Recovery', shortLabel: 'Gym-Sore', icon: '', subtitle: 'Tempo & light rehearsals' },
       ];
 
+  const reverseFaultMap = new Map();
+  for (const [faultKey, ids] of Object.entries(FAULT_TO_DRILL_IDS)) {
+    for (const did of ids) {
+      if (!reverseFaultMap.has(did)) reverseFaultMap.set(did, []);
+      reverseFaultMap.get(did).push(faultKey);
+    }
+  }
+
   const drills = (drillsData && Array.isArray(drillsData.drills))
     ? drillsData.drills.map((d) => ({
         id: d.id,
@@ -91,6 +99,7 @@ function loadDrillsHubData(repoRoot) {
         focus: d.focus || '',
         keyFeel: d.keyFeel || '',
         faultTags: Array.isArray(d.faultTags) ? d.faultTags : [],
+        shotlabFaultIds: reverseFaultMap.get(d.id) || [],
         modes: Array.isArray(d.modes) ? d.modes : ['real'],
         clubs: d.clubs || 'all',
         video: d.video || null,
@@ -124,6 +133,7 @@ function loadDrillsHubData(repoRoot) {
     hasPersonalProfile,
     modes,
     drills,
+    faultToDrillIds: FAULT_TO_DRILL_IDS,
     feels,
     driverDial,
     personalChecklist,
@@ -181,7 +191,9 @@ function recommendDrillsForFault(faultKey, drills = [], { practiceMode = 'real',
   const maxResults = Number.isFinite(Number(limit)) ? Math.max(0, Math.floor(Number(limit))) : 3;
   if (maxResults === 0) return [];
 
-  const preferredIds = FAULT_TO_DRILL_IDS[faultKey] || [];
+  const preferredIds = (typeof faultKey === 'string' && Object.hasOwn(FAULT_TO_DRILL_IDS, faultKey))
+    ? FAULT_TO_DRILL_IDS[faultKey]
+    : [];
   const byId = new Map(drills.map((d) => [d.id, d]));
 
   let picked = [];

@@ -65,6 +65,133 @@ let swingDb = null;
 let shuttingDown = false;
 const sseClients = new Set();
 
+const VALID_MAT_TYPES = new Set(['fiberbuilt', 'divot', 'firm']);
+const VALID_INTENDED_SHAPES = new Set(['stock', 'draw', 'fade', 'stinger', 'high']);
+
+function defaultWedgeMatrix() {
+  return [
+    { club: 'PW', label: 'PW (45°)', cells: [{ arm: '7:30', pct: '50%', carry: 68, roll: 5 }, { arm: '9:00', pct: '75%', carry: 96, roll: 4 }, { arm: '10:30', pct: '90%', carry: 116, roll: 3 }, { arm: 'Full', pct: '100%', carry: 126, roll: 3 }] },
+    { club: 'GW', label: 'GW (50°)', cells: [{ arm: '7:30', pct: '50%', carry: 58, roll: 4 }, { arm: '9:00', pct: '75%', carry: 84, roll: 3 }, { arm: '10:30', pct: '90%', carry: 102, roll: 2 }, { arm: 'Full', pct: '100%', carry: 112, roll: 1 }] },
+    { club: 'SW', label: 'SW (54°)', cells: [{ arm: '7:30', pct: '50%', carry: 48, roll: 3 }, { arm: '9:00', pct: '75%', carry: 72, roll: 2 }, { arm: '10:30', pct: '90%', carry: 89, roll: 1 }, { arm: 'Full', pct: '100%', carry: 99, roll: -1 }] },
+    { club: 'LW', label: 'LW (58°)', cells: [{ arm: '7:30', pct: '50%', carry: 38, roll: 2 }, { arm: '9:00', pct: '75%', carry: 60, roll: 1 }, { arm: '10:30', pct: '90%', carry: 75, roll: 0 }, { arm: 'Full', pct: '100%', carry: 84, roll: -2 }] },
+  ];
+}
+
+function defaultStudioState() {
+  return {
+    matType: 'fiberbuilt',
+    intendedShape: 'stock',
+    showGoalLine: true,
+    activeCues: [
+      { id: 'cue_shaft', text: 'Shaft pointed at left thigh at address (P1)', club: 'All' },
+      { id: 'cue_wrist', text: 'Lead wrist flat through P6–P7 impact zone', club: 'Irons' },
+    ],
+    parkedIdeas: [],
+    bodyCheckin: { hamstrings: 1, ankle: 'ok', energy: 4 },
+    roundCheckin: null,
+    wedgeMatrix: defaultWedgeMatrix(),
+    challengeBests: {},
+  };
+}
+
+const BLOCKED_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function toFiniteNumOrNull(v) {
+  if (v === null || v === undefined || v === '' || typeof v === 'boolean') return null;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : null;
+}
+
+function sanitizeStudioState(patch = {}, prev = defaultStudioState()) {
+  const defaults = defaultStudioState();
+  const base = { ...defaults, ...(prev && typeof prev === 'object' ? prev : {}) };
+  base.bodyCheckin = { ...defaults.bodyCheckin, ...(base.bodyCheckin && typeof base.bodyCheckin === 'object' ? base.bodyCheckin : {}) };
+  const p = patch && typeof patch === 'object' ? patch : {};
+  const next = { ...base };
+  if (typeof p.matType === 'string' && VALID_MAT_TYPES.has(p.matType)) next.matType = p.matType;
+  if (typeof p.intendedShape === 'string' && VALID_INTENDED_SHAPES.has(p.intendedShape)) next.intendedShape = p.intendedShape;
+  if (typeof p.showGoalLine === 'boolean') next.showGoalLine = p.showGoalLine;
+  if (Array.isArray(p.activeCues)) {
+    next.activeCues = p.activeCues
+      .filter((c) => c && typeof c.text === 'string' && c.text.trim())
+      .slice(0, 2)
+      .map((c, i) => ({
+        id: String(c.id || `cue_${i + 1}`).slice(0, 48),
+        text: c.text.trim().slice(0, 140),
+        club: String(c.club || 'All').slice(0, 24),
+      }));
+  }
+  if (Array.isArray(p.parkedIdeas)) {
+    const stamp = Date.now();
+    next.parkedIdeas = p.parkedIdeas
+      .filter((x) => x && typeof x.text === 'string' && x.text.trim())
+      .slice(0, 30)
+      .map((x, i) => ({
+        id: String(x.id || `park_${stamp}_${i}`).slice(0, 48),
+        text: x.text.trim().slice(0, 180),
+        ts: String(x.ts || new Date().toISOString().slice(0, 10)).slice(0, 32),
+      }));
+  }
+  if (p.bodyCheckin && typeof p.bodyCheckin === 'object' && !Array.isArray(p.bodyCheckin)) {
+    const numHam = toFiniteNumOrNull(p.bodyCheckin.hamstrings);
+    const prevHam = toFiniteNumOrNull(base.bodyCheckin.hamstrings);
+    const numEnergy = toFiniteNumOrNull(p.bodyCheckin.energy);
+    const prevEnergy = toFiniteNumOrNull(base.bodyCheckin.energy);
+    next.bodyCheckin = {
+      hamstrings: Math.max(0, Math.min(3, Math.round(numHam ?? prevHam ?? 1))),
+      ankle: ['ok', 'sore', 'flare'].includes(p.bodyCheckin.ankle) ? p.bodyCheckin.ankle : base.bodyCheckin.ankle,
+      energy: Math.max(1, Math.min(5, Math.round(numEnergy ?? prevEnergy ?? 4))),
+    };
+  }
+  if ('roundCheckin' in p) {
+    next.roundCheckin = p.roundCheckin && typeof p.roundCheckin === 'object' && !Array.isArray(p.roundCheckin) ? {
+      score: Math.max(55, Math.min(140, Math.round(toFiniteNumOrNull(p.roundCheckin.score) ?? 82))),
+      struggles: Array.isArray(p.roundCheckin.struggles) ? p.roundCheckin.struggles.slice(0, 4).map((s) => String(s).slice(0, 40)) : [],
+      ts: String(p.roundCheckin.ts || new Date().toISOString().slice(0, 10)).slice(0, 32),
+    } : null;
+  }
+  if (Array.isArray(p.wedgeMatrix) && p.wedgeMatrix.length) {
+    const validRows = p.wedgeMatrix.filter((row) => row && typeof row === 'object');
+    if (validRows.length) {
+      next.wedgeMatrix = validRows.slice(0, 5).map((row) => ({
+        club: String(row.club || '').slice(0, 8),
+        label: String(row.label || row.club || '').slice(0, 24),
+        cells: Array.isArray(row.cells)
+          ? row.cells
+              .filter((c) => c && typeof c === 'object')
+              .slice(0, 4)
+              .map((c) => ({
+                arm: String(c.arm || '').slice(0, 12),
+                pct: String(c.pct || '').slice(0, 8),
+                carry: Math.max(10, Math.min(200, Math.round(toFiniteNumOrNull(c.carry) ?? 60))),
+                roll: Math.max(-15, Math.min(30, Math.round(toFiniteNumOrNull(c.roll) ?? 0))),
+              }))
+          : [],
+      }));
+    }
+  }
+  if (p.challengeBests && typeof p.challengeBests === 'object' && !Array.isArray(p.challengeBests)) {
+    const merged = Object.create(null);
+    if (base.challengeBests && typeof base.challengeBests === 'object' && !Array.isArray(base.challengeBests)) {
+      for (const [k, v] of Object.entries(base.challengeBests)) {
+        if (!BLOCKED_OBJECT_KEYS.has(k) && typeof v === 'number' && Number.isFinite(v)) merged[k] = v;
+      }
+    }
+    for (const [k, v] of Object.entries(p.challengeBests).slice(0, 24)) {
+      const cleanK = String(k).slice(0, 32);
+      if (!BLOCKED_OBJECT_KEYS.has(cleanK) && typeof v === 'number' && Number.isFinite(v)) {
+        merged[cleanK] = v;
+      }
+    }
+    const capped = {};
+    for (const k of Object.keys(merged).slice(0, 24)) {
+      capped[k] = merged[k];
+    }
+    next.challengeBests = capped;
+  }
+  return next;
+}
+
 const runtime = {
   bridgeConnected: false,
   bridgeSnifferOk: false,
@@ -73,6 +200,7 @@ const runtime = {
   gsproClub: null,
   obsServerError: null,
   drillsHub: null,
+  challengeState: null,
   settings: {
     tierId: 'low_hcp',
     handedness: 'RH',
@@ -89,6 +217,7 @@ const runtime = {
     tempoSound: 'tones',
     tempoGapSec: 0, // rest between swings; 0 = non-stop loop
     refLines: ['tour'], // benchmark trajectories shown on the flight chart
+    studio: defaultStudioState(),
   },
   calibration: engine.createEmptyCalibration(98),
   shots: [],          // newest first, max 200 analyzed shots
@@ -167,6 +296,8 @@ function syncHistoricalSessions() {
         practiceMode: raw.practice_mode || 'real',
         feelId: raw.feel_id || null,
         drillId: raw.drill_id || null,
+        drills: runtime.drillsHub?.drills || [],
+        matType: runtime.settings.studio?.matType || 'fiberbuilt',
       })
     );
   } catch (err) {
@@ -275,6 +406,18 @@ function loadPersistedState() {
     const raw = JSON.parse(fs.readFileSync(STATE_PATH, 'utf8'));
     if (raw.settings && typeof raw.settings === 'object') {
       runtime.settings = { ...runtime.settings, ...raw.settings };
+      if (typeof runtime.settings.tierId !== 'string' || !Object.hasOwn(engine.BENCHMARK_TIERS, runtime.settings.tierId)) {
+        runtime.settings.tierId = 'low_hcp';
+      }
+      if (runtime.settings.handedness !== 'RH' && runtime.settings.handedness !== 'LH') {
+        runtime.settings.handedness = 'RH';
+      }
+      runtime.settings.altitudeFt = Number.isFinite(Number(runtime.settings.altitudeFt))
+        ? Math.max(0, Math.min(10000, Number(runtime.settings.altitudeFt)))
+        : 0;
+      runtime.settings.obsAutoHideSec = Number.isFinite(Number(runtime.settings.obsAutoHideSec))
+        ? Math.max(0, Math.min(300, Math.round(Number(runtime.settings.obsAutoHideSec))))
+        : 0;
       if (!VALID_PRACTICE_MODES.has(runtime.settings.practiceMode)) {
         runtime.settings.practiceMode = 'real';
       }
@@ -290,6 +433,15 @@ function loadPersistedState() {
       }
       runtime.settings.tempoGapSec = sanitizeTempoGap(runtime.settings.tempoGapSec);
       runtime.settings.refLines = sanitizeRefLines(runtime.settings.refLines);
+      runtime.settings.studio = sanitizeStudioState(raw.settings.studio, defaultStudioState());
+      const swPort = toFiniteNumOrNull(runtime.settings.simwatchPort);
+      runtime.settings.simwatchPort = (swPort !== null && swPort >= 1024 && swPort <= 65535)
+        ? Math.round(swPort)
+        : SIMWATCH_PORT;
+      const oPort = toFiniteNumOrNull(runtime.settings.obsPort);
+      runtime.settings.obsPort = (oPort !== null && oPort >= 1024 && oPort <= 65535)
+        ? Math.round(oPort)
+        : OBS_PORT;
       // Explicit environment overrides always take precedence over saved ports
       if (Number.isFinite(ENV_SIMWATCH_PORT) && ENV_SIMWATCH_PORT > 0) {
         runtime.settings.simwatchPort = ENV_SIMWATCH_PORT;
@@ -300,16 +452,26 @@ function loadPersistedState() {
     }
     if (raw.calibration && typeof raw.calibration === 'object') {
       const defaults = engine.createEmptyCalibration(98);
+      const rawLofts = (raw.calibration.customLofts && typeof raw.calibration.customLofts === 'object') ? raw.calibration.customLofts : {};
+      const cleanLofts = {};
+      for (const [club, val] of Object.entries(rawLofts)) {
+        if (!Object.hasOwn(engine.CLUB_SPECS, club)) continue;
+        const num = Number(val);
+        if (Number.isFinite(num) && num >= 5 && num <= 70) cleanLofts[club] = Number(num.toFixed(1));
+      }
+      const rawDriverSpd = toFiniteNumOrNull(raw.calibration.driverSpeedMph);
+      const validDriverSpd = (rawDriverSpd !== null && rawDriverSpd >= 60 && rawDriverSpd <= 140)
+        ? rawDriverSpd
+        : 98;
       runtime.calibration = {
         ...defaults,
         ...raw.calibration,
+        driverSpeedMph: validDriverSpd,
         autoSwitch: {
           ...defaults.autoSwitch,
           ...(raw.calibration.autoSwitch || {}),
         },
-        customLofts: {
-          ...(raw.calibration.customLofts || {}),
-        },
+        customLofts: cleanLofts,
       };
     }
   } catch (err) {
@@ -392,12 +554,14 @@ function getSnapshot() {
         focus: d.focus,
         keyFeel: d.keyFeel,
         faultTags: d.faultTags || [],
+        shotlabFaultIds: d.shotlabFaultIds || [],
         modes: d.modes,
         clubs: d.clubs,
         video: d.video,
         why: d.why,
         instructions: d.instructions || [],
       })),
+      faultToDrillIds: runtime.drillsHub?.faultToDrillIds || engine.FAULT_TO_DRILL_IDS || {},
       driverDial: runtime.drillsHub?.driverDial || null,
       personalChecklist: runtime.drillsHub?.personalChecklist || [],
     },
@@ -419,7 +583,7 @@ function buildObsPayload(snap) {
     }
     if (!dispersion || (dispersion.n || 0) < 2) {
       const matching = runtime.shots
-        .filter((s) => s.activeClub === activeClub)
+        .filter((s) => !s.isPreviewSeed && (s.practiceMode || 'real') !== 'almost' && s.activeClub === activeClub)
         .map(toDispersionShot);
       if (matching.length > 0) {
         dispersion = engine.computeDispersionStats(matching, { club: activeClub });
@@ -437,6 +601,7 @@ function buildObsPayload(snap) {
     settings: snap.settings,
     bridgeConnected: snap.bridgeConnected,
     dispersion,
+    challengeState: runtime.challengeState,
     sessionTicker: {
       count: snap.sessionStats.count,
       sessionShots: snap.sessionStats.count,
@@ -653,7 +818,7 @@ function ingestRawShot(
         .map((s) => s.activeClub);
 
   const effectivePracticeMode = rawShot.practice_mode || (prev && prev.practiceMode) || runtime.settings.practiceMode;
-  const analyzed = engine.analyzeShot(enrichedRaw, {
+  let analyzed = engine.analyzeShot(enrichedRaw, {
     calibration: runtime.calibration,
     tierId: runtime.settings.tierId,
     handedness: runtime.settings.handedness,
@@ -663,8 +828,51 @@ function ingestRawShot(
     practiceMode: effectivePracticeMode,
     feelId: rawShot.feel_id ?? (prev ? prev.feelId : undefined) ?? runtime.settings.activeFeelId,
     drillId: rawShot.drill_id ?? (prev ? prev.drillId : undefined) ?? runtime.settings.activeDrillId,
+    drills: runtime.drillsHub?.drills || [],
+    matType: runtime.settings.studio?.matType || 'fiberbuilt',
   });
   if (!analyzed) return null;
+  if (!isDemoFlag && !isPreviewSeed && swingDb) {
+    try {
+      const dbRow = typeof swingDb.getShotById === 'function'
+        ? swingDb.getShotById(analyzed.id, { includeDeleted: true })
+        : null;
+      if (dbRow?.deleted || (typeof swingDb.isDeleted === 'function' && swingDb.isDeleted(analyzed.id))) {
+        return null;
+      }
+      if (!prev && dbRow) {
+        const dbConfirmed = dbRow.confirmed_club || null;
+        const dbMode = rawShot.practice_mode || dbRow.practice_mode || effectivePracticeMode;
+        const dbFeel = rawShot.feel_id ?? dbRow.feel_id ?? runtime.settings.activeFeelId;
+        const dbDrill = rawShot.drill_id ?? dbRow.drill_id ?? runtime.settings.activeDrillId;
+        if ((dbConfirmed && dbConfirmed !== analyzed.confirmedClub) || dbMode !== effectivePracticeMode) {
+          const reanalyzed = engine.analyzeShot(
+            { ...enrichedRaw, confirmed_club: dbConfirmed || enrichedRaw.confirmed_club },
+            {
+              calibration: runtime.calibration,
+              tierId: runtime.settings.tierId,
+              handedness: runtime.settings.handedness,
+              altitudeFt: runtime.settings.altitudeFt,
+              clubOverride: dbConfirmed,
+              recentClubs,
+              practiceMode: dbMode,
+              feelId: dbFeel,
+              drillId: dbDrill,
+              drills: runtime.drillsHub?.drills || [],
+              matType: runtime.settings.studio?.matType || 'fiberbuilt',
+            }
+          );
+          if (reanalyzed) analyzed = reanalyzed;
+        }
+        if (dbConfirmed && !analyzed.confirmedClub) analyzed.confirmedClub = dbConfirmed;
+        if (!analyzed.clipDtl && dbRow.clip_dtl) analyzed.clipDtl = dbRow.clip_dtl;
+        if (!analyzed.clipFo && dbRow.clip_fo) analyzed.clipFo = dbRow.clip_fo;
+        if (dbRow.is_goto) analyzed.isGoTo = true;
+      }
+    } catch {
+      // ignore DB lookup error during ingestion
+    }
+  }
 
   analyzed.isDemo = prev ? Boolean(prev.isDemo) : isDemoFlag;
   analyzed.isPreviewSeed = prev ? Boolean(prev.isPreviewSeed) : Boolean(isPreviewSeed);
@@ -707,8 +915,9 @@ function ingestRawShot(
     runtime.shots[refreshIdx] = analyzed;
   } else {
     runtime.shots.unshift(analyzed);
-    if (runtime.shots.length > 200) runtime.shots = runtime.shots.slice(0, 200);
   }
+  runtime.shots.sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+  if (runtime.shots.length > 200) runtime.shots = runtime.shots.slice(0, 200);
   if (select) {
     runtime.selectedShotId = analyzed.id;
   }
@@ -752,6 +961,8 @@ function reanalyzeAllShots() {
       practiceMode: s.practiceMode || 'real',
       feelId: s.feelId,
       drillId: s.drillId,
+      drills: runtime.drillsHub?.drills || [],
+      matType: runtime.settings.studio?.matType || 'fiberbuilt',
     });
     if (!next) continue;
     next.isDemo = isDemo;
@@ -1699,6 +1910,8 @@ function setupIpc() {
       practiceMode: shot.practiceMode || 'real',
       feelId: shot.feelId,
       drillId: shot.drillId,
+      drills: runtime.drillsHub?.drills || [],
+      matType: runtime.settings.studio?.matType || 'fiberbuilt',
     });
     if (reanalyzed) {
       reanalyzed.isDemo = Boolean(shot.isDemo);
@@ -1738,7 +1951,7 @@ function setupIpc() {
     if (patch && typeof patch === 'object') {
       let needsReanalyze = false;
       const contextPatch = {};
-      if (patch.tierId && engine.BENCHMARK_TIERS[patch.tierId] && patch.tierId !== runtime.settings.tierId) {
+      if (typeof patch.tierId === 'string' && Object.hasOwn(engine.BENCHMARK_TIERS, patch.tierId) && patch.tierId !== runtime.settings.tierId) {
         runtime.settings.tierId = patch.tierId;
         needsReanalyze = true;
       }
@@ -1805,7 +2018,7 @@ function setupIpc() {
         const prevLofts = runtime.calibration.customLofts || {};
         const nextLofts = { ...prevLofts };
         for (const [club, val] of Object.entries(patch.customLofts)) {
-          if (!engine.CLUB_SPECS[club]) continue;
+          if (!Object.hasOwn(engine.CLUB_SPECS, club)) continue;
           if (val === null || val === '' || val === undefined) {
             delete nextLofts[club];
           } else {
@@ -1860,8 +2073,15 @@ function setupIpc() {
     return getSnapshot();
   });
 
+  const normalizeFilterClub = (rawClub) => {
+    if (typeof rawClub !== 'string' || !rawClub.trim()) return 'ALL';
+    const trimmed = rawClub.trim();
+    if (trimmed.toUpperCase() === 'ALL') return 'ALL';
+    return engine.normalizeClubCode(trimmed) || trimmed.toUpperCase();
+  };
+
   ipcMain.handle('shotlab:get-patterns', (_e, opts = {}) => {
-    const club = (opts && typeof opts.club === 'string' && opts.club.trim()) ? opts.club.trim() : 'ALL';
+    const club = normalizeFilterClub(opts && opts.club);
     const mode = (opts && typeof opts.mode === 'string' && opts.mode.trim()) ? opts.mode.trim() : 'real';
     const rawDays = opts && opts.days !== undefined ? Number(opts.days) : 90;
     const days = Number.isFinite(rawDays) && rawDays > 0 ? Math.min(3650, Math.round(rawDays)) : null;
@@ -1902,23 +2122,258 @@ function setupIpc() {
     const mode = (opts && typeof opts.mode === 'string' && opts.mode.trim()) ? opts.mode.trim() : 'real';
     const rawDays = opts && opts.days !== undefined ? Number(opts.days) : 180;
     const days = Number.isFinite(rawDays) && rawDays > 0 ? Math.min(3650, Math.round(rawDays)) : null;
+    const quality = (opts && typeof opts.quality === 'string') ? opts.quality : 'all';
+    const category = (opts && typeof opts.category === 'string') ? opts.category : 'all';
+    const trimOutliers = Boolean(opts && opts.trimOutliers);
     if (!swingDb) {
-      return { clubs: [], summary: null };
+      return { clubs: [], summary: null, deletedCount: 0 };
     }
     try {
       return {
-        clubs: swingDb.getBagGapping({ mode, days }),
+        clubs: swingDb.getBagGapping({ mode, days, quality, category, trimOutliers }),
         summary: swingDb.getSummary(),
+        deletedCount: swingDb.getDeletedCount(),
       };
     } catch (err) {
       console.warn('[ShotLab] get-bag-gapping failed:', err.message);
-      return { clubs: [], summary: null };
+      return { clubs: [], summary: null, deletedCount: 0 };
     }
+  });
+
+  ipcMain.handle('shotlab:get-bag-shots', (_e, opts = {}) => {
+    const club = normalizeFilterClub(opts && opts.club);
+    const mode = (opts && typeof opts.mode === 'string' && opts.mode.trim()) ? opts.mode.trim() : 'real';
+    const rawDays = opts && opts.days !== undefined ? Number(opts.days) : 90;
+    const days = Number.isFinite(rawDays) && rawDays > 0 ? Math.min(3650, Math.round(rawDays)) : null;
+    const quality = (opts && typeof opts.quality === 'string') ? opts.quality : 'all';
+    const limit = Math.max(1, Math.min(500, Number(opts && opts.limit) || 120));
+    if (!swingDb) return { shots: [], deletedCount: 0, globalDeletedCount: 0 };
+    try {
+      return {
+        shots: swingDb.getClubShots({ club, mode, days, quality, limit }),
+        deletedCount: swingDb.getDeletedCount({ club }),
+        globalDeletedCount: swingDb.getDeletedCount(),
+      };
+    } catch (err) {
+      console.warn('[ShotLab] get-bag-shots failed:', err.message);
+      return { shots: [], deletedCount: 0, globalDeletedCount: 0 };
+    }
+  });
+
+  ipcMain.handle('shotlab:delete-shot', (_e, shotId) => {
+    if (typeof shotId !== 'string' || !shotId.trim()) return { ok: false, deletedCount: 0 };
+    const cleanId = shotId.trim();
+    let dbDeleted = false;
+    let deletedCount = 0;
+    if (swingDb) {
+      try {
+        dbDeleted = swingDb.softDeleteShot(cleanId);
+        deletedCount = swingDb.getDeletedCount();
+      } catch (err) {
+        console.warn('[ShotLab] delete-shot failed:', err.message);
+      }
+    }
+    const prevLen = runtime.shots.length;
+    runtime.shots = runtime.shots.filter((s) => s.id !== cleanId);
+    const memRemoved = runtime.shots.length < prevLen;
+    if (runtime.selectedShotId === cleanId) {
+      runtime.selectedShotId = runtime.shots[0] ? runtime.shots[0].id : null;
+    }
+    notifyAll('state');
+    return {
+      ok: dbDeleted || memRemoved,
+      deletedCount,
+    };
+  });
+
+  ipcMain.handle('shotlab:restore-shots', (_e, opts = {}) => {
+    const rawClub = opts && typeof opts.club === 'string' && opts.club.trim() ? opts.club.trim() : null;
+    const club = rawClub ? normalizeFilterClub(rawClub) : null;
+    let restored = 0;
+    let deletedCount = 0;
+    if (swingDb) {
+      try {
+        const filterClub = club === 'ALL' ? null : club;
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const toRestoreToday = typeof swingDb.getDeletedShots === 'function'
+          ? swingDb.getDeletedShots({ club: filterClub, sessionDate: todayStr })
+          : [];
+        restored = swingDb.restoreDeletedShots({ club: filterClub });
+        deletedCount = swingDb.getDeletedCount();
+
+        if (restored > 0 && toRestoreToday.length > 0) {
+          let addedReal = false;
+          for (const row of toRestoreToday) {
+            if (!row || !row.id || runtime.shots.some((s) => s.id === row.id)) continue;
+            let raw = null;
+            if (row.raw_json) {
+              try { raw = JSON.parse(row.raw_json); } catch { raw = null; }
+            }
+            if (!raw || typeof raw !== 'object') {
+              raw = {
+                ts: row.ts,
+                club: row.club,
+                clip: row.clip_dtl || row.clip_fo || null,
+                feel_id: row.feel_id || null,
+                drill_id: row.drill_id || null,
+                source: row.source || 'live',
+                ball: {
+                  speed: row.ball_speed,
+                  vla: row.vla,
+                  hla: row.hla,
+                  spin: row.back_spin ?? row.total_spin,
+                  spin_axis: row.spin_axis,
+                  carry: row.carry_yds,
+                  total: row.total_yds,
+                },
+                club_data: row.club_speed != null ? { speed: row.club_speed, aoa: row.aoa, path: row.path } : undefined,
+              };
+            }
+            const restoredAnalyzed = engine.analyzeShot(raw, {
+              calibration: runtime.calibration,
+              tierId: runtime.settings.tierId,
+              handedness: runtime.settings.handedness,
+              altitudeFt: runtime.settings.altitudeFt,
+              clubOverride: row.confirmed_club || null,
+              practiceMode: row.practice_mode || 'real',
+              feelId: row.feel_id || null,
+              drillId: row.drill_id || null,
+              drills: runtime.drillsHub?.drills || [],
+              matType: runtime.settings.studio?.matType || 'fiberbuilt',
+            });
+            if (!restoredAnalyzed) continue;
+            if (row.confirmed_club && !restoredAnalyzed.confirmedClub) restoredAnalyzed.confirmedClub = row.confirmed_club;
+            restoredAnalyzed.clipDtl = row.clip_dtl || restoredAnalyzed.clipDtl || null;
+            restoredAnalyzed.clipFo = row.clip_fo || restoredAnalyzed.clipFo || null;
+            if (row.is_goto) restoredAnalyzed.isGoTo = true;
+            runtime.shots.push(restoredAnalyzed);
+            addedReal = true;
+          }
+          if (addedReal) {
+            runtime.shots = runtime.shots.filter((s) => !s.isPreviewSeed);
+            runtime.shots.sort((a, b) => String(b.ts).localeCompare(String(a.ts)));
+            if (runtime.shots.length > 200) runtime.shots = runtime.shots.slice(0, 200);
+            if (!runtime.selectedShotId || !runtime.shots.some((s) => s.id === runtime.selectedShotId)) {
+              runtime.selectedShotId = runtime.shots[0] ? runtime.shots[0].id : null;
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('[ShotLab] restore-shots failed:', err.message);
+        return { ok: false, restored: 0, deletedCount: 0, error: err.message };
+      }
+    }
+    notifyAll('state');
+    return {
+      ok: true,
+      restored,
+      deletedCount,
+    };
+  });
+
+  ipcMain.handle('shotlab:get-review', (_e, opts = {}) => {
+    const club = normalizeFilterClub(opts && opts.club);
+    const mode = (opts && typeof opts.mode === 'string' && opts.mode.trim()) ? opts.mode.trim() : 'real';
+    const rawDays = opts && opts.days !== undefined ? Number(opts.days) : 30;
+    const days = Number.isFinite(rawDays) && rawDays > 0 ? Math.min(3650, Math.round(rawDays)) : null;
+    if (!swingDb) {
+      return {
+        summary: null,
+        patterns: { club, mode, days, ...engine.computeDispersionStats([], { club }), averages: {} },
+        feelComparison: [],
+        trends: [],
+        fatigue: [],
+        sgByCategory: [],
+        highlights: [],
+        heatmap: [],
+      };
+    }
+    try {
+      const summary = swingDb.getSummary();
+      const patterns = swingDb.getClubPatterns({ club, mode, days });
+      const feelComparison = swingDb.getFeelComparison({ club, mode, days }).map((f) => ({
+        ...f,
+        label: f.feelId ? resolveFeelLabel(f.feelId) : f.label,
+      }));
+      const trends = swingDb.getSessionTrends({ club, mode, days, limit: 45 });
+      const fatigue = swingDb.getFatigueCurve({ mode, days });
+      const sgByCategory = swingDb.getSgByCategory({ mode, days });
+      const highlights = swingDb.getHighlights({ mode, days, limit: 12 }).map(formatVideoCompareItem).filter(Boolean);
+      const heatmap = swingDb.getPracticeHeatmap({ days: 91 });
+      return { summary, patterns, feelComparison, trends, fatigue, sgByCategory, highlights, heatmap };
+    } catch (err) {
+      console.warn('[ShotLab] get-review failed:', err.message);
+      return {
+        summary: null,
+        patterns: { club, mode, days, ...engine.computeDispersionStats([], { club }), averages: {} },
+        feelComparison: [],
+        trends: [],
+        fatigue: [],
+        sgByCategory: [],
+        highlights: [],
+        heatmap: [],
+      };
+    }
+  });
+
+  ipcMain.handle('shotlab:get-plan', () => {
+    if (!swingDb) {
+      return {
+        summary: null,
+        heatmap: [],
+        topLeaks: [],
+        patterns30d: null,
+        patternsPrior30d: null,
+        studio: runtime.settings.studio,
+      };
+    }
+    try {
+      const summary = swingDb.getSummary();
+      const heatmap = swingDb.getPracticeHeatmap({ days: 91 });
+      const patterns30d = swingDb.getClubPatterns({ club: 'ALL', mode: 'real', days: 30 });
+      const patterns90d = swingDb.getClubPatterns({ club: 'ALL', mode: 'real', days: 90 });
+      const topLeaks = (patterns30d.faultLeaks || []).filter((l) => l.isFault !== false).slice(0, 4);
+      return {
+        summary,
+        heatmap,
+        topLeaks,
+        patterns30d,
+        patternsPrior30d: patterns90d,
+        studio: runtime.settings.studio,
+      };
+    } catch (err) {
+      console.warn('[ShotLab] get-plan failed:', err.message);
+      return { summary: null, heatmap: [], topLeaks: [], patterns30d: null, patternsPrior30d: null, studio: runtime.settings.studio };
+    }
+  });
+
+  ipcMain.handle('shotlab:update-studio-state', (_e, patch = {}) => {
+    const prevMat = runtime.settings.studio?.matType || 'fiberbuilt';
+    runtime.settings.studio = sanitizeStudioState(patch, runtime.settings.studio);
+    savePersistedState();
+    if (runtime.settings.studio.matType !== prevMat) {
+      reanalyzeAllShots();
+    } else {
+      notifyAll('state');
+    }
+    return getSnapshot();
+  });
+
+  ipcMain.handle('shotlab:set-challenge-state', (_e, payload = null) => {
+    runtime.challengeState = payload && typeof payload === 'object' && !Array.isArray(payload) ? {
+      name: String(payload.name || 'Challenge').slice(0, 48),
+      score: String(payload.score ?? '—').slice(0, 24),
+      streak: Number.isFinite(Number(payload.streak)) ? Number(payload.streak) : 0,
+      target: String(payload.target || '').slice(0, 48),
+      status: String(payload.status || '').slice(0, 64),
+    } : null;
+    broadcastSse('state', buildObsPayload(getSnapshot()));
+    return true;
   });
 
   ipcMain.handle('shotlab:get-video-compare', (_e, opts = {}) => {
     const shotId = (opts && typeof opts.shotId === 'string' && opts.shotId.trim()) ? opts.shotId.trim() : null;
-    const requestedClub = (opts && typeof opts.club === 'string' && opts.club.trim()) ? opts.club.trim() : 'ALL';
+    const requestedClub = normalizeFilterClub(opts && opts.club);
 
     let recentRows = [];
     if (swingDb) {
@@ -2042,15 +2497,23 @@ function setupIpc() {
   ipcMain.handle('shotlab:sync-history', () => {
     const res = syncHistoricalSessions();
     notifyAll('state');
+    let dbSummary = null;
+    if (swingDb) {
+      try {
+        dbSummary = swingDb.getSummary();
+      } catch (err) {
+        console.warn('[ShotLab] sync-history getSummary failed:', err.message);
+      }
+    }
     return {
       ok: !res.error,
       ...res,
-      dbSummary: swingDb ? swingDb.getSummary() : null,
+      dbSummary,
     };
   });
 
   ipcMain.handle('shotlab:export-debrief', async (_e, opts = {}) => {
-    const club = (opts && typeof opts.club === 'string' && opts.club.trim()) ? opts.club.trim() : 'ALL';
+    const club = normalizeFilterClub(opts && opts.club);
     let days = 30;
     if (opts && opts.days !== undefined) {
       if (opts.days === null || opts.days === '' || Number(opts.days) <= 0) {
@@ -2063,11 +2526,15 @@ function setupIpc() {
 
     const markdown = buildCoachingDebriefMarkdown({ club, days });
     const todayStr = new Date().toISOString().slice(0, 10);
-    const res = await dialog.showSaveDialog(mainWindow, {
+    const parentWin = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+    const saveOpts = {
       title: 'Export ShotLab Coaching Debrief',
       defaultPath: `ShotLab_Debrief_${todayStr}.md`,
       filters: [{ name: 'Markdown', extensions: ['md'] }],
-    });
+    };
+    const res = parentWin
+      ? await dialog.showSaveDialog(parentWin, saveOpts)
+      : await dialog.showSaveDialog(saveOpts);
     if (res.canceled || !res.filePath) {
       return { ok: false, filePath: null, markdown, canceled: true };
     }
@@ -2098,11 +2565,15 @@ function setupIpc() {
 
   ipcMain.handle('shotlab:import-csv', async (_e, opts = {}) => {
     const watch = Boolean(opts && opts.watch);
-    const res = await dialog.showOpenDialog(mainWindow, {
+    const parentWin = mainWindow && !mainWindow.isDestroyed() ? mainWindow : undefined;
+    const openOpts = {
       title: watch ? 'Watch FSX LastShot.csv / shots.csv' : 'Import FSX Pro / FSX 2020 CSV',
       filters: [{ name: 'CSV Files', extensions: ['csv'] }],
       properties: ['openFile'],
-    });
+    };
+    const res = parentWin
+      ? await dialog.showOpenDialog(parentWin, openOpts)
+      : await dialog.showOpenDialog(openOpts);
     if (res.canceled || !res.filePaths.length) return { ok: false, count: 0 };
     try {
       const count = importFsxCsvFile(res.filePaths[0], watch);
@@ -2146,13 +2617,16 @@ function setupIpc() {
 const LAUNCHED_BY_SIMWATCH = process.env.SHOTLAB_LAUNCHED_BY === 'simwatch';
 
 function createWindow() {
+  const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png';
+  const iconPath = path.join(__dirname, 'assets', iconFile);
   mainWindow = new BrowserWindow({
     show: !LAUNCHED_BY_SIMWATCH,
     width: 1480,
     height: 940,
     minWidth: 1120,
     minHeight: 740,
-    backgroundColor: '#0b0f17',
+    backgroundColor: '#07080b',
+    icon: fs.existsSync(iconPath) ? iconPath : undefined,
     title: 'ShotLab — Golf Launch Monitor Intelligence & OBS Studio Suite',
     autoHideMenuBar: true,
     webPreferences: {
@@ -2196,6 +2670,9 @@ const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
 } else {
+  if (typeof app.setAppUserModelId === 'function') {
+    app.setAppUserModelId('com.simwatch.shotlab');
+  }
   app.on('second-instance', () => {
     if (mainWindow) {
       if (mainWindow.isMinimized()) mainWindow.restore();

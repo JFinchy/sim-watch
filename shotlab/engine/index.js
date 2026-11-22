@@ -11,6 +11,7 @@
 const {
   CLUB_ORDER,
   GSPRO_CLUB_ORDER,
+  CLUB_CATEGORY_GROUPS,
   CLUB_SPECS,
   BENCHMARK_TIERS,
   normalizeClubCode,
@@ -31,6 +32,8 @@ const {
   diagnoseDelivery,
   inferFaceStrike,
   gradeMetrics,
+  diagnoseCoupledSignals,
+  buildFaultCoach,
 } = require('./diagnostics');
 const { computeShotStrokesGained, computeDispersionStats } = require('./strokesGained');
 const { SwingDatabase, deriveSiblingClips } = require('./swingDb');
@@ -179,7 +182,7 @@ function normalizeRawShot(raw) {
 }
 
 // Grade cards that need the club marker (BLP 1-dot sticker) read.
-const CLUB_METRIC_KEYS = new Set(['clubSpeed', 'smash', 'aoa', 'path', 'faceToPath']);
+const CLUB_METRIC_KEYS = new Set(['clubSpeed', 'smash', 'aoa', 'path', 'faceToPath', 'shaftLean']);
 // "Nothing wrong" delivery verdicts; without club data they can't actually be confirmed.
 const HEALTHY_DELIVERY_IDS = new Set(['pure_compression', 'neutral_delivery', 'tour_sweep', 'solid_driver']);
 
@@ -219,6 +222,7 @@ function applyDataQuality({ metrics, clubSpec, delivery, strike, scorecard, prac
 
   if (scorecard && Array.isArray(scorecard.cards)) {
     for (const c of scorecard.cards) {
+      if (c.source === 'foam_na') continue;
       if (CLUB_METRIC_KEYS.has(c.key) && (c.raw === null || c.raw === undefined)) {
         c.source = 'missing';
         c.target = 'no club read';
@@ -251,7 +255,7 @@ function applyDataQuality({ metrics, clubSpec, delivery, strike, scorecard, prac
       const spinDelta = metrics.backSpin !== null ? metrics.backSpin - clubSpec.spin.ideal : 0;
       const offWindow = [vlaCard, spinCard].some((c) => c && (c.grade === 'yellow' || c.grade === 'red'));
       const anyRed = [vlaCard, spinCard].some((c) => c && c.grade === 'red');
-      if (offWindow && vlaDelta > 0 && spinDelta >= 0) {
+      if (offWindow && (vlaDelta > 0 || (metrics.vla === null && spinDelta > 0)) && spinDelta >= 0) {
         Object.assign(delivery, {
           id: 'flipping_floater',
           name: 'High Launch & Spin (ball-flight estimate)',
@@ -260,14 +264,15 @@ function applyDataQuality({ metrics, clubSpec, delivery, strike, scorecard, prac
           tagline: `No club read: launch and spin are high for a ${club}, the usual sign of added loft at impact (flip / scoop). Can't confirm without club data.`,
           cues: ['Hands ahead of the ball at impact', 'Check the club sticker is clean, flat and square to the face'],
           evidence: [
-            `Launch ${metrics.vla}° vs ${clubSpec.vla.ideal}° typical ${club}`,
+            metrics.vla !== null ? `Launch ${metrics.vla}° vs ${clubSpec.vla.ideal}° typical ${club}` : '',
             metrics.backSpin !== null ? `Backspin ${Math.round(metrics.backSpin)} rpm vs ${clubSpec.spin.ideal} typical` : '',
           ].filter(Boolean),
+          estDynamicLoft: null,
           estShaftLean: null,
           spinLoft: null,
           alternates: [],
         });
-      } else if (offWindow && vlaDelta < 0 && spinDelta <= 0) {
+      } else if (offWindow && (vlaDelta < 0 || (metrics.vla === null && spinDelta < 0)) && spinDelta <= 0) {
         Object.assign(delivery, {
           id: 'over_hold',
           name: 'Low Launch & Spin (ball-flight estimate)',
@@ -276,9 +281,10 @@ function applyDataQuality({ metrics, clubSpec, delivery, strike, scorecard, prac
           tagline: `No club read: launch and spin are low for a ${club}: delofted or held-off delivery, or a thin strike. Can't confirm without club data.`,
           cues: ['Let the club release through impact', 'Check the club sticker is clean, flat and square to the face'],
           evidence: [
-            `Launch ${metrics.vla}° vs ${clubSpec.vla.ideal}° typical ${club}`,
+            metrics.vla !== null ? `Launch ${metrics.vla}° vs ${clubSpec.vla.ideal}° typical ${club}` : '',
             metrics.backSpin !== null ? `Backspin ${Math.round(metrics.backSpin)} rpm vs ${clubSpec.spin.ideal} typical` : '',
           ].filter(Boolean),
+          estDynamicLoft: null,
           estShaftLean: null,
           spinLoft: null,
           alternates: [],
@@ -291,6 +297,7 @@ function applyDataQuality({ metrics, clubSpec, delivery, strike, scorecard, prac
           confidence: Math.min(delivery.confidence || 0, 0.5),
           tagline: `No club read: launch and spin look right for a ${club}, but compression, attack angle and shaft lean can't be confirmed.`,
           cues: ['Check the club sticker is clean, flat and square to the face'],
+          estDynamicLoft: null,
           estShaftLean: null,
           spinLoft: null,
         });
@@ -302,6 +309,9 @@ function applyDataQuality({ metrics, clubSpec, delivery, strike, scorecard, prac
     } else {
       delivery.confidence = Math.round(Math.min((delivery.confidence || 0) * 0.7, 0.6) * 100) / 100;
       delivery.name = `${delivery.name} (ball-flight estimate)`;
+      delivery.estDynamicLoft = null;
+      delivery.estShaftLean = null;
+      delivery.spinLoft = null;
       delivery.evidence = [
         `No club read: attack angle assumed ${clubSpec.aoa.ideal}° for ${club}; verdict from launch & spin only`,
         ...(delivery.evidence || []),
@@ -335,7 +345,7 @@ function applyDataQuality({ metrics, clubSpec, delivery, strike, scorecard, prac
  * @param {object} rawShot
  * @param {object} [options]
  * @param {object} [options.calibration]  Player's calibration profile
- * @param {string} [options.tierId='low_hcp']  'scratch' | 'low_hcp' | 'mid_hcp' | 'personal'
+ * @param {string} [options.tierId='low_hcp']  'tour_pro' | 'scratch' | 'low_hcp' | 'mid_hcp' | 'personal'
  * @param {string} [options.handedness='RH']   'RH' | 'LH'
  * @param {string} [options.clubOverride]      Explicit club code (e.g. after user confirms club)
  * @param {number} [options.altitudeFt=0]
@@ -485,6 +495,26 @@ function analyzeShot(rawShot, options = {}) {
 
   const dataQuality = applyDataQuality({ metrics: norm.metrics, clubSpec, delivery, strike, scorecard, practiceMode });
 
+  const coupledSignals = diagnoseCoupledSignals(
+    { ...norm.metrics, effectiveCarry },
+    flight,
+    dplane,
+    delivery,
+    strike,
+    clubSpec,
+    potential,
+    { practiceMode, matType: options.matType || 'fiberbuilt', handedness }
+  );
+  const faultCoach = buildFaultCoach(
+    delivery,
+    strike,
+    dplane,
+    norm.metrics,
+    clubSpec,
+    Array.isArray(options.drills) ? options.drills : [],
+    practiceMode
+  );
+
   const clipInfo = deriveSiblingClips(norm.raw.clip || null);
 
   return {
@@ -537,6 +567,8 @@ function analyzeShot(rawShot, options = {}) {
     delivery,
     strike,
     scorecard,
+    coupledSignals,
+    faultCoach,
     dataQuality,
     strokesGained,
     clubDetection,
@@ -703,6 +735,7 @@ function parseFsxCsv(csvText) {
 module.exports = {
   CLUB_ORDER,
   GSPRO_CLUB_ORDER,
+  CLUB_CATEGORY_GROUPS,
   CLUB_SPECS,
   BENCHMARK_TIERS,
   normalizeClubCode,
@@ -716,6 +749,8 @@ module.exports = {
   getCalibrationStats,
   posteriorForClub,
   analyzeShot,
+  diagnoseCoupledSignals,
+  buildFaultCoach,
   planGsproClubSwitch,
   parseFsxCsv,
   computeShotStrokesGained,

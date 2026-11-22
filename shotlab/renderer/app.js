@@ -1,78 +1,968 @@
 /**
- * ShotLab v2 — Electron Desktop Dashboard Renderer Controller ("Coaching & Pattern OS").
- * Preserves all v1 Live Telemetry intelligence boxes, hover popovers, 14-metric R/Y/G grid,
- * club calibration, OBS modal, CSV watcher, and Settings modal, while adding:
- *   - 4-Tab View Switcher (Live Telemetry, Patterns & Dispersion, Bag Gapping, Video Compare)
- *   - Practice Context Controls (Real Balls / Kids Asleep, Active Feel tagger, Audio Caddie, Tour Tempo)
- *   - Fault-Streak -> Drill Prescription Banner & Per-Shot Strokes Gained Pill
- *   - Fullscreen 10-foot readable Mat Glance Mode (Hotkey: M / Esc)
- *   - Local SQLite Patterns Lab (2D DECADE Dispersion, Stroke Leaks, A/B Feel Verdicts, Trends, Fatigue)
- *   - 14-Club Bag Gapping & Stopping Power Table
- *   - Synced Kinovea Dual-Angle (DTL + FO) Video Player, Compare vs Personal Best, 1-Click Promote to My-Go-To
+ * ShotLab — Broadcast Coaching OS & Launch Monitor Studio Renderer Controller.
+ * Connects 01 Plan, 02 Practice (Live Telemetry + 7 Challenges), 03 Review (Swing DNA,
+ * Delivery Faults by Cost, DECADE Dispersion, Real Kinovea Video Compare, Trends/SG),
+ * and 04 My Bag (14-Club Sortable Gapping + Filter/Trim/Soft-Delete Shot Manager)
+ * to Electron IPC + local SQLite (with clean standalone browser fallback).
  */
 (function () {
   'use strict';
 
   const CLUB_ORDER = ['DR', '3W', '5W', '4H', '4I', '5I', '6I', '7I', '8I', '9I', 'PW', 'GW', 'SW', 'LW'];
   const DEFAULT_LOFTS = {
-    DR: 10.5, '3W': 15, '5W': 18, '4H': 22,
-    '4I': 22, '5I': 25, '6I': 28, '7I': 32, '8I': 36, '9I': 40,
-    PW: 45, GW: 50, SW: 55, LW: 60,
+    DR: 10.5, '3W': 15, '5W': 18, '4H': 21,
+    '4I': 22, '5I': 25, '6I': 28, '7I': 31.5, '8I': 35.5, '9I': 40,
+    PW: 45, GW: 50, SW: 54, LW: 58,
   };
   const CLUB_LABELS = {
     DR: 'Driver', '3W': '3 Wood', '5W': '5 Wood', '4H': '4 Hybrid',
     '4I': '4 Iron', '5I': '5 Iron', '6I': '6 Iron', '7I': '7 Iron',
-    '8I': '8 Iron', '9I': '9 Iron', PW: 'Pitching Wedge', GW: 'Gap Wedge',
-    SW: 'Sand Wedge', LW: 'Lob Wedge',
+    '8I': '8 Iron', '9I': '9 Iron', PW: 'Pitching Wedge', GW: 'Gap Wedge (50°)',
+    SW: 'Sand Wedge (54°)', LW: 'Lob Wedge (58°)',
   };
+
+  const HAS_IPC = Boolean(typeof window !== 'undefined' && window.shotlabAPI);
+  const $ = (id) => document.getElementById(id);
 
   let state = null;
-  let toastTimer = null;
-  let activeTab = 'live';
+  let activeMode = 'practice';
+  let activePracticeSub = 'range'; // 'range' | 'challenge'
+  let activeLabMode = 'coupled'; // 'coupled' | 'raw'
+  let activeReviewSub = 'dna'; // 'dna' | 'decade' | 'video' | 'trends' | 'highlights'
+  let activeTrendMetric = 'avgScore';
+  let activeBagView = 'table'; // 'table' | 'warp'
   let matGlanceOpen = false;
+  let missionState = null;
 
-  // Audio guard state — prevents speech/chime spam on startup, settings edits, or clicking tape rows
   let initialLoadComplete = false;
   let lastKnownNewestShotId = null;
-
-  // Fault banner dismissal key (`${faultId}:${latestShotId}`)
   let dismissedFaultKey = null;
-
-  // Patterns Lab local state
-  const patternFilters = { club: 'ALL', mode: 'real', days: 90 };
-  let activeTrendMetric = 'avgScore';
-  let lastPatternsData = null;
-
-  // Bag Gapping local state
-  const gappingFilters = { mode: 'real', days: 180 };
-
-  // Video Compare local state
-  const videoState = {
-    club: 'ALL',
-    selectedShotId: null,
-    playbackRate: 0.5,
-    data: null,
-  };
-
-  // Debounced background refresh for SQLite-backed tabs when a new shot arrives
+  let lastHotkeys = [];
+  let lastTrajShot = null;
+  let toastTimer = null;
   let tabRefreshTimer = null;
 
-  const $ = (id) => document.getElementById(id);
+  const reviewFilters = { club: 'ALL', mode: 'real', days: 30, faultsOnly: false };
+  let lastReviewData = null;
+  let lastPlanData = null;
+  let planDurationMin = 20;
+  let activePopoverKey = null;
+
+  const bagFilters = {
+    mode: 'real',
+    days: 90,
+    quality: 'all',
+    category: 'all',
+    trimOutliers: false,
+    sortKey: 'club',
+    sortDir: 'asc',
+    mgrClub: '7I',
+    warp: { wind: 0, temp: 70, alt: 0, lie: 'fairway' },
+  };
+  let lastBagClubs = [];
+  let lastBagDeletedCount = 0;
+
+  const videoState = { club: 'ALL', selectedShotId: null, playbackRate: 0.5, data: null };
+  const drawerState = { open: false, fault: 'all', mode: 'all', selectedId: null };
+
+  const challengeStore = window.ShotLabChallenges ? window.ShotLabChallenges.createChallengeStore() : null;
+  let lastChallengeScoredId = null;
+
+  // ==================== SAFE IPC / FALLBACK ADAPTER ====================
+  const standaloneDb = (() => {
+    const demoShots = [
+      {
+        id: 'demo_1',
+        ts: '2026-11-21T20:10:00Z',
+        club: '7I',
+        carry: 151, total: 158, offline: 6, ballSpeed: 111.2, clubSpeed: 86.1, smash: 1.29,
+        vla: 18.2, hla: -2.6, backSpin: 7420, spinAxis: 9.4, aoa: -6.8, path: -3.8,
+        face: -2.3, f2p: 1.5, dynLoft: 28.9, lean: 4.1, spinLoft: 25.0, apex: 86, descent: 50, curve: 11,
+        shape: 'Pull Fade', sev: 'red', score: 54, sg: -0.28, deliveryId: 'steep_dig', deliveryName: 'Steep Chop / Heavy Dig',
+        strikeLoc: 'fat', strikeLabel: 'Heavy / Low Heel', strikeCoords: { x: -0.42, y: -0.22 }, leftYds: 14,
+        cues: ['Keep sternum stacked 1" ahead of ball', 'Shallow P5 path'],
+      },
+      {
+        id: 'demo_2',
+        ts: '2026-11-21T20:14:00Z',
+        club: 'DR',
+        carry: 252, total: 274, offline: -6, ballSpeed: 148.4, clubSpeed: 98.4, smash: 1.50,
+        vla: 12.6, hla: 1.4, backSpin: 2380, spinAxis: -4.2, aoa: 3.1, path: 2.2,
+        face: 1.1, f2p: -1.1, dynLoft: 13.8, lean: -3.3, spinLoft: 10.7, apex: 94, descent: 37, curve: -6,
+        shape: 'Tour Push Draw', sev: 'green', score: 93, sg: 0.24, deliveryId: 'tour_sweep', deliveryName: 'Tour Upward Sweep',
+        strikeLoc: 'center', strikeLabel: 'Center Flush', strikeCoords: { x: 0.04, y: 0.05 }, leftYds: 1,
+        cues: ['Repeat 98 mph smooth cruise transition'],
+      },
+      {
+        id: 'demo_3',
+        ts: '2026-11-21T20:18:00Z',
+        club: '7I',
+        carry: 168, total: 175, offline: -2, ballSpeed: 120.4, clubSpeed: 87.2, smash: 1.38,
+        vla: 16.4, hla: 1.6, backSpin: 6420, spinAxis: -4.0, aoa: -4.3, path: 2.4,
+        face: 1.5, f2p: -0.9, dynLoft: 26.8, lean: 6.1, spinLoft: 22.5, apex: 94, descent: 48, curve: -5,
+        shape: 'Tour Push Draw', sev: 'green', score: 94, sg: 0.29, deliveryId: 'pure_compression', deliveryName: 'Pure Compression',
+        strikeLoc: 'center', strikeLabel: 'Center Flush', strikeCoords: { x: 0.02, y: 0.04 }, leftYds: 2,
+        cues: ['Lead wrist flat through P6-P7'],
+      },
+      {
+        id: 'demo_4',
+        ts: '2026-11-21T20:22:00Z',
+        club: 'DR',
+        carry: 228, total: 244, offline: -34, ballSpeed: 146.5, clubSpeed: 103.2, smash: 1.42,
+        vla: 9.8, hla: -2.8, backSpin: 1920, spinAxis: -19.5, aoa: 1.5, path: 2.1,
+        face: -3.9, f2p: -6.0, dynLoft: 8.2, lean: -2.3, spinLoft: 6.7, apex: 62, descent: 31, curve: -26,
+        shape: 'Snap Hook', sev: 'red', score: 42, sg: -0.46, deliveryId: 'low_hook_trap', deliveryName: 'Low Hook Trap',
+        strikeLoc: 'toe', strikeLabel: 'High Toe Gear Hook', strikeCoords: { x: 0.45, y: 0.16 }, leftYds: 24,
+        cues: ['Cap Driver at 98 mph cruise window'],
+      },
+      {
+        id: 'demo_5',
+        ts: '2026-11-21T20:26:00Z',
+        club: '4H',
+        carry: 198, total: 207, offline: 2, ballSpeed: 130.4, clubSpeed: 92.5, smash: 1.41,
+        vla: 14.2, hla: 1.5, backSpin: 4380, spinAxis: -3.6, aoa: -2.2, path: 1.9,
+        face: 0.8, f2p: -1.1, dynLoft: 18.1, lean: 2.9, spinLoft: 15.9, apex: 91, descent: 45, curve: -5,
+        shape: 'Controlled Draw', sev: 'green', score: 89, sg: 0.21, deliveryId: 'pure_compression', deliveryName: 'Pure Compression',
+        strikeLoc: 'center', strikeLabel: 'Center Flush', strikeCoords: { x: 0.05, y: 0.02 }, leftYds: 2,
+        cues: ['Shallow fairway sweep'],
+      },
+      {
+        id: 'demo_6',
+        ts: '2026-11-21T20:30:00Z',
+        club: 'SW',
+        carry: 99, total: 98, ballSpeed: 82.0, clubSpeed: 67.8, smash: 1.21, offline: 1,
+        vla: 29.4, hla: -0.3, backSpin: 10350, spinAxis: 1.1, aoa: -5.6, path: -0.8,
+        face: -0.2, f2p: 0.6, dynLoft: 46.5, lean: 7.5, spinLoft: 52.1, apex: 86, descent: 53, curve: 1,
+        shape: 'Straight Hop-Stop', sev: 'green', score: 92, sg: 0.24, deliveryId: 'pure_compression', deliveryName: 'Pure Compression',
+        strikeLoc: 'center', strikeLabel: '2nd-Groove Center', strikeCoords: { x: 0.0, y: -0.1 }, leftYds: 0,
+        cues: ['Rotate chest through on 18/9 tempo'],
+      },
+      {
+        id: 'demo_7',
+        ts: '2026-11-21T20:34:00Z',
+        club: '7I',
+        carry: 149, total: 156, offline: 15, ballSpeed: 113.0, clubSpeed: 86.2, smash: 1.31,
+        vla: 23.8, hla: 2.1, backSpin: 8240, spinAxis: 11.2, aoa: 0.8, path: -2.0,
+        face: 2.6, f2p: 4.6, dynLoft: 34.0, lean: -2.5, spinLoft: 33.2, apex: 114, descent: 54, curve: 14,
+        shape: 'Weak Slice', sev: 'red', score: 48, sg: -0.41, deliveryId: 'flipping_floater', deliveryName: 'Flipping Floater',
+        strikeLoc: 'heel', strikeLabel: 'Heel Flip', strikeCoords: { x: -0.35, y: -0.15 }, leftYds: 18,
+        cues: ['Lead wrist bowed / motorcycle throttle through P6'],
+      },
+    ];
+    let deletedIds = new Set();
+    let settings = {
+      tierId: 'low_hcp',
+      handedness: 'RH',
+      altitudeFt: 0,
+      practiceMode: 'real',
+      activeFeelId: null,
+      activeDrillId: null,
+      audioCaddie: false,
+      audioChimes: true,
+      tempoPreset: 'off',
+      tempoSound: 'tones',
+      tempoGapSec: 0,
+      refLines: ['tour'],
+      obsAutoHideSec: 0,
+      studio: {
+        matType: 'fiberbuilt',
+        intendedShape: 'stock',
+        showGoalLine: true,
+        activeCues: [
+          { id: 'c1', text: 'Shaft pointed at left thigh at address (P1)', club: 'All' },
+          { id: 'c2', text: 'Lead wrist flat through P6–P7 impact zone', club: 'Irons' },
+        ],
+        parkedIdeas: [{ id: 'p1', text: 'Pause at P4 top transition before firing Driver', ts: 'Today' }],
+        bodyCheckin: { hamstrings: 1, ankle: 'ok', energy: 4 },
+        roundCheckin: null,
+        wedgeMatrix: [
+          { club: 'PW', label: 'PW (45°)', cells: [{ arm: '7:30', pct: '50%', carry: 68, roll: 5 }, { arm: '9:00', pct: '75%', carry: 96, roll: 4 }, { arm: '10:30', pct: '90%', carry: 116, roll: 3 }, { arm: 'Full', pct: '100%', carry: 126, roll: 3 }] },
+          { club: 'GW', label: 'GW (50°)', cells: [{ arm: '7:30', pct: '50%', carry: 58, roll: 4 }, { arm: '9:00', pct: '75%', carry: 84, roll: 3 }, { arm: '10:30', pct: '90%', carry: 102, roll: 2 }, { arm: 'Full', pct: '100%', carry: 112, roll: 1 }] },
+          { club: 'SW', label: 'SW (54°)', cells: [{ arm: '7:30', pct: '50%', carry: 48, roll: 3 }, { arm: '9:00', pct: '75%', carry: 72, roll: 2 }, { arm: '10:30', pct: '90%', carry: 89, roll: 1 }, { arm: 'Full', pct: '100%', carry: 99, roll: -1 }] },
+          { club: 'LW', label: 'LW (58°)', cells: [{ arm: '7:30', pct: '50%', carry: 38, roll: 2 }, { arm: '9:00', pct: '75%', carry: 60, roll: 1 }, { arm: '10:30', pct: '90%', carry: 75, roll: 0 }, { arm: 'Full', pct: '100%', carry: 84, roll: -2 }] },
+        ],
+      },
+    };
+    const faultToDrillIds = {
+      flipping_floater: ['hackmotion-shaft-lean-impact'],
+      early_cast: ['hackmotion-shaft-lean-impact'],
+      over_hold: ['hackmotion-shaft-lean-impact'],
+      steep_dig: ['gate-towel-lowpoint'],
+      steep_chop: ['gate-towel-lowpoint'],
+      pop_up: ['driver-startline-fairway-challenge'],
+      low_hook_trap: ['driver-startline-fairway-challenge'],
+      hooded_trap: ['driver-startline-fairway-challenge'],
+      strike_toe: ['gate-towel-lowpoint'],
+      strike_heel: ['gate-towel-lowpoint'],
+      strike_fat: ['gate-towel-lowpoint'],
+      strike_thin: ['gate-towel-lowpoint'],
+    };
+    const drills = [
+      { id: 'hackmotion-shaft-lean-impact', title: 'Impact Bag Motorcycle Deloft', focus: 'Lead Wrist Bowing', keyFeel: 'Twist motorcycle throttle down into P6', faultTags: ['early-release-scoop', 'early-release'], shotlabFaultIds: ['flipping_floater', 'early_cast', 'over_hold'], modes: ['real', 'almost'], clubs: 'irons', why: 'Eliminates flipping floater by matching lead wrist flexion.', instructions: ['Preset impact alignment with 7I', 'Slow 50% swings finishing waist-high'] },
+      { id: 'gate-towel-lowpoint', title: 'Towel-Behind-Ball Low-Point Gate', focus: 'Ball-First Turf Strike', keyFeel: 'Sternum ahead of ball; miss towel 3 inches back', faultTags: ['low-point-control', 'over-the-top'], shotlabFaultIds: ['steep_dig', 'steep_chop', 'strike_fat', 'strike_thin', 'strike_toe', 'strike_heel'], modes: ['real', 'almost'], clubs: 'irons', why: 'Mat bounces mask heavy fat strikes; towel gives honest contact feedback.', instructions: ['Place flat towel 3.5" behind ball', 'Brush front side of ball cleanly'] },
+      { id: 'driver-startline-fairway-challenge', title: '98 mph Cruise Gear Fairway Gate', focus: 'Driver Start Line & Tempo', keyFeel: 'Smooth pause at top, keep path < +3°', faultTags: ['driver-hook', 'steep-driver-aoa'], shotlabFaultIds: ['low_hook_trap', 'hooded_trap', 'pop_up'], modes: ['real'], clubs: 'driver', why: 'Prevents over-swing speed cliffs and snap hooks.', instructions: ['Target 96-99 mph cruise window', 'Hit 5 straight drives inside ±15y gate'] },
+    ];
+    const feels = [
+      { id: 'the-throw', name: 'The Throw (Trail Hand Release)', club: 'Irons' },
+      { id: 'cruise-98', name: '98 mph Cruise Rhythm', club: 'DR' },
+      { id: 'sternum-lead', name: 'Sternum 1" Ahead at Impact', club: 'Irons' },
+    ];
+
+    function toAnalyzed(d) {
+      const cat = d.club === 'DR' ? 'driver' : d.club === '4H' ? 'hybrid' : ['PW', 'GW', 'SW', 'LW'].includes(d.club) ? 'wedge' : 'mid_iron';
+      const goalCarry = d.club === 'DR' ? 250 : d.club === '4H' ? 196 : d.club === 'SW' ? 99 : 166;
+      const curvePts = Array.from({ length: 16 }, (_, i) => {
+        const t = i / 15;
+        return { x: Math.round(d.carry * t * 10) / 10, y: Math.round(4 * d.apex * t * (1 - t) * 10) / 10 };
+      });
+      return {
+        id: d.id,
+        ts: d.ts,
+        practiceMode: settings.practiceMode,
+        feelId: settings.activeFeelId,
+        activeClub: d.club,
+        activeClubLabel: CLUB_LABELS[d.club] || d.club,
+        activeClubSource: 'detected',
+        confirmedClub: null,
+        isDemo: true,
+        metrics: {
+          ballSpeed: d.ballSpeed, clubSpeed: d.clubSpeed, smash: d.smash, vla: d.vla, hla: d.hla,
+          totalSpin: d.backSpin, backSpin: d.backSpin, spinAxis: d.spinAxis, aoa: d.aoa, path: d.path,
+          effectiveCarry: d.carry, totalYds: d.total, faceToTarget: d.face, faceToPath: d.f2p,
+          estDynamicLoft: d.dynLoft, estShaftLean: d.lean, spinLoft: d.spinLoft, clubRead: true,
+        },
+        clubSpec: { code: d.club, label: CLUB_LABELS[d.club] || d.club, category: cat, staticLoft: DEFAULT_LOFTS[d.club] || 31.5, idealSmash: d.club === 'DR' ? 1.48 : 1.36 },
+        flight: { carryYds: d.carry, totalYds: d.total, rollYds: Math.max(0, d.total - d.carry), apexFt: d.apex, descentAngleDeg: d.descent, curveYds: d.curve, offlineYds: d.offline, points: curvePts },
+        potential: { actualCarryYds: d.carry, centerStrikeCarryYds: d.carry + d.leftYds, maxCarryAtSpeedYds: d.carry + d.leftYds + 2, speedUpsideCarryYds: d.carry + d.leftYds + 10, speedUpsideMph: Math.round((d.clubSpeed || 90) + 5), totalLeftOnTableYds: d.leftYds, reasons: [d.cues[0]] },
+        references: [],
+        dplane: { faceToTarget: d.face, faceToPath: d.f2p, faceSource: 'estimated', faceRationale: 'D-Plane estimate from HLA & Path.', gearEffectResidual: 0 },
+        shotShape: { name: d.shape, shortTag: d.shape, heightTag: d.apex > 105 ? 'High Ball' : 'Optimal Height', severity: d.sev, description: `${d.shape} finishing ${Math.abs(d.offline)}y ${d.offline < 0 ? 'L' : 'R'}.`, svgParams: { hlaDeg: d.hla, curveYds: d.curve, offlineYds: d.offline, carryYds: d.carry, severity: d.sev }, rationale: d.cues },
+        delivery: { id: d.deliveryId, name: d.deliveryName, severity: d.sev, confidence: 0.86, estDynamicLoft: d.dynLoft, estShaftLean: d.lean, spinLoft: d.spinLoft, tagline: d.cues[0], cues: d.cues, evidence: [d.cues[0]] },
+        strike: { location: d.strikeLoc, label: d.strikeLabel, severity: d.sev, confidence: 0.85, coords: d.strikeCoords, rationale: [d.cues[0]] },
+        scorecard: {
+          tierId: settings.tierId,
+          tierLabel: settings.tierId === 'tour_pro' ? 'Tour Pro' : settings.tierId,
+          score: d.score,
+          overallGrade: d.sev,
+          counts: { green: d.sev === 'green' ? 11 : 4, yellow: 3, red: d.sev === 'red' ? 5 : 1 },
+          cards: [
+            { key: 'carry', label: 'Carry', value: `${d.carry}`, raw: d.carry, unit: 'yds', grade: d.sev, source: 'measured', target: `${goalCarry}y`, goalDelta: `${d.carry - goalCarry >= 0 ? '+' : ''}${d.carry - goalCarry}y vs ${goalCarry}y`, tooltip: 'Carry distance' },
+            { key: 'offline', label: 'Offline', value: `${Math.abs(d.offline)}y ${d.offline < 0 ? 'L' : 'R'}`, raw: d.offline, unit: '', grade: Math.abs(d.offline) <= 10 ? 'green' : Math.abs(d.offline) <= 18 ? 'yellow' : 'red', source: 'measured', target: '±10y', goalDelta: `${Math.abs(d.offline)}y / ±10y`, tooltip: 'Lateral miss' },
+            { key: 'smash', label: 'Smash Factor', value: d.smash.toFixed(2), raw: d.smash, unit: '', grade: d.sev, source: 'measured', target: '≥1.35', goalDelta: `${(d.smash - 1.35 >= 0 ? '+' : '')}${(d.smash - 1.35).toFixed(2)} vs 1.35`, tooltip: 'Ball / Club Speed' },
+            { key: 'ballSpeed', label: 'Ball Speed', value: d.ballSpeed.toFixed(1), raw: d.ballSpeed, unit: 'mph', grade: d.sev, source: 'measured', target: 'Target', goalDelta: 'In window', tooltip: 'Ball Speed' },
+            { key: 'clubSpeed', label: 'Club Speed', value: d.clubSpeed.toFixed(1), raw: d.clubSpeed, unit: 'mph', grade: 'green', source: 'measured', target: 'Cruise', goalDelta: 'Cruise', tooltip: 'Club Speed' },
+            { key: 'aoa', label: 'Angle of Attack', value: `${d.aoa}°`, raw: d.aoa, unit: '', grade: 'green', source: 'measured', target: '-4°', goalDelta: `${d.aoa}°`, tooltip: 'AoA' },
+            { key: 'path', label: 'Club Path', value: `${d.path}°`, raw: d.path, unit: '', grade: Math.abs(d.path) <= 3 ? 'green' : 'yellow', source: 'measured', target: '±3.0°', goalDelta: `${d.path}°`, tooltip: 'Path' },
+            { key: 'face', label: 'Face to Target', value: `${d.face}°`, raw: d.face, unit: '', grade: Math.abs(d.face) <= 2 ? 'green' : 'red', source: 'estimated', target: '±2.0°', goalDelta: `${d.face}°`, tooltip: 'Face' },
+            { key: 'faceToPath', label: 'Face to Path', value: `${d.f2p}°`, raw: d.f2p, unit: '', grade: Math.abs(d.f2p) <= 2.5 ? 'green' : 'red', source: 'estimated', target: '±2.5°', goalDelta: `${d.f2p}°`, tooltip: 'F2P' },
+            { key: 'vla', label: 'Launch (VLA)', value: `${d.vla}°`, raw: d.vla, unit: '', grade: d.sev, source: 'measured', target: 'Window', goalDelta: `${d.vla}°`, tooltip: 'VLA' },
+            { key: 'backSpin', label: 'Backspin', value: String(d.backSpin), raw: d.backSpin, unit: 'rpm', grade: d.sev, source: 'measured', target: 'Window', goalDelta: `${d.backSpin} rpm`, tooltip: 'Backspin' },
+            { key: 'spinAxis', label: 'Spin Axis', value: `${d.spinAxis}°`, raw: d.spinAxis, unit: '', grade: Math.abs(d.spinAxis) <= 8 ? 'green' : 'red', source: 'measured', target: '±8°', goalDelta: `${d.spinAxis}°`, tooltip: 'Spin Axis' },
+            { key: 'hla', label: 'Start Line (HLA)', value: `${d.hla}°`, raw: d.hla, unit: '', grade: Math.abs(d.hla) <= 2.5 ? 'green' : 'yellow', source: 'measured', target: '±2.5°', goalDelta: `${d.hla}°`, tooltip: 'HLA' },
+            { key: 'shaftLean', label: 'Est. Shaft Lean', value: `${d.lean}°`, raw: d.lean, unit: '', grade: d.lean >= 4 ? 'green' : 'red', source: 'estimated', target: '+5°', goalDelta: `${d.lean}°`, tooltip: 'Shaft Lean' },
+            { key: 'descent', label: 'Descent Angle', value: `${d.descent}°`, raw: d.descent, unit: '', grade: 'green', source: 'physics', target: '45°+', goalDelta: `${d.descent}°`, tooltip: 'Descent' },
+          ],
+        },
+        coupledSignals: {
+          cards: [
+            { id: 'launchSpin', title: 'Launch × Spin Window', helpKey: 'vla', severity: d.sev, verdict: d.deliveryId === 'flipping_floater' ? 'OVER-LAUNCHED · HIGH SPIN' : 'TOUR LAUNCH WINDOW', delta: `${d.vla}° / ${d.backSpin}`, rows: [{ label: 'VLA', value: `${d.vla}°` }, { label: 'Spin', value: `${d.backSpin} rpm` }], takeaway: d.cues[0] },
+            { id: 'turfStrike', title: 'Turf × AoA × Smash', helpKey: 'smash', severity: d.strikeLoc === 'fat' ? 'red' : d.sev, verdict: d.strikeLoc === 'fat' ? 'MAT-SAVED FAT RISK' : 'CLEAN TURF STRIKE', delta: `Smash ${d.smash.toFixed(2)}`, rows: [{ label: 'Smash', value: d.smash.toFixed(2) }, { label: 'AoA', value: `${d.aoa}°` }], takeaway: d.strikeLabel },
+            { id: 'dplaneShape', title: 'Start Line × F2P', helpKey: 'faceToPath', severity: Math.abs(d.f2p) > 3 ? 'red' : 'green', verdict: Math.abs(d.f2p) > 3 ? 'EXCESS CURVE' : 'ON-TARGET D-PLANE', delta: `F2P ${d.f2p}°`, rows: [{ label: 'HLA', value: `${d.hla}°` }, { label: 'Path', value: `${d.path}°` }], takeaway: d.shape },
+            { id: 'speedEfficiency', title: 'Speed × Potential', helpKey: 'carry', severity: d.leftYds > 10 ? 'red' : 'green', verdict: d.leftYds > 10 ? `LEFT ${d.leftYds}Y ON TABLE` : 'CRUISE EFFICIENCY', delta: `${d.carry}y`, rows: [{ label: 'Carry', value: `${d.carry}y` }, { label: 'Lost', value: `${d.leftYds}y` }], takeaway: `Avg SG ${d.sg >= 0 ? '+' : ''}${d.sg.toFixed(2)}` },
+          ],
+        },
+        faultCoach: {
+          headline: d.deliveryName,
+          severity: d.sev,
+          likelyCauses: d.cues,
+          feelsToTry: d.cues.map((c, i) => ({ id: `fc_${i}`, label: c, cue: c })),
+          recommendedDrills: drills.slice(0, 2),
+        },
+        dataQuality: { clubRead: true, basis: 'full', missing: [] },
+        strokesGained: { sg: d.sg, sgPga: d.sg, category: d.club === 'DR' ? 'OTT' : 'APP', explanation: 'Fallback demo shot.' },
+        clubDetection: { predictedClub: d.club, predictedLabel: CLUB_LABELS[d.club], confidencePct: 92, top3: [{ club: d.club, confidencePct: 92 }, { club: '6I', confidencePct: 6 }, { club: '8I', confidencePct: 2 }], summary: 'Prior Bayesian club detector' },
+      };
+    }
+
+    let shotsList = demoShots.map(toAnalyzed);
+    let selectedId = shotsList[0].id;
+    let demoSeq = 0;
+    let cal = { driverSpeedMph: 98, clubs: { DR: { n: 12 }, '7I': { n: 18 }, PW: { n: 9 } }, autoSwitch: { enabled: false, minConfidence: 0.9 }, customLofts: {} };
+
+    function activeRaw({ club = 'ALL', quality = 'all' } = {}) {
+      return demoShots.filter((d) => {
+        if (deletedIds.has(d.id)) return false;
+        if (club !== 'ALL' && d.club !== club) return false;
+        if (quality === 'center' && d.strikeLoc !== 'center') return false;
+        return true;
+      });
+    }
+
+    function computeReview() {
+      const list = activeRaw();
+      const byDel = new Map();
+      for (const r of list) {
+        if (!byDel.has(r.deliveryId)) byDel.set(r.deliveryId, { deliveryId: r.deliveryId, deliveryName: r.deliveryName, isFault: r.deliveryId !== 'pure_compression' && r.deliveryId !== 'tour_sweep', count: 0, sgSum: 0, lostSum: 0 });
+        const g = byDel.get(r.deliveryId);
+        g.count += 1; g.sgSum += r.sg; g.lostSum += r.leftYds;
+      }
+      const faultLeaks = [...byDel.values()].map((g) => ({
+        deliveryId: g.deliveryId,
+        deliveryName: g.deliveryName,
+        isFault: g.isFault,
+        count: g.count,
+        pct: Math.round((g.count / Math.max(1, list.length)) * 100),
+        avgSg: Math.round((g.sgSum / g.count) * 100) / 100,
+        totalSg: Math.round(g.sgSum * 100) / 100,
+        avgLostYds: Math.round((g.lostSum / g.count) * 10) / 10,
+      })).sort((a, b) => a.totalSg - b.totalSg);
+
+      return {
+        summary: { totalShots: list.length, totalSessions: 4, clubsTracked: 4, clipsLinked: 0, backend: 'browser-demo' },
+        patterns: {
+          n: list.length,
+          meanCarry: 179,
+          meanOffline: -3.2,
+          ellipse80: { cx: -3.2, cy: 179, rx: 14, ry: 12, angleDeg: -8, widthYds: 28, depthYds: 24 },
+          twoWayMiss: { detected: true, left80Yds: -24, right80Yds: 14, label: 'Two-Way Miss (−24y to +14y)' },
+          cruiseSpeedBuckets: [
+            { speedMph: 86, n: 2, avgSg: -0.34, avgScore: 51, bigMissPct: 50 },
+            { speedMph: 98, n: 2, avgSg: 0.24, avgScore: 93, bigMissPct: 0 },
+            { speedMph: 103, n: 1, avgSg: -0.46, avgScore: 42, bigMissPct: 100 },
+          ],
+          optimalCruiseMph: 98,
+          rootCauseAttribution: [
+            { key: 'faceToPath', label: '|Face-to-Path| Control', impactPct: 52, detail: 'Curvature variance vs target' },
+            { key: 'smash', label: 'Center Contact (Smash)', impactPct: 26, detail: 'Sweet-spot transfer' },
+            { key: 'path', label: 'Club Path Corridor', impactPct: 13, detail: 'In-to-Out vs Out-to-In' },
+            { key: 'aoa', label: 'Angle of Attack Window', impactPct: 9, detail: 'Low point depth' },
+          ],
+          avgSg: 0.01,
+          avgScore: 73,
+          decadeAdvice: '80% corridor is 28y wide, slightly left biased — favor center-right fairway/green targets.',
+          faultLeaks,
+          averages: { ballSpeed: 121.6, clubSpeed: 88.8, smash: 1.37, vla: 18.0, backSpin: 6250, aoa: -2.9, path: 0.4, estShaftLean: 2.6, carryYds: 179, apexFt: 90, descentDeg: 45 },
+          strikeCounts: { center: 4, fat: 1, toe: 1, heel: 1 },
+          points: list.map((r) => ({ id: r.id, carryYds: r.carry, offlineYds: r.offline, score: r.score, sg: r.sg, shotShape: r.shape })),
+        },
+        feelComparison: [
+          { feelId: 'cruise-98', label: '98 mph Cruise Rhythm', n: 3, avgScore: 93, avgSg: 0.25, avgSmash: 1.43, avgCarry: 206, width80Yds: 14, faultPct: 0 },
+          { feelId: null, label: 'Baseline (No Feel Tagged)', n: 4, avgScore: 60, avgSg: -0.23, avgSmash: 1.32, avgCarry: 162, width80Yds: 32, faultPct: 75 },
+        ],
+        trends: [
+          { date: '2026-11-15', n: 18, avgScore: 66, avgSmash: 1.31, avgCarry: 158, avgSg: -0.14, faultPct: 48 },
+          { date: '2026-11-17', n: 22, avgScore: 71, avgSmash: 1.33, avgCarry: 161, avgSg: -0.05, faultPct: 36 },
+          { date: '2026-11-19', n: 24, avgScore: 76, avgSmash: 1.35, avgCarry: 164, avgSg: 0.06, faultPct: 28 },
+          { date: '2026-11-21', n: 16, avgScore: 81, avgSmash: 1.37, avgCarry: 166, avgSg: 0.14, faultPct: 19 },
+        ],
+        fatigue: [
+          { id: '1-10', label: 'Warmup (1–10)', n: 10, avgScore: 74, avgSmash: 1.34 },
+          { id: '11-25', label: 'Dialed In (11–25)', n: 15, avgScore: 84, avgSmash: 1.37 },
+          { id: '26-45', label: 'Peak Window (26–45)', n: 18, avgScore: 82, avgSmash: 1.36 },
+          { id: '46-70', label: 'Late Session (46–70)', n: 12, avgScore: 68, avgSmash: 1.30 },
+        ],
+        sgByCategory: [
+          { id: 'OTT', label: 'Off the Tee (Woods)', n: 2, avgSg: -0.11 },
+          { id: 'APP', label: 'Approach (Hyb & Irons)', n: 4, avgSg: -0.05 },
+          { id: 'WEDGE', label: 'Scoring Wedges', n: 1, avgSg: 0.24 },
+        ],
+        highlights: list.filter((x) => x.sg >= 0.2).map((d) => ({ id: d.id, ts: d.ts, club: d.club, carryYds: d.carry, score: d.score, sgShot: d.sg, deliveryName: d.deliveryName, shotShape: d.shape })),
+        heatmap: Array.from({ length: 91 }, (_, i) => ({ date: `Day ${i + 1}`, count: (i * 7) % 5 === 0 ? 28 : (i % 3 === 0 ? 12 : 0), avgScore: 78 })),
+      };
+    }
+
+    function snapshot() {
+      const cur = shotsList.find((s) => s.id === selectedId) || shotsList[0] || null;
+      return {
+        bridgeConnected: false,
+        bridgeSnifferOk: false,
+        rigHealth: null,
+        hotkeys: [],
+        gsproClub: '7I',
+        obsPort: 8766,
+        simwatchPort: 8765,
+        settings,
+        calibration: cal,
+        calibrationStats: { recentExactPct: 91, recentWithinOnePct: 97, highConfExactPct: 95, totalConfirmed: 39, calibratedClubs: ['DR', '7I', 'PW'] },
+        currentShot: cur,
+        shots: shotsList,
+        demoArchetypes: demoShots.map((d) => ({ id: d.id, label: `${d.club} — ${d.shape}`, actualClub: d.club })),
+        dbSummary: computeReview().summary,
+        drillsHub: { loaded: true, drills, feels, faultToDrillIds },
+        faultAlert: null,
+        sessionStats: { count: shotsList.length, clubReads: shotsList.length, avgScore: 73, avgCarry: 179, avgSg: 0.01 },
+      };
+    }
+
+    return {
+      getState: async () => snapshot(),
+      getHotkeys: async () => [],
+      selectShot: async (id) => { selectedId = id; render(snapshot()); return true; },
+      fireDemo: async (archetypeId) => {
+        const base = (archetypeId && demoShots.find((d) => d.id === archetypeId))
+          || demoShots[(demoSeq) % demoShots.length];
+        demoSeq += 1;
+        const shot = toAnalyzed({
+          ...base,
+          id: `${base.id}#${demoSeq}`,
+          ts: new Date().toISOString(),
+        });
+        shotsList.unshift(shot);
+        if (shotsList.length > 60) shotsList = shotsList.slice(0, 60);
+        selectedId = shot.id;
+        render({ ...snapshot(), eventType: 'shot' });
+      },
+      clearSession: async () => { shotsList = []; selectedId = null; return snapshot(); },
+      updateSettings: async (patch = {}) => {
+        const p = patch || {};
+        if (typeof p.driverSpeedMph === 'number') cal.driverSpeedMph = p.driverSpeedMph;
+        if (p.autoSwitch) cal.autoSwitch = { ...cal.autoSwitch, ...p.autoSwitch };
+        if (p.customLofts) cal.customLofts = { ...cal.customLofts, ...p.customLofts };
+        const sPatch = { ...p };
+        delete sPatch.driverSpeedMph; delete sPatch.autoSwitch; delete sPatch.customLofts;
+        settings = { ...settings, ...sPatch };
+        shotsList = shotsList.map((s) => {
+          const baseId = String(s.id || '').split('#')[0];
+          const raw = demoShots.find((d) => d.id === baseId);
+          return raw ? { ...toAnalyzed({ ...raw, id: s.id, ts: s.ts }) } : s;
+        });
+        render(snapshot());
+        return snapshot();
+      },
+      setPracticeContext: async (patch) => { settings = { ...settings, ...patch }; render(snapshot()); return snapshot(); },
+      updateStudioState: async (patch) => { settings.studio = { ...settings.studio, ...patch }; render(snapshot()); return snapshot(); },
+      getPlanData: async () => { const rev = computeReview(); return { summary: rev.summary, heatmap: rev.heatmap, topLeaks: rev.patterns.faultLeaks.filter((l) => l.isFault !== false), studio: settings.studio }; },
+      getReviewData: async () => computeReview(),
+      getBagGapping: async ({ category = 'all', mode = 'real', quality = 'all', trimOutliers = false } = {}) => {
+        const prevCompute = mode === 'almost' ? [] : activeRaw({ quality });
+        const byClub = new Map();
+        for (const r of prevCompute) {
+          if (!byClub.has(r.club)) byClub.set(r.club, []);
+          byClub.get(r.club).push(r);
+        }
+        const rawAll = CLUB_ORDER.map((c) => {
+          let list = byClub.get(c) || [];
+          let outliersTrimmed = 0;
+          if (trimOutliers && list.length >= 2) {
+            const clean = list.filter((x) => !x.deliveryId || x.deliveryId === 'pure_compression' || x.deliveryId === 'tour_sweep');
+            if (clean.length > 0 && clean.length < list.length) { outliersTrimmed = list.length - clean.length; list = clean; }
+          }
+          if (!list.length) return { club: c, label: CLUB_LABELS[c], n: 0, outliersTrimmed: 0, avgCarry: null, avgTotal: null, avgBallSpeed: null, avgSmash: null, avgSpin: null, avgDescent: null, stoppingPower: '—', width80Yds: null, avgSg: null, avgScore: null, gapToNextYds: null, gapAlert: null };
+          const mean = (fn) => Math.round((list.reduce((a, x) => a + fn(x), 0) / list.length) * 100) / 100;
+          const desc = mean((x) => x.descent);
+          return {
+            club: c, label: CLUB_LABELS[c], n: list.length, outliersTrimmed,
+            avgCarry: Math.round(mean((x) => x.carry) * 10) / 10,
+            avgTotal: Math.round(mean((x) => x.total) * 10) / 10,
+            avgBallSpeed: Math.round(mean((x) => x.ballSpeed) * 10) / 10,
+            avgSmash: mean((x) => x.smash),
+            avgSpin: Math.round(mean((x) => x.backSpin)),
+            avgDescent: desc,
+            stoppingPower: desc >= 47 ? 'Drop & Stop' : desc >= 41 ? 'Holds Green' : 'Runs Out',
+            width80Yds: 18,
+            avgSg: mean((x) => x.sg),
+            avgScore: Math.round(mean((x) => x.score)),
+            gapToNextYds: null,
+            gapAlert: null,
+          };
+        });
+        const pop = rawAll.filter((c) => c.n >= 2);
+        for (let i = 0; i < pop.length - 1; i += 1) pop[i].gapToNextYds = Math.round(pop[i].avgCarry - pop[i + 1].avgCarry);
+        const groups = { woods: new Set(['DR', '3W', '5W']), hybrids: new Set(['4H']), irons: new Set(['4I', '5I', '6I', '7I', '8I', '9I']), wedges: new Set(['PW', 'GW', 'SW', 'LW']) };
+        const clubs = (category !== 'all' && groups[category]) ? rawAll.filter((c) => groups[category].has(c.club)) : rawAll;
+        return { clubs, summary: computeReview().summary, deletedCount: deletedIds.size };
+      },
+      getBagShots: async ({ club = 'ALL', mode = 'real', quality = 'all' } = {}) => ({
+        shots: mode === 'almost' ? [] : activeRaw({ club, quality }).map((r) => ({ id: r.id, ts: r.ts, club: r.club, carry_yds: r.carry, offline_yds: r.offline, smash: r.smash, back_spin: r.backSpin, shot_shape: r.shape, delivery_name: r.deliveryName, sg_shot: r.sg })),
+        deletedCount: deletedIds.size,
+        globalDeletedCount: deletedIds.size,
+      }),
+      deleteShot: async (id) => { deletedIds.add(id); return { ok: true, deletedCount: deletedIds.size }; },
+      restoreDeletedShots: async () => { const n = deletedIds.size; deletedIds.clear(); return { ok: true, restored: n, deletedCount: 0 }; },
+      getVideoCompare: async () => ({ current: null, best: null, recentWithClips: [] }),
+      syncHistory: async () => ({ ok: true, shotsImported: 0, filesScanned: 0 }),
+      exportDebrief: async () => ({ ok: false, canceled: true }),
+      setChallengeState: async () => true,
+      copyText: async () => true,
+      openExternal: async () => false,
+    };
+  })();
+
+  const api = HAS_IPC ? window.shotlabAPI : standaloneDb;
+
+  // ==================== HELPERS & POPOVERS ====================
+  function esc(str) {
+    return String(str ?? '')
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }
 
   function showToast(msg) {
     const el = $('toast');
+    if (!el) return;
     el.textContent = msg;
-    el.classList.remove('hidden');
-    if (toastTimer) clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
+    el.classList.add('show');
+    if (typeof el.showPopover === 'function') {
+      try {
+        if (el.matches(':popover-open')) el.hidePopover();
+        el.showPopover();
+      } catch {}
+    }
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      el.classList.remove('show');
+      if (typeof el.hidePopover === 'function') {
+        try { if (el.matches(':popover-open')) el.hidePopover(); } catch {}
+      }
+    }, 3000);
   }
 
-  // ---- Flight chart benchmark lines (Tour / Scratch / Low HCP / Mid HCP), toggled by the chips under the chart
-  let lastTrajShot = null;
+  function fmtSg(val, { prefix = 'SG ' } = {}) {
+    if (typeof val !== 'number' || !Number.isFinite(val)) return '—';
+    return `${prefix}${val > 0 ? '+' : val < 0 ? '−' : ''}${Math.abs(val).toFixed(2)}`;
+  }
 
-  function visibleRefLines() {
-    const v = state && state.settings && state.settings.refLines;
-    return Array.isArray(v) ? v : ['tour'];
+  function sgCol(val) {
+    if (typeof val !== 'number' || !Number.isFinite(val)) return 'var(--text-dim)';
+    return val >= 0.04 ? 'var(--green)' : val <= -0.1 ? 'var(--red-hi)' : 'var(--text)';
+  }
+
+  function feelLabelById(feelId, snap = state) {
+    if (!feelId) return 'Baseline';
+    const list = snap?.drillsHub?.feels || [];
+    const hit = list.find((f) => f && f.id === feelId);
+    return hit ? (hit.name || hit.label || hit.id) : feelId;
+  }
+
+  let keysReqSeq = 0;
+
+  function openDialog(id) {
+    const dlg = $(id);
+    if (!dlg) return;
+    if (id === 'dlg-obs' && state) renderObsModal(state);
+    if (id === 'dlg-settings' && state) renderSettingsModal(state);
+    if (id === 'dlg-cal' && state) renderCalModal(state);
+    if (id === 'dlg-wedge') renderWedgePrintModal();
+    if (id === 'dlg-keys') {
+      renderKeysModal();
+      if (HAS_IPC && typeof api.getHotkeys === 'function') {
+        const seq = ++keysReqSeq;
+        Promise.resolve(api.getHotkeys()).then((liveKeys) => {
+          if (seq === keysReqSeq && dlg.open && Array.isArray(liveKeys)) {
+            lastHotkeys = liveKeys;
+            renderKeysModal();
+          }
+        }).catch(() => {});
+      }
+    }
+    if (id === 'dlg-tempo') syncTempoModal();
+    if (typeof dlg.showModal === 'function') {
+      if (!dlg.open) dlg.showModal();
+    } else {
+      dlg.setAttribute('open', '');
+    }
+  }
+
+  function closeDialog(id) {
+    const dlg = $(id);
+    if (!dlg) return;
+    if (typeof dlg.close === 'function') {
+      if (dlg.open) dlg.close();
+    } else {
+      dlg.removeAttribute('open');
+    }
+  }
+
+  // Click-to-explain metric popovers (? buttons)
+  function hideMetricPopover() {
+    const pop = $('metric-popover');
+    activePopoverKey = null;
+    if (pop) {
+      pop.classList.remove('open');
+      pop.setAttribute('aria-hidden', 'true');
+    }
+  }
+
+  function showMetricPopover(key, triggerEl) {
+    const pop = $('metric-popover');
+    if (activePopoverKey === key && pop?.classList.contains('open')) {
+      hideMetricPopover();
+      return;
+    }
+    const map = (window.ShotLabCharts && window.ShotLabCharts.METRIC_HELP) || {};
+    const m = map[key];
+    if (!m || !pop) return;
+    activePopoverKey = key;
+    pop.innerHTML = `
+      <div class="flex-row" style="justify-content:space-between;margin-bottom:6px;">
+        <strong style="color:#fff;font-size:13px;">${esc(m.title)}</strong>
+        <span class="badge badge-cyan">${esc(m.badge)}</span>
+      </div>
+      <p style="margin:0 0 8px;font-size:11.5px;">${esc(m.def)}</p>
+      <div class="sub-well" style="font-size:11px;">
+        <div><strong style="color:var(--green);">Goal Window:</strong> ${esc(m.goal)}</div>
+        <div style="margin-top:3px;"><strong style="color:var(--yellow);">Why It Matters:</strong> ${esc(m.impact)}</div>
+        <div style="margin-top:3px;"><strong style="color:var(--cyan);">Fix Cue:</strong> ${esc(m.cue)}</div>
+      </div>
+    `;
+    pop.classList.add('open');
+    pop.setAttribute('aria-hidden', 'false');
+    const r = triggerEl.getBoundingClientRect();
+    const pw = pop.offsetWidth || 330;
+    const ph = pop.offsetHeight || 180;
+    const left = Math.max(12, Math.min(window.innerWidth - pw - 12, r.left + r.width / 2 - pw / 2));
+    const top = r.bottom + ph + 12 < window.innerHeight ? r.bottom + 8 : Math.max(12, r.top - ph - 8);
+    pop.style.left = `${left}px`;
+    pop.style.top = `${top}px`;
+  }
+
+  const hoverPop = $('hover-popover');
+  function hideHoverPopover() { if (hoverPop) hoverPop.classList.add('hidden'); }
+  function bindHover(el, getHtml) {
+    if (!el || !hoverPop) return;
+    const showAt = (x, y) => {
+      const html = getHtml();
+      if (!html) return;
+      hoverPop.innerHTML = html;
+      hoverPop.classList.remove('hidden');
+      hoverPop.style.left = `${Math.max(12, Math.min(window.innerWidth - 340, x))}px`;
+      hoverPop.style.top = `${Math.max(12, Math.min(window.innerHeight - 200, y))}px`;
+    };
+    el.onmouseenter = (ev) => showAt(ev.clientX + 14, ev.clientY + 12);
+    el.onmousemove = (ev) => {
+      if (!hoverPop.classList.contains('hidden')) {
+        hoverPop.style.left = `${Math.max(12, Math.min(window.innerWidth - 340, ev.clientX + 14))}px`;
+        hoverPop.style.top = `${Math.max(12, Math.min(window.innerHeight - 200, ev.clientY + 12))}px`;
+      }
+    };
+    el.onmouseleave = hideHoverPopover;
+    el.onclick = (ev) => {
+      ev.stopPropagation();
+      if (!hoverPop.classList.contains('hidden')) { hideHoverPopover(); return; }
+      const r = el.getBoundingClientRect();
+      showAt(r.left - 240, r.bottom + 8);
+    };
+  }
+
+  document.addEventListener('click', (ev) => {
+    const qBtn = ev.target.closest ? ev.target.closest('[data-metric-help]') : null;
+    if (qBtn) {
+      ev.stopPropagation();
+      showMetricPopover(qBtn.dataset.metricHelp, qBtn);
+      return;
+    }
+    if ($('metric-popover')?.classList.contains('open') && !(ev.target.closest && ev.target.closest('#metric-popover'))) {
+      hideMetricPopover();
+    }
+    if (hoverPop && !hoverPop.classList.contains('hidden') && !(ev.target.closest && ev.target.closest('.q-btn'))) {
+      hideHoverPopover();
+    }
+  });
+
+  // Floating tooltip on SVG data dots
+  document.addEventListener('mousemove', (ev) => {
+    const tipEl = $('chart-tooltip');
+    if (!tipEl) return;
+    const dot = ev.target && ev.target.closest ? ev.target.closest('[data-tip]') : null;
+    if (dot && dot.dataset.tip) {
+      tipEl.textContent = dot.dataset.tip;
+      tipEl.classList.add('show');
+      tipEl.style.left = `${Math.min(window.innerWidth - 280, ev.clientX + 14)}px`;
+      tipEl.style.top = `${Math.max(10, ev.clientY - 34)}px`;
+    } else {
+      tipEl.classList.remove('show');
+    }
+  });
+
+  // ==================== NAVIGATION & CHROME ====================
+  function switchMode(mode) {
+    activeMode = mode;
+    hideMetricPopover();
+    hideHoverPopover();
+    if (mode !== 'practice') {
+      $('tension-vignette')?.classList.remove('active');
+    } else if (state) {
+      renderChallengePanel(state);
+    }
+    document.querySelectorAll('#lifecycle-nav .mode-btn').forEach((b) => b.classList.toggle('active', b.dataset.mode === mode));
+    document.querySelectorAll('.mode-panel').forEach((p) => p.classList.toggle('active', p.id === `mode-${mode}`));
+    if (mode === 'plan') loadPlanTab();
+    else if (mode === 'review') loadReviewTab();
+    else if (mode === 'bag') loadBagTab();
+  }
+
+  function populateClubFilterSelect(sel, includeAll = true) {
+    if (!sel || sel.options.length > 0) return;
+    if (includeAll) {
+      const allOpt = document.createElement('option');
+      allOpt.value = 'ALL';
+      allOpt.textContent = 'All Clubs';
+      sel.appendChild(allOpt);
+    }
+    for (const c of CLUB_ORDER) {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = `${c} — ${CLUB_LABELS[c] || c}`;
+      sel.appendChild(opt);
+    }
+  }
+
+  function renderTopbar(snap) {
+    const port = snap.simwatchPort || 8765;
+    const pillBridge = $('pill-bridge');
+    if (snap.bridgeConnected) {
+      pillBridge.className = 'pill pill-live';
+      pillBridge.innerHTML = `<span class="dot"></span> Bridge :${esc(port)}`;
+    } else {
+      pillBridge.className = 'pill pill-warn';
+      pillBridge.innerHTML = `<span class="dot"></span> Bridge Offline`;
+    }
+    const pillSniffer = $('pill-sniffer');
+    pillSniffer.className = `pill ${snap.bridgeConnected && snap.bridgeSnifferOk ? 'pill-live' : 'pill-muted'}`;
+    pillSniffer.textContent = snap.bridgeConnected && snap.bridgeSnifferOk ? ':921 OK' : ':921 Idle';
+
+    const pillRig = $('pill-rig');
+    const rh = snap.rigHealth;
+    pillRig.textContent = rh?.state ? `Rig: ${rh.state}` : 'Rig: —';
+    pillRig.className = `pill ${rh?.state === 'healthy' ? 'pill-live' : rh?.state ? 'pill-warn' : 'pill-muted'}`;
+
+    $('pill-gspro-club').textContent = `GSPro: ${snap.gsproClub || '—'}`;
+    lastHotkeys = Array.isArray(snap.hotkeys) ? snap.hotkeys : [];
+
+    const sel = $('demo-select');
+    if (sel.options.length === 0 && Array.isArray(snap.demoArchetypes)) {
+      const o0 = document.createElement('option'); o0.value = ''; o0.textContent = 'Random Demo Shot'; sel.appendChild(o0);
+      for (const d of snap.demoArchetypes) {
+        const opt = document.createElement('option');
+        opt.value = d.id;
+        opt.textContent = d.label;
+        sel.appendChild(opt);
+      }
+    }
+
+    const settings = snap.settings || {};
+    const pm = settings.practiceMode || 'real';
+    document.querySelectorAll('#glob-mode-seg button').forEach((b) => b.classList.toggle('active', b.dataset.pm === pm));
+    document.querySelectorAll('#glob-tier-seg button').forEach((b) => b.classList.toggle('active', b.dataset.tier === (settings.tierId || 'low_hcp')));
+
+    const banner = $('glob-mode-banner');
+    if (pm === 'almost') {
+      banner.className = 'mode-banner show';
+      $('glob-mode-banner-text').textContent = 'Kids-Asleep Firewall Active: Grading Start Line Gate (±1.5°) + Path + AoA only. Distance/spin paused.';
+      $('glob-mode-banner-tag').textContent = 'QUIET MODE';
+    } else if (pm === 'sore') {
+      banner.className = 'mode-banner show is-sore';
+      $('glob-mode-banner-text').textContent = 'Gym-Sore Recovery Firewall Active: Strokes Gained paused — focus on 75% tempo rehearsal.';
+      $('glob-mode-banner-tag').textContent = 'RECOVERY';
+    } else {
+      banner.className = 'mode-banner';
+    }
+
+    // Active feel dropdown
+    const feelSel = $('select-active-feel');
+    const feels = snap.drillsHub?.feels || [];
+    const sig = feels.map((f) => `${f.id}:${f.name || f.label || ''}`).join('|');
+    if (feelSel.dataset.sig !== sig) {
+      feelSel.dataset.sig = sig;
+      feelSel.innerHTML = '<option value="">No Feel Tagged</option>' + feels.map((f) => `<option value="${esc(f.id)}">${esc(f.name || f.label || f.id)}</option>`).join('');
+    }
+    feelSel.value = settings.activeFeelId || '';
+
+    const btnVoice = $('btn-audio-caddie');
+    const voiceOn = Boolean(settings.audioCaddie);
+    btnVoice.classList.toggle('btn-voice-on', voiceOn);
+    btnVoice.textContent = voiceOn ? '🔊 Voice ON' : '🔇 Voice';
+
+    const db = snap.dbSummary;
+    $('pill-db').textContent = db ? `DB: ${db.totalShots} swings` : 'DB: Sync';
+
+    const csvInd = $('csv-watch-indicator');
+    if (snap.watchedCsvPath) {
+      csvInd.classList.remove('hidden');
+      csvInd.textContent = `Watching: ${snap.watchedCsvPath.split(/[/\\]/).pop()}`;
+      $('btn-csv-stop').classList.remove('hidden');
+    } else {
+      csvInd.classList.add('hidden');
+      $('btn-csv-stop').classList.add('hidden');
+    }
+  }
+
+  function matchDrillForFault(drill, faultKey) {
+    if (!faultKey || faultKey === 'all') return true;
+    const fMap = state?.drillsHub?.faultToDrillIds || {};
+    const mappedIds = Array.isArray(fMap[faultKey]) ? fMap[faultKey] : [];
+    return (
+      mappedIds.includes(drill.id) ||
+      (Array.isArray(drill.shotlabFaultIds) && drill.shotlabFaultIds.includes(faultKey)) ||
+      (Array.isArray(drill.faultTags) && drill.faultTags.includes(faultKey))
+    );
+  }
+
+  function findDrillsForFault(faultKey, limit = 3) {
+    const all = state?.drillsHub?.drills || [];
+    const byId = new Map(all.map((d) => [d.id, d]));
+    const fMap = state?.drillsHub?.faultToDrillIds || {};
+    const curatedIds = Array.isArray(fMap[faultKey]) ? fMap[faultKey] : [];
+    const out = [];
+    const seen = new Set();
+    for (const id of curatedIds) {
+      const hit = byId.get(id);
+      if (hit && !seen.has(hit.id)) {
+        seen.add(hit.id);
+        out.push(hit);
+      }
+    }
+    for (const d of all) {
+      if (!seen.has(d.id) && matchDrillForFault(d, faultKey)) {
+        seen.add(d.id);
+        out.push(d);
+      }
+    }
+    return (out.length ? out : all).slice(0, limit);
+  }
+
+  // ==================== 01 PLAN ====================
+  async function loadPlanTab() {
+    try {
+      const data = await api.getPlanData();
+      lastPlanData = data;
+      renderPlan(data);
+    } catch (err) {
+      showToast(`Plan load failed: ${err.message || err}`);
+    }
+  }
+
+  function renderPlan(data = lastPlanData) {
+    const studio = state?.settings?.studio || data?.studio || {};
+    const body = studio.bodyCheckin || { hamstrings: 1, ankle: 'ok', energy: 4 };
+    $('plan-body-ham').value = String(body.hamstrings ?? 1);
+    $('plan-body-ankle').value = body.ankle || 'ok';
+    $('plan-body-energy').value = String(body.energy ?? 4);
+    const highFatigue = body.hamstrings >= 3 || body.ankle === 'flare' || body.energy <= 2;
+    $('plan-body-warn').innerHTML = highFatigue
+      ? '<strong style="color:var(--yellow);">Recovery Flag:</strong> High soreness or low energy — recommend switching to <strong>Gym-Sore</strong> or tempo wedge work.'
+      : '<strong style="color:var(--green);">Green Light:</strong> Body cleared for full-speed Cruise Gear calibration.';
+
+    const cues = Array.isArray(studio.activeCues) ? studio.activeCues : [];
+    $('plan-cues-list').innerHTML = cues.length
+      ? cues.map((c, idx) => `<div class="cue-item"><span><strong style="color:var(--cyan);">Cue ${idx + 1}:</strong> ${esc(c.text)}</span><button type="button" class="btn btn-xs" data-del-cue="${esc(c.id)}">✕</button></div>`).join('')
+      : '<div class="sub-well muted">No active cues pinned yet (max 2 cues).</div>';
+    $('plan-cues-list').querySelectorAll('[data-del-cue]').forEach((b) => {
+      b.onclick = async () => {
+        const next = cues.filter((c) => c.id !== b.dataset.delCue);
+        await api.updateStudioState({ activeCues: next });
+        renderPlan();
+      };
+    });
+
+    const leaks = (data?.topLeaks || []).filter((l) => l && l.isFault !== false);
+    const summary = data?.summary || state?.dbSummary;
+    const rc = studio.roundCheckin;
+    const roundBadge = rc ? ` · Last Round: ${rc.score} (${(rc.struggles || []).join(', ')})` : '';
+    $('plan-summary-pill').textContent = summary ? `${summary.totalShots} stored swings` : 'Ready';
+    $('plan-focus-summary').innerHTML = leaks.length
+      ? `<strong>#1 Stroke Leak (30d):</strong> ${esc(leaks[0].deliveryName)} (${leaks[0].count} shots · Total SG ${leaks[0].totalSg ?? '—'})${esc(roundBadge)}`
+      : `Hit or sync sessions to rank your biggest SQLite stroke leaks.${esc(roundBadge)}`;
+
+    document.querySelectorAll('#plan-dur-seg button').forEach((b) => {
+      b.classList.toggle('active', Number(b.dataset.min) === planDurationMin);
+    });
+    const maxBlocks = planDurationMin <= 15 ? 2 : 3;
+    const minsPerBlock = Math.max(4, Math.round(planDurationMin / Math.max(1, Math.min(maxBlocks, leaks.length || 1))));
+    const repsPerBlock = Math.max(6, Math.round(minsPerBlock * 1.5));
+
+    const blocks = leaks.slice(0, maxBlocks).map((leak, idx) => {
+      const matched = findDrillsForFault(leak.deliveryId, 1)[0];
+      const drill = matched || { id: 'gate-towel-lowpoint', title: 'Towel-Behind-Ball Low-Point Gate', keyFeel: 'Brush turf forward of ball' };
+      return `
+        <div class="rx-block">
+          <div class="flex-row" style="justify-content:space-between;">
+            <strong>Block ${idx + 1} (${minsPerBlock}m · ${repsPerBlock} balls): Fix ${esc(leak.deliveryName)}</strong>
+            <div class="flex-row">
+              <span class="badge badge-cyan">${esc(drill.title)}</span>
+              <button type="button" class="btn btn-xs btn-cyan" data-launch-title="${esc(drill.title)}" data-launch-drill="${esc(drill.id)}" data-launch-feel="${esc(drill.keyFeel || 'Target corridor')}">Launch →</button>
+            </div>
+          </div>
+          <div class="muted" style="font-size:11px;margin-top:4px;">Target: ${esc(drill.keyFeel || 'Keep inside green target corridor')} (${leak.pct || 0}% of recent misses)</div>
+        </div>`;
+    });
+    $('plan-rx-blocks').innerHTML = blocks.length
+      ? blocks.join('')
+      : `<div class="rx-block"><div class="flex-row" style="justify-content:space-between;"><strong>Cruise Gear &amp; Start-Line Warmup (${planDurationMin}m)</strong><button type="button" class="btn btn-xs btn-cyan" data-launch-title="Cruise Gear Warmup" data-launch-drill="driver-startline-fairway-challenge" data-launch-feel="Keep inside ±2° HLA start line gate">Launch →</button></div><div class="muted" style="font-size:11px;margin-top:4px;">${Math.round(planDurationMin * 0.75)} calibration swings with 7I &amp; Driver inside ±2° HLA start line gate.</div></div>`;
+
+    $('plan-rx-blocks').querySelectorAll('[data-launch-title]').forEach((b) => {
+      b.onclick = () => {
+        missionState = { title: b.dataset.launchTitle, drillId: b.dataset.launchDrill, badge: 'COACHED MISSION', target: b.dataset.launchFeel || 'Stay in green corridor' };
+        if (api.setPracticeContext && b.dataset.launchDrill) api.setPracticeContext({ activeDrillId: b.dataset.launchDrill });
+        switchMode('practice');
+        renderPractice(state);
+        showToast(`Launched session: ${missionState.title}`);
+      };
+    });
+
+    const hm = data?.heatmap || [];
+    const activeDays = hm.filter((d) => d.count > 0).length;
+    $('plan-heatmap-badge').textContent = `${activeDays} active days / 91d`;
+    $('plan-heatmap-91').innerHTML = window.ShotLabCharts ? window.ShotLabCharts.renderHeatmap91(hm) : '';
+
+    const parked = studio.parkedIdeas || [];
+    $('plan-parking-list').innerHTML = parked.length
+      ? parked.slice(0, 6).map((p) => `<div class="cue-item"><span>${esc(p.text)} <span class="dim mono">(${esc(p.ts || '')})</span></span><button type="button" class="btn btn-xs" data-del-park="${esc(p.id)}">✕</button></div>`).join('')
+      : '<div class="sub-well muted">No parked ideas yet. Capture off-plan swing thoughts with [P] without breaking your current block!</div>';
+    $('plan-parking-list').querySelectorAll('[data-del-park]').forEach((b) => {
+      b.onclick = async () => {
+        await api.updateStudioState({ parkedIdeas: parked.filter((x) => x.id !== b.dataset.delPark) });
+        renderPlan();
+      };
+    });
+  }
+
+  // ==================== 02 PRACTICE ====================
+  function renderFaultBanner(snap) {
+    const banner = $('fault-streak-banner');
+    const alert = snap.faultAlert;
+    const latestId = snap.shots?.[0]?.id || snap.currentShot?.id || '';
+    if (!alert || !alert.faultId || dismissedFaultKey === `${alert.faultId}:${latestId}`) {
+      banner.classList.add('hidden');
+      return;
+    }
+    const count = alert.count ?? alert.streak ?? 2;
+    const topDrill = (alert.drills || alert.recommendedDrills || [])[0] || null;
+    banner.classList.remove('hidden');
+    banner.classList.toggle('urgent', count >= 3 || Boolean(alert.urgent));
+    banner.innerHTML = `
+      <div>
+        <div><span class="streak-pill">${esc(count)}× STREAK</span><strong>${esc(alert.faultName || alert.faultId)}</strong> detected</div>
+        <div class="muted" style="font-size:11px;">${topDrill ? `Recommended Drill: <strong>${esc(topDrill.title)}</strong> — ${esc(topDrill.keyFeel || '')}` : 'Check Fault Coach cues below.'}</div>
+      </div>
+      <div class="flex-row">
+        ${topDrill ? `<button type="button" class="btn btn-xs btn-cyan" id="btn-tag-fault-drill">Open Drill</button>` : ''}
+        <button type="button" class="btn btn-xs" id="btn-dismiss-fault">✕</button>
+      </div>`;
+    if ($('btn-tag-fault-drill') && topDrill) {
+      $('btn-tag-fault-drill').onclick = () => openDrawerWithDrill(topDrill.id, alert.faultId);
+    }
+    if ($('btn-dismiss-fault')) {
+      $('btn-dismiss-fault').onclick = () => { dismissedFaultKey = `${alert.faultId}:${latestId}`; banner.classList.add('hidden'); };
+    }
+  }
+
+  function computeGoalFlightPoints(shot, intentShape) {
+    const refs = Array.isArray(shot.references) ? shot.references : [];
+    const tier = state?.settings?.tierId || 'low_hcp';
+    const refId = tier === 'tour_pro' ? 'tour' : tier === 'personal' ? 'low_hcp' : tier;
+    const refMatch = refs.find((r) => r.id === refId) || refs.find((r) => r.id === 'low_hcp') || refs[0];
+    const carry = refMatch ? refMatch.carryYds : (shot.potential?.maxCarryAtSpeedYds || shot.metrics?.effectiveCarry || 165);
+    const baseApex = refMatch ? refMatch.apexFt : (shot.flight?.apexFt || 88);
+    const apexMult = intentShape === 'stinger' ? 0.65 : intentShape === 'high' ? 1.18 : 1.0;
+    const apex = Math.max(24, Math.round(baseApex * apexMult));
+    const pts = (refMatch && Array.isArray(refMatch.points) && refMatch.points.length >= 2)
+      ? refMatch.points.map((pt) => ({ x: pt.x, y: Math.round(pt.y * apexMult * 10) / 10 }))
+      : Array.from({ length: 17 }, (_, i) => {
+          const t = i / 16;
+          return { x: Math.round(carry * t * 10) / 10, y: Math.round(4 * apex * t * (1 - t) * 10) / 10 };
+        });
+    return { carryYds: carry, apexFt: apex, points: pts };
   }
 
   function renderTrajectoryWithRefs() {
@@ -83,2093 +973,1611 @@
       wrap.innerHTML = window.ShotLabSVG.renderSideTrajectory(null, null);
       return;
     }
+    const studio = state?.settings?.studio || {};
+    const showGoal = studio.showGoalLine !== false;
+    const isAlmost = (shot.practiceMode || state?.settings?.practiceMode) === 'almost';
+    const goalFlight = (showGoal && !isAlmost) ? computeGoalFlightPoints(shot, studio.intendedShape || 'stock') : null;
     const refs = Array.isArray(shot.references) ? shot.references : [];
-    const shown = visibleRefLines();
+    const shown = Array.isArray(state?.settings?.refLines) ? state.settings.refLines : ['tour'];
     const svg = window.ShotLabSVG.renderSideTrajectory(
-      shot.flight, shot.potential, shot.shotShape && shot.shotShape.severity, refs, shown);
+      shot.flight, shot.potential, shot.shotShape?.severity, refs, shown, { goalFlight }
+    );
     const chips = refs.map((r) => {
       const on = shown.includes(r.id);
-      const tip = `${r.label}: ${r.carryYds} yds carry, ${r.apexFt} ft apex, ${r.descentAngleDeg}° landing (${r.source}). Click to ${on ? 'hide' : 'show'}.`;
-      return `<button type="button" class="ref-chip${on ? ' on' : ''}" data-ref="${esc(r.id)}" title="${esc(tip)}" style="--ref:${esc(r.color)}">`
-        + `<span class="ref-swatch"></span>${esc(r.label)}${on ? ` <span class="ref-num">${r.carryYds}y · ${r.apexFt}ft</span>` : ''}</button>`;
+      return `<button type="button" class="ref-chip${on ? ' on' : ''}" data-ref="${esc(r.id)}" style="--ref:${esc(r.color)}"><span class="ref-swatch"></span>${esc(r.label)}${on ? ` <span class="ref-num">${r.carryYds}y</span>` : ''}</button>`;
     }).join('');
-    wrap.innerHTML = svg + (chips ? `<div class="ref-chips" aria-label="Benchmark lines">${chips}</div>` : '');
+    wrap.innerHTML = svg + (chips ? `<div class="ref-chips">${chips}</div>` : '');
     wrap.querySelectorAll('.ref-chip').forEach((btn) => {
       btn.onclick = () => {
-        const id = btn.getAttribute('data-ref');
-        const cur = new Set(visibleRefLines());
+        const id = btn.dataset.ref;
+        const cur = new Set(Array.isArray(state?.settings?.refLines) ? state.settings.refLines : ['tour']);
         if (cur.has(id)) cur.delete(id); else cur.add(id);
         const next = [...cur];
-        if (state && state.settings) state.settings.refLines = next;  // instant redraw; main persists it
-        window.shotlabAPI.updateSettings({ refLines: next });
+        if (state?.settings) state.settings.refLines = next;
+        api.updateSettings({ refLines: next });
         renderTrajectoryWithRefs();
       };
     });
   }
 
-  function esc(str) {
-    return String(str ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
-  }
-
-  function fmtSg(val, { prefix = 'SG ' } = {}) {
-    if (typeof val !== 'number' || !Number.isFinite(val)) return '—';
-    const sign = val > 0 ? '+' : val < 0 ? '−' : '';
-    return `${prefix}${sign}${Math.abs(val).toFixed(2)}`;
-  }
-
-  function sgClass(val) {
-    if (typeof val !== 'number' || !Number.isFinite(val)) return 'sg-flat';
-    if (val >= 0.04) return 'sg-pos';
-    if (val <= -0.1) return 'sg-neg';
-    return 'sg-flat';
-  }
-
-  function sgTagClass(val) {
-    if (typeof val !== 'number' || !Number.isFinite(val)) return 'tag-neutral';
-    if (val >= 0.05) return 'tag-green';
-    if (val > -0.15) return 'tag-yellow';
-    return 'tag-red';
-  }
-
-  function fmtNum(val, digits = 1, unit = '') {
-    if (typeof val !== 'number' || !Number.isFinite(val)) return '—';
-    return `${val.toFixed(digits)}${unit}`;
-  }
-
-  function fmtSigned(val, digits = 1, unit = '') {
-    if (typeof val !== 'number' || !Number.isFinite(val)) return '—';
-    const sign = val > 0 ? '+' : val < 0 ? '−' : '';
-    return `${sign}${Math.abs(val).toFixed(digits)}${unit}`;
-  }
-
-  function feelLabelById(feelId, snap = state) {
-    if (!feelId) return 'Baseline (No Feel Tagged)';
-    const feels = (snap && snap.drillsHub && Array.isArray(snap.drillsHub.feels)) ? snap.drillsHub.feels : [];
-    const found = feels.find((f) => f && f.id === feelId);
-    if (found) return found.label || found.name || found.id;
-    return feelId;
-  }
-
-  function populateClubFilterSelect(sel) {
-    if (!sel || sel.options.length > 0) return;
-    const allOpt = document.createElement('option');
-    allOpt.value = 'ALL';
-    allOpt.textContent = 'All Clubs';
-    sel.appendChild(allOpt);
-    for (const code of CLUB_ORDER) {
-      const opt = document.createElement('option');
-      opt.value = code;
-      opt.textContent = `${code} — ${CLUB_LABELS[code] || code}`;
-      sel.appendChild(opt);
-    }
-  }
-
-  // --------------------------------------------------------------------------- Smart Hover Popover
-
-  const popover = $('hover-popover');
-
-  function hidePopover() {
-    popover.classList.add('hidden');
-  }
-
-  function positionPopover(ev) {
-    const pad = 14;
-    const vw = window.innerWidth;
-    const vh = window.innerHeight;
-    popover.style.left = '0px';
-    popover.style.top = '0px';
-    const rect = popover.getBoundingClientRect();
-    let x = ev.clientX + 16;
-    let y = ev.clientY + 14;
-    if (x + rect.width + pad > vw) x = Math.max(pad, ev.clientX - rect.width - 16);
-    if (y + rect.height + pad > vh) y = Math.max(pad, ev.clientY - rect.height - 14);
-    popover.style.left = `${x}px`;
-    popover.style.top = `${y}px`;
-  }
-
-  function bindHover(el, getHtml) {
+  function renderPracticeKpis(shot) {
+    const el = $('prac-kpi-strip');
     if (!el) return;
-    el.onmouseenter = (ev) => {
-      const html = getHtml();
-      if (!html) return;
-      popover.innerHTML = html;
-      popover.classList.remove('hidden');
-      positionPopover(ev);
-    };
-    el.onmousemove = (ev) => {
-      if (!popover.classList.contains('hidden')) positionPopover(ev);
-    };
-    el.onmouseleave = hidePopover;
-  }
-
-  window.addEventListener('blur', hidePopover);
-  window.addEventListener('scroll', hidePopover, true);
-
-  // --------------------------------------------------------------------------- Audio Caddie & Chimes Guard
-
-  function maybePlayShotAudio(snap) {
-    const newest = (snap.shots && snap.shots.length > 0) ? snap.shots[0] : snap.currentShot;
-    const newestId = newest ? newest.id : null;
-
-    if (!initialLoadComplete) {
-      initialLoadComplete = true;
-      lastKnownNewestShotId = newestId;
-      return;
-    }
-
-    if (!newest || !newestId || newestId === lastKnownNewestShotId) return;
-    lastKnownNewestShotId = newestId;
-
-    if (snap.eventType !== 'shot') return;
-    if (newest.isPreviewSeed) return;
-    if (!snap.currentShot || snap.currentShot.id !== newestId) return;
-
-    const audio = window.ShotLabAudio;
-    if (!audio) return;
-    const settings = snap.settings || {};
-
-    if (settings.audioChimes && typeof audio.playGradeChime === 'function') {
-      audio.playGradeChime(newest.scorecard && newest.scorecard.overallGrade);
-    }
-    if (settings.audioCaddie && typeof audio.speakShot === 'function') {
-      audio.speakShot(newest, {
-        practiceMode: newest.practiceMode || settings.practiceMode || 'real',
-        handedness: settings.handedness || 'RH',
-      });
-    }
-  }
-
-  // --------------------------------------------------------------------------- Topbar & Subbar Render
-
-  function setCardSeverity(el, sev) {
-    el.classList.remove('sev-green', 'sev-yellow', 'sev-red');
-    if (sev === 'green' || sev === 'yellow' || sev === 'red') el.classList.add(`sev-${sev}`);
-  }
-
-  // SimWatch watchdog states -> short label + pill style (see simwatch.py _watch_step)
-  const RIG_STATES = {
-    healthy: ['Rig OK', 'pill-live'],
-    degraded: ['Rig: checking', 'pill-warn'],
-    recovering: ['Rig: recovering', 'pill-bad'],
-    gave_up: ['Rig: needs you', 'pill-bad'],
-    device_offline: ['Launch Pro off', 'pill-warn'],
-    device_check: ['Rig: checking LM', 'pill-warn'],
-    device_backoff: ['Rig: LM retry wait', 'pill-warn'],
-    discovery_grace: ['Rig: connecting LM', 'pill-warn'],
-  };
-
-  let lastHotkeys = [];
-  const HOTKEY_NOTES = { failed: 'taken by another app', invalid: 'bad key in config', ctrl_alt_only: 'use Ctrl+Alt' };
-
-  function hotkeysHtml() {
-    if (!lastHotkeys.length) {
-      return `<div class="hp-title"><span>SimWatch Hotkeys</span></div>
-        <div class="hp-body">Not available: SimWatch isn't connected, or its video rig (which owns the hotkeys) isn't running.</div>`;
-    }
-    const rows = lastHotkeys.map((h) => {
-      const note = HOTKEY_NOTES[h.state];
-      return `<div style="display:flex;gap:10px;align-items:baseline;margin:3px 0;">
-        <span style="font-family:var(--mono);color:#facc15;min-width:92px;">${esc(h.keys)}</span>
-        <span>${esc(h.label)}${note ? ` <span style="color:#f87171;">(${esc(note)})</span>` : ''}</span>
-      </div>`;
-    }).join('');
-    return `<div class="hp-title"><span>SimWatch Hotkeys</span><span class="tag">Alt+H on screen</span></div>
-      <div class="hp-body">${rows}<div style="margin-top:6px;color:#94a3b8;font-size:10.5px;">Every Alt+&lt;key&gt; also works as Ctrl+Alt+&lt;key&gt;.</div></div>`;
-  }
-
-  function initKeysPill() {
-    const el = $('pill-keys');
-    if (!el) return;
-    bindHover(el, hotkeysHtml);
-    el.addEventListener('mouseenter', () => {
-      // Refresh in the background so the next hover reflects live registration state.
-      window.shotlabAPI.getHotkeys().then((list) => {
-        if (Array.isArray(list)) lastHotkeys = list;
-      }).catch(() => {});
-    });
-  }
-
-  // Missing-data notice: says plainly what the launch monitor didn't send and what is an estimate.
-  function renderDataQuality(shot, snap) {
-    const el = $('data-quality-note');
-    if (!el) return;
-    const dq = shot && shot.dataQuality;
-    const cov = shot && shot.scorecard && shot.scorecard.coverage;
-    if (!dq || dq.clubRead) {
-      el.classList.add('hidden');
-      el.textContent = '';
-      return;
-    }
-    const st = snap && snap.sessionStats;
-    const rate = st && st.count > 1 ? ` Club read on ${st.clubReads}/${st.count} shots this session.` : '';
-    const graded = cov ? ` Score uses ${cov.graded} of ${cov.total} metrics.` : '';
-    el.innerHTML = `<strong>No club read</strong> (sticker missed): club speed, smash, path &amp; attack angle unavailable.
-      Delivery and strike below are <em>ball-flight estimates</em>.${esc(graded)}${esc(rate)}`;
-    el.classList.remove('hidden');
-  }
-
-  function renderRigPill(el, health) {
-    if (!el) return;
-    if (!health || !health.state) {
-      el.className = 'pill pill-muted';
-      el.textContent = 'Rig: —';
-      el.title = 'No watchdog verdict yet (SimWatch bridge offline, or watchdog not running)';
-      return;
-    }
-    const [label, cls] = RIG_STATES[health.state] || [`Rig: ${health.state}`, 'pill-muted'];
-    el.className = `pill ${cls}`;
-    el.textContent = label;
-    const failing = Array.isArray(health.failing) ? health.failing : [];
-    el.title = failing.length
-      ? `SimWatch: ${health.state} - failing: ${failing.join(', ')}`
-      : `SimWatch: ${health.state}${health.ts ? ` (as of ${health.ts})` : ''}`;
-  }
-
-  function renderTopbar(snap) {
-    const pillBridge = $('pill-bridge');
-    const pillSniffer = $('pill-sniffer');
-    const pillGspro = $('pill-gspro-club');
-    const port = snap.simwatchPort || 8765;
-
-    pillBridge.title = `Connection to SimWatch local bridge (127.0.0.1:${port})`;
-    if (snap.bridgeConnected) {
-      pillBridge.className = 'pill pill-live';
-      pillBridge.innerHTML = `<span class="dot"></span> Bridge :${esc(port)} Live`;
-    } else {
-      pillBridge.className = 'pill pill-warn';
-      pillBridge.innerHTML = `<span class="dot"></span> Bridge :${esc(port)} Offline`;
-    }
-
-    if (snap.bridgeConnected && snap.bridgeSnifferOk) {
-      pillSniffer.className = 'pill pill-live';
-      pillSniffer.textContent = ':921 Sniffer OK';
-    } else {
-      pillSniffer.className = 'pill pill-muted';
-      pillSniffer.textContent = ':921 Sniffer Idle';
-    }
-
-    pillGspro.textContent = `GSPro: ${snap.gsproClub || '—'}`;
-
-    renderRigPill($('pill-rig'), snap.rigHealth);
-    lastHotkeys = Array.isArray(snap.hotkeys) ? snap.hotkeys : [];
-
-    // Tier buttons
-    document.querySelectorAll('.tier-btn').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.tier === (snap.settings && snap.settings.tierId));
-    });
-
-    // Populate demo select once
-    const sel = $('demo-select');
-    if (sel.options.length === 0 && Array.isArray(snap.demoArchetypes)) {
-      const optRand = document.createElement('option');
-      optRand.value = '';
-      optRand.textContent = 'Random Archetype';
-      sel.appendChild(optRand);
-      for (const d of snap.demoArchetypes) {
-        const opt = document.createElement('option');
-        opt.value = d.id;
-        opt.textContent = d.label;
-        sel.appendChild(opt);
-      }
-    }
-
-    // CSV watcher indicator
-    const csvInd = $('csv-watch-indicator');
-    if (snap.watchedCsvPath) {
-      csvInd.classList.remove('hidden');
-      csvInd.className = 'tag tag-green';
-      csvInd.textContent = `Watching: ${snap.watchedCsvPath.split(/[/\\]/).pop()}`;
-      $('btn-csv-stop').classList.remove('hidden');
-    } else {
-      csvInd.classList.add('hidden');
-      $('btn-csv-stop').classList.add('hidden');
-    }
-  }
-
-  function renderSubbar(snap) {
-    const settings = snap.settings || {};
-    const mode = settings.practiceMode === 'almost' ? 'almost' : 'real';
-
-    document.querySelectorAll('.mode-btn').forEach((btn) => {
-      btn.classList.toggle('active', btn.dataset.mode === mode);
-    });
-
-    // Populate Active Feel dropdown from snapshot.drillsHub.feels
-    const feelSel = $('select-active-feel');
-    const feels = (snap.drillsHub && Array.isArray(snap.drillsHub.feels)) ? snap.drillsHub.feels : [];
-    const activeFeelId = settings.activeFeelId || '';
-    const sig = feels.map((f) => `${f.id}:${f.label || f.name || ''}`).join('|');
-    if (feelSel.dataset.sig !== sig) {
-      feelSel.dataset.sig = sig;
-      feelSel.innerHTML = '';
-      const noneOpt = document.createElement('option');
-      noneOpt.value = '';
-      noneOpt.textContent = 'No Feel Tagged';
-      feelSel.appendChild(noneOpt);
-      for (const f of feels) {
-        if (!f || !f.id) continue;
-        const opt = document.createElement('option');
-        opt.value = f.id;
-        opt.textContent = f.label || f.name || f.id;
-        const tip = f.trigger || f.cue || f.note || '';
-        if (tip) opt.title = tip;
-        feelSel.appendChild(opt);
-      }
-    }
-    if (activeFeelId && !Array.from(feelSel.options).some((o) => o.value === activeFeelId)) {
-      const customOpt = document.createElement('option');
-      customOpt.value = activeFeelId;
-      customOpt.textContent = activeFeelId;
-      feelSel.appendChild(customOpt);
-    }
-    feelSel.value = activeFeelId;
-
-    // Audio Caddie button
-    const btnVoice = $('btn-audio-caddie');
-    const voiceOn = Boolean(settings.audioCaddie);
-    btnVoice.classList.toggle('btn-voice-on', voiceOn);
-    btnVoice.classList.toggle('btn-ghost', !voiceOn);
-    btnVoice.textContent = voiceOn ? '🔊 Voice ON' : '🔇 Voice';
-
-    // Tour Tempo dropdown reflects actual running metronome state
-    const tempoSel = $('select-tempo');
-    const audio = window.ShotLabAudio;
-    const isRunning = Boolean(audio && typeof audio.isTempoRunning === 'function' && audio.isTempoRunning());
-    const runningPreset = isRunning && typeof audio.getTempoPreset === 'function' ? audio.getTempoPreset() : 'off';
-    tempoSel.value = isRunning ? (runningPreset || '24/8') : 'off';
-    const tempoSettings = (state && state.settings) || {};
-    const soundSel = $('select-tempo-sound');
-    const gapSel = $('select-tempo-gap');
-    if (soundSel && document.activeElement !== soundSel) soundSel.value = tempoSettings.tempoSound || 'tones';
-    if (gapSel && document.activeElement !== gapSel) gapSel.value = String(tempoSettings.tempoGapSec || 0);
-    if (audio && typeof audio.setTempoOptions === 'function') {
-      audio.setTempoOptions({ sound: tempoSettings.tempoSound || 'tones', gapSec: tempoSettings.tempoGapSec || 0 });
-    }
-
-    // Local DB pill
-    const pillDb = $('pill-db');
-    const db = snap.dbSummary;
-    if (db && typeof db.totalShots === 'number') {
-      pillDb.textContent = `DB: ${db.totalShots} swing${db.totalShots === 1 ? '' : 's'}`;
-      pillDb.title = `Local ${db.backend || 'sqlite'} DB · ${db.totalSessions || 0} sessions · ${db.clubsTracked || 0} clubs · ${db.clipsLinked || 0} clips linked. Click to sync SimWatch history.`;
-    } else {
-      pillDb.textContent = 'DB: Sync';
-    }
-  }
-
-  // --------------------------------------------------------------------------- Tab 1: Live Telemetry
-
-  function renderFaultBanner(snap) {
-    const banner = $('fault-streak-banner');
-    const alert = snap.faultAlert;
-    const latestId = (snap.shots && snap.shots[0] && snap.shots[0].id) || (snap.currentShot && snap.currentShot.id) || '';
-
-    if (!alert || !alert.faultId) {
-      banner.classList.add('hidden');
-      banner.innerHTML = '';
-      return;
-    }
-
-    const key = `${alert.faultId}:${latestId}`;
-    if (dismissedFaultKey === key) {
-      banner.classList.add('hidden');
-      return;
-    }
-
-    const count = alert.count ?? alert.streak ?? 2;
-    const drills = alert.drills || alert.recommendedDrills || [];
-    const topDrill = drills[0] || null;
-    const activeDrillId = snap.settings && snap.settings.activeDrillId;
-    const isTagged = Boolean(topDrill && activeDrillId === topDrill.id);
-
-    banner.classList.remove('hidden');
-    banner.classList.toggle('urgent', count >= 3 || Boolean(alert.urgent));
-
-    const drillHtml = topDrill
-      ? `<div class="fault-banner-drill">Recommended Drill: <strong>${esc(topDrill.title)}</strong>${topDrill.keyFeel ? ` — <em>${esc(topDrill.keyFeel)}</em>` : ''}</div>`
-      : `<div class="fault-banner-drill">Repeating delivery pattern detected — check Focus Cues below before your next swing.</div>`;
-
-    banner.innerHTML = `
-      <div class="fault-banner-info">
-        <div class="fault-banner-head">
-          <span class="streak-pill">${esc(count)}× STREAK</span>
-          ${esc(alert.faultName || alert.faultId)} detected
+    const cards = shot?.scorecard?.cards || [];
+    const find = (k) => cards.find((c) => c.key === k) || { label: k, value: '—', unit: '', grade: 'neutral', target: '—', goalDelta: '—' };
+    const sg = shot?.strokesGained?.sg;
+    const kpis = [
+      { key: 'carry', ...find('carry') },
+      { key: 'offline', ...find('offline') },
+      { key: 'smash', ...find('smash') },
+      { key: 'ballSpeed', ...find('ballSpeed') },
+      {
+        key: 'sg',
+        label: 'Strokes Gained',
+        value: typeof sg === 'number' ? fmtSg(sg, { prefix: '' }) : '—',
+        unit: 'SG',
+        grade: typeof sg === 'number' ? (sg >= 0.04 ? 'green' : sg > -0.15 ? 'yellow' : 'red') : 'neutral',
+        target: shot?.strokesGained?.resultLie || 'Broadie',
+        goalDelta: typeof sg === 'number' ? (sg >= 0 ? 'Gain vs Tier' : 'Cost vs Tier') : 'Paused',
+      },
+    ];
+    el.innerHTML = kpis.map((k) => `
+      <div class="kpi-card grade-${esc(k.grade)}">
+        <div class="flex-row" style="justify-content:space-between;gap:4px;flex-wrap:nowrap;">
+          <div class="flex-row" style="gap:4px;min-width:0;flex-wrap:nowrap;">
+            <span class="kicker" style="margin:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(k.label)}</span>
+            <button type="button" class="q-btn" data-metric-help="${esc(k.key)}" aria-label="Explain ${esc(k.label)}">?</button>
+          </div>
+          ${(k.goalDelta || k.target) ? `<span class="goal-delta sev-pill-${esc(k.grade)}">${esc(k.goalDelta || k.target)}</span>` : ''}
         </div>
-        ${drillHtml}
+        <div class="kpi-val">${esc(k.value)} <span class="muted" style="font-size:12px;">${esc(k.unit || '')}</span></div>
+        <div class="kpi-sub">Goal: ${esc(k.target)}</div>
       </div>
-      <div class="fault-banner-actions">
-        ${topDrill ? `<button id="btn-tag-fault-drill" class="btn btn-sm ${isTagged ? 'btn-green' : 'btn-accent'}" data-drill-id="${esc(topDrill.id)}">${isTagged ? '✓ Drill Tagged' : 'Tag Drill'}</button>` : ''}
-        <button id="btn-dismiss-fault" class="btn btn-ghost btn-sm" title="Dismiss until next shot">✕</button>
+    `).join('');
+  }
+
+  function renderChallengePanel(snap) {
+    const panel = $('prac-challenge-panel');
+    if (!panel || !challengeStore) return;
+    panel.style.display = activePracticeSub === 'challenge' ? 'block' : 'none';
+    if (activePracticeSub !== 'challenge') {
+      $('tension-vignette')?.classList.remove('active');
+      return;
+    }
+
+    const st = challengeStore.state;
+    const isTension = activeMode === 'practice' && activePracticeSub === 'challenge' && st.activeId === 'pressure5' && st.pressure.streak === 4 && !st.pressure.mutedVignette;
+    $('tension-vignette')?.classList.toggle('active', isTension);
+
+    const pills = window.ShotLabChallenges.CHALLENGE_DEFS.map((d) => `
+      <button type="button" class="${d.id === st.activeId ? 'active' : ''}" data-chal-id="${esc(d.id)}">${esc(d.short)}</button>
+    `).join('');
+
+    let detail = '';
+    if (st.activeId === 'pressure5') {
+      const lights = [0, 1, 2, 3, 4].map((i) => `<span class="badge ${i < st.pressure.streak ? 'badge-green' : ''}">Ball ${i + 1}</span>`).join('');
+      detail = `
+        <div class="flex-row mt-8" style="justify-content:space-between;">
+          <div class="flex-row">
+            <select id="chal-gate-sel" aria-label="Pressure gate criterion">
+              <option value="hla" ${st.pressure.gate === 'hla' ? 'selected' : ''}>Start Line Gate (±1.5° HLA)</option>
+              <option value="path" ${st.pressure.gate === 'path' ? 'selected' : ''}>Path Corridor (±2.5°)</option>
+              <option value="smash" ${st.pressure.gate === 'smash' ? 'selected' : ''}>Smash Threshold (≥1.34)</option>
+            </select>
+            ${lights}
+          </div>
+          <span class="badge badge-cyan">Clears: ${st.pressure.clears}</span>
+        </div>`;
+    } else if (st.activeId === 'course3') {
+      detail = `<div class="grid-3 mt-8">${st.course.holes.map((h, i) => `
+        <div class="sub-well" style="${i === st.course.holeIdx ? 'border-color:var(--cyan);' : ''}">
+          <div class="flex-row" style="justify-content:space-between;"><strong>Hole ${h.num} · Par ${h.par}</strong><span class="mono muted">${esc(h.wind)}</span></div>
+          <div class="mono" style="margin-top:4px;">${h.appYds ? `${h.appYds}y left` : `${h.yds}y`}${h.score !== null ? ` → Final ${h.score}` : ''}</div>
+        </div>`).join('')}</div>`;
+    } else {
+      const obs = challengeStore.getObsPayload();
+      detail = `<div class="sub-well mt-8 flex-row" style="justify-content:space-between;"><strong>${esc(challengeStore.getCurrentTargetText())}</strong><span class="badge badge-green">Score: ${esc(obs.score)}</span></div>`;
+    }
+
+    panel.innerHTML = `
+      <div class="head-row">
+        <div>
+          <span class="kicker">AUTO-SCORED BY LIVE LAUNCH MONITOR &amp; DEMO SHOTS · BROADCASTS TO OBS ?widget=challenge</span>
+          <h3>Challenge Arena</h3>
+        </div>
+        <div class="flex-row">
+          <button type="button" class="btn btn-xs btn-primary" id="chal-test-cur">Score Current Shot</button>
+          <button type="button" class="btn btn-xs" id="chal-reset-btn">Reset Challenge</button>
+        </div>
       </div>
+      <div class="seg">${pills}</div>
+      ${detail}
     `;
 
-    const btnTag = $('btn-tag-fault-drill');
-    if (btnTag && topDrill) {
-      btnTag.onclick = async () => {
-        if (window.shotlabAPI.setPracticeContext) {
-          await window.shotlabAPI.setPracticeContext({ activeDrillId: topDrill.id });
-          showToast(`Tagged drill: ${topDrill.title}`);
+    panel.querySelectorAll('[data-chal-id]').forEach((b) => {
+      b.onclick = () => {
+        challengeStore.setActive(b.dataset.chalId);
+        api.setChallengeState(challengeStore.getObsPayload());
+        renderChallengePanel(snap);
+      };
+    });
+    if ($('chal-gate-sel')) {
+      $('chal-gate-sel').onchange = (e) => {
+        challengeStore.setPressureGate(e.target.value);
+        api.setChallengeState(challengeStore.getObsPayload());
+        renderChallengePanel(snap);
+      };
+    }
+    if ($('chal-test-cur')) {
+      $('chal-test-cur').onclick = () => {
+        if (snap.currentShot) {
+          const r = challengeStore.recordShot(snap.currentShot);
+          api.setChallengeState(challengeStore.getObsPayload());
+          if (r?.bestsChanged) api.updateStudioState({ challengeBests: r.bests });
+          renderChallengePanel(snap);
+          showToast(r.message || 'Shot scored');
         }
       };
     }
-    const btnDismiss = $('btn-dismiss-fault');
-    if (btnDismiss) {
-      btnDismiss.onclick = () => {
-        dismissedFaultKey = key;
-        banner.classList.add('hidden');
+    if ($('chal-reset-btn')) {
+      $('chal-reset-btn').onclick = () => {
+        challengeStore.resetActive();
+        api.setChallengeState(challengeStore.getObsPayload());
+        renderChallengePanel(snap);
       };
     }
   }
 
-  function renderShotShapeBox(shot, snap) {
-    const box = $('box-shape');
+  function renderPractice(snap = state) {
+    if (!snap) return;
+    const shot = snap.currentShot;
+    const studio = snap.settings?.studio || {};
+    const handedness = snap.settings?.handedness || 'RH';
+
+    const strip = $('prac-mission-strip');
+    if (strip) {
+      strip.classList.toggle('show', Boolean(missionState));
+      if (missionState) {
+        $('prac-mission-badge').textContent = missionState.badge || 'ACTIVE BLOCK';
+        $('prac-mission-title').textContent = missionState.title;
+        $('prac-mission-target').textContent = (activePracticeSub === 'challenge' && challengeStore)
+          ? challengeStore.getCurrentTargetText()
+          : (missionState.target || 'Stay in green target corridor');
+      }
+    }
+
+    $('prac-intent-shape').value = studio.intendedShape || 'stock';
+    const goalOn = studio.showGoalLine !== false;
+    $('prac-goal-toggle').textContent = goalOn ? '◉ Dotted Goal: ON' : '○ Dotted Goal: OFF';
+    $('prac-goal-toggle').classList.toggle('btn-emerald', goalOn);
+
+    const matNames = { fiberbuilt: 'Fiberbuilt Strip', divot: 'Divot Action', firm: 'Firm Turf' };
+    $('prac-mat-badge').textContent = `Mat: ${matNames[studio.matType || 'fiberbuilt'] || 'Fiberbuilt'}`;
+
+    renderFaultBanner(snap);
+    renderPracticeKpis(shot);
+    renderChallengePanel(snap);
+
+    if (!shot) {
+      lastTrajShot = null;
+      hideHoverPopover();
+      ['shape-why-trigger', 'club-why-trigger', 'delivery-why-trigger', 'strike-why-trigger'].forEach((tid) => {
+        const trigger = $(tid);
+        if (trigger) {
+          trigger.onmouseenter = null;
+          trigger.onmousemove = null;
+          trigger.onmouseleave = null;
+          trigger.onclick = null;
+        }
+      });
+      $('box-shape').className = 'card';
+      $('shape-name').textContent = 'Waiting for Shot';
+      $('shape-height-tag').textContent = '—';
+      $('shape-sg-pill').classList.add('hidden');
+      $('shape-quiet-badge').classList.add('hidden');
+      $('shape-icon-wrap').innerHTML = '';
+      renderTrajectoryWithRefs();
+      $('stat-carry').textContent = '—';
+      $('stat-total').textContent = 'Total — yds';
+      $('stat-curve').textContent = '—';
+      $('stat-offline').textContent = '—';
+      $('stat-apex').textContent = '—';
+      $('shape-desc').textContent = 'Hit a ball or press Test Shot.';
+      $('box-club').className = 'card';
+      $('club-pred-name').textContent = '—';
+      $('club-conf-badge').textContent = '—%';
+      $('club-source-tag').textContent = 'AUTO';
+      $('club-top3').innerHTML = '';
+      $('club-picker-grid').innerHTML = '';
+      $('btn-confirm-pred').disabled = true;
+      $('btn-confirm-pred').onclick = null;
+      $('btn-sync-gspro').disabled = true;
+      $('btn-sync-gspro').onclick = null;
+      $('box-delivery').className = 'card';
+      $('delivery-name').textContent = '—';
+      $('delivery-conf').textContent = '—';
+      $('delivery-conf').className = 'tag';
+      $('dplane-wrap').innerHTML = '';
+      $('delivery-tagline').textContent = '—';
+      $('val-dynloft').textContent = '—';
+      $('val-shaftlean').textContent = '—';
+      $('val-spinloft').textContent = '—';
+      $('delivery-cues').innerHTML = '';
+      $('box-strike').className = 'card';
+      $('strike-label').textContent = '—';
+      $('strike-conf').textContent = '—';
+      $('strike-conf').className = 'tag';
+      $('clubface-wrap').innerHTML = '';
+      $('pot-actual').textContent = '—';
+      $('pot-center').textContent = '—';
+      $('pot-max').textContent = '—';
+      $('pot-speed').textContent = '—';
+      $('pot-reasons').innerHTML = '';
+      $('scorecard-tier-label').textContent = '—';
+      $('sum-green').textContent = '0 Green';
+      $('sum-yellow').textContent = '0 Yellow';
+      $('sum-red').textContent = '0 Red';
+      $('overall-score-num').textContent = '—';
+      $('data-quality-note').classList.add('hidden');
+      $('metrics-grid').innerHTML = '';
+      $('prac-coupled-wrap').innerHTML = '';
+      $('prac-fault-coach').innerHTML = '';
+      renderHistory(snap);
+      return;
+    }
+
+    // Box 1: Shot Shape & Trajectory
     const sh = shot.shotShape;
     const fl = shot.flight;
-    setCardSeverity(box, sh.severity);
-
-    const nameEl = $('shape-name');
-    nameEl.textContent = sh.name;
-    nameEl.className = `card-title sev-${sh.severity}`;
-
-    const hTag = $('shape-height-tag');
-    hTag.textContent = sh.heightTag;
-    hTag.className = `tag ${sh.heightTag === 'Optimal Height' ? 'tag-green' : 'tag-yellow'}`;
-
-    // Strokes Gained Pill & Quiet Mode Badge
-    const practiceMode = shot.practiceMode || (snap && snap.settings && snap.settings.practiceMode) || 'real';
-    const sgPill = $('shape-sg-pill');
-    const quietBadge = $('shape-quiet-badge');
+    $('box-shape').className = `card sev-${sh.severity}`;
+    $('shape-name').textContent = sh.name;
+    $('shape-height-tag').textContent = sh.heightTag;
     const sg = shot.strokesGained;
-
-    if (practiceMode === 'almost') {
-      quietBadge.classList.remove('hidden');
-      sgPill.classList.add('hidden');
+    const sgPill = $('shape-sg-pill');
+    if (sg && typeof sg.sg === 'number') {
+      sgPill.classList.remove('hidden');
+      sgPill.className = `tag tag-${sg.sg >= 0.04 ? 'green' : sg.sg <= -0.1 ? 'red' : 'yellow'}`;
+      sgPill.textContent = fmtSg(sg.sg);
     } else {
-      quietBadge.classList.add('hidden');
-      if (sg && typeof sg.sg === 'number' && Number.isFinite(sg.sg)) {
-        sgPill.classList.remove('hidden');
-        sgPill.className = `tag ${sgTagClass(sg.sg)}`;
-        sgPill.textContent = fmtSg(sg.sg);
-        bindHover(sgPill, () => `
-          <div class="hp-title">
-            <span>Strokes Gained (${esc(sg.category || 'SHOT')})</span>
-            <span class="tag ${esc(sgTagClass(sg.sg))}">${esc(fmtSg(sg.sg, { prefix: '' }))}</span>
-          </div>
-          <div class="hp-body">${esc(sg.explanation || '')}</div>
-          ${typeof sg.sgPga === 'number' ? `<div class="hp-body" style="margin-top:5px;color:#94a3b8;font-family:var(--mono);font-size:10.5px;">vs PGA Tour: ${esc(fmtSg(sg.sgPga, { prefix: '' }))} · Result: ${esc(sg.resultLie || '—')}</div>` : ''}
-        `);
-      } else {
-        sgPill.classList.add('hidden');
-      }
+      sgPill.classList.add('hidden');
     }
-
-    $('shape-icon-wrap').innerHTML = window.ShotLabSVG.renderShotShapeIcon(sh.svgParams, { width: 112, height: 112 });
+    $('shape-quiet-badge').classList.toggle('hidden', (shot.practiceMode || snap.settings?.practiceMode) !== 'almost');
+    $('shape-icon-wrap').innerHTML = window.ShotLabSVG.renderShotShapeIcon(sh.svgParams, {
+      width: 108,
+      height: 108,
+      intendedShape: studio.showGoalLine !== false ? (studio.intendedShape || 'stock') : null,
+      handedness,
+    });
     lastTrajShot = shot;
     renderTrajectoryWithRefs();
-
     $('stat-carry').textContent = `${Math.round(shot.metrics.effectiveCarry)} yds`;
     $('stat-total').textContent = `Total ${Math.round(shot.metrics.totalYds)} yds (+${Math.round(fl.rollYds)} roll)`;
-
-    const cDir = fl.curveYds < -0.5 ? 'L' : fl.curveYds > 0.5 ? 'R' : '';
-    const oDir = fl.offlineYds < -0.5 ? 'L' : fl.offlineYds > 0.5 ? 'R' : '';
-    $('stat-curve').textContent = `${Math.abs(fl.curveYds).toFixed(0)}y ${cDir}`;
-    $('stat-offline').textContent = `${Math.abs(fl.offlineYds).toFixed(0)}y ${oDir}`;
+    $('stat-curve').textContent = `${Math.abs(fl.curveYds).toFixed(0)}y ${fl.curveYds < -0.5 ? 'L' : fl.curveYds > 0.5 ? 'R' : ''}`;
+    $('stat-offline').textContent = `${Math.abs(fl.offlineYds).toFixed(0)}y ${fl.offlineYds < -0.5 ? 'L' : fl.offlineYds > 0.5 ? 'R' : ''}`;
     $('stat-apex').textContent = `${Math.round(fl.apexFt)} ft`;
     $('shape-desc').textContent = sh.description;
+    bindHover($('shape-why-trigger'), () => `<strong>${esc(sh.name)}</strong><ul style="margin:6px 0 0 14px;padding:0;">${(sh.rationale || []).map((r) => `<li>${esc(r)}</li>`).join('')}</ul>`);
 
-    const whyHtml = () => `
-      <div class="hp-title">
-        <span>Why "${esc(sh.name)}"?</span>
-        <span class="tag tag-${esc(sh.severity)}">${esc(sh.shortTag)}</span>
-      </div>
-      <div class="hp-body">Evaluated from combined launch direction, spin tilt, and aerodynamic curve:</div>
-      <ul class="hp-list">${(sh.rationale || []).map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
-    `;
-    bindHover($('shape-why-trigger'), whyHtml);
-    bindHover($('shape-icon-wrap'), whyHtml);
-  }
-
-  function renderClubBox(shot, snap) {
+    // Box 2: Club Auto-Detector
     const det = shot.clubDetection;
-    const stats = snap.calibrationStats;
-    const box = $('box-club');
-
+    const calSt = snap.calibrationStats || {};
     const confPct = det.confidencePct || 0;
-    const sev = shot.confirmedClub ? 'green' : (confPct >= 85 ? 'green' : confPct >= 60 ? 'yellow' : 'red');
-    setCardSeverity(box, sev);
-
+    $('box-club').className = `card sev-${shot.confirmedClub ? 'green' : confPct >= 85 ? 'green' : confPct >= 60 ? 'yellow' : 'red'}`;
     $('club-pred-name').textContent = shot.activeClubLabel;
-    const badge = $('club-conf-badge');
-    badge.textContent = shot.confirmedClub ? 'CONFIRMED' : `${Math.round(confPct)}%`;
-    badge.className = `conf-badge ${shot.confirmedClub || confPct >= 85 ? 'high' : confPct >= 60 ? 'med' : ''}`;
-
-    const srcTag = $('club-source-tag');
-    if (shot.confirmedClub) {
-      srcTag.textContent = shot.isDemo ? 'DEMO PREVIEW' : 'VERIFIED';
-      srcTag.className = shot.isDemo ? 'tag tag-cyan' : 'tag tag-green';
-    } else if (shot.demoActualClub) {
-      srcTag.textContent = `DEMO (${shot.demoActualClub})`;
-      srcTag.className = det.predictedClub === shot.demoActualClub ? 'tag tag-green' : 'tag tag-yellow';
-    } else if (det.isPartialOrShortGame) {
-      srcTag.textContent = (det.shotCategory || 'PARTIAL').toUpperCase();
-      srcTag.className = 'tag tag-yellow';
-    } else {
-      srcTag.textContent = det.calibrated ? 'CALIBRATED' : 'PRIOR';
-      srcTag.className = det.calibrated ? 'tag tag-green' : 'tag tag-cyan';
-    }
-
+    $('club-conf-badge').textContent = shot.confirmedClub ? 'CONFIRMED' : `${Math.round(confPct)}%`;
+    $('club-source-tag').textContent = shot.confirmedClub ? 'VERIFIED' : (det.calibrated ? 'CALIBRATED' : 'PRIOR');
     $('club-top3').innerHTML = (det.top3 || []).map((t, i) => `
       <div class="top3-row ${i === 0 ? 'first' : ''}">
-        <span class="top3-code">${esc(t.club)}</span>
+        <strong class="mono">${esc(t.club)}</strong>
         <div class="top3-bar"><div class="top3-fill" style="width:${Math.min(100, Number(t.confidencePct) || 0)}%"></div></div>
-        <span class="top3-pct">${Math.round(Number(t.confidencePct) || 0)}%</span>
-      </div>
-    `).join('');
-
+        <span class="mono muted" style="text-align:right;">${Math.round(Number(t.confidencePct) || 0)}%</span>
+      </div>`).join('');
     const btnConfirm = $('btn-confirm-pred');
-    if (shot.confirmedClub) {
-      btnConfirm.textContent = `✓ Confirmed ${shot.confirmedClub}`;
-      btnConfirm.disabled = true;
-      btnConfirm.onclick = null;
-    } else {
-      const guessClub = det.predictedClub || shot.activeClub;
-      btnConfirm.textContent = `✓ Confirm ${guessClub}`;
-      btnConfirm.disabled = false;
-      btnConfirm.onclick = () => confirmClub(shot.id, guessClub);
-    }
-
-    $('btn-sync-gspro').onclick = async () => {
-      const target = shot.confirmedClub || det.predictedClub || shot.activeClub;
-      const res = await window.shotlabAPI.switchGsproClub(target);
-      if (res && res.ok) {
-        showToast(`Sent GSPro switch → ${target} (${res.plan.steps}× ${res.plan.key.toUpperCase()})`);
-      } else {
-        const reasonMap = {
-          bridge_offline: 'SimWatch bridge is offline',
-          unknown_gspro_club: 'GSPro active club unknown (press I/K once in GSPro)',
-          already_selected: `GSPro is already on ${target}`,
-          club_not_in_bag: `${target} is not in your active bag list`,
-          unknown_target_club: 'No club to switch to for this shot',
-          switch_in_progress: 'previous switch still settling, try again in a moment',
-        };
-        const msg = (res && (reasonMap[res.reason] || res.error || res.reason)) || 'switch skipped';
-        showToast(`GSPro switch: ${msg}`);
-      }
-    };
-
+    const guess = det.predictedClub || shot.activeClub;
+    btnConfirm.textContent = shot.confirmedClub ? `✓ Confirmed ${shot.confirmedClub}` : `✓ Confirm ${guess}`;
+    btnConfirm.disabled = Boolean(shot.confirmedClub);
+    btnConfirm.onclick = () => confirmClub(shot.id, guess);
+    $('btn-sync-gspro').disabled = false;
+    $('btn-sync-gspro').onclick = () => syncGsproClub(shot.confirmedClub || guess);
     const chkAuto = $('chk-autoswitch');
-    const minConfPct = Math.round(((snap.calibration && snap.calibration.autoSwitch && snap.calibration.autoSwitch.minConfidence) || 0.90) * 100);
-    chkAuto.checked = Boolean(snap.calibration && snap.calibration.autoSwitch && snap.calibration.autoSwitch.enabled);
-    chkAuto.onchange = () => {
-      window.shotlabAPI.updateSettings({ autoSwitch: { enabled: chkAuto.checked } });
-      showToast(chkAuto.checked ? `GSPro Auto-Switch ENABLED (≥${minConfPct}% conf)` : 'GSPro Auto-Switch paused');
-    };
+    chkAuto.checked = Boolean(snap.calibration?.autoSwitch?.enabled);
+    chkAuto.onchange = () => api.updateSettings({ autoSwitch: { enabled: chkAuto.checked } });
+    const calClubs = new Set(calSt.calibratedClubs || []);
+    $('club-picker-grid').innerHTML = CLUB_ORDER.map((c) => `<button type="button" class="club-chip ${shot.activeClub === c ? 'active' : ''} ${calClubs.has(c) ? 'calibrated' : ''}" data-pick-club="${esc(c)}">${esc(c)}</button>`).join('');
+    $('club-picker-grid').querySelectorAll('[data-pick-club]').forEach((b) => { b.onclick = () => confirmClub(shot.id, b.dataset.pickClub); });
+    $('cal-exact').textContent = calSt.recentExactPct !== null && calSt.recentExactPct !== undefined ? `${calSt.recentExactPct}%` : '—';
+    $('cal-within1').textContent = calSt.recentWithinOnePct !== null && calSt.recentWithinOnePct !== undefined ? `${calSt.recentWithinOnePct}%` : '—';
+    $('cal-highconf').textContent = calSt.highConfExactPct !== null && calSt.highConfExactPct !== undefined ? `${calSt.highConfExactPct}%` : '—';
+    $('cal-count').textContent = String(calSt.totalConfirmed || 0);
+    $('cal-progress-fill').style.width = `${Math.min(100, calSt.recentExactPct || 0)}%`;
+    bindHover($('club-why-trigger'), () => `<strong>${esc(det.predictedLabel)}</strong><p style="margin:4px 0 0;">${esc(det.summary || '')}</p>`);
 
-    const calClubs = new Set(stats.calibratedClubs || []);
-    const picker = $('club-picker-grid');
-    picker.innerHTML = CLUB_ORDER.map((c) => {
-      const isAct = shot.activeClub === c;
-      const isCal = calClubs.has(c);
-      return `<button class="club-chip ${isAct ? 'active' : ''} ${isCal ? 'calibrated' : ''}" data-club="${esc(c)}" title="Tell ShotLab you actually hit ${esc(c)} to calibrate your bag">${esc(c)}</button>`;
-    }).join('');
-    picker.querySelectorAll('.club-chip').forEach((btn) => {
-      btn.onclick = () => confirmClub(shot.id, btn.dataset.club);
-    });
-
-    $('cal-exact').textContent = stats.recentExactPct !== null ? `${stats.recentExactPct}%` : '—';
-    $('cal-within1').textContent = stats.recentWithinOnePct !== null ? `${stats.recentWithinOnePct}%` : '—';
-    $('cal-highconf').textContent = stats.highConfExactPct !== null ? `${stats.highConfExactPct}%` : '—';
-    $('cal-count').textContent = `${stats.totalConfirmed}`;
-    $('cal-progress-fill').style.width = `${Math.min(100, stats.recentExactPct || 0)}%`;
-
-    bindHover($('club-why-trigger'), () => `
-      <div class="hp-title">
-        <span>How ShotLab Guessed ${esc(det.predictedLabel)}</span>
-        <span class="tag tag-cyan">${Math.round(confPct)}%</span>
-      </div>
-      <div class="hp-body">${esc(det.summary)}</div>
-      <table class="hp-table">
-        ${(det.factorBreakdown || []).map((f) => `
-          <tr>
-            <td>${esc(f.label)}</td>
-            <td><strong>${esc(f.actual)}${esc(f.unit)}</strong></td>
-            <td>exp ${esc(f.expected)}</td>
-            <td class="g-${esc(f.grade)}">${esc(f.match)}</td>
-          </tr>
-        `).join('')}
-      </table>
-    `);
-  }
-
-  function renderDeliveryBox(shot) {
+    // Box 3: Delivery & Release
     const del = shot.delivery;
-    const box = $('box-delivery');
-    setCardSeverity(box, del.severity);
-
-    const nameEl = $('delivery-name');
-    nameEl.textContent = del.name;
-    nameEl.className = `card-title sev-${del.severity}`;
-
-    const confEl = $('delivery-conf');
-    confEl.textContent = `${Math.round((del.confidence || 0.8) * 100)}% conf`;
-    confEl.className = `tag tag-${del.severity}`;
-
+    const delConf = del.confidence;
+    $('box-delivery').className = `card sev-${del.severity}`;
+    $('delivery-name').textContent = del.name;
+    $('delivery-conf').textContent = (typeof delConf === 'number' && Number.isFinite(delConf) && delConf > 0) ? `${Math.round(delConf * 100)}%` : '—';
+    $('delivery-conf').className = `tag tag-${del.severity}`;
     $('dplane-wrap').innerHTML = window.ShotLabSVG.renderDPlaneDiagram(shot.metrics, shot.dplane);
     $('delivery-tagline').textContent = del.tagline;
-    $('val-dynloft').textContent = del.estDynamicLoft !== null ? `${del.estDynamicLoft.toFixed(1)}°` : '—';
-    $('val-shaftlean').textContent = del.estShaftLean !== null ? `${del.estShaftLean >= 0 ? '+' : ''}${del.estShaftLean.toFixed(1)}°` : '—';
-    $('val-spinloft').textContent = del.spinLoft !== null ? `${del.spinLoft.toFixed(1)}°` : '—';
+    $('val-dynloft').textContent = del.estDynamicLoft !== null && del.estDynamicLoft !== undefined ? `${del.estDynamicLoft.toFixed(1)}°` : '—';
+    $('val-shaftlean').textContent = del.estShaftLean !== null && del.estShaftLean !== undefined ? `${del.estShaftLean >= 0 ? '+' : ''}${del.estShaftLean.toFixed(1)}°` : '—';
+    $('val-spinloft').textContent = del.spinLoft !== null && del.spinLoft !== undefined ? `${del.spinLoft.toFixed(1)}°` : '—';
+    $('delivery-cues').innerHTML = `<strong>Focus Cues:</strong> ${(del.cues || []).map((c) => esc(c)).join(' · ')}`;
+    bindHover($('delivery-why-trigger'), () => `<strong>${esc(del.name)}</strong><ul style="margin:6px 0 0 14px;padding:0;">${(del.evidence || []).map((e) => `<li>${esc(e)}</li>`).join('')}</ul>`);
 
-    $('delivery-cues').innerHTML = `
-      <strong>Focus Cues</strong>
-      <ul>${(del.cues || []).map((c) => `<li>${esc(c)}</li>`).join('')}</ul>
-    `;
-
-    const whyHtml = () => `
-      <div class="hp-title">
-        <span>Delivery Analysis: ${esc(del.name)}</span>
-        <span class="tag tag-${esc(del.severity)}">${Math.round((del.confidence || 0.8) * 100)}%</span>
-      </div>
-      <div class="hp-body">
-        Inferred from VLA (${esc(shot.metrics.vla ?? '—')}°), AoA (${esc(shot.metrics.aoa ?? '—')}°), Backspin, Club Path, and ${esc(shot.clubSpec.label)} static loft (${esc(shot.clubSpec.staticLoft)}°):
-      </div>
-      <ul class="hp-list">${(del.evidence || []).map((e) => `<li>${esc(e)}</li>`).join('')}</ul>
-      ${del.alternates && del.alternates.length ? `<div class="hp-body" style="margin-top:6px;color:#94a3b8;">Secondary tendencies: ${esc(del.alternates.join(', '))}</div>` : ''}
-    `;
-    bindHover($('delivery-why-trigger'), whyHtml);
-    bindHover($('dplane-wrap'), whyHtml);
-  }
-
-  function renderStrikeBox(shot, snap) {
+    // Box 4: Photorealistic Clubface Strike
     const st = shot.strike;
+    const stConf = st.confidence;
     const pot = shot.potential;
-    const box = $('box-strike');
-    const handedness = (snap && snap.settings && snap.settings.handedness) || 'RH';
-    setCardSeverity(box, st.severity);
-
-    const lbl = $('strike-label');
-    lbl.textContent = st.label;
-    lbl.className = `card-title sev-${st.severity}`;
-
-    const confEl = $('strike-conf');
-    confEl.textContent = `${Math.round((st.confidence || 0.75) * 100)}% conf`;
-    confEl.className = `tag tag-${st.severity}`;
-
+    $('box-strike').className = `card sev-${st.severity}`;
+    $('strike-label').textContent = st.label;
+    $('strike-conf').textContent = (typeof stConf === 'number' && Number.isFinite(stConf) && stConf > 0) ? `${Math.round(stConf * 100)}%` : '—';
+    $('strike-conf').className = `tag tag-${st.severity}`;
     $('clubface-wrap').innerHTML = window.ShotLabSVG.renderClubfaceMap(st, shot.clubSpec, handedness);
-
     $('pot-actual').textContent = `${Math.round(pot.actualCarryYds)} yds`;
-    if (pot.centerStrikeCarryYds) {
-      const diff = Math.round(pot.centerStrikeCarryYds - pot.actualCarryYds);
-      $('pot-center').textContent = `${Math.round(pot.centerStrikeCarryYds)} yds ${diff > 0 ? `(+${diff})` : ''}`;
-    } else {
-      $('pot-center').textContent = 'Need Club Speed';
+    $('pot-center').textContent = pot.centerStrikeCarryYds ? `${Math.round(pot.centerStrikeCarryYds)} yds` : 'Need Club Speed';
+    $('pot-max').textContent = `${Math.round(pot.maxCarryAtSpeedYds)} yds`;
+    $('pot-speed').textContent = pot.speedUpsideCarryYds ? `${Math.round(pot.speedUpsideCarryYds)} yds (@${pot.speedUpsideMph})` : '—';
+    $('pot-reasons').innerHTML = (pot.reasons || []).map((r) => esc(r)).join(' · ');
+    bindHover($('strike-why-trigger'), () => `<strong>${esc(st.label)}</strong><ul style="margin:6px 0 0 14px;padding:0;">${(st.rationale || []).map((r) => `<li>${esc(r)}</li>`).join('')}</ul>`);
+
+    // Coupled Lab Matrix
+    $('prac-coupled-rail').style.display = activeLabMode === 'coupled' ? 'block' : 'none';
+    if (activeLabMode === 'coupled' && window.ShotLabCharts) {
+      $('prac-coupled-wrap').innerHTML = window.ShotLabCharts.renderCoupledSignalsGrid(shot.coupledSignals);
     }
-    const maxDiff = Math.round(pot.maxCarryAtSpeedYds - pot.actualCarryYds);
-    $('pot-max').textContent = `${Math.round(pot.maxCarryAtSpeedYds)} yds ${maxDiff > 0 ? `(+${maxDiff})` : ''}`;
-    $('pot-speed').textContent = pot.speedUpsideCarryYds
-      ? `${Math.round(pot.speedUpsideCarryYds)} yds (@ ${pot.speedUpsideMph} mph)`
-      : '—';
 
-    $('pot-reasons').innerHTML = `
-      <ul>${(pot.reasons || []).map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
-    `;
-
-    const whyHtml = () => `
-      <div class="hp-title">
-        <span>Strike Inference: ${esc(st.label)}</span>
-        <span class="tag tag-${esc(st.severity)}">${Math.round((st.confidence || 0.75) * 100)}%</span>
-      </div>
-      <div class="hp-body">
-        1-dot Launch Pro infers face impact by combining Smash Factor drop, D-Plane Gear Effect residual (${shot.dplane.gearEffectResidual !== null ? `${shot.dplane.gearEffectResidual >= 0 ? '+' : ''}${esc(shot.dplane.gearEffectResidual)}°` : 'n/a'}), Backspin, and VLA:
-      </div>
-      <ul class="hp-list">${(st.rationale || []).map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
-    `;
-    bindHover($('strike-why-trigger'), whyHtml);
-    bindHover($('clubface-wrap'), whyHtml);
-  }
-
-  function renderScorecard(shot, snap) {
+    // 15-Metric R/Y/G Scorecard with upper-right +/- Goal deltas & ? buttons
     const sc = shot.scorecard;
     $('scorecard-tier-label').textContent = `${sc.tierLabel} · ${shot.activeClubLabel}`;
-    renderDataQuality(shot, snap);
     $('sum-green').textContent = `${sc.counts.green} Green`;
     $('sum-yellow').textContent = `${sc.counts.yellow} Yellow`;
     $('sum-red').textContent = `${sc.counts.red} Red`;
+    $('overall-score-num').textContent = sc.score != null ? String(sc.score) : '—';
+    $('overall-score-num').style.color = window.ShotLabSVG.gradeColor(sc.overallGrade);
 
-    const sessChip = $('session-summary-chip');
-    const st = snap && snap.sessionStats;
-    if (st && st.count > 0) {
-      sessChip.classList.remove('hidden');
-      const parts = [`Session (${st.count})`];
-      if (st.avgScore !== null && st.avgScore !== undefined) parts.push(`Avg ${st.avgScore}`);
-      if (st.totalSg !== null && st.totalSg !== undefined) parts.push(fmtSg(st.totalSg));
-      if (typeof st.clubReads === 'number' && st.clubReads < st.count) parts.push(`Club read ${st.clubReads}/${st.count}`);
-      sessChip.textContent = parts.join(' · ');
-      sessChip.className = `tag ${st.avgSg !== null ? sgTagClass(st.avgSg) : 'tag-neutral'}`;
+    const dq = shot.dataQuality;
+    const dqEl = $('data-quality-note');
+    if (dq && !dq.clubRead) {
+      const dqClean = String(dq.note || '').replace(/^No club read\s*(?:\([^)]*\))?:\s*/i, '');
+      dqEl.classList.remove('hidden');
+      dqEl.innerHTML = `<strong>No club read (sticker missed):</strong> ${esc(dqClean)}`;
     } else {
-      sessChip.classList.add('hidden');
+      dqEl.classList.add('hidden');
     }
 
-    const scoreNum = $('overall-score-num');
-    scoreNum.textContent = `${sc.score}`;
-    scoreNum.style.color = window.ShotLabSVG.gradeColor(sc.overallGrade);
-
-    const grid = $('metrics-grid');
-    grid.innerHTML = sc.cards.map((c, idx) => `
-      <div class="metric-tile grade-${esc(c.grade)}" data-idx="${idx}">
+    $('metrics-grid').innerHTML = sc.cards.map((c) => {
+      const gd = c.goalDelta || c.delta || '';
+      return `
+      <div class="metric-tile grade-${esc(c.grade)}">
         <div class="mt-top">
-          <span class="mt-label">${esc(c.label)}</span>
-          <span class="mt-src src-${esc(c.source)}">${esc(c.source === 'measured' ? 'BLP' : c.source === 'estimated' ? 'EST' : c.source === 'physics' ? 'PHYS' : c.source === 'missing' ? 'NO READ' : c.source)}</span>
+          <div class="flex-row" style="gap:4px;min-width:0;flex-wrap:nowrap;">
+            <span class="mt-label" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(c.label)}</span>
+            <button type="button" class="q-btn" data-metric-help="${esc(c.helpKey || c.key)}" aria-label="Explain ${esc(c.label)}">?</button>
+          </div>
+          ${gd ? `<span class="goal-delta sev-pill-${esc(c.grade)}">${esc(gd)}</span>` : ''}
         </div>
         <div class="mt-value">${esc(c.value)}<span class="mt-unit">${esc(c.unit)}</span></div>
-        <div class="mt-foot">
-          <span>${esc(c.target)}</span>
-          <span class="mt-delta">${esc(c.delta || '')}</span>
-        </div>
-      </div>
-    `).join('');
+        <div class="mt-foot"><span>${esc(c.target)}</span><span>${esc(c.source)}</span></div>
+      </div>`;
+    }).join('');
 
-    grid.querySelectorAll('.metric-tile').forEach((tile) => {
-      const card = sc.cards[Number(tile.dataset.idx)];
-      bindHover(tile, () => `
-        <div class="hp-title">
-          <span>${esc(card.label)}: ${esc(card.value)} ${esc(card.unit)}</span>
-          <span class="tag tag-${esc(card.grade)}">${esc(String(card.grade || '').toUpperCase())}</span>
+    // Fault Coach (Best Guesses -> Feels to Try -> Drills Hub Fixes)
+    const fc = shot.faultCoach || {};
+    const fcDrills = Array.isArray(fc.recommendedDrills) ? fc.recommendedDrills : [];
+    $('prac-fault-coach').innerHTML = `
+      <div class="head-row">
+        <div>
+          <span class="kicker">Root-Cause Fault Coach &middot; Anti-Feel-Cycling Safe</span>
+          <h3>Likely Fault Reasons &rarr; Feels to Try &rarr; Drills Hub</h3>
         </div>
-        <div class="hp-body">${esc(card.tooltip)}</div>
-        <div class="hp-body" style="margin-top:6px;color:#94a3b8;font-family:var(--mono);font-size:10.5px;">
-          Target (${esc(sc.tierLabel)}): ${esc(card.target)} · Source: ${esc(card.source)}
+        <span class="badge badge-${esc(fc.severity === 'green' ? 'green' : fc.severity === 'red' ? 'red' : 'yellow')}">${esc(fc.headline || 'Diagnostics')}</span>
+      </div>
+      <div class="grid-3">
+        <div class="sub-well">
+          <span class="kicker" style="color:var(--red-hi);">1. Best Guesses (Why It Happened)</span>
+          ${(fc.likelyCauses || []).map((c) => `<div style="margin-top:6px;font-size:11.5px;">&bull; ${esc(c)}</div>`).join('')}
         </div>
-      `);
+        <div class="sub-well">
+          <span class="kicker" style="color:var(--yellow);">2. Feels to Try / Park</span>
+          ${(fc.feelsToTry || []).map((f) => `
+            <div class="flex-row" style="justify-content:space-between;margin-top:6px;flex-wrap:nowrap;">
+              <span style="font-size:11.5px;">&ldquo;${esc(f.cue)}&rdquo;</span>
+              <button type="button" class="btn btn-xs btn-amber" data-park-feel="${esc(f.cue)}">🅿 Park</button>
+            </div>`).join('')}
+        </div>
+        <div class="sub-well">
+          <span class="kicker" style="color:var(--cyan);">3. Matched Drills Hub Fixes</span>
+          ${fcDrills.length ? fcDrills.map((d) => `
+            <div class="flex-row" style="justify-content:space-between;margin-top:6px;">
+              <div><strong>${esc(d.title)}</strong><div class="dim" style="font-size:10px;">${esc(d.keyFeel || d.focus || '')}</div></div>
+              <button type="button" class="btn btn-xs btn-cyan" data-open-drill="${esc(d.id)}">Open →</button>
+            </div>`).join('') : '<div class="muted" style="margin-top:6px;font-size:11px;">Keep locking in this tempo — open Drills [D] anytime.</div>'}
+        </div>
+      </div>`;
+
+    $('prac-fault-coach').querySelectorAll('[data-park-feel]').forEach((b) => {
+      b.onclick = async () => {
+        const cur = Array.isArray(studio.parkedIdeas) ? studio.parkedIdeas : [];
+        await api.updateStudioState({ parkedIdeas: [{ id: `pk_${Date.now()}`, text: b.dataset.parkFeel, ts: new Date().toISOString().slice(0, 10) }, ...cur] });
+        showToast('Parked feel into Plan Parking Lot!');
+      };
     });
+    $('prac-fault-coach').querySelectorAll('[data-open-drill]').forEach((b) => {
+      b.onclick = () => openDrawerWithDrill(b.dataset.openDrill, fc.faultKey || 'all');
+    });
+
+    renderHistory(snap);
   }
 
   function renderHistory(snap) {
     const tape = $('history-tape');
-    const curId = snap.currentShot ? snap.currentShot.id : null;
-    if (!snap.shots || snap.shots.length === 0) {
-      tape.innerHTML = '<div class="micro-desc" style="padding:6px 2px;">No shots in tape yet — hit a ball on Launch Pro or click ▶ Test Shot.</div>';
+    if (!tape) return;
+    const shots = snap.shots || [];
+    if (!shots.length) {
+      tape.innerHTML = '<div class="muted">No shots in tape yet — hit a ball or click ⚡ Test Shot.</div>';
       return;
     }
-    tape.innerHTML = snap.shots.slice(0, 30).map((s) => {
-      const sgVal = s.strokesGained && typeof s.strokesGained.sg === 'number' ? s.strokesGained.sg : null;
-      const sgSnippet = sgVal !== null ? ` · ${fmtSg(sgVal, { prefix: 'SG ' })}` : '';
-      return `
-        <div class="hist-item ${s.id === curId ? 'selected' : ''}" data-shot-id="${esc(s.id)}">
-          <div class="hist-mini-svg">
-            ${window.ShotLabSVG.renderShotShapeIcon(s.shotShape.svgParams, { width: 38, height: 38, compact: true })}
-          </div>
-          <div class="hist-meta">
-            <div class="hist-top">
-              <span class="hist-club">${esc(s.activeClub)}${s.confirmedClub ? ' ✓' : ''}${s.isDemo ? '<span class="tag-demo">DEMO</span>' : ''}</span>
-              <span class="hist-carry">${Math.round(s.metrics.effectiveCarry)}y</span>
-            </div>
-            <div class="hist-sub">${esc(s.shotShape.shortTag)} · ${esc(s.delivery.name)}</div>
-            <div class="hist-sub">BS ${esc(s.metrics.ballSpeed?.toFixed(1) ?? '—')} · Sm ${esc(s.metrics.smash?.toFixed(2) ?? '—')} · ${esc(s.scorecard.score)}${esc(sgSnippet)}</div>
-          </div>
+    const curId = snap.currentShot?.id;
+    tape.innerHTML = shots.slice(0, 30).map((s) => `
+      <div class="hist-item ${s.id === curId ? 'selected' : ''}" data-shot-id="${esc(s.id)}">
+        ${window.ShotLabSVG.renderShotShapeIcon(s.shotShape.svgParams, { width: 38, height: 38, compact: true })}
+        <div>
+          <div class="hist-top"><span>${esc(s.activeClub)}${s.confirmedClub ? ' ✓' : ''}</span><span class="mono">${Math.round(s.metrics.effectiveCarry)}y</span></div>
+          <div class="hist-sub">${esc(s.shotShape.shortTag)} · ${esc(s.scorecard.score)}</div>
         </div>
-      `;
-    }).join('');
-
-    tape.querySelectorAll('.hist-item').forEach((item) => {
-      item.onclick = () => window.shotlabAPI.selectShot(item.dataset.shotId);
+      </div>`).join('');
+    tape.querySelectorAll('[data-shot-id]').forEach((el) => {
+      el.setAttribute('role', 'button');
+      el.setAttribute('tabindex', '0');
+      const pick = () => api.selectShot(el.dataset.shotId);
+      el.onclick = pick;
+      el.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(); } };
     });
   }
 
-  function renderEmptyState() {
-    $('shape-name').textContent = 'Waiting for Shot';
-    $('shape-name').className = 'card-title';
-    $('shape-height-tag').textContent = '—';
-    $('shape-sg-pill').classList.add('hidden');
-    $('shape-quiet-badge').classList.add('hidden');
-    $('shape-icon-wrap').innerHTML = '';
-    lastTrajShot = null;
-    renderTrajectoryWithRefs();
-    $('stat-carry').textContent = '—';
-    $('stat-total').textContent = 'Total — yds';
-    $('stat-curve').textContent = '—';
-    $('stat-offline').textContent = '—';
-    $('stat-apex').textContent = '—';
-    $('shape-desc').textContent = 'Hit a shot on your Launch Pro or click ▶ Test Shot.';
-    $('club-pred-name').textContent = '—';
-    $('club-conf-badge').textContent = '—%';
-    $('club-top3').innerHTML = '';
-    $('delivery-name').textContent = '—';
-    $('delivery-tagline').textContent = 'Hit a shot to diagnose release & strike.';
-    $('delivery-cues').innerHTML = '';
-    $('strike-label').textContent = '—';
-    $('pot-actual').textContent = '—';
-    $('pot-center').textContent = '—';
-    $('pot-max').textContent = '—';
-    $('pot-speed').textContent = '—';
-    $('pot-reasons').innerHTML = '';
-    $('metrics-grid').innerHTML = '';
-    $('overall-score-num').textContent = '—';
+  // ==================== 03 REVIEW ====================
+  async function loadReviewTab() {
+    try {
+      const daysVal = Number(reviewFilters.days);
+      const data = await api.getReviewData({
+        club: reviewFilters.club,
+        mode: reviewFilters.mode,
+        days: daysVal > 0 ? daysVal : null,
+      });
+      lastReviewData = data;
+      renderReview(data);
+    } catch (err) {
+      showToast(`Review error: ${err.message || err}`);
+    }
   }
 
-  // --------------------------------------------------------------------------- Fullscreen Mat Glance Mode
+  function renderReview(data = lastReviewData) {
+    if (!data) return;
+    document.querySelectorAll('#rev-days-seg button').forEach((b) => b.classList.toggle('active', Number(b.dataset.days) === Number(reviewFilters.days)));
+    document.querySelectorAll('#rev-sub-seg button').forEach((b) => {
+      const isActive = b.dataset.sub === activeReviewSub;
+      b.classList.toggle('active', isActive);
+      b.setAttribute('aria-selected', isActive ? 'true' : 'false');
+    });
+    ['dna', 'decade', 'video', 'trends', 'highlights'].forEach((s) => {
+      const el = $(`rev-view-${s}`);
+      if (el) el.style.display = s === activeReviewSub ? 'block' : 'none';
+    });
 
-  function renderScoreRingSvg(score, grade) {
-    const val = Number.isFinite(score) ? Math.max(0, Math.min(100, Math.round(score))) : 0;
-    const col = window.ShotLabSVG.gradeColor(grade);
-    const r = 58;
-    const circ = 2 * Math.PI * r;
-    const dash = ((val / 100) * circ).toFixed(1);
-    return `
-      <svg viewBox="0 0 144 144" width="144" height="144" aria-label="Shot score ${val}">
-        <circle cx="72" cy="72" r="${r}" fill="#090e19" stroke="#1e293b" stroke-width="10"/>
-        <circle cx="72" cy="72" r="${r}" fill="none" stroke="${col}" stroke-width="10"
-                stroke-linecap="round" stroke-dasharray="${dash} ${circ.toFixed(1)}"
-                transform="rotate(-90 72 72)"/>
-        <text x="72" y="76" text-anchor="middle" fill="#ffffff" font-family="ui-monospace, Menlo, Consolas, monospace" font-size="38" font-weight="900">${Number.isFinite(score) ? val : '—'}</text>
-        <text x="72" y="98" text-anchor="middle" fill="#94a3b8" font-size="11" font-weight="800" letter-spacing="1.4">SCORE</text>
-      </svg>
-    `;
+    const p = data.patterns || {};
+    const trends = data.trends || [];
+    const spark = (k, col) => window.ShotLabCharts ? window.ShotLabCharts.renderSparklineSvg(trends.map((t) => t[k]), col) : '';
+
+    $('rev-exec-kpis').innerHTML = [
+      { k: 'Sample & Avg Score', v: `${p.avgScore ?? '—'}`, d: `${p.n || 0} swings`, s: spark('avgScore', '#10f296') },
+      { k: 'Avg SG / Shot', v: fmtSg(p.avgSg, { prefix: '' }), d: 'vs Active Tier', s: spark('avgSg', '#00e5ff') },
+      { k: 'Avg Smash / Carry', v: `${p.averages?.smash?.toFixed(2) ?? '—'}`, d: p.meanCarry != null ? `${Math.round(p.meanCarry)}y mean` : '—', s: spark('avgSmash', '#00e5ff') },
+      { k: 'Optimal Cruise Speed', v: p.optimalCruiseMph ? `${p.optimalCruiseMph} mph` : 'Need 5+', d: p.twoWayMiss?.label || '', s: '' },
+    ].map((c) => `
+      <div class="sub-well" style="display:flex;justify-content:space-between;align-items:center;gap:8px;">
+        <div><span class="kicker">${esc(c.k)}</span><div class="mono" style="font-size:19px;font-weight:900;color:#fff;">${esc(c.v)}</div><div class="muted" style="font-size:10.5px;">${esc(c.d)}</div></div>
+        ${c.s}
+      </div>`).join('');
+
+    if (activeReviewSub === 'dna') {
+      $('rev-cruise-pill').textContent = p.optimalCruiseMph ? `Cruise: ${p.optimalCruiseMph} mph` : 'Need 5+ Swings';
+      $('rev-cruise-svg').innerHTML = window.ShotLabCharts ? window.ShotLabCharts.renderCruiseSpeedSvg(p.cruiseSpeedBuckets || [], p.optimalCruiseMph) : '';
+      const tMiss = p.twoWayMiss || {};
+      $('rev-miss-pill').textContent = tMiss.label || 'Dispersion Cone';
+      $('rev-miss-pill').className = `badge ${tMiss.detected ? 'badge-red' : 'badge-green'}`;
+
+      const attrs = p.rootCauseAttribution || [];
+      $('rev-attr-bars').innerHTML = attrs.length
+        ? attrs.map((a, idx) => `
+          <div class="leak-cost-row">
+            <div class="leak-cost-top"><strong>${esc(a.label)}</strong><span class="mono" style="color:${idx === 0 ? 'var(--red-hi)' : 'var(--cyan)'};">${a.impactPct}% Variance Share</span></div>
+            <div class="leak-cost-track"><div class="leak-cost-fill" style="width:${a.impactPct}%;background:${idx === 0 ? 'var(--red)' : 'var(--cyan)'};"></div></div>
+            <div class="muted" style="font-size:10.5px;margin-top:3px;">${esc(a.detail)}</div>
+          </div>`).join('')
+        : '<div class="sub-well muted">Hit 3+ shots with club data to rank root-cause contributors.</div>';
+
+      // DELIVERY FAULTS BY COST
+      document.querySelectorAll('#rev-leaks-filter-seg button').forEach((b) => b.classList.toggle('active', (b.dataset.lf === 'faults') === reviewFilters.faultsOnly));
+      $('rev-fault-leaks').innerHTML = window.ShotLabCharts
+        ? window.ShotLabCharts.renderDeliveryFaultsByCost(p.faultLeaks || [], { faultsOnly: reviewFilters.faultsOnly })
+        : '';
+      $('rev-fault-leaks').querySelectorAll('[data-fault-id]').forEach((row) => {
+        const open = () => openDrawerWithDrill(null, row.dataset.faultId || 'all');
+        row.onclick = open;
+        row.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); open(); } };
+      });
+
+      // A/B Feels Table
+      const feels = data.feelComparison || [];
+      $('rev-feels-tbody').innerHTML = feels.length
+        ? feels.map((f) => `
+          <tr>
+            <td><strong>${esc(f.feelId ? feelLabelById(f.feelId) : (f.label || 'Baseline'))}</strong></td>
+            <td class="num">${esc(f.n)}</td>
+            <td class="num">${esc(f.avgScore ?? '—')}</td>
+            <td class="num" style="color:${sgCol(f.avgSg)};">${esc(fmtSg(f.avgSg, { prefix: '' }))}</td>
+            <td class="num">${f.avgSmash != null ? f.avgSmash.toFixed(2) : '—'}</td>
+            <td class="num">${f.avgCarry != null ? `${Math.round(f.avgCarry)}y` : '—'}</td>
+            <td class="num">${f.width80Yds != null ? `${Math.round(f.width80Yds)}y` : '—'}</td>
+            <td class="num">${f.faultPct != null ? `${f.faultPct}%` : '—'}</td>
+          </tr>`).join('')
+        : '<tr><td colspan="8" class="muted">Tag shots with an Active Feel in the top bar to compare feels.</td></tr>';
+    } else if (activeReviewSub === 'decade') {
+      $('pat-disp-title').textContent = `${reviewFilters.club === 'ALL' ? 'All Clubs' : reviewFilters.club} — 80% DECADE Dispersion Cone`;
+      $('pat-disp-n').textContent = `${p.n || 0} shots`;
+      $('pat-dispersion-svg').innerHTML = window.ShotLabSVG.renderDispersionPlot(p, { width: 460, height: 320 });
+      const off = p.meanOffline;
+      const cone = p.ellipse80 ? `${Math.round(p.ellipse80.widthYds)}y × ${Math.round(p.ellipse80.depthYds)}y` : '—';
+      $('pat-summary-stats').innerHTML = `
+        <div class="sub-well"><span class="kicker">Mean Carry</span><strong class="mono" style="font-size:17px;">${p.meanCarry != null ? `${Math.round(p.meanCarry)}y` : '—'}</strong></div>
+        <div class="sub-well"><span class="kicker">Mean Offline</span><strong class="mono" style="font-size:17px;">${typeof off === 'number' ? `${Math.abs(off).toFixed(1)}y ${off < 0 ? 'L' : 'R'}` : '—'}</strong></div>
+        <div class="sub-well"><span class="kicker">80% Corridor</span><strong class="mono" style="font-size:17px;">${cone}</strong></div>
+        <div class="sub-well"><span class="kicker">Avg SG / Score</span><strong class="mono" style="font-size:17px;color:${sgCol(p.avgSg)};">${fmtSg(p.avgSg, { prefix: '' })} / ${p.avgScore ?? '—'}</strong></div>`;
+      $('pat-decade-advice').textContent = p.decadeAdvice || 'Record 5+ shots for DECADE aim guidance.';
+      const sc = p.strikeCounts || {};
+      $('pat-strike-dist').innerHTML = `<span class="kicker">Inferred Face Strike Distribution</span><div class="flex-row mt-8">${Object.entries(sc).map(([k, v]) => `<span class="badge">${esc(k)}: ${v}</span>`).join('') || '<span class="muted">No strikes logged</span>'}</div>`;
+    } else if (activeReviewSub === 'video') {
+      loadVideoTab();
+    } else if (activeReviewSub === 'trends') {
+      $('rev-trend-svg').innerHTML = window.ShotLabCharts ? window.ShotLabCharts.renderSmoothSplineSvg(trends, activeTrendMetric, { width: 680, height: 220 }) : '';
+      $('rev-sg-cat-svg').innerHTML = window.ShotLabCharts ? window.ShotLabCharts.renderDivergingSgSvg(data.sgByCategory || []) : '';
+      const fat = data.fatigue || [];
+      const peakBucket = fat.filter((b) => b.n > 0 && b.avgScore != null && b.id !== '71+').sort((a, b) => b.avgScore - a.avgScore)[0];
+      const lateBucket = fat.find((b) => (b.id === '71+' || b.id === '46-70') && b.n > 0 && b.avgScore != null);
+      const fatBadge = $('rev-fat-badge');
+      if (fatBadge) {
+        if (peakBucket && lateBucket && peakBucket !== lateBucket) {
+          const drop = Math.round(lateBucket.avgScore - peakBucket.avgScore);
+          fatBadge.textContent = `${drop >= 0 ? '+' : ''}${drop} pts late`;
+          fatBadge.className = `badge ${drop <= -8 ? 'badge-red' : drop < 0 ? 'badge-yellow' : 'badge-green'}`;
+        } else {
+          fatBadge.textContent = fat.some((b) => b.n > 0) ? 'Tracking Stamina' : 'No Stamina Data';
+          fatBadge.className = 'badge';
+        }
+      }
+      $('pat-fatigue-bars').innerHTML = fat.map((b) => `
+        <div class="fatigue-row">
+          <span class="muted">${esc(b.label)}</span>
+          <div class="fatigue-track"><div class="fatigue-fill ${b.n > 0 && b.avgScore != null && b.avgScore < 65 ? 'fat-warn' : ''}" style="width:${b.n > 0 ? Math.min(100, Math.max(8, b.avgScore ?? 50)) : 0}%"></div></div>
+          <span class="mono muted">${b.n > 0 ? `Sc ${b.avgScore ?? '—'} (${b.n})` : '0 shots'}</span>
+        </div>`).join('');
+    } else if (activeReviewSub === 'highlights') {
+      const hls = data.highlights || [];
+      $('rev-hl-count').textContent = `${hls.length} highlights`;
+      $('rev-highlights-grid').innerHTML = hls.length
+        ? hls.map((h) => `
+          <div class="sub-well">
+            <div class="flex-row" style="justify-content:space-between;">
+              <strong>${esc(h.club)} · ${h.carryYds != null ? `${Math.round(h.carryYds)}y` : '—'}</strong>
+              <span class="badge badge-${h.score >= 85 ? 'green' : 'cyan'}">Sc ${h.score ?? '—'}</span>
+            </div>
+            <div class="muted" style="font-size:11px;margin-top:4px;">${esc(h.shotShape || '')} · ${esc(h.deliveryName || '')}</div>
+            <div class="flex-row mt-8" style="justify-content:space-between;">
+              <span class="mono" style="color:${sgCol(h.sgShot)};">${fmtSg(h.sgShot)}</span>
+              ${h.isGoTo ? '<span class="badge badge-green">★ My-Go-To</span>' : ''}
+            </div>
+          </div>`).join('')
+        : '<div class="sub-well muted">Record standout shots to populate highlights.</div>';
+    }
+  }
+
+  // ==================== REAL KINOVEA VIDEO COMPARE ====================
+  function buildMediaUrl(row, angle, mediaBaseUrl) {
+    if (!row) return null;
+    const hasPreResolved = angle === 'dtl'
+      ? ('dtlUrl' in row || 'dtl_url' in row)
+      : ('foUrl' in row || 'fo_url' in row);
+    const direct = angle === 'dtl' ? (row.dtlUrl ?? row.dtl_url) : (row.foUrl ?? row.fo_url);
+    if (typeof direct === 'string' && /^http:\/\/127\.0\.0\.1:\d+\//.test(direct)) return direct;
+    if (hasPreResolved) return null;
+    const clip = angle === 'dtl' ? (row.clipDtl || row.clip_dtl) : (row.clipFo || row.clip_fo);
+    if (!clip) return null;
+    const base = mediaBaseUrl || `http://127.0.0.1:${state?.obsPort || 8766}/media`;
+    const segs = clip.replace(/\\/g, '/').split('/').filter(Boolean);
+    const sDate = row.sessionDate || row.session_date || (row.ts ? String(row.ts).slice(0, 10) : null);
+    if (sDate && segs[0] !== sDate) segs.unshift(sDate);
+    return `${base}/${segs.map(encodeURIComponent).join('/')}`;
+  }
+
+  function setVideoSource(vid, missEl, url) {
+    if (!vid) return;
+    if (url) {
+      if (vid.dataset.srcUrl !== url) {
+        vid.pause();
+        vid.src = url;
+        vid.dataset.srcUrl = url;
+        vid.load();
+      }
+      vid.dataset.loaded = '1';
+      vid.playbackRate = videoState.playbackRate;
+      vid.classList.remove('hidden');
+      missEl?.classList.add('hidden');
+    } else {
+      vid.pause();
+      vid.dataset.srcUrl = '';
+      vid.dataset.loaded = '0';
+      vid.removeAttribute('src');
+      vid.classList.add('hidden');
+      missEl?.classList.remove('hidden');
+    }
+  }
+
+  function getActiveVideos() {
+    const out = [];
+    const dtl = $('vid-player-dtl');
+    const fo = $('vid-player-fo');
+    const best = $('vid-player-best');
+    if (dtl?.dataset.loaded === '1') out.push(dtl);
+    if (fo?.dataset.loaded === '1') out.push(fo);
+    if ($('chk-sync-best')?.checked && best?.dataset.loaded === '1') out.push(best);
+    return out;
+  }
+
+  async function loadVideoTab() {
+    try {
+      const res = await api.getVideoCompare({ shotId: videoState.selectedShotId, club: videoState.club });
+      videoState.data = res;
+      const clips = res?.recentWithClips || [];
+      const cur = res?.current || clips[0] || null;
+      const best = res?.best || null;
+      const emptyEl = $('vid-empty-state');
+      const wsEl = $('vid-workspace');
+      const hasAny = clips.length > 0 || (cur && (cur.dtlUrl || cur.foUrl || cur.clipDtl || cur.clipFo));
+      emptyEl.classList.toggle('hidden', Boolean(hasAny));
+      wsEl.classList.toggle('hidden', !hasAny);
+      if (!hasAny) {
+        setVideoSource($('vid-player-dtl'), $('vid-dtl-missing'), null);
+        setVideoSource($('vid-player-fo'), $('vid-fo-missing'), null);
+        setVideoSource($('vid-player-best'), $('vid-best-missing'), null);
+        if ($('vid-time-readout')) $('vid-time-readout').textContent = '0.00s';
+        if ($('btn-vid-play')) $('btn-vid-play').textContent = '▶ Play Synced';
+        $('btn-promote-goto').disabled = true;
+        return;
+      }
+      if (cur) videoState.selectedShotId = cur.id;
+      $('vid-list-count').textContent = String(clips.length);
+      $('vid-clips-list').innerHTML = clips.map((c) => `
+        <button type="button" class="vid-clip-item ${cur && c.id === cur.id ? 'selected' : ''}" data-vc-id="${esc(c.id)}">
+          <div class="flex-row" style="justify-content:space-between;"><strong>${esc(c.club)} · ${c.carryYds != null ? `${Math.round(c.carryYds)}y` : '—'}</strong><span class="mono">Sc ${c.score ?? '—'}</span></div>
+          <div class="dim mono" style="font-size:10px;">${esc(c.sessionDate || '')} · ${esc(c.deliveryName || '')}</div>
+        </button>`).join('');
+      $('vid-clips-list').querySelectorAll('[data-vc-id]').forEach((b) => {
+        b.onclick = () => { videoState.selectedShotId = b.dataset.vcId; loadVideoTab(); };
+      });
+      $('vid-dtl-title').textContent = cur ? `${cur.club} · ${Math.round(cur.carryYds || 0)}y · ${cur.deliveryName || ''}` : '—';
+      $('vid-fo-title').textContent = $('vid-dtl-title').textContent;
+      setVideoSource($('vid-player-dtl'), $('vid-dtl-missing'), buildMediaUrl(cur, 'dtl'));
+      setVideoSource($('vid-player-fo'), $('vid-fo-missing'), buildMediaUrl(cur, 'fo'));
+      setVideoSource($('vid-player-best'), $('vid-best-missing'), buildMediaUrl(best, 'dtl') || buildMediaUrl(best, 'fo'));
+      if ($('vid-time-readout')) $('vid-time-readout').textContent = '0.00s';
+      if ($('btn-vid-play')) $('btn-vid-play').textContent = '▶ Play Synced';
+      $('vid-best-headline').textContent = best ? `vs Personal Best (${best.sessionDate || ''}${best.isGoTo ? ' ★ Go-To' : ''})` : 'Personal Best Comparison';
+      $('vid-best-meta').textContent = best ? `Best: ${Math.round(best.carryYds || 0)}y · Sc ${best.score ?? '—'}` : 'No Personal Best clip linked yet.';
+      $('btn-promote-goto').disabled = !cur;
+
+      const fmtDeltaCell = (val, dec, signed) => {
+        if (typeof val !== 'number' || !Number.isFinite(val)) return '—';
+        return `${signed && val > 0 ? '+' : ''}${val.toFixed(dec)}`;
+      };
+      const deltaRows = [
+        ['Carry', cur?.carryYds, best?.carryYds, 'y', 1, false],
+        ['Ball Speed', cur?.ballSpeed, best?.ballSpeed, ' mph', 1, false],
+        ['Smash', cur?.smash, best?.smash, '', 2, false],
+        ['Path', cur?.path, best?.path, '°', 1, true],
+        ['AoA', cur?.aoa, best?.aoa, '°', 1, true],
+        ['SG', cur?.sgShot, best?.sgShot, '', 2, true],
+      ];
+      $('vid-delta-tbody').innerHTML = deltaRows.map(([lbl, cv, bv, u, dec, signed]) => {
+        const hasBoth = typeof cv === 'number' && Number.isFinite(cv) && typeof bv === 'number' && Number.isFinite(bv);
+        const diff = hasBoth ? (cv - bv).toFixed(dec) : '—';
+        const cStr = typeof cv === 'number' && Number.isFinite(cv) ? `${fmtDeltaCell(cv, dec, signed)}${u}` : '—';
+        const bStr = typeof bv === 'number' && Number.isFinite(bv) ? `${fmtDeltaCell(bv, dec, signed)}${u}` : '—';
+        return `<tr><td><strong>${esc(lbl)}</strong></td><td class="num">${esc(cStr)}</td><td class="num">${esc(bStr)}</td><td class="num">${diff !== '—' ? `${Number(diff) > 0 ? '+' : ''}${diff}${u}` : '—'}</td></tr>`;
+      }).join('');
+    } catch (err) {
+      showToast(`Video error: ${err.message || err}`);
+    }
+  }
+
+  // ==================== 04 MY BAG (FILTER / SORT / TRIM / DELETE) ====================
+  async function loadBagTab() {
+    try {
+      const daysVal = Number(bagFilters.days);
+      const res = await api.getBagGapping({
+        mode: bagFilters.mode,
+        days: daysVal > 0 ? daysVal : null,
+        quality: bagFilters.quality,
+        category: bagFilters.category,
+        trimOutliers: bagFilters.trimOutliers,
+      });
+      lastBagClubs = res?.clubs || [];
+      lastBagDeletedCount = Number(res?.deletedCount || 0);
+      renderBag();
+      await loadBagShotsManager();
+    } catch (err) {
+      showToast(`My Bag error: ${err.message || err}`);
+    }
+  }
+
+  async function loadBagShotsManager() {
+    try {
+      const daysVal = Number(bagFilters.days);
+      const res = await api.getBagShots({
+        club: bagFilters.mgrClub || 'ALL',
+        mode: bagFilters.mode,
+        days: daysVal > 0 ? daysVal : null,
+        quality: bagFilters.quality,
+        limit: 150,
+      });
+      const list = res?.shots || [];
+      lastBagDeletedCount = Number(res?.globalDeletedCount ?? lastBagDeletedCount);
+      $('bag-del-count').textContent = String(lastBagDeletedCount);
+      $('bag-mgr-title').textContent = `${bagFilters.mgrClub === 'ALL' ? 'All Clubs' : bagFilters.mgrClub} Recorded Shots (${list.length} matching)`;
+      $('bag-shots-tbody').innerHTML = list.length
+        ? list.map((s) => `
+          <tr>
+            <td class="mono muted">${esc(String(s.ts || '').replace('T', ' ').slice(0, 16))}</td>
+            <td><span class="badge badge-cyan">${esc(s.club)}</span></td>
+            <td class="num"><strong>${s.carry_yds != null ? `${Math.round(s.carry_yds)}y` : '—'}</strong></td>
+            <td class="num">${s.offline_yds != null ? `${Math.abs(s.offline_yds).toFixed(1)}y ${s.offline_yds < 0 ? 'L' : 'R'}` : '—'}</td>
+            <td class="num">${s.smash != null ? Number(s.smash).toFixed(2) : '—'}</td>
+            <td class="num">${s.back_spin != null ? Math.round(s.back_spin) : '—'}</td>
+            <td>${esc(s.shot_shape || '—')} <span class="muted">(${esc(s.delivery_name || '')})</span></td>
+            <td class="num" style="color:${sgCol(s.sg_shot)};">${esc(fmtSg(s.sg_shot, { prefix: '' }))}</td>
+            <td class="num"><button type="button" class="btn btn-xs btn-danger" data-del-shot="${esc(s.id)}">✕ Delete</button></td>
+          </tr>`).join('')
+        : '<tr><td colspan="9" class="muted">No shots match current club/day/quality filters.</td></tr>';
+
+      $('bag-shots-tbody').querySelectorAll('[data-del-shot]').forEach((b) => {
+        b.onclick = async (ev) => {
+          ev.stopPropagation();
+          await api.deleteShot(b.dataset.delShot);
+          showToast('Deleted shot from SQLite analytics (use Restore Deleted to undo).');
+          await loadBagTab();
+        };
+      });
+    } catch (err) {
+      showToast(`Shot manager error: ${err.message || err}`);
+    }
+  }
+
+  function applyWarpCarry(carry) {
+    if (typeof carry !== 'number' || !Number.isFinite(carry)) return null;
+    const w = bagFilters.warp;
+    const windPct = 1 + (w.wind * 0.0085);
+    const tempPct = 1 + ((w.temp - 70) * 0.0011);
+    const altPct = 1 + (w.alt / 1000) * 0.015;
+    const liePct = w.lie === 'rough' ? 0.94 : w.lie === 'flyer' ? 1.06 : 1.0;
+    return Math.round(carry * windPct * tempPct * altPct * liePct * 10) / 10;
+  }
+
+  function renderBag() {
+    document.querySelectorAll('#bag-view-seg button').forEach((b) => b.classList.toggle('active', b.dataset.bview === activeBagView));
+    $('bag-warp-view').style.display = activeBagView === 'warp' ? 'block' : 'none';
+    $('bag-trim-btn').textContent = `✂ Trim Outliers (±2σ): ${bagFilters.trimOutliers ? 'ON' : 'OFF'}`;
+    $('bag-trim-btn').classList.toggle('is-on', bagFilters.trimOutliers);
+    $('bag-del-count').textContent = String(lastBagDeletedCount);
+
+    const tracked = lastBagClubs.filter((c) => c.n > 0).length;
+    $('bag-summary-pill').textContent = `${tracked} / ${lastBagClubs.length || 14} clubs`;
+
+    const isWarp = activeBagView === 'warp';
+    const cols = [
+      { key: 'club', label: 'Club', num: false },
+      { key: 'n', label: 'N', num: true },
+      { key: 'avgCarry', label: isWarp ? 'Warped Carry' : 'Avg Carry', num: true },
+      { key: 'ladder', label: 'Carry Ladder', num: false, nosort: true },
+      { key: 'gapToNextYds', label: 'Gap Next', num: true },
+      { key: 'avgTotal', label: isWarp ? 'Warped Total' : 'Total', num: true },
+      { key: 'avgBallSpeed', label: 'Ball Spd', num: true },
+      { key: 'avgSmash', label: 'Smash', num: true },
+      { key: 'avgSpin', label: 'Spin', num: true },
+      { key: 'avgDescent', label: 'Descent', num: true },
+      { key: 'stoppingPower', label: 'Stopping', num: false },
+      { key: 'width80Yds', label: '80% W', num: true },
+      { key: 'avgSg', label: 'Avg SG', num: true },
+    ];
+    $('bag-thead').innerHTML = `<tr>${cols.map((col) => {
+      const isSort = !col.nosort && bagFilters.sortKey === col.key;
+      const arrow = isSort ? (bagFilters.sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+      return `<th class="${col.num ? 'num' : ''} ${isSort ? 'sort-active' : ''}" ${col.nosort ? '' : `data-sort="${col.key}" role="button" tabindex="0"`}>${esc(col.label)}${arrow}</th>`;
+    }).join('')}</tr>`;
+    $('bag-thead').querySelectorAll('[data-sort]').forEach((th) => {
+      const doSort = () => {
+        const k = th.dataset.sort;
+        if (bagFilters.sortKey === k) bagFilters.sortDir = bagFilters.sortDir === 'asc' ? 'desc' : 'asc';
+        else { bagFilters.sortKey = k; bagFilters.sortDir = k === 'club' ? 'asc' : 'desc'; }
+        renderBag();
+      };
+      th.onclick = doSort;
+      th.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); doSort(); } };
+    });
+
+    const enriched = lastBagClubs.map((c) => {
+      const carryShown = isWarp ? applyWarpCarry(c.avgCarry) : c.avgCarry;
+      const totalShown = isWarp
+        ? ((typeof c.avgTotal === 'number' && Number.isFinite(c.avgTotal) && typeof c.avgCarry === 'number' && typeof carryShown === 'number')
+            ? Math.round((carryShown + (c.avgTotal - c.avgCarry)) * 10) / 10
+            : null)
+        : c.avgTotal;
+      return {
+        ...c,
+        _carryShown: carryShown,
+        _totalShown: totalShown,
+        _gapShown: isWarp ? null : c.gapToNextYds,
+        _gapAlertShown: isWarp ? null : c.gapAlert,
+      };
+    });
+
+    if (isWarp) {
+      const pop = enriched.filter((c) => c.n >= 2 && typeof c._carryShown === 'number');
+      for (let i = 0; i < pop.length - 1; i += 1) {
+        const g = Math.round((pop[i]._carryShown - pop[i + 1]._carryShown) * 10) / 10;
+        pop[i]._gapShown = g;
+        pop[i]._gapAlertShown = g < 7 ? `Overlap (${g}y gap to ${pop[i + 1].club})` : (g > 22 && pop[i].club !== 'DR' ? `Big gap (${g}y to ${pop[i + 1].club})` : null);
+      }
+    }
+
+    const sortVal = (row, k) => {
+      if (k === 'avgCarry') return row._carryShown;
+      if (k === 'avgTotal') return row._totalShown;
+      if (k === 'gapToNextYds') return row._gapShown;
+      if (k === 'stoppingPower') return (!row.stoppingPower || row.stoppingPower === '—') ? null : row.stoppingPower;
+      return row[k];
+    };
+    const sorted = [...enriched].sort((a, b) => {
+      if (bagFilters.sortKey === 'club') {
+        const diff = CLUB_ORDER.indexOf(a.club) - CLUB_ORDER.indexOf(b.club);
+        return bagFilters.sortDir === 'asc' ? diff : -diff;
+      }
+      const va = sortVal(a, bagFilters.sortKey);
+      const vb = sortVal(b, bagFilters.sortKey);
+      const aMissing = va === null || va === undefined;
+      const bMissing = vb === null || vb === undefined;
+      if (aMissing && bMissing) return 0;
+      if (aMissing) return 1;
+      if (bMissing) return -1;
+      if (typeof va === 'string') return bagFilters.sortDir === 'asc' ? va.localeCompare(vb) : vb.localeCompare(va);
+      return bagFilters.sortDir === 'asc' ? (va - vb) : (vb - va);
+    });
+
+    const maxCarry = Math.max(240, ...sorted.map((c) => c._carryShown || 0));
+    $('bag-tbody').innerHTML = sorted.map((c) => {
+      const carryShown = c._carryShown;
+      const totalShown = c._totalShown;
+      const barPct = carryShown ? Math.max(4, Math.min(100, Math.round((carryShown / maxCarry) * 100))) : 0;
+      const barCat = ['DR', '3W', '5W', '4H'].includes(c.club) ? 'cat-wood' : ['PW', 'GW', 'SW', 'LW'].includes(c.club) ? 'cat-wedge' : '';
+      const gapShown = c._gapShown;
+      const gapAlert = c._gapAlertShown;
+      const gapBadge = gapAlert
+        ? `<span class="badge badge-${/overlap/i.test(gapAlert) ? 'red' : 'yellow'}">${esc(gapAlert)}</span>`
+        : (gapShown != null ? `<span class="badge badge-green">${gapShown}y</span>` : '—');
+      return `
+        <tr class="${!c.n ? 'row-empty' : ''} ${c.club === bagFilters.mgrClub ? 'selected-club' : ''}" data-bag-club="${esc(c.club)}" role="button" tabindex="0">
+          <td><strong>${esc(c.club)}</strong> <span class="muted">${esc(c.label || '')}</span></td>
+          <td class="num">${c.n}${c.outliersTrimmed ? ` <span class="dim">(-${c.outliersTrimmed})</span>` : ''}</td>
+          <td class="num"><strong>${carryShown != null ? `${Math.round(carryShown)}y` : '—'}</strong></td>
+          <td><div class="gap-bar-wrap"><div class="gap-bar-fill ${barCat}" style="width:${barPct}%"></div></div></td>
+          <td class="num">${gapBadge}</td>
+          <td class="num">${totalShown != null ? `${Math.round(totalShown)}y` : '—'}</td>
+          <td class="num">${c.avgBallSpeed != null ? c.avgBallSpeed.toFixed(1) : '—'}</td>
+          <td class="num">${c.avgSmash != null ? c.avgSmash.toFixed(2) : '—'}</td>
+          <td class="num">${c.avgSpin != null ? Math.round(c.avgSpin) : '—'}</td>
+          <td class="num">${c.avgDescent != null ? `${c.avgDescent.toFixed(1)}°` : '—'}</td>
+          <td>${esc(c.stoppingPower || '—')}</td>
+          <td class="num">${c.width80Yds != null ? `${Math.round(c.width80Yds)}y` : '—'}</td>
+          <td class="num" style="color:${sgCol(c.avgSg)};">${esc(fmtSg(c.avgSg, { prefix: '' }))}</td>
+        </tr>`;
+    }).join('');
+    $('bag-tbody').querySelectorAll('[data-bag-club]').forEach((tr) => {
+      const pick = () => {
+        bagFilters.mgrClub = tr.dataset.bagClub;
+        $('bag-mgr-club').value = bagFilters.mgrClub;
+        renderBag();
+        loadBagShotsManager();
+      };
+      tr.onclick = pick;
+      tr.onkeydown = (ev) => { if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(); } };
+    });
+
+    // Wedge Clock Matrix
+    const matrix = state?.settings?.studio?.wedgeMatrix || [];
+    $('bag-wedge-matrix').innerHTML = matrix.length ? `
+      <table class="data-table">
+        <thead><tr><th>Wedge</th>${matrix[0].cells.map((c) => `<th class="num">${esc(c.arm)} (${esc(c.pct)})</th>`).join('')}</tr></thead>
+        <tbody>${matrix.map((row) => `
+          <tr><td><strong>${esc(row.label)}</strong></td>${row.cells.map((c) => `<td class="num"><strong>${c.carry}y</strong> <span class="dim">(${c.roll >= 0 ? '+' : ''}${c.roll}y)</span></td>`).join('')}</tr>`).join('')}
+        </tbody>
+      </table>` : '';
+  }
+
+  // ==================== DRILLS DRAWER, MAT GLANCE & MODALS ====================
+  function openDrawerWithDrill(drillId = null, faultTag = null) {
+    drawerState.open = true;
+    const faultSel = $('drawer-fault-filter');
+    const modeSel = $('drawer-mode-filter');
+    const validOpts = new Set(Array.from(faultSel?.options || []).map((o) => o.value));
+    if (faultTag) {
+      const nonFaults = new Set(['pure_compression', 'tour_sweep', 'solid_delivery', 'solid_driver', 'neutral_delivery', 'ball_flight_ok', 'no_data', 'unknown']);
+      const normalized = nonFaults.has(faultTag) ? 'all' : faultTag;
+      drawerState.fault = validOpts.has(normalized) ? normalized : 'all';
+      if (faultSel) faultSel.value = drawerState.fault;
+      if (!drillId) drawerState.selectedId = null;
+    }
+    if (drillId) {
+      drawerState.selectedId = drillId;
+      const target = (state?.drillsHub?.drills || []).find((d) => d.id === drillId);
+      if (target) {
+        if (!matchDrillForFault(target, drawerState.fault)) {
+          drawerState.fault = 'all';
+          if (faultSel) faultSel.value = 'all';
+        }
+        if (drawerState.mode !== 'all' && !(target.modes || []).includes(drawerState.mode)) {
+          drawerState.mode = 'all';
+          if (modeSel) modeSel.value = 'all';
+        }
+      }
+    }
+    $('drawer-backdrop').classList.add('open');
+    $('drawer-drills').classList.add('open');
+    renderDrawer();
+  }
+
+  function closeDrawer() {
+    drawerState.open = false;
+    $('drawer-backdrop').classList.remove('open');
+    $('drawer-drills').classList.remove('open');
+  }
+
+  function renderDrawer() {
+    const all = state?.drillsHub?.drills || [];
+    const list = all.filter((d) =>
+      matchDrillForFault(d, drawerState.fault) &&
+      (drawerState.mode === 'all' || (d.modes || []).includes(drawerState.mode))
+    );
+    const active = list.find((d) => d.id === drawerState.selectedId) || list[0] || all[0];
+    drawerState.selectedId = active ? active.id : null;
+    $('drawer-list').innerHTML = list.length
+      ? list.map((d) => `<button type="button" class="vid-clip-item ${active && d.id === active.id ? 'selected' : ''}" data-did="${esc(d.id)}" style="width:100%;margin-bottom:6px;"><strong style="color:#fff;">${esc(d.title)}</strong><div class="muted" style="font-size:11px;">${esc(d.keyFeel || d.focus || '')}</div></button>`).join('')
+      : '<div class="muted">No drills match the selected fault/mode filter.</div>';
+    $('drawer-list').querySelectorAll('[data-did]').forEach((b) => {
+      b.onclick = () => { drawerState.selectedId = b.dataset.did; renderDrawer(); };
+    });
+    if (active) {
+      $('drawer-detail').innerHTML = `
+        <span class="kicker">${esc(active.focus || 'Drill Briefing')}</span>
+        <h3 style="margin:2px 0 6px;color:#fff;">${esc(active.title)}</h3>
+        <p style="margin:0 0 6px;"><strong>Feel:</strong> ${esc(active.keyFeel || '—')}</p>
+        <p class="muted" style="margin:0 0 8px;font-size:11.5px;">${esc(active.why || '')}</p>
+        <div class="flex-row" style="justify-content:flex-end;">
+          <button type="button" class="btn btn-xs btn-cyan" id="drawer-tag-btn">Tag Active Drill → Practice</button>
+        </div>`;
+      $('drawer-tag-btn').onclick = async () => {
+        missionState = { title: active.title, drillId: active.id, badge: 'DRILL ACTIVE' };
+        if (api.setPracticeContext) await api.setPracticeContext({ activeDrillId: active.id });
+        closeDrawer();
+        switchMode('practice');
+        renderPractice(state);
+        showToast(`Active drill tagged: ${active.title}`);
+      };
+    } else {
+      $('drawer-detail').innerHTML = '<div class="muted">No Drills Hub entries loaded.</div>';
+    }
   }
 
   function renderMatGlance(snap) {
     if (!matGlanceOpen || !snap) return;
     const shot = snap.currentShot;
-    const settings = snap.settings || {};
-    const mode = (shot && shot.practiceMode) || settings.practiceMode || 'real';
-    const isQuiet = mode === 'almost';
-
-    const modeEl = $('mg-mode');
-    modeEl.textContent = isQuiet ? 'Kids Asleep (Quiet Mode)' : 'Real Balls';
-    modeEl.className = `tag ${isQuiet ? 'tag-purple' : 'tag-green'}`;
-
+    const pm = (shot && shot.practiceMode) || snap.settings?.practiceMode || 'real';
+    $('mg-mode').textContent = pm === 'almost' ? 'Kids Asleep' : pm === 'sore' ? 'Gym-Sore' : 'Real Balls';
     const feelEl = $('mg-feel');
-    const activeFeelId = (shot && shot.feelId) || settings.activeFeelId;
-    if (activeFeelId) {
-      feelEl.classList.remove('hidden');
-      feelEl.textContent = `Feel: ${feelLabelById(activeFeelId, snap)}`;
-    } else {
-      feelEl.classList.add('hidden');
-    }
-
+    const fid = (shot && shot.feelId) || snap.settings?.activeFeelId;
+    feelEl.classList.toggle('hidden', !fid);
+    if (fid) feelEl.textContent = `Feel: ${feelLabelById(fid, snap)}`;
     if (!shot) {
       $('mg-club').textContent = '—';
       $('mg-shape-svg').innerHTML = '';
       $('mg-shape-name').textContent = 'Waiting for Shot';
-      $('mg-shape-name').className = 'mg-shape-name';
-      $('mg-shape-sub').textContent = 'Hit a shot on Launch Pro or press Test Shot';
-      $('mg-score-ring').innerHTML = renderScoreRingSvg(NaN, 'neutral');
+      $('mg-shape-sub').textContent = 'Hit a ball on Launch Pro or click Test Shot';
+      $('mg-score-ring').innerHTML = '';
       $('mg-stats-grid').innerHTML = '';
       $('mg-del-name').textContent = '—';
-      $('mg-del-cue').textContent = 'Ready on the mat.';
+      $('mg-del-cue').textContent = '—';
       return;
     }
-
-    const m = shot.metrics || {};
-    const fl = shot.flight || {};
-    const sh = shot.shotShape || {};
-    const del = shot.delivery || {};
-    const sc = shot.scorecard || {};
-    const sg = shot.strokesGained || {};
-
-    $('mg-club').textContent = `${shot.activeClubLabel || shot.activeClub}`;
-    $('mg-shape-svg').innerHTML = window.ShotLabSVG.renderShotShapeIcon(sh.svgParams, { width: 146, height: 146 });
-    const shapeName = $('mg-shape-name');
-    shapeName.textContent = sh.name || '—';
-    shapeName.className = `mg-shape-name sev-${sh.severity || 'neutral'}`;
-    const oDir = fl.offlineYds < -0.5 ? 'L' : fl.offlineYds > 0.5 ? 'R' : 'Center';
-    $('mg-shape-sub').textContent = isQuiet
-      ? `Start Line ${m.hla !== null ? `${Math.abs(m.hla).toFixed(1)}° ${m.hla < 0 ? 'L' : m.hla > 0 ? 'R' : ''}` : '—'} · Path ${fmtSigned(m.path, 1, '°')} · ${sh.heightTag || ''}`
-      : `${Math.abs(fl.offlineYds || 0).toFixed(0)}y ${oDir} · Curve ${Math.abs(fl.curveYds || 0).toFixed(0)}y · Apex ${Math.round(fl.apexFt || 0)} ft`;
-
-    $('mg-score-ring').innerHTML = renderScoreRingSvg(sc.score, sc.overallGrade);
-
-    let stats;
-    if (isQuiet) {
-      const hlaDir = m.hla === null || Math.abs(m.hla) < 0.2 ? '' : (m.hla > 0 ? ' R' : ' L');
-      stats = [
-        {
-          lbl: 'START LINE (HLA)',
-          val: m.hla !== null ? `${Math.abs(m.hla).toFixed(1)}°${hlaDir}` : '—',
-          sub: `Face ${fmtSigned(m.faceToTarget, 1, '°')}`,
-          sev: m.hla !== null ? (Math.abs(m.hla) <= 2 ? 'green' : Math.abs(m.hla) <= 4 ? 'yellow' : 'red') : 'neutral',
-        },
-        {
-          lbl: 'CLUB SPEED',
-          val: m.clubSpeed !== null ? `${m.clubSpeed.toFixed(1)}` : '—',
-          sub: 'mph · Tempo Focus',
-          sev: 'cyan',
-        },
-        {
-          lbl: 'CLUB PATH',
-          val: fmtSigned(m.path, 1, '°'),
-          sub: `Face-to-Path ${fmtSigned(m.faceToPath, 1, '°')}`,
-          sev: m.path !== null ? (Math.abs(m.path) <= 3.5 ? 'green' : Math.abs(m.path) <= 6 ? 'yellow' : 'red') : 'neutral',
-        },
-        {
-          lbl: 'ATTACK ANGLE',
-          val: fmtSigned(m.aoa, 1, '°'),
-          sub: `Shaft Lean ${fmtSigned(del.estShaftLean, 1, '°')}`,
-          sev: del.severity || 'neutral',
-        },
-      ];
-    } else {
-      stats = [
-        {
-          lbl: 'CARRY',
-          val: `${Math.round(m.effectiveCarry || 0)}y`,
-          sub: `Total ${Math.round(m.totalYds || 0)}y · Apex ${Math.round(fl.apexFt || 0)}ft`,
-          sev: sh.severity || 'cyan',
-        },
-        {
-          lbl: 'BALL SPEED',
-          val: m.ballSpeed !== null ? `${m.ballSpeed.toFixed(1)}` : '—',
-          sub: m.clubSpeed !== null ? `Club Speed ${m.clubSpeed.toFixed(1)} mph` : 'mph',
-          sev: 'cyan',
-        },
-        {
-          lbl: 'SMASH FACTOR',
-          val: m.smash !== null ? m.smash.toFixed(2) : '—',
-          sub: m.totalSpin !== null ? `Spin ${Math.round(m.totalSpin)} rpm` : 'Strike Efficiency',
-          sev: shot.strike ? shot.strike.severity : 'neutral',
-        },
-        {
-          lbl: 'STROKES GAINED',
-          val: typeof sg.sg === 'number' ? fmtSg(sg.sg, { prefix: '' }) : '—',
-          sub: sg.resultLie ? `${sg.category || 'SHOT'} · ${sg.resultLie}${sg.proximityYds != null ? ` (${sg.proximityYds}y)` : ''}` : 'Broadie Baseline',
-          sev: typeof sg.sg === 'number' ? (sg.sg >= 0.05 ? 'green' : sg.sg > -0.15 ? 'yellow' : 'red') : 'neutral',
-        },
-      ];
-    }
-
-    $('mg-stats-grid').innerHTML = stats.map((st) => `
-      <div class="mg-stat-card sev-${esc(st.sev)}">
-        <span class="mg-stat-lbl">${esc(st.lbl)}</span>
-        <span class="mg-stat-val">${esc(st.val)}</span>
-        <span class="mg-stat-sub">${esc(st.sub)}</span>
-      </div>
-    `).join('');
-
-    const delBox = $('mg-delivery-box');
-    delBox.className = `mg-delivery-box sev-${del.severity || 'neutral'}`;
-    $('mg-del-name').textContent = del.name || '—';
-    $('mg-del-cue').textContent = (del.cues && del.cues[0]) || del.tagline || '—';
-  }
-
-  function setMatGlanceOpen(open) {
-    matGlanceOpen = Boolean(open);
-    const el = $('mat-glance-overlay');
-    el.classList.toggle('hidden', !matGlanceOpen);
-    if (matGlanceOpen) {
-      hidePopover();
-      renderMatGlance(state);
-    }
-  }
-
-  // --------------------------------------------------------------------------- Tab 2: Patterns & Dispersion Lab
-
-  async function loadPatternsTab() {
-    if (!window.shotlabAPI || typeof window.shotlabAPI.getPatterns !== 'function') return;
-    try {
-      const daysVal = Number(patternFilters.days);
-      const res = await window.shotlabAPI.getPatterns({
-        club: patternFilters.club,
-        mode: patternFilters.mode,
-        days: daysVal > 0 ? daysVal : null,
-      });
-      lastPatternsData = res;
-      renderPatternsTab(res);
-    } catch (err) {
-      showToast(`Patterns error: ${err.message || err}`);
-    }
-  }
-
-  function renderPatternsTab(data) {
-    if (!data) return;
-    const pattern = data.patterns || data.dispersion || data;
-    const feels = data.feels || data.feelComparison || [];
-    const trends = data.trends || data.sessionTrends || [];
-    const fatigue = data.fatigue || data.fatigueCurve || [];
-
-    const clubLabel = patternFilters.club === 'ALL'
-      ? 'All Clubs'
-      : `${patternFilters.club} (${CLUB_LABELS[patternFilters.club] || patternFilters.club})`;
-    $('pat-disp-title').textContent = `${clubLabel} — 80% Dispersion Cone`;
-    $('pat-disp-n').textContent = `${pattern.n || 0} shot${pattern.n === 1 ? '' : 's'}`;
-
-    // 2D Dispersion Plot SVG
-    const dispWrap = $('pat-dispersion-svg');
-    if (window.ShotLabSVG && typeof window.ShotLabSVG.renderDispersionPlot === 'function') {
-      dispWrap.innerHTML = window.ShotLabSVG.renderDispersionPlot(pattern, { width: 420, height: 290 });
-    } else {
-      dispWrap.innerHTML = '<div class="micro-desc" style="padding:20px;">Dispersion SVG renderer unavailable.</div>';
-    }
-
-    // Summary stats grid
-    const ell = pattern.ellipse80;
-    const offVal = pattern.meanOffline;
-    const offStr = typeof offVal === 'number'
-      ? `${Math.abs(offVal).toFixed(1)}y ${offVal < -0.2 ? 'L' : offVal > 0.2 ? 'R' : 'C'}`
-      : '—';
-    const coneStr = ell ? `${Math.round(ell.widthYds)}y × ${Math.round(ell.depthYds)}y` : '—';
-
-    $('pat-summary-stats').innerHTML = `
-      <div class="disp-stat-box">
-        <span class="lbl">Mean Carry</span>
-        <span class="val">${esc(pattern.meanCarry != null ? `${Math.round(pattern.meanCarry)} yds` : '—')}</span>
-      </div>
-      <div class="disp-stat-box">
-        <span class="lbl">Mean Offline</span>
-        <span class="val">${esc(offStr)}</span>
-      </div>
-      <div class="disp-stat-box">
-        <span class="lbl">80% Width × Depth</span>
-        <span class="val">${esc(coneStr)}</span>
-      </div>
-      <div class="disp-stat-box">
-        <span class="lbl">Avg SG / Score</span>
-        <span class="val ${esc(sgClass(pattern.avgSg))}">${esc(fmtSg(pattern.avgSg, { prefix: '' }))} <span style="font-size:12px;color:#94a3b8;">/ ${esc(pattern.avgScore ?? '—')}</span></span>
-      </div>
-    `;
-    $('pat-decade-advice').textContent = pattern.decadeAdvice || 'Log real-ball swings to generate your DECADE aim offset.';
-
-    // Root-Cause Stroke-Leak Ranking
-    const leaksEl = $('pat-fault-leaks');
-    const leaks = Array.isArray(pattern.faultLeaks) ? pattern.faultLeaks : [];
-    if (!leaks.length) {
-      leaksEl.innerHTML = '<div class="micro-desc" style="padding:12px 2px;">No swing delivery records match the current filter yet.</div>';
-    } else {
-      const maxCount = Math.max(1, ...leaks.map((l) => l.count || 0));
-      leaksEl.innerHTML = leaks.slice(0, 7).map((l) => {
-        const pctWidth = Math.max(6, Math.round(((l.count || 0) / maxCount) * 100));
-        const isGood = l.deliveryId === 'pure_compression' || l.deliveryId === 'solid_delivery' || (typeof l.avgSg === 'number' && l.avgSg >= 0.03);
-        const barCls = isGood ? 'leak-green' : (typeof l.avgSg === 'number' && l.avgSg <= -0.15 ? 'leak-red' : 'leak-yellow');
-        const sgText = typeof l.avgSg === 'number' ? `Avg ${fmtSg(l.avgSg)}` : 'No SG';
-        const totalText = typeof l.totalSg === 'number' ? `Total ${fmtSg(l.totalSg, { prefix: '' })}` : '';
-        const lostText = l.avgLostYds > 1 ? ` · −${l.avgLostYds}y` : '';
-        return `
-          <div class="leak-row">
-            <div class="leak-top">
-              <span class="leak-name">${esc(l.deliveryName || l.deliveryId)}</span>
-              <span class="leak-meta">
-                ${esc(l.count)} shots (${esc(l.pct)}%) ·
-                <span class="${esc(sgClass(l.avgSg))}">${esc(sgText)}</span>${totalText ? ` · ${esc(totalText)}` : ''}${esc(lostText)}
-              </span>
-            </div>
-            <div class="leak-bar-track">
-              <div class="leak-bar-fill ${esc(barCls)}" style="width:${pctWidth}%"></div>
-            </div>
-          </div>
-        `;
-      }).join('');
-    }
-
-    // A/B Active Feel Verdicts Table
-    const feelsTbody = $('pat-feels-tbody');
-    if (!feels.length) {
-      feelsTbody.innerHTML = '<tr><td colspan="8" class="micro-desc" style="padding:14px;">No shots found for this filter. Tag an Active Feel in the sub-header to start A/B testing!</td></tr>';
-    } else {
-      const taggedFeels = feels.filter((f) => f.feelId !== null);
-      let winnerFeelId = null;
-      if (taggedFeels.length > 0) {
-        const best = [...taggedFeels].sort((a, b) => {
-          const scoreDiff = (b.avgScore ?? -1) - (a.avgScore ?? -1);
-          if (scoreDiff !== 0) return scoreDiff;
-          return (b.avgSg ?? -99) - (a.avgSg ?? -99);
-        })[0];
-        if (best) winnerFeelId = best.feelId;
-      }
-
-      feelsTbody.innerHTML = feels.map((f) => {
-        const isWinner = winnerFeelId !== null && f.feelId === winnerFeelId;
-        const displayName = f.feelId ? feelLabelById(f.feelId, state) : (f.label || 'Baseline (No Feel Tagged)');
-        return `
-          <tr class="${isWinner ? 'winner-row' : ''}">
-            <td>
-              <strong>${esc(displayName)}</strong>
-              ${isWinner ? '<span class="winner-badge">★ #1 FEEL</span>' : ''}
-            </td>
-            <td class="num">${esc(f.n)}</td>
-            <td class="num">${esc(f.avgScore ?? '—')}</td>
-            <td class="num ${esc(sgClass(f.avgSg))}">${esc(fmtSg(f.avgSg, { prefix: '' }))}</td>
-            <td class="num">${esc(fmtNum(f.avgSmash, 2))}</td>
-            <td class="num">${esc(f.avgCarry != null ? `${Math.round(f.avgCarry)}y` : '—')}</td>
-            <td class="num">${esc(f.width80Yds != null ? `${Math.round(f.width80Yds)}y` : '—')}</td>
-            <td class="num">${esc(f.faultPct != null ? `${f.faultPct}%` : '—')}</td>
-          </tr>
-        `;
-      }).join('');
-    }
-
-    // Trend Sparkline
-    renderTrendSparklineArea(trends);
-
-    // Warmup & Fatigue Curve
-    const fatEl = $('pat-fatigue-bars');
-    if (!fatigue.length) {
-      fatEl.innerHTML = '<div class="micro-desc">No session fatigue data yet.</div>';
-    } else {
-      const scores = fatigue.map((b) => b.avgScore).filter((v) => typeof v === 'number');
-      const peakScore = scores.length ? Math.max(...scores) : 100;
-      fatEl.innerHTML = fatigue.map((b) => {
-        const scVal = typeof b.avgScore === 'number' ? b.avgScore : 0;
-        const isDrop = b.n > 0 && scores.length >= 2 && (b.id === '46-70' || b.id === '71+') && scVal < peakScore - 5;
-        const pct = b.n > 0 ? Math.max(8, Math.min(100, scVal)) : 0;
-        const meta = b.n > 0
-          ? `Sc ${b.avgScore ?? '—'} · Sm ${fmtNum(b.avgSmash, 2)} (${b.n})`
-          : '0 shots';
-        return `
-          <div class="fatigue-row">
-            <span class="fatigue-lbl">${esc(b.label || b.id)}</span>
-            <div class="fatigue-track">
-              <div class="fatigue-fill ${isDrop ? 'fat-warn' : ''}" style="width:${pct}%"></div>
-            </div>
-            <span class="fatigue-val">${esc(meta)}</span>
-          </div>
-        `;
-      }).join('');
-    }
-  }
-
-  function renderTrendSparklineArea(trends) {
-    const wrap = $('pat-trend-svg');
-    if (window.ShotLabSVG && typeof window.ShotLabSVG.renderTrendSparkline === 'function') {
-      wrap.innerHTML = window.ShotLabSVG.renderTrendSparkline(trends || [], activeTrendMetric, {
-        width: 440,
-        height: 118,
-      });
-    } else {
-      wrap.innerHTML = '<div class="micro-desc">Trend sparkline renderer unavailable.</div>';
-    }
-  }
-
-  // --------------------------------------------------------------------------- Tab 3: 14-Club Bag Gapping
-
-  async function loadGappingTab() {
-    if (!window.shotlabAPI || typeof window.shotlabAPI.getBagGapping !== 'function') return;
-    try {
-      const daysVal = Number(gappingFilters.days);
-      const res = await window.shotlabAPI.getBagGapping({
-        mode: gappingFilters.mode,
-        days: daysVal > 0 ? daysVal : null,
-      });
-      const clubs = Array.isArray(res) ? res : ((res && (res.clubs || res.gapping)) || []);
-      renderGappingTab(clubs);
-    } catch (err) {
-      showToast(`Bag Gapping error: ${err.message || err}`);
-    }
-  }
-
-  function renderGappingTab(clubs) {
-    const tbody = $('gapping-tbody');
-    const populated = clubs.filter((c) => c.n > 0);
-    const alerts = clubs.filter((c) => Boolean(c.gapAlert)).length;
-    $('gap-summary-badge').textContent = `${populated.length} / ${clubs.length || 14} clubs tracked${alerts ? ` · ${alerts} gap alert${alerts === 1 ? '' : 's'}` : ''}`;
-    $('gap-summary-badge').className = `tag ${alerts > 0 ? 'tag-yellow' : 'tag-cyan'}`;
-
-    const maxCarry = Math.max(240, ...clubs.map((c) => c.avgCarry || 0));
-
-    tbody.innerHTML = clubs.map((c) => {
-      const empty = !c.n;
-      const barPct = c.avgCarry ? Math.max(4, Math.min(100, Math.round((c.avgCarry / maxCarry) * 100))) : 0;
-      const barCat = ['DR', '3W', '5W', '4H'].includes(c.club)
-        ? 'cat-wood'
-        : ['PW', 'GW', 'SW', 'LW'].includes(c.club) ? 'cat-wedge' : '';
-
-      let gapHtml = '<span style="color:#64748b;">—</span>';
-      if (c.gapAlert) {
-        const isOverlap = /overlap/i.test(c.gapAlert) || (c.gapToNextYds !== null && c.gapToNextYds < 7);
-        gapHtml = `<span class="tag ${isOverlap ? 'tag-red' : 'tag-yellow'}">${esc(c.gapAlert)}</span>`;
-      } else if (c.gapToNextYds !== null && c.gapToNextYds !== undefined) {
-        gapHtml = `<span class="tag tag-green">${esc(c.gapToNextYds)}y</span>`;
-      }
-
-      const stopCls = c.stoppingPower === 'Drop & Stop'
-        ? 'tag-green'
-        : c.stoppingPower === 'Holds Green'
-          ? 'tag-cyan'
-          : c.stoppingPower === 'Runs Out'
-            ? 'tag-yellow'
-            : 'tag-neutral';
-
-      return `
-        <tr class="${empty ? 'row-empty' : ''}">
-          <td>
-            <div class="club-cell">
-              <span class="club-code-pill">${esc(c.club)}</span>
-              <span class="club-sub-lbl">${esc(c.label || '')}</span>
-            </div>
-          </td>
-          <td class="num">${esc(c.n)}</td>
-          <td class="num"><strong>${esc(c.avgCarry != null ? `${Math.round(c.avgCarry)}y` : '—')}</strong></td>
-          <td>
-            <div class="gap-bar-wrap">
-              <div class="gap-bar-fill ${esc(barCat)}" style="width:${barPct}%"></div>
-            </div>
-          </td>
-          <td>${gapHtml}</td>
-          <td class="num">${esc(c.avgTotal != null ? `${Math.round(c.avgTotal)}y` : '—')}</td>
-          <td class="num">${esc(fmtNum(c.avgBallSpeed, 1))}</td>
-          <td class="num">${esc(fmtNum(c.avgSmash, 2))}</td>
-          <td class="num">${esc(c.avgSpin != null ? `${Math.round(c.avgSpin)}` : '—')}</td>
-          <td class="num">${esc(c.avgDescent != null ? `${c.avgDescent.toFixed(1)}°` : '—')}</td>
-          <td><span class="tag ${esc(stopCls)}">${esc(c.stoppingPower || '—')}</span></td>
-          <td class="num">${esc(c.width80Yds != null ? `${Math.round(c.width80Yds)}y` : '—')}</td>
-          <td class="num ${esc(sgClass(c.avgSg))}">${esc(fmtSg(c.avgSg, { prefix: '' }))}</td>
-        </tr>
-      `;
-    }).join('');
-  }
-
-  // --------------------------------------------------------------------------- Tab 4: Synced Kinovea Video Compare
-
-  function buildMediaUrl(row, angle, mediaBaseUrl) {
-    if (!row) return null;
-    const hasDirectKey = angle === 'dtl'
-      ? ('dtlUrl' in row || 'dtl_url' in row)
-      : ('foUrl' in row || 'fo_url' in row);
-    const direct = angle === 'dtl' ? (row.dtlUrl || row.dtl_url) : (row.foUrl || row.fo_url);
-    if (hasDirectKey) {
-      return (typeof direct === 'string' && /^http:\/\/127\.0\.0\.1:\d+\//.test(direct)) ? direct : null;
-    }
-    const clipName = angle === 'dtl' ? (row.clip_dtl || row.clipDtl) : (row.clip_fo || row.clipFo);
-    if (!clipName || typeof clipName !== 'string') return null;
-    const obsPort = (state && state.obsPort) || 8766;
-    const base = (mediaBaseUrl && /^http:\/\/127\.0\.0\.1:\d+/.test(mediaBaseUrl))
-      ? mediaBaseUrl.replace(/\/+$/, '')
-      : `http://127.0.0.1:${obsPort}/media`;
-    const sessionDate = row.sessionDate || row.session_date || (row.ts ? String(row.ts).slice(0, 10) : null);
-    const segments = clipName.replace(/\\/g, '/').split('/').filter(Boolean);
-    if (sessionDate && segments[0] !== sessionDate) {
-      segments.unshift(sessionDate);
-    }
-    return `${base}/${segments.map((s) => encodeURIComponent(s)).join('/')}`;
-  }
-
-  function getActiveVideos() {
-    const vids = [];
-    const dtl = $('vid-player-dtl');
-    const fo = $('vid-player-fo');
-    const best = $('vid-player-best');
-    if (dtl && dtl.dataset.loaded === '1') vids.push(dtl);
-    if (fo && fo.dataset.loaded === '1') vids.push(fo);
-    if ($('chk-sync-best') && $('chk-sync-best').checked && best && best.dataset.loaded === '1') {
-      vids.push(best);
-    }
-    return vids;
-  }
-
-  function setVideoSource(videoEl, missingEl, url) {
-    if (!videoEl) return;
-    if (!videoEl.dataset.mediaListenersBound) {
-      videoEl.dataset.mediaListenersBound = '1';
-      videoEl.addEventListener('error', () => {
-        if (!videoEl.dataset.srcUrl) return;
-        videoEl.dataset.loaded = '0';
-        videoEl.classList.add('hidden');
-        if (missingEl) missingEl.classList.remove('hidden');
-        updateVideoTimeReadout();
-        updatePlayButtonLabel();
-      });
-      videoEl.addEventListener('loadedmetadata', () => {
-        updateVideoTimeReadout();
-      });
-    }
-
-    if (url) {
-      if (videoEl.dataset.srcUrl !== url) {
-        videoEl.pause();
-        videoEl.src = url;
-        videoEl.dataset.srcUrl = url;
-        videoEl.load();
-        videoEl.dataset.loaded = '1';
-        videoEl.classList.remove('hidden');
-        if (missingEl) missingEl.classList.add('hidden');
-      }
-      videoEl.playbackRate = videoState.playbackRate;
-    } else {
-      videoEl.pause();
-      videoEl.dataset.srcUrl = '';
-      videoEl.dataset.loaded = '0';
-      videoEl.removeAttribute('src');
-      videoEl.load();
-      videoEl.classList.add('hidden');
-      if (missingEl) missingEl.classList.remove('hidden');
-    }
-  }
-
-  function updateVideoTimeReadout() {
-    const vids = getActiveVideos();
-    const primary = vids[0];
-    const el = $('vid-time-readout');
-    if (!primary || !Number.isFinite(primary.currentTime)) {
-      el.textContent = '0.00s';
-      return;
-    }
-    const dur = Number.isFinite(primary.duration) ? ` / ${primary.duration.toFixed(2)}s` : '';
-    el.textContent = `${primary.currentTime.toFixed(2)}s${dur}`;
-  }
-
-  function updatePlayButtonLabel() {
-    const vids = getActiveVideos();
-    const playing = vids.some((v) => !v.paused && !v.ended);
-    $('btn-vid-play').textContent = playing ? '⏸ Pause Synced' : '▶ Play Synced';
-  }
-
-  async function loadVideoTab() {
-    if (!window.shotlabAPI || typeof window.shotlabAPI.getVideoCompare !== 'function') return;
-    try {
-      const res = await window.shotlabAPI.getVideoCompare({
-        shotId: videoState.selectedShotId,
-        club: videoState.club,
-      });
-      videoState.data = res;
-      renderVideoTab(res);
-    } catch (err) {
-      showToast(`Video Compare error: ${err.message || err}`);
-    }
-  }
-
-  function normalizeVideoItem(raw) {
-    if (!raw || typeof raw !== 'object') return null;
-    const sessionDate = raw.sessionDate || raw.session_date || (raw.ts ? String(raw.ts).slice(0, 10) : '');
-    const item = {
-      id: raw.id,
-      ts: raw.ts || null,
-      sessionDate,
-      club: raw.club || raw.activeClub || '—',
-      score: raw.score ?? null,
-      carryYds: raw.carryYds ?? raw.carry_yds ?? null,
-      ballSpeed: raw.ballSpeed ?? raw.ball_speed ?? null,
-      clubSpeed: raw.clubSpeed ?? raw.club_speed ?? null,
-      smash: raw.smash ?? null,
-      path: raw.path ?? null,
-      aoa: raw.aoa ?? null,
-      estShaftLean: raw.estShaftLean ?? raw.est_shaft_lean ?? null,
-      shotShape: raw.shotShape ?? raw.shot_shape ?? null,
-      deliveryName: raw.deliveryName ?? raw.delivery_name ?? null,
-      sgShot: raw.sgShot ?? raw.sg_shot ?? null,
-      isGoTo: Boolean(raw.isGoTo ?? raw.is_goto),
-      clipDtl: raw.clipDtl ?? raw.clip_dtl ?? null,
-      clipFo: raw.clipFo ?? raw.clip_fo ?? null,
-    };
-    if ('dtlUrl' in raw || 'dtl_url' in raw) {
-      item.dtlUrl = raw.dtlUrl ?? raw.dtl_url ?? null;
-    }
-    if ('foUrl' in raw || 'fo_url' in raw) {
-      item.foUrl = raw.foUrl ?? raw.fo_url ?? null;
-    }
-    return item;
-  }
-
-  function hasLinkedClip(item) {
-    if (!item) return false;
-    const hasDtl = 'dtlUrl' in item ? Boolean(item.dtlUrl) : Boolean(item.clipDtl);
-    const hasFo = 'foUrl' in item ? Boolean(item.foUrl) : Boolean(item.clipFo);
-    return hasDtl || hasFo;
-  }
-
-  function renderVideoTab(res) {
-    const rawClips = (res && (res.recentWithClips || res.recentClips || res.clips || res.recentShots)) || [];
-    const clips = rawClips.map(normalizeVideoItem).filter(Boolean);
-    const rawCur = (res && (res.current || res.shot)) || null;
-    const curNorm = normalizeVideoItem(rawCur);
-    const cur = (curNorm && hasLinkedClip(curNorm))
-      ? curNorm
-      : (clips[0] || curNorm);
-    const best = normalizeVideoItem((res && (res.best || res.bestShot)) || null);
-    const mediaBaseUrl = res && res.mediaBaseUrl;
-
-    const emptyEl = $('vid-empty-state');
-    const wsEl = $('vid-workspace');
-    const promoteBtn = $('btn-promote-goto');
-
-    const curHasClip = hasLinkedClip(cur);
-    if (clips.length === 0 && !curHasClip) {
-      emptyEl.classList.remove('hidden');
-      wsEl.classList.add('hidden');
-      promoteBtn.disabled = true;
-      setVideoSource($('vid-player-dtl'), $('vid-dtl-missing'), null);
-      setVideoSource($('vid-player-fo'), $('vid-fo-missing'), null);
-      setVideoSource($('vid-player-best'), $('vid-best-missing'), null);
-      return;
-    }
-
-    emptyEl.classList.add('hidden');
-    wsEl.classList.remove('hidden');
-    if (cur) videoState.selectedShotId = cur.id;
-
-    // Left sidebar clip list
-    $('vid-list-count').textContent = `${clips.length}`;
-    const listEl = $('vid-clips-list');
-    listEl.innerHTML = clips.map((c) => {
-      const isSel = cur && c.id === cur.id;
-      const hasDtl = 'dtlUrl' in c ? Boolean(c.dtlUrl) : Boolean(c.clipDtl);
-      const hasFo = 'foUrl' in c ? Boolean(c.foUrl) : Boolean(c.clipFo);
-      const star = c.isGoTo ? '<span class="goto-star" title="My-Go-To Reference Swing">★</span>' : '';
-      return `
-        <div class="vid-clip-item ${isSel ? 'selected' : ''}" data-vid-shot-id="${esc(c.id)}">
-          <div class="vid-clip-top">
-            <span>${esc(c.club)} · ${esc(c.carryYds != null ? `${Math.round(c.carryYds)}y` : '—')}${star}</span>
-            <span style="color:var(--cyan);font-family:var(--mono);">Sc ${esc(c.score ?? '—')}</span>
-          </div>
-          <div class="vid-clip-sub">
-            <span>${esc(c.sessionDate)}</span>
-            <span>${hasDtl ? 'DTL' : ''}${hasDtl && hasFo ? '+' : ''}${hasFo ? 'FO' : ''}</span>
-          </div>
-          <div class="vid-clip-sub">
-            <span>${esc(c.deliveryName || c.shotShape || '—')}</span>
-            <span class="${esc(sgClass(c.sgShot))}">${esc(fmtSg(c.sgShot, { prefix: '' }))}</span>
-          </div>
-        </div>
-      `;
-    }).join('');
-
-    listEl.querySelectorAll('.vid-clip-item').forEach((item) => {
-      item.onclick = () => {
-        videoState.selectedShotId = item.dataset.vidShotId;
-        loadVideoTab();
-      };
-    });
-
-    // Current Shot Dual-Angle Players
-    const curSummary = cur
-      ? `${cur.club} · ${cur.carryYds != null ? `${Math.round(cur.carryYds)}y` : '—'} · Score ${cur.score ?? '—'} · ${cur.deliveryName || ''}`
-      : '—';
-    $('vid-dtl-title').textContent = curSummary;
-    $('vid-fo-title').textContent = curSummary;
-
-    const dtlUrl = buildMediaUrl(cur, 'dtl', mediaBaseUrl);
-    const foUrl = buildMediaUrl(cur, 'fo', mediaBaseUrl);
-    setVideoSource($('vid-player-dtl'), $('vid-dtl-missing'), dtlUrl);
-    setVideoSource($('vid-player-fo'), $('vid-fo-missing'), foUrl);
-
-    promoteBtn.disabled = !cur;
-    promoteBtn.textContent = cur && cur.isGoTo ? '★ My-Go-To Saved' : '★ Promote to My-Go-To';
-
-    // Compare vs Personal Best
-    const bestUrl = buildMediaUrl(best, 'dtl', mediaBaseUrl) || buildMediaUrl(best, 'fo', mediaBaseUrl);
-    setVideoSource($('vid-player-best'), $('vid-best-missing'), bestUrl);
-
-    if (best) {
-      $('vid-best-headline').textContent = `Current ${cur ? cur.club : ''} vs Personal Best (${best.sessionDate || ''}${best.isGoTo ? ' ★ Go-To' : ''})`;
-      $('vid-best-meta').textContent = `Best: ${best.carryYds != null ? `${Math.round(best.carryYds)}y` : '—'} · Score ${best.score ?? '—'} · ${best.deliveryName || '—'} · ${fmtSg(best.sgShot)}`;
-    } else {
-      $('vid-best-headline').textContent = `Personal Best Comparison (${cur ? cur.club : 'Club'})`;
-      $('vid-best-meta').textContent = 'Log more swings with this club to unlock side-by-side comparison vs your personal best.';
-    }
-
-    // Telemetry Delta Table
-    const rows = [
-      { label: 'Ball Speed', key: 'ballSpeed', digits: 1, unit: ' mph', higherBetter: true },
-      { label: 'Club Speed', key: 'clubSpeed', digits: 1, unit: ' mph', higherBetter: true },
-      { label: 'Smash Factor', key: 'smash', digits: 2, unit: '', higherBetter: true },
-      { label: 'Club Path', key: 'path', digits: 1, unit: '°', higherBetter: null },
-      { label: 'Attack Angle', key: 'aoa', digits: 1, unit: '°', higherBetter: null },
-      { label: 'Shaft Lean', key: 'estShaftLean', digits: 1, unit: '°', higherBetter: null },
-      { label: 'Carry', key: 'carryYds', digits: 1, unit: ' yds', higherBetter: true },
-      { label: 'Shot Score', key: 'score', digits: 0, unit: '', higherBetter: true },
-      { label: 'Strokes Gained', key: 'sgShot', digits: 2, unit: '', higherBetter: true },
+    const m = shot.metrics;
+    const sc = shot.scorecard;
+    const handedness = snap.settings?.handedness || 'RH';
+    $('mg-club').textContent = shot.activeClubLabel || shot.activeClub;
+    $('mg-shape-svg').innerHTML = window.ShotLabSVG.renderShotShapeIcon(shot.shotShape.svgParams, { width: 136, height: 136, handedness });
+    $('mg-shape-name').textContent = shot.shotShape.name;
+    $('mg-shape-sub').textContent = `${Math.abs(shot.flight.offlineYds || 0).toFixed(0)}y ${shot.flight.offlineYds < 0 ? 'L' : 'R'} · Apex ${Math.round(shot.flight.apexFt || 0)} ft`;
+    $('mg-score-ring').innerHTML = `<div class="mono" style="font-size:48px;font-weight:900;color:${window.ShotLabSVG.gradeColor(sc.overallGrade)};">${sc.score != null ? sc.score : '—'}</div>`;
+    const cards = [
+      { lbl: 'CARRY', val: `${Math.round(m.effectiveCarry)}y`, sub: `Total ${Math.round(m.totalYds)}y` },
+      { lbl: 'SMASH', val: m.smash != null ? m.smash.toFixed(2) : '—', sub: m.clubSpeed != null ? `CS ${m.clubSpeed.toFixed(1)}` : 'Ball-only' },
+      { lbl: 'START LINE', val: m.hla != null ? `${m.hla.toFixed(1)}°` : '—', sub: `Path ${m.path != null ? `${m.path.toFixed(1)}°` : '—'}` },
+      { lbl: 'STROKES GAINED', val: fmtSg(shot.strokesGained?.sg, { prefix: '' }), sub: shot.delivery?.name || '' },
     ];
-
-    $('vid-delta-tbody').innerHTML = rows.map((r) => {
-      const cv = cur && typeof cur[r.key] === 'number' && Number.isFinite(cur[r.key]) ? cur[r.key] : null;
-      const bv = best && typeof best[r.key] === 'number' && Number.isFinite(best[r.key]) ? best[r.key] : null;
-      const diff = (cv !== null && bv !== null) ? (cv - bv) : null;
-      let deltaCls = 'sg-flat';
-      if (diff !== null && r.higherBetter === true) {
-        deltaCls = diff > 0.01 ? 'sg-pos' : diff < -0.01 ? 'sg-neg' : 'sg-flat';
-      }
-      return `
-        <tr>
-          <td><strong>${esc(r.label)}</strong></td>
-          <td class="num">${esc(cv !== null ? fmtNum(cv, r.digits, r.unit) : '—')}</td>
-          <td class="num">${esc(bv !== null ? fmtNum(bv, r.digits, r.unit) : '—')}</td>
-          <td class="num ${esc(deltaCls)}">${esc(diff !== null ? fmtSigned(diff, r.digits, r.unit) : '—')}</td>
-        </tr>
-      `;
-    }).join('');
-
-    updateVideoTimeReadout();
-    updatePlayButtonLabel();
+    $('mg-stats-grid').innerHTML = cards.map((c) => `<div class="mg-stat-card"><span class="mg-stat-lbl">${esc(c.lbl)}</span><span class="mg-stat-val">${esc(c.val)}</span><span class="mg-stat-sub">${esc(c.sub)}</span></div>`).join('');
+    $('mg-del-name').textContent = shot.delivery.name;
+    $('mg-del-cue').textContent = shot.delivery.cues?.[0] || shot.delivery.tagline || '';
   }
-
-  // --------------------------------------------------------------------------- OBS & Settings Modals
 
   function renderObsModal(snap) {
     const warn = $('obs-server-warning');
     if (snap.obsServerError) {
-      warn.textContent = `⚠ ${snap.obsServerError} — Close the conflicting app or set SHOTLAB_OBS_PORT to another port.`;
       warn.classList.remove('hidden');
+      warn.textContent = snap.obsServerError;
     } else {
       warn.classList.add('hidden');
     }
-
     const base = `http://127.0.0.1:${snap.obsPort || 8766}/obs/overlay.html`;
-    const widgets = [
-      {
-        title: 'Full Broadcast Lower-Third HUD',
-        desc: 'Shot shape graphic, club, carry/total, smash/ball/club speed, spin, and delivery verdict (1280×156)',
-        url: `${base}?widget=hud`,
-      },
-      {
-        title: 'Shot Shape & Flight Badge',
-        desc: 'Compact curved flight SVG + Shot Shape name + Curve/Offline yards (320×170)',
-        url: `${base}?widget=shape`,
-      },
-      {
-        title: 'Red / Yellow / Green Key Metrics Strip',
-        desc: 'Color-coded Carry, Ball Speed, Club Speed, Smash, VLA, Spin, AoA, Path strip (960×105)',
-        url: `${base}?widget=metrics`,
-      },
-      {
-        title: 'Coach Diagnosis & Miss-Hit Card',
-        desc: 'Release verdict (Flipping/Compression/etc.), inferred face strike, and yards left on table (440×190)',
-        url: `${base}?widget=diagnosis`,
-      },
-      {
-        title: 'Compact Corner PiP Stack',
-        desc: 'Vertical corner overlay designed to sit alongside your Kinovea DTL+FO replay PiP (330×420)',
-        url: `${base}?widget=compact`,
-      },
-      {
-        title: 'Club Auto-Detector Pill',
-        desc: 'Predicted/Confirmed club + confidence % badge (280×92)',
-        url: `${base}?widget=club`,
-      },
-      {
-        title: 'Broadcast Shot Tracer Arc',
-        desc: 'Animated 3D-projected glowing ball-flight tracer arc with apex & carry callout (640×360)',
-        url: `${base}?widget=tracer`,
-      },
-      {
-        title: 'Live Session 2D Dispersion Plot',
-        desc: 'Real-time bird’s-eye shot scatter, 80% DECADE ellipse, and target aim marker (360×310)',
-        url: `${base}?widget=dispersion`,
-      },
-      {
-        title: 'Session Stats Broadcast Ticker',
-        desc: 'Slim ESPN-style bottom ticker with session count, avg score, avg carry, avg SG, active feel, and DB total (1280×48)',
-        url: `${base}?widget=ticker`,
-      },
-    ];
-
-    $('obs-url-list').innerHTML = widgets.map((w, i) => `
-      <div class="obs-row">
-        <div class="obs-info">
-          <div class="obs-title">${esc(w.title)}</div>
-          <div class="obs-desc">${esc(w.desc)}</div>
-          <div class="obs-url">${esc(w.url)}</div>
-        </div>
-        <div class="obs-btns">
-          <button class="btn btn-sm btn-accent" data-copy-obs="${i}">Copy URL</button>
-          <button class="btn btn-sm btn-ghost" data-open-obs="${i}">Preview</button>
-        </div>
-      </div>
-    `).join('');
-
+    const widgets = ['hud', 'shape', 'metrics', 'diagnosis', 'compact', 'club', 'tracer', 'dispersion', 'ticker', 'challenge', 'verdict'];
+    $('obs-url-list').innerHTML = widgets.map((w) => `
+      <div class="cue-item">
+        <code class="mono" style="font-size:11px;color:var(--cyan);">${esc(`${base}?widget=${w}`)}</code>
+        <button type="button" class="btn btn-xs btn-cyan" data-copy-obs="${esc(`${base}?widget=${w}`)}">Copy</button>
+      </div>`).join('');
     $('obs-url-list').querySelectorAll('[data-copy-obs]').forEach((b) => {
       b.onclick = () => {
-        window.shotlabAPI.copyText(widgets[Number(b.dataset.copyObs)].url);
-        showToast('Copied OBS Browser Source URL!');
+        if (api.copyText) api.copyText(b.dataset.copyObs);
+        else if (navigator.clipboard) navigator.clipboard.writeText(b.dataset.copyObs).catch(() => {});
+        showToast('Copied OBS URL!');
       };
-    });
-    $('obs-url-list').querySelectorAll('[data-open-obs]').forEach((b) => {
-      b.onclick = () => window.shotlabAPI.openExternal(widgets[Number(b.dataset.openObs)].url);
     });
   }
 
   function renderSettingsModal(snap) {
-    $('set-driver-speed').value = snap.calibration.driverSpeedMph || 98;
-    $('set-handedness').value = snap.settings.handedness || 'RH';
-    $('set-altitude').value = snap.settings.altitudeFt || 0;
-    $('set-autoswitch-conf').value = Math.round(((snap.calibration.autoSwitch && snap.calibration.autoSwitch.minConfidence) || 0.90) * 100);
-    $('set-obs-autohide').value = snap.settings.obsAutoHideSec || 0;
-    $('set-audio-chimes').checked = Boolean(snap.settings.audioChimes);
-    $('set-audio-caddie').checked = Boolean(snap.settings.audioCaddie);
+    $('set-driver-speed').value = snap.calibration?.driverSpeedMph || 98;
+    $('set-handedness').value = snap.settings?.handedness || 'RH';
+    $('set-altitude').value = snap.settings?.altitudeFt || 0;
+    $('set-mat-type').value = snap.settings?.studio?.matType || 'fiberbuilt';
+    $('set-autoswitch-conf').value = Math.round(((snap.calibration?.autoSwitch?.minConfidence) || 0.9) * 100);
+    $('set-obs-autohide').value = snap.settings?.obsAutoHideSec || 0;
+    $('set-audio-chimes').checked = Boolean(snap.settings?.audioChimes);
+    $('set-audio-caddie').checked = Boolean(snap.settings?.audioCaddie);
+    const customLofts = snap.calibration?.customLofts || {};
+    $('custom-lofts-grid').innerHTML = CLUB_ORDER.map((c) => `
+      <label class="sub-well" style="padding:5px 7px;font-size:10.5px;">
+        <span class="kicker">${esc(c)}</span>
+        <input type="number" data-loft-club="${esc(c)}" step="0.5" placeholder="${DEFAULT_LOFTS[c]}" value="${customLofts[c] ?? ''}" style="width:100%;" />
+      </label>`).join('');
+  }
 
-    const customLofts = (snap.calibration && snap.calibration.customLofts) || {};
-    $('custom-lofts-grid').innerHTML = CLUB_ORDER.map((c) => {
-      const val = customLofts[c] != null ? customLofts[c] : '';
-      return `
-        <label class="loft-field">
-          <span>${esc(c)}</span>
-          <input type="number" data-loft-club="${esc(c)}" min="5" max="70" step="0.5" placeholder="${esc(DEFAULT_LOFTS[c])}°" value="${esc(val)}" />
-        </label>
-      `;
-    }).join('');
-
-    const clubs = snap.calibration.clubs || {};
+  function renderCalModal(snap) {
+    const clubs = snap.calibration?.clubs || {};
     $('cal-clubs-badges').innerHTML = CLUB_ORDER.map((c) => {
       const n = clubs[c] ? clubs[c].n : 0;
-      const cls = n >= 3 ? 'tag-green' : n > 0 ? 'tag-yellow' : '';
-      return `<span class="tag ${esc(cls)}">${esc(c)}: ${esc(n)}</span>`;
+      return `<span class="badge ${n >= 3 ? 'badge-green' : n > 0 ? 'badge-yellow' : ''}">${esc(c)}: ${n}</span>`;
     }).join('');
   }
 
-  // --------------------------------------------------------------------------- Master Render
+  function renderWedgePrintModal() {
+    const matrix = state?.settings?.studio?.wedgeMatrix || [];
+    $('wedge-print-body').innerHTML = matrix.length ? `
+      <table class="data-table">
+        <thead><tr><th>Wedge</th>${matrix[0].cells.map((c) => `<th class="num">${esc(c.arm)} (${esc(c.pct)})</th>`).join('')}</tr></thead>
+        <tbody>${matrix.map((r) => `<tr><td><strong>${esc(r.label)}</strong></td>${r.cells.map((c) => `<td class="num"><strong>${c.carry}y</strong> (${c.roll >= 0 ? '+' : ''}${c.roll}y)</td>`).join('')}</tr>`).join('')}</tbody>
+      </table>` : '';
+  }
 
-  function scheduleActiveDataTabRefresh() {
-    if (activeTab === 'live') return;
-    if (tabRefreshTimer) clearTimeout(tabRefreshTimer);
-    tabRefreshTimer = setTimeout(() => {
-      tabRefreshTimer = null;
-      if (activeTab === 'patterns') loadPatternsTab();
-      else if (activeTab === 'gapping') loadGappingTab();
-      else if (activeTab === 'video') loadVideoTab();
-    }, 350);
+  function renderKeysModal() {
+    const baseKeys = [
+      ['M', 'Toggle 10-Ft Mat Glance'],
+      ['D', 'Toggle Drills Hub Drawer'],
+      ['P', 'Capture Thought in Park It Vault'],
+      ['1–4', 'Switch Plan / Practice / Review / My Bag'],
+      ['Esc', 'Close Popover / Drawer / Mat Glance'],
+    ];
+    const simRows = lastHotkeys.map((h) => [h.keys, h.label]);
+    $('keys-dlg-body').innerHTML = `<table class="data-table"><tbody>${[...baseKeys, ...simRows].map(([k, l]) => `<tr><td><strong class="mono" style="color:var(--cyan);">${esc(k)}</strong></td><td>${esc(l)}</td></tr>`).join('')}</tbody></table>`;
+  }
+
+  function syncTempoModal() {
+    const settings = state?.settings || {};
+    const audio = window.ShotLabAudio;
+    const running = Boolean(audio?.isTempoRunning?.());
+    $('select-tempo').value = running ? (audio.getTempoPreset?.() || '24/8') : 'off';
+    $('select-tempo-sound').value = settings.tempoSound || 'tones';
+    $('select-tempo-gap').value = String(settings.tempoGapSec || 0);
+    $('tmp-status-txt').textContent = running ? `Running: ${$('select-tempo').value}` : 'Stopped';
+  }
+
+  // ==================== ACTIONS ====================
+  async function confirmClub(shotId, actualClub) {
+    if (!api.confirmClub) {
+      showToast(`Confirmed ${actualClub} (demo mode)`);
+      return;
+    }
+    const res = await api.confirmClub(shotId, actualClub);
+    if (res?.ok && !res.alreadyConfirmed) {
+      showToast(res.isDemoPreview ? `Confirmed demo club → ${actualClub}` : `Calibrated ${actualClub}!`);
+    }
+  }
+
+  async function syncGsproClub(target) {
+    if (!api.switchGsproClub) { showToast(`GSPro Sync skipped (no bridge)`); return; }
+    const res = await api.switchGsproClub(target);
+    showToast(res?.ok ? `GSPro switched → ${target}` : `GSPro switch: ${res?.reason || 'skipped'}`);
+  }
+
+  function maybePlayShotAudio(snap) {
+    const newest = snap.shots?.[0] || snap.currentShot;
+    const id = newest ? newest.id : null;
+    if (!initialLoadComplete) {
+      initialLoadComplete = true;
+      lastKnownNewestShotId = id;
+      return;
+    }
+    if (!newest || !id || id === lastKnownNewestShotId) return;
+    lastKnownNewestShotId = id;
+    if (snap.eventType !== 'shot' || newest.isPreviewSeed) return;
+    const audio = window.ShotLabAudio;
+    if (!audio) return;
+    if (snap.settings?.audioChimes && audio.playGradeChime) audio.playGradeChime(newest.scorecard?.overallGrade);
+    if (snap.settings?.audioCaddie && audio.speakShot) audio.speakShot(newest, { practiceMode: newest.practiceMode || snap.settings.practiceMode, handedness: snap.settings.handedness });
   }
 
   function render(snap) {
     if (!snap) return;
-    hidePopover();
-    const prevTopId = state && state.shots && state.shots[0] ? state.shots[0].id : null;
-    const nextTopId = snap.shots && snap.shots[0] ? snap.shots[0].id : null;
-    const prevClipsLinked = state && state.dbSummary ? state.dbSummary.clipsLinked : null;
-    const nextClipsLinked = snap.dbSummary ? snap.dbSummary.clipsLinked : null;
-
+    const prevTopId = state?.shots?.[0]?.id || null;
+    const nextTopId = snap.shots?.[0]?.id || null;
+    if (!state && challengeStore && snap.settings?.studio?.challengeBests) {
+      challengeStore.setBests(snap.settings.studio.challengeBests);
+    }
     state = snap;
+
     maybePlayShotAudio(snap);
-
     renderTopbar(snap);
-    renderSubbar(snap);
-    renderFaultBanner(snap);
-    renderHistory(snap);
 
-    if (!snap.currentShot) {
-      renderEmptyState();
-    } else {
-      renderShotShapeBox(snap.currentShot, snap);
-      renderClubBox(snap.currentShot, snap);
-      renderDeliveryBox(snap.currentShot);
-      renderStrikeBox(snap.currentShot, snap);
-      renderScorecard(snap.currentShot, snap);
-    }
-
-    if (matGlanceOpen) {
-      renderMatGlance(snap);
-    }
-
-    const shotChanged = Boolean(nextTopId && nextTopId !== prevTopId);
-    const clipsChanged = prevClipsLinked !== null && nextClipsLinked !== null && nextClipsLinked !== prevClipsLinked;
-    if (shotChanged || clipsChanged) {
-      scheduleActiveDataTabRefresh();
-    }
-  }
-
-  // --------------------------------------------------------------------------- Actions & Event Wiring
-
-  function switchTab(tabId) {
-    activeTab = tabId;
-    hidePopover();
-    document.querySelectorAll('.tab-btn').forEach((btn) => {
-      const isAct = btn.dataset.tab === tabId;
-      btn.classList.toggle('active', isAct);
-      btn.setAttribute('aria-selected', isAct ? 'true' : 'false');
-    });
-    document.querySelectorAll('.tab-panel').forEach((panel) => {
-      const isAct = panel.id === `tab-${tabId}`;
-      panel.classList.toggle('hidden', !isAct);
-      panel.classList.toggle('active', isAct);
-    });
-    if (tabId === 'patterns') loadPatternsTab();
-    else if (tabId === 'gapping') loadGappingTab();
-    else if (tabId === 'video') loadVideoTab();
-  }
-
-  async function confirmClub(shotId, actualClub) {
-    const res = await window.shotlabAPI.confirmClub(shotId, actualClub);
-    if (!res || !res.ok) return;
-    if (res.alreadyConfirmed) return;
-    if (res.isDemoPreview) {
-      showToast(`Demo preview updated to ${actualClub} (synthetic demo shots are not saved to calibration)`);
-    } else if (res.updatedOnly) {
-      showToast(`Updated shot club to ${actualClub}`);
-    } else {
-      const st = res.calibrationStats;
-      showToast(`Calibrated ${actualClub}! Rolling accuracy: ${st.recentExactPct ?? '—'}% (${st.totalConfirmed} shots)`);
-    }
-  }
-
-  async function runSyncHistory() {
-    if (!window.shotlabAPI || typeof window.shotlabAPI.syncHistory !== 'function') return;
-    showToast('Syncing historical SimWatch sessions into local DB…');
-    try {
-      const res = await window.shotlabAPI.syncHistory();
-      if (!res || res.ok === false) {
-        showToast((res && res.error) ? `Sync failed: ${res.error}` : 'Sync failed');
-        return;
+    // Feed real live/demo shots into Challenge Arena when active
+    let pendingBests = null;
+    if (snap.eventType === 'shot' && snap.currentShot && snap.currentShot.id !== lastChallengeScoredId && challengeStore) {
+      lastChallengeScoredId = snap.currentShot.id;
+      if (activePracticeSub === 'challenge') {
+        const res = challengeStore.recordShot(snap.currentShot);
+        api.setChallengeState(challengeStore.getObsPayload());
+        if (res?.bestsChanged && res.bests) pendingBests = res.bests;
       }
-      const imported = (res.shotsImported ?? res.imported) || 0;
-      const files = (res.filesScanned ?? res.files) || 0;
-      showToast(`Synced ${imported} swing${imported === 1 ? '' : 's'} across ${files} session file${files === 1 ? '' : 's'}!`);
-      if (activeTab === 'patterns') loadPatternsTab();
-      else if (activeTab === 'gapping') loadGappingTab();
-      else if (activeTab === 'video') loadVideoTab();
-    } catch (err) {
-      showToast(`Sync failed: ${err.message || err}`);
+    }
+
+    renderPractice(snap);
+    if (activeMode === 'plan') renderPlan();
+    if (matGlanceOpen) renderMatGlance(snap);
+    if (pendingBests) {
+      queueMicrotask(() => { api.updateStudioState({ challengeBests: pendingBests }); });
+    }
+
+    if (nextTopId && nextTopId !== prevTopId && activeMode !== 'practice') {
+      clearTimeout(tabRefreshTimer);
+      tabRefreshTimer = setTimeout(() => {
+        if (activeMode === 'plan') loadPlanTab();
+        else if (activeMode === 'review') loadReviewTab();
+        else if (activeMode === 'bag') loadBagTab();
+      }, 300);
     }
   }
 
-  async function runExportDebrief() {
-    if (!window.shotlabAPI || typeof window.shotlabAPI.exportDebrief !== 'function') return;
-    try {
-      const daysVal = Number(patternFilters.days);
-      const res = await window.shotlabAPI.exportDebrief({
-        club: patternFilters.club,
-        days: daysVal > 0 ? daysVal : null,
-      });
-      if (res && res.ok) {
-        const savedPath = res.filePath || res.path;
-        const fileName = savedPath ? String(savedPath).split(/[/\\]/).pop() : 'debrief.md';
-        showToast(`Exported Coach Debrief → ${fileName}`);
-      } else if (res && res.canceled) {
-        // user canceled save dialog
-      } else if (res && res.error) {
-        showToast(`Export failed: ${res.error}`);
+  // ==================== EVENT WIRING ====================
+  populateClubFilterSelect($('rev-club-filter'), true);
+  populateClubFilterSelect($('vid-club'), true);
+  populateClubFilterSelect($('bag-mgr-club'), true);
+  $('bag-mgr-club').value = bagFilters.mgrClub;
+
+  document.querySelectorAll('#lifecycle-nav .mode-btn').forEach((b) => { b.onclick = () => switchMode(b.dataset.mode); });
+  document.querySelectorAll('#glob-mode-seg button').forEach((b) => {
+    b.onclick = () => {
+      const fn = api.setPracticeContext || api.updateSettings;
+      fn({ practiceMode: b.dataset.pm });
+      showToast(`Mode: ${b.textContent}`);
+    };
+  });
+  document.querySelectorAll('#glob-tier-seg button').forEach((b) => {
+    b.onclick = () => api.updateSettings({ tierId: b.dataset.tier });
+  });
+  $('select-active-feel').onchange = (e) => {
+    const fn = api.setPracticeContext || api.updateSettings;
+    fn({ activeFeelId: e.target.value || null });
+  };
+  $('btn-fire-demo').onclick = () => api.fireDemo($('demo-select').value || null);
+  $('btn-clear-session').onclick = async () => render(await api.clearSession());
+  $('btn-audio-caddie').onclick = () => api.updateSettings({ audioCaddie: !state?.settings?.audioCaddie });
+  $('btn-mat-glance').onclick = () => {
+    matGlanceOpen = !matGlanceOpen;
+    $('mat-glance-overlay').classList.toggle('hidden', !matGlanceOpen);
+    if (matGlanceOpen) renderMatGlance(state);
+  };
+  $('btn-mg-close').onclick = () => { matGlanceOpen = false; $('mat-glance-overlay').classList.add('hidden'); };
+  $('pill-db').onclick = async () => {
+    await api.syncHistory();
+    showToast('Synced SimWatch sessions');
+    if (activeMode === 'plan') loadPlanTab();
+    else if (activeMode === 'review') loadReviewTab();
+    else if (activeMode === 'bag') loadBagTab();
+  };
+
+  $('btn-obs').onclick = () => openDialog('dlg-obs');
+  $('btn-tempo-dlg').onclick = () => openDialog('dlg-tempo');
+  $('bag-cal-btn').onclick = () => openDialog('dlg-cal');
+  $('btn-csv').onclick = () => openDialog('dlg-csv');
+  $('btn-settings').onclick = () => openDialog('dlg-settings');
+  $('plan-btn-checkin').onclick = () => openDialog('dlg-checkin');
+  $('glob-park-btn').onclick = () => openDialog('dlg-park');
+  $('plan-add-park').onclick = () => openDialog('dlg-park');
+  $('bag-open-wedge-print').onclick = () => openDialog('dlg-wedge');
+  $('pill-keys').onclick = () => openDialog('dlg-keys');
+  $('btn-drills').onclick = () => (drawerState.open ? closeDrawer() : openDrawerWithDrill());
+  $('drawer-close').onclick = closeDrawer;
+  $('drawer-backdrop').onclick = closeDrawer;
+  $('drawer-fault-filter').onchange = (e) => { drawerState.fault = e.target.value; drawerState.selectedId = null; renderDrawer(); };
+  $('drawer-mode-filter').onchange = (e) => { drawerState.mode = e.target.value; drawerState.selectedId = null; renderDrawer(); };
+
+  document.querySelectorAll('[data-close-dlg]').forEach((b) => { b.onclick = () => closeDialog(b.dataset.closeDlg); });
+
+  // Practice controls
+  document.querySelectorAll('#prac-sub-seg button').forEach((b) => {
+    b.onclick = () => {
+      activePracticeSub = b.dataset.psub;
+      document.querySelectorAll('#prac-sub-seg button').forEach((x) => x.classList.toggle('active', x.dataset.psub === activePracticeSub));
+      if (activePracticeSub === 'challenge' && challengeStore) {
+        api.setChallengeState(challengeStore.getObsPayload());
       } else {
-        showToast('Debrief export complete.');
+        api.setChallengeState(null);
       }
-    } catch (err) {
-      showToast(`Export error: ${err.message || err}`);
-    }
-  }
-
-  // Populate club filter selects for Patterns and Video tabs
-  populateClubFilterSelect($('pat-club'));
-  populateClubFilterSelect($('vid-club'));
-
-  // Topbar tier buttons
-  document.querySelectorAll('.tier-btn').forEach((btn) => {
-    btn.onclick = () => window.shotlabAPI.updateSettings({ tierId: btn.dataset.tier });
+      renderChallengePanel(state);
+    };
   });
-
-  // Sub-header tabs
-  document.querySelectorAll('.tab-btn').forEach((btn) => {
-    btn.onclick = () => switchTab(btn.dataset.tab);
+  document.querySelectorAll('#prac-lab-seg button').forEach((b) => {
+    b.onclick = () => {
+      activeLabMode = b.dataset.lmode;
+      document.querySelectorAll('#prac-lab-seg button').forEach((x) => x.classList.toggle('active', x.dataset.lmode === activeLabMode));
+      renderPractice(state);
+    };
   });
+  $('prac-intent-shape').onchange = (e) => api.updateStudioState({ intendedShape: e.target.value });
+  $('prac-goal-toggle').onclick = () => api.updateStudioState({ showGoalLine: state?.settings?.studio?.showGoalLine === false });
+  $('prac-mission-drill').onclick = () => openDrawerWithDrill(missionState?.drillId || null);
+  $('prac-mission-clear').onclick = () => { missionState = null; renderPractice(state); };
 
-  // Practice mode segmented toggle
-  document.querySelectorAll('.mode-btn').forEach((btn) => {
-    btn.onclick = () => {
-      const mode = btn.dataset.mode;
-      if (window.shotlabAPI.setPracticeContext) {
-        window.shotlabAPI.setPracticeContext({ practiceMode: mode });
-      } else {
-        window.shotlabAPI.updateSettings({ practiceMode: mode });
-      }
-      showToast(mode === 'almost' ? 'Kids Asleep / Quiet Mode enabled' : 'Real Balls Mode enabled');
+  // Plan controls
+  ['plan-body-ham', 'plan-body-ankle', 'plan-body-energy'].forEach((id) => {
+    $(id).onchange = () => api.updateStudioState({
+      bodyCheckin: {
+        hamstrings: Number($('plan-body-ham').value),
+        ankle: $('plan-body-ankle').value,
+        energy: Number($('plan-body-energy').value),
+      },
+    });
+  });
+  $('plan-swap-cue').onclick = async () => {
+    const pool = [
+      { id: 'cue_shaft', text: 'Shaft pointed at left thigh at address (P1)', club: 'All' },
+      { id: 'cue_wrist', text: 'Lead wrist flat through P6–P7 impact zone', club: 'Irons' },
+      { id: 'cue_cruise', text: '98 mph cruise rhythm (no max-effort Driver)', club: 'DR' },
+    ];
+    const cur = state?.settings?.studio?.activeCues || [];
+    const next = cur[0]?.id === 'cue_cruise' ? pool.slice(0, 2) : [pool[2], pool[1]];
+    await api.updateStudioState({ activeCues: next });
+    renderPlan();
+  };
+  $('plan-btn-start').onclick = () => {
+    missionState = { title: 'Coached Plan Block', drillId: null, badge: 'ACTIVE BLOCK' };
+    switchMode('practice');
+    renderPractice(state);
+  };
+  document.querySelectorAll('#plan-dur-seg button').forEach((b) => {
+    b.onclick = () => {
+      planDurationMin = Number(b.dataset.min) || 20;
+      document.querySelectorAll('#plan-dur-seg button').forEach((x) => x.classList.toggle('active', x === b));
+      renderPlan();
     };
   });
 
-  // Active Feel selector
-  $('select-active-feel').onchange = (ev) => {
-    const val = ev.target.value || null;
-    if (window.shotlabAPI.setPracticeContext) {
-      window.shotlabAPI.setPracticeContext({ activeFeelId: val });
-    }
-    showToast(val ? `Active Feel tagged: ${feelLabelById(val)}` : 'Cleared Active Feel tag');
-  };
-
-  // Audio Caddie toggle
-  $('btn-audio-caddie').onclick = () => {
-    const next = !(state && state.settings && state.settings.audioCaddie);
-    if (!next && window.ShotLabAudio && typeof window.ShotLabAudio.stopSpeech === 'function') {
-      window.ShotLabAudio.stopSpeech();
-    }
-    window.shotlabAPI.updateSettings({ audioCaddie: next });
-    showToast(next ? 'Audio Caddie Voice ON' : 'Audio Caddie Voice muted');
-  };
-
-  // Tour Tempo selector
-  $('select-tempo').onchange = (ev) => {
-    const preset = ev.target.value;
-    const audio = window.ShotLabAudio;
-    if (preset === 'off') {
-      if (audio && typeof audio.stopTempo === 'function') audio.stopTempo();
-      window.shotlabAPI.updateSettings({ tempoPreset: 'off' });
-      showToast('Tour Tempo metronome stopped');
-    } else {
-      if (audio && typeof audio.startTempo === 'function') audio.startTempo(preset, null, currentTempoOptions());
-      window.shotlabAPI.updateSettings({ tempoPreset: preset });
-      const opts = currentTempoOptions();
-      showToast(`Tour Tempo ${preset} started` + (opts.gapSec > 0 ? ` · ${opts.gapSec}s rest between swings` : ''));
-    }
-  };
-
-  function currentTempoOptions() {
-    const soundSel = $('select-tempo-sound');
-    const gapSel = $('select-tempo-gap');
-    return {
-      sound: (soundSel && soundSel.value) || 'tones',
-      gapSec: Number((gapSel && gapSel.value) || 0) || 0,
+  // Review controls
+  $('rev-club-filter').onchange = (e) => { reviewFilters.club = e.target.value; loadReviewTab(); };
+  $('rev-mode-filter').onchange = (e) => { reviewFilters.mode = e.target.value; loadReviewTab(); };
+  document.querySelectorAll('#rev-days-seg button').forEach((b) => { b.onclick = () => { reviewFilters.days = Number(b.dataset.days); loadReviewTab(); }; });
+  document.querySelectorAll('#rev-sub-seg button').forEach((b) => { b.onclick = () => { activeReviewSub = b.dataset.sub; renderReview(); }; });
+  document.querySelectorAll('#rev-leaks-filter-seg button').forEach((b) => { b.onclick = () => { reviewFilters.faultsOnly = b.dataset.lf === 'faults'; renderReview(); }; });
+  document.querySelectorAll('#rev-trend-seg button').forEach((b) => {
+    b.onclick = () => {
+      activeTrendMetric = b.dataset.metric;
+      document.querySelectorAll('#rev-trend-seg button').forEach((x) => x.classList.toggle('active', x === b));
+      renderReview();
     };
-  }
-
-  // Tempo sound + rest between swings: apply live (next beat) and persist.
-  $('select-tempo-sound').onchange = (ev) => {
-    const audio = window.ShotLabAudio;
-    if (audio && typeof audio.setTempoOptions === 'function') audio.setTempoOptions({ sound: ev.target.value });
-    window.shotlabAPI.updateSettings({ tempoSound: ev.target.value });
-    const set = audio && audio.TEMPO_SOUNDS && audio.TEMPO_SOUNDS[ev.target.value];
-    showToast(`Tempo sound: ${set ? set.label : ev.target.value}`);
-  };
-  $('select-tempo-gap').onchange = (ev) => {
-    const gapSec = Number(ev.target.value) || 0;
-    const audio = window.ShotLabAudio;
-    if (audio && typeof audio.setTempoOptions === 'function') audio.setTempoOptions({ gapSec });
-    window.shotlabAPI.updateSettings({ tempoGapSec: gapSec });
-    showToast(gapSec > 0 ? `Tempo: ${gapSec}s rest between swings (quiet tick 1s before each)` : 'Tempo: non-stop');
+  });
+  $('rev-btn-sync').onclick = async () => { await api.syncHistory(); loadReviewTab(); showToast('Synced SimWatch history'); };
+  $('rev-export-md').onclick = async () => {
+    const r = await api.exportDebrief({ club: reviewFilters.club, days: reviewFilters.days || null });
+    if (r?.ok) showToast(`Saved coaching debrief: ${String(r.filePath || '').split(/[/\\]/).pop()}`);
+    else if (r && !r.canceled && r.error) showToast(`Export failed: ${r.error}`);
   };
 
-  // Mat Glance button & close
-  $('btn-mat-glance').onclick = () => setMatGlanceOpen(!matGlanceOpen);
-  $('btn-mg-close').onclick = () => setMatGlanceOpen(false);
-
-  // DB Sync & Export Debrief buttons
-  $('pill-db').onclick = runSyncHistory;
-  $('btn-export-debrief').onclick = runExportDebrief;
-  $('btn-pat-sync').onclick = runSyncHistory;
-  $('btn-pat-export').onclick = runExportDebrief;
-  $('btn-vid-sync-empty').onclick = runSyncHistory;
-
-  // Patterns Lab filters & trend metric switcher
-  $('pat-club').onchange = (ev) => {
-    patternFilters.club = ev.target.value || 'ALL';
-    loadPatternsTab();
-  };
-  $('pat-mode').onchange = (ev) => {
-    patternFilters.mode = ev.target.value || 'real';
-    loadPatternsTab();
-  };
-  $('pat-days').onchange = (ev) => {
-    patternFilters.days = Number(ev.target.value) || 0;
-    loadPatternsTab();
-  };
-  document.querySelectorAll('.trend-metric-btn').forEach((btn) => {
-    btn.onclick = () => {
-      activeTrendMetric = btn.dataset.metric || 'avgScore';
-      document.querySelectorAll('.trend-metric-btn').forEach((b) => {
-        b.classList.toggle('active', b === btn);
+  // Video compare controls
+  (function wireVideoSyncHandlers() {
+    const dtl = $('vid-player-dtl');
+    const fo = $('vid-player-fo');
+    const best = $('vid-player-best');
+    const playBtn = $('btn-vid-play');
+    const readout = $('vid-time-readout');
+    const players = [dtl, fo, best].filter(Boolean);
+    const progUntil = new WeakMap();
+    const markProgrammatic = (el, ms = 300) => { progUntil.set(el, Date.now() + ms); };
+    const isProgrammatic = (el) => (progUntil.get(el) || 0) > Date.now();
+    const updatePlayLabel = () => {
+      const vids = getActiveVideos();
+      const anyPlaying = vids.some((v) => !v.paused && !v.ended);
+      if (playBtn) playBtn.textContent = anyPlaying ? '❚❚ Pause' : '▶ Play Synced';
+    };
+    players.forEach((v) => {
+      v.addEventListener('timeupdate', () => {
+        const active = getActiveVideos();
+        if (!active.includes(v)) return;
+        if (v === active[0] && readout && Number.isFinite(v.currentTime)) {
+          readout.textContent = `${v.currentTime.toFixed(2)}s`;
+        }
       });
-      const trends = lastPatternsData ? (lastPatternsData.trends || lastPatternsData.sessionTrends || []) : [];
-      renderTrendSparklineArea(trends);
-    };
-  });
-
-  // Bag Gapping filters
-  $('gap-mode').onchange = (ev) => {
-    gappingFilters.mode = ev.target.value || 'real';
-    loadGappingTab();
-  };
-  $('gap-days').onchange = (ev) => {
-    gappingFilters.days = Number(ev.target.value) || 0;
-    loadGappingTab();
-  };
-  $('btn-gap-refresh').onclick = loadGappingTab;
-
-  // Video Compare filters & synced playback controls
-  $('vid-club').onchange = (ev) => {
-    videoState.club = ev.target.value || 'ALL';
-    videoState.selectedShotId = null;
-    loadVideoTab();
-  };
+      v.addEventListener('play', () => {
+        const active = getActiveVideos();
+        if (!active.includes(v)) return;
+        if (!isProgrammatic(v)) {
+          active.forEach((other) => {
+            if (other !== v && other.paused) {
+              markProgrammatic(other, 250);
+              other.playbackRate = videoState.playbackRate;
+              other.play?.().catch(() => {});
+            }
+          });
+        }
+        updatePlayLabel();
+      });
+      v.addEventListener('pause', () => {
+        const active = getActiveVideos();
+        if (!active.includes(v)) return;
+        if (!isProgrammatic(v) && !v.ended) {
+          active.forEach((other) => {
+            if (other !== v && !other.paused) {
+              markProgrammatic(other, 250);
+              other.pause?.();
+            }
+          });
+        }
+        updatePlayLabel();
+      });
+      v.addEventListener('ended', updatePlayLabel);
+      v.addEventListener('seeked', () => {
+        const active = getActiveVideos();
+        if (!active.includes(v)) return;
+        if (isProgrammatic(v)) return;
+        const t = Number.isFinite(v.currentTime) ? v.currentTime : 0;
+        if (readout) readout.textContent = `${t.toFixed(2)}s`;
+        active.forEach((other) => {
+          if (other === v) return;
+          const targetT = (Number.isFinite(other.duration) && other.duration > 0) ? Math.min(t, other.duration) : t;
+          if (Math.abs((other.currentTime || 0) - targetT) > 0.04) {
+            markProgrammatic(other, 350);
+            other.currentTime = targetT;
+          }
+        });
+      });
+    });
+    if (playBtn) {
+      playBtn.onclick = () => {
+        const vids = getActiveVideos();
+        const playing = vids.some((v) => !v.paused && !v.ended);
+        vids.forEach((v) => {
+          markProgrammatic(v, 250);
+          if (playing) v.pause?.();
+          else { v.playbackRate = videoState.playbackRate; v.play?.().catch(() => {}); }
+        });
+        updatePlayLabel();
+      };
+    }
+    const prevBtn = $('btn-vid-prev-frame');
+    const nextBtn = $('btn-vid-next-frame');
+    if (prevBtn) {
+      prevBtn.onclick = () => {
+        const vids = getActiveVideos();
+        vids.forEach((v) => {
+          markProgrammatic(v, 350);
+          v.pause?.();
+          v.currentTime = Math.max(0, (v.currentTime || 0) - 1 / 60);
+        });
+        if (vids[0] && readout && Number.isFinite(vids[0].currentTime)) {
+          readout.textContent = `${vids[0].currentTime.toFixed(2)}s`;
+        }
+        updatePlayLabel();
+      };
+    }
+    if (nextBtn) {
+      nextBtn.onclick = () => {
+        const vids = getActiveVideos();
+        vids.forEach((v) => {
+          markProgrammatic(v, 350);
+          v.pause?.();
+          const nextT = (v.currentTime || 0) + 1 / 60;
+          v.currentTime = (Number.isFinite(v.duration) && v.duration > 0) ? Math.min(v.duration, nextT) : nextT;
+        });
+        if (vids[0] && readout && Number.isFinite(vids[0].currentTime)) {
+          readout.textContent = `${vids[0].currentTime.toFixed(2)}s`;
+        }
+        updatePlayLabel();
+      };
+    }
+  })();
+  $('vid-club').onchange = (e) => { videoState.club = e.target.value; videoState.selectedShotId = null; loadVideoTab(); };
   $('btn-vid-refresh').onclick = loadVideoTab;
-
-  $('btn-vid-play').onclick = () => {
-    const vids = getActiveVideos();
-    if (!vids.length) return;
-    const anyPlaying = vids.some((v) => !v.paused && !v.ended);
-    if (anyPlaying) {
-      vids.forEach((v) => v.pause());
-    } else {
-      vids.forEach((v) => {
-        if (v.ended) v.currentTime = 0;
-        v.playbackRate = videoState.playbackRate;
-        v.play().catch(() => {});
-      });
-    }
-    updatePlayButtonLabel();
-  };
-
-  document.querySelectorAll('.speed-btn').forEach((btn) => {
-    btn.onclick = () => {
-      const spd = Number(btn.dataset.speed) || 1;
-      videoState.playbackRate = spd;
-      document.querySelectorAll('.speed-btn').forEach((b) => b.classList.toggle('active', b === btn));
-      [$('vid-player-dtl'), $('vid-player-fo'), $('vid-player-best')].forEach((v) => {
-        if (v) v.playbackRate = spd;
-      });
+  $('btn-vid-sync-empty').onclick = async () => { await api.syncHistory(); loadVideoTab(); };
+  document.querySelectorAll('#vid-speed-seg button').forEach((b) => {
+    b.onclick = () => {
+      videoState.playbackRate = Number(b.dataset.speed) || 0.5;
+      document.querySelectorAll('#vid-speed-seg button').forEach((x) => x.classList.toggle('active', x === b));
+      getActiveVideos().forEach((v) => { v.playbackRate = videoState.playbackRate; });
     };
   });
-
-  function stepVideoFrames(deltaFrames) {
-    const vids = getActiveVideos();
-    const stepSec = deltaFrames / 60;
-    vids.forEach((v) => {
-      v.pause();
-      const maxT = Number.isFinite(v.duration) ? v.duration : 9999;
-      v.currentTime = Math.max(0, Math.min(maxT, (v.currentTime || 0) + stepSec));
-    });
-    updatePlayButtonLabel();
-    updateVideoTimeReadout();
-  }
-
-  $('btn-vid-prev-frame').onclick = () => stepVideoFrames(-1);
-  $('btn-vid-next-frame').onclick = () => stepVideoFrames(1);
-
-  [$('vid-player-dtl'), $('vid-player-fo'), $('vid-player-best')].forEach((v) => {
-    if (!v) return;
-    v.addEventListener('timeupdate', updateVideoTimeReadout);
-    v.addEventListener('play', updatePlayButtonLabel);
-    v.addEventListener('pause', updatePlayButtonLabel);
-    v.addEventListener('ended', updatePlayButtonLabel);
-  });
-
   $('btn-promote-goto').onclick = async () => {
-    if (!videoState.selectedShotId || !window.shotlabAPI.promoteGoTo) return;
-    try {
-      const res = await window.shotlabAPI.promoteGoTo(videoState.selectedShotId);
-      if (res && res.ok !== false) {
-        showToast('Promoted swing to My-Go-To ★!');
-        loadVideoTab();
-      } else {
-        showToast(`Promote failed: ${(res && (res.error || res.reason)) || 'unknown error'}`);
-      }
-    } catch (err) {
-      showToast(`Promote error: ${err.message || err}`);
+    if (videoState.selectedShotId && api.promoteGoTo) {
+      const res = await api.promoteGoTo(videoState.selectedShotId);
+      showToast(res?.ok ? 'Promoted ★ to My-Go-To!' : (res?.error || 'Could not promote'));
+      loadVideoTab();
     }
   };
 
-  // Existing v1 Topbar & Modal Actions
-  $('btn-fire-demo').onclick = () => {
-    const arch = $('demo-select').value || null;
-    window.shotlabAPI.fireDemo(arch);
+  // My Bag controls
+  document.querySelectorAll('#bag-view-seg button').forEach((b) => { b.onclick = () => { activeBagView = b.dataset.bview; renderBag(); }; });
+  $('bag-days').onchange = (e) => { bagFilters.days = Number(e.target.value); loadBagTab(); };
+  $('bag-mode-filter').onchange = (e) => { bagFilters.mode = e.target.value; loadBagTab(); };
+  $('bag-qual-filter').onchange = (e) => { bagFilters.quality = e.target.value; loadBagTab(); };
+  $('bag-cat-filter').onchange = (e) => { bagFilters.category = e.target.value; loadBagTab(); };
+  $('bag-mgr-club').onchange = (e) => { bagFilters.mgrClub = e.target.value; renderBag(); loadBagShotsManager(); };
+  $('bag-trim-btn').onclick = () => { bagFilters.trimOutliers = !bagFilters.trimOutliers; loadBagTab(); };
+  $('bag-restore-btn').onclick = async () => {
+    const r = await api.restoreDeletedShots({});
+    showToast(`Restored ${r?.restored || 0} deleted shot(s).`);
+    loadBagTab();
   };
-
-  $('btn-clear-session').onclick = async () => {
-    const snap = await window.shotlabAPI.clearSession();
-    render(snap);
-    showToast('Cleared session shot tape (calibration preserved).');
-  };
-
-  $('btn-obs').onclick = () => {
-    hidePopover();
-    if (state) renderObsModal(state);
-    $('modal-obs').classList.remove('hidden');
-  };
-
-  $('btn-csv').onclick = () => {
-    hidePopover();
-    $('modal-csv').classList.remove('hidden');
-  };
-
-  $('btn-settings').onclick = () => {
-    hidePopover();
-    if (state) renderSettingsModal(state);
-    $('modal-settings').classList.remove('hidden');
-  };
-
-  document.querySelectorAll('[data-close]').forEach((btn) => {
-    btn.onclick = () => $(btn.dataset.close).classList.add('hidden');
-  });
-
-  document.querySelectorAll('.modal-backdrop').forEach((bd) => {
-    bd.onclick = (ev) => {
-      if (ev.target === bd) bd.classList.add('hidden');
+  $('bag-refresh-btn').onclick = loadBagTab;
+  ['bag-wind', 'bag-temp', 'bag-alt', 'bag-lie'].forEach((id) => {
+    $(id).oninput = () => {
+      bagFilters.warp.wind = Number($('bag-wind').value);
+      bagFilters.warp.temp = Number($('bag-temp').value);
+      bagFilters.warp.alt = Number($('bag-alt').value);
+      bagFilters.warp.lie = $('bag-lie').value;
+      $('bag-wind-lbl').textContent = `${bagFilters.warp.wind} mph`;
+      $('bag-temp-lbl').textContent = `${bagFilters.warp.temp}°F`;
+      $('bag-alt-lbl').textContent = `${bagFilters.warp.alt} ft`;
+      renderBag();
     };
   });
-
-  $('btn-csv-import-once').onclick = async () => {
-    const res = await window.shotlabAPI.importCsv({ watch: false });
-    if (res.ok) {
-      $('csv-status-msg').textContent = `Imported ${res.count} shot(s) from ${res.path}`;
-      showToast(`Imported ${res.count} FSX shot(s)!`);
-    } else if (res.error) {
-      $('csv-status-msg').textContent = `Error: ${res.error}`;
-    }
+  $('bag-warp-reset').onclick = () => {
+    bagFilters.warp = { wind: 0, temp: 70, alt: 0, lie: 'fairway' };
+    $('bag-wind').value = '0'; $('bag-temp').value = '70'; $('bag-alt').value = '0'; $('bag-lie').value = 'fairway';
+    $('bag-wind-lbl').textContent = '0 mph'; $('bag-temp-lbl').textContent = '70°F'; $('bag-alt-lbl').textContent = '0 ft';
+    renderBag();
   };
 
-  $('btn-csv-watch').onclick = async () => {
-    const res = await window.shotlabAPI.importCsv({ watch: true });
-    if (res.ok) {
-      $('csv-status-msg').textContent = `Watching ${res.path} (${res.count} initial shots loaded)`;
-      showToast('Live FSX CSV watcher active!');
-    } else if (res.error) {
-      $('csv-status-msg').textContent = `Error: ${res.error}`;
-    }
+  // Tempo, CSV, Settings, Checkin, Park, Print modal actions
+  $('select-tempo').onchange = (e) => {
+    const preset = e.target.value;
+    const audio = window.ShotLabAudio;
+    if (preset === 'off') audio?.stopTempo?.();
+    else audio?.startTempo?.(preset, null, { sound: $('select-tempo-sound').value, gapSec: Number($('select-tempo-gap').value) });
+    api.updateSettings({ tempoPreset: preset });
+    syncTempoModal();
   };
-
-  $('btn-csv-stop').onclick = async () => {
-    await window.shotlabAPI.stopCsvWatch();
-    $('csv-status-msg').textContent = 'Stopped CSV watcher.';
-    showToast('Stopped CSV watcher.');
+  $('select-tempo-sound').onchange = (e) => {
+    window.ShotLabAudio?.setTempoOptions?.({ sound: e.target.value });
+    api.updateSettings({ tempoSound: e.target.value });
   };
-
+  $('select-tempo-gap').onchange = (e) => {
+    const gapSec = Number(e.target.value) || 0;
+    window.ShotLabAudio?.setTempoOptions?.({ gapSec });
+    api.updateSettings({ tempoGapSec: gapSec });
+  };
+  $('btn-tempo-toggle').onclick = () => {
+    const next = $('select-tempo').value === 'off' ? '24/8' : 'off';
+    $('select-tempo').value = next;
+    $('select-tempo').onchange({ target: { value: next } });
+  };
+  $('btn-csv-import-once').onclick = async () => { if (api.importCsv) { const r = await api.importCsv({ watch: false }); $('csv-status-msg').textContent = r.ok ? `Imported ${r.count} shots.` : (r.error || ''); } };
+  $('btn-csv-watch').onclick = async () => { if (api.importCsv) { const r = await api.importCsv({ watch: true }); $('csv-status-msg').textContent = r.ok ? `Watching ${r.path}` : (r.error || ''); } };
+  $('btn-csv-stop').onclick = async () => { if (api.stopCsvWatch) await api.stopCsvWatch(); };
+  $('btn-reset-cal').onclick = async () => { if (api.resetCalibration) await api.resetCalibration(); showToast('Calibration reset'); closeDialog('dlg-cal'); };
   $('btn-save-settings').onclick = async () => {
     const customLofts = {};
-    document.querySelectorAll('[data-loft-club]').forEach((inp) => {
-      const raw = inp.value.trim();
-      customLofts[inp.dataset.loftClub] = raw === '' ? null : Number(raw);
-    });
-    const obsAutoHideRaw = Number($('set-obs-autohide').value);
-    const altRaw = Number($('set-altitude').value);
-
-    await window.shotlabAPI.updateSettings({
+    document.querySelectorAll('[data-loft-club]').forEach((inp) => { customLofts[inp.dataset.loftClub] = inp.value.trim() === '' ? null : Number(inp.value); });
+    await api.updateSettings({
       driverSpeedMph: Number($('set-driver-speed').value) || 98,
       handedness: $('set-handedness').value,
-      altitudeFt: Number.isFinite(altRaw) ? altRaw : 0,
-      obsAutoHideSec: Number.isFinite(obsAutoHideRaw) ? obsAutoHideRaw : 0,
-      audioChimes: Boolean($('set-audio-chimes').checked),
-      audioCaddie: Boolean($('set-audio-caddie').checked),
-      autoSwitch: {
-        minConfidence: Math.max(0.7, Math.min(0.99, (Number($('set-autoswitch-conf').value) || 90) / 100)),
-      },
+      altitudeFt: Number($('set-altitude').value) || 0,
+      obsAutoHideSec: Number($('set-obs-autohide').value) || 0,
+      audioChimes: $('set-audio-chimes').checked,
+      audioCaddie: $('set-audio-caddie').checked,
+      autoSwitch: { minConfidence: Math.max(0.7, Math.min(0.99, (Number($('set-autoswitch-conf').value) || 90) / 100)) },
       customLofts,
     });
-    $('modal-settings').classList.add('hidden');
-    showToast('Settings saved & shots re-evaluated!');
+    await api.updateStudioState({ matType: $('set-mat-type').value });
+    closeDialog('dlg-settings');
+    showToast('Settings saved!');
   };
-
-  $('btn-reset-cal').onclick = async () => {
-    const snap = await window.shotlabAPI.resetCalibration();
-    if (snap) renderSettingsModal(snap);
-    showToast('Club calibration reset to fresh priors.');
+  $('btn-save-checkin').onclick = async () => {
+    await api.updateStudioState({
+      roundCheckin: { score: Number($('chk-round-score').value) || 79, struggles: [$('chk-round-struggle').value], ts: new Date().toISOString().slice(0, 10) },
+    });
+    closeDialog('dlg-checkin');
+    showToast('Round Check-In saved!');
   };
+  $('btn-save-park').onclick = async () => {
+    const txt = ($('park-input').value || '').trim();
+    if (!txt) return;
+    const cur = state?.settings?.studio?.parkedIdeas || [];
+    await api.updateStudioState({ parkedIdeas: [{ id: `pk_${Date.now()}`, text: txt, ts: new Date().toISOString().slice(0, 10) }, ...cur] });
+    $('park-input').value = '';
+    closeDialog('dlg-park');
+    renderPlan();
+    showToast('Captured into Parking Lot!');
+  };
+  $('btn-print-wedge').onclick = () => window.print();
 
-  // Global keyboard shortcuts: M for Mat Glance, Esc to close Mat Glance or modals
   window.addEventListener('keydown', (ev) => {
-    const tag = (ev.target && ev.target.tagName) ? ev.target.tagName.toUpperCase() : '';
-    const isTyping = tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA' || (ev.target && ev.target.isContentEditable);
-
+    if (document.querySelector('dialog[open]')) return;
+    const tag = (ev.target?.tagName || '').toUpperCase();
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
     if (ev.key === 'Escape') {
-      if (matGlanceOpen) {
-        setMatGlanceOpen(false);
-        return;
-      }
-      document.querySelectorAll('.modal-backdrop:not(.hidden)').forEach((m) => m.classList.add('hidden'));
+      if (matGlanceOpen) { matGlanceOpen = false; $('mat-glance-overlay').classList.add('hidden'); }
+      hideMetricPopover();
+      hideHoverPopover();
+      closeDrawer();
       return;
     }
-
-    if (!isTyping && !ev.metaKey && !ev.ctrlKey && !ev.altKey && (ev.key === 'm' || ev.key === 'M')) {
-      const anyModalOpen = Boolean(document.querySelector('.modal-backdrop:not(.hidden)'));
-      if (!anyModalOpen) {
-        ev.preventDefault();
-        setMatGlanceOpen(!matGlanceOpen);
-      }
+    if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    const k = ev.key.toLowerCase();
+    if (matGlanceOpen) {
+      if (k === 'm') { $('btn-mat-glance').click(); }
+      return;
     }
+    if (k === 'm') { $('btn-mat-glance').click(); }
+    else if (k === 'd') { $('btn-drills').click(); }
+    else if (k === 'p') {
+      ev.preventDefault();
+      openDialog('dlg-park');
+      $('park-input')?.focus();
+    }
+    else if (k === '1') switchMode('plan');
+    else if (k === '2') switchMode('practice');
+    else if (k === '3') switchMode('review');
+    else if (k === '4') switchMode('bag');
   });
 
-  initKeysPill();
-
-  // Subscribe to Electron main process state pushes
-  window.shotlabAPI.onState(render);
-  window.shotlabAPI.onAutoSwitch((info) => {
-    if (info.result && info.result.ok) {
-      showToast(`Auto-Switched GSPro → ${info.target} (${Math.round(info.confidence)}% conf)`);
-    }
-  });
-
-  // Initial pull
-  window.shotlabAPI.getState().then(render);
+  if (HAS_IPC && typeof api.onState === 'function') {
+    api.onState(render);
+    api.onAutoSwitch?.((info) => {
+      if (info?.result?.ok) showToast(`Auto-Switched GSPro → ${info.target} (${Math.round(info.confidence)}%)`);
+    });
+  }
+  api.getState().then(render);
 })();
