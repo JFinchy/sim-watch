@@ -52,6 +52,19 @@ def test_mapping_without_club_data_and_back_side_spin():
     assert shot["ts"][10] == "T" and ("+" in shot["ts"][19:] or "-" in shot["ts"][19:])
 
 
+def test_unread_club_marker_zeros_are_dropped_not_recorded_as_readings():
+    # ContainsClubData left true but every club value is a 0 placeholder (sticker not read)
+    obj = {"BallData": {"Speed": 113, "VLA": 17.8, "TotalSpin": 6800, "SpinAxis": -4},
+           "ShotDataOptions": {"ContainsBallData": True, "ContainsClubData": True},
+           "ClubData": {"Speed": 0, "Path": 0, "AngleOfAttack": 0, "FaceToTarget": 0}}
+    shot = sw.openconnect_to_shot(obj)
+    assert shot["club_data"] is None
+    assert shot["derived"].get("smash") is None
+    # path without a club speed is also untrustworthy -> dropped
+    obj["ClubData"] = {"Path": 2.0, "AngleOfAttack": -3.0}
+    assert sw.openconnect_to_shot(obj)["club_data"] is None
+
+
 def test_monitor_passes_full_shot_and_keeps_legacy_keys():
     got = []
     mon = sw.OpenConnectMonitor(got.append, lambda club: None)

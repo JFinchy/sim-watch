@@ -83,6 +83,8 @@ const NON_FAULT_DELIVERY_IDS = new Set([
   'tour_sweep',
   'solid_driver',
   'neutral_delivery',
+  'ball_flight_ok', // no club read, launch & spin fine (not a fault)
+  'no_data',        // Quiet Mode with no club read (nothing graded)
 ]);
 
 function toNumOrNull(v) {

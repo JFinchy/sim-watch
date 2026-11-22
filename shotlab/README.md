@@ -91,6 +91,16 @@ Every metric tile is explicitly badged so you always know what came directly off
 
 ---
 
+## When the Club Isn't Read (Sticker Missed)
+
+The Launch Pro reads club speed, smash, path and attack angle from the club sticker. When it misses, ShotLab never invents those numbers:
+
+- **Shown as missing:** club speed, smash, path, AoA and face-to-path tiles show `—` (tagged `NO READ`), and a yellow **No club read** notice explains what's estimated. Zero placeholders some connectors send instead are treated as missing, so a fake `0.0°` path never grades green.
+- **Still estimated from ball flight:** carry, apex, curve and shot shape (pure ball physics), face-to-target from start line (`EST`), and delivery faults from launch & spin with the club's typical attack angle assumed. These are labelled **"(ball-flight estimate)"** at reduced confidence.
+- **Not claimed:** "Pure Compression"-style verdicts (shown instead as "Launch & Spin On Window") and a clean strike (shown as **Strike not measured**, with `?` on the clubface map).
+- **Club:** graded against the club selected in GSPro, because guessing the club from ball flight alone can't tell a different club apart from a mishit with this one. GSPro Auto-Switch never fires on these shots.
+- **Session:** the average score uses full reads only, and the session chip shows `Club read N/M`, a quick sign the sticker needs replacing.
+
 ## FSX Pro / FSX 2020 CSV Support
 
 Click **FSX CSV** in the top bar to:

@@ -227,13 +227,16 @@ function detectFaultStreak(recentShots = [], drills = [], { practiceMode = 'real
   ]);
   if (!Array.isArray(recentShots) || recentShots.length < 2) return null;
 
+  // Ball-flight estimates (club sticker not read) never start or extend a streak: a run of sticker misses
+  // shouldn't raise a "repeating fault" alert built on assumed attack angles.
+  const measured = (s) => Boolean(s && s.delivery && s.delivery.basis !== 'ball_only');
   const first = recentShots[0];
-  const faultId = first && first.delivery ? first.delivery.id : null;
+  const faultId = measured(first) ? first.delivery.id : null;
   if (!faultId || !nonGood.has(faultId)) return null;
 
   let streak = 0;
   for (const s of recentShots) {
-    if (s && s.delivery && s.delivery.id === faultId) {
+    if (measured(s) && s.delivery.id === faultId) {
       streak += 1;
     } else {
       break;

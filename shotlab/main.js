@@ -234,9 +234,14 @@ function computeSessionStats(shots) {
     ? Math.round((totalSg / sgVals.length) * 100) / 100
     : null;
 
+  // Shots with no club read are graded on fewer metrics (no smash/path/AoA), so they'd inflate the average:
+  // average full reads only, and report how often the club sticker was read.
+  const clubReads = real.filter((s) => !s.dataQuality || s.dataQuality.clubRead).length;
+  const fullReadShots = real.filter((s) => !s.dataQuality || s.dataQuality.clubRead);
   return {
     count,
-    avgScore: avgOf(real.map((s) => s.scorecard && s.scorecard.score), 0),
+    clubReads,
+    avgScore: avgOf((fullReadShots.length ? fullReadShots : real).map((s) => s.scorecard && s.scorecard.score), 0),
     avgCarry: avgOf(
       real.map((s) => s.metrics && (s.metrics.effectiveCarry ?? (s.flight && s.flight.carryYds))),
       1

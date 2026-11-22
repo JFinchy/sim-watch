@@ -254,6 +254,25 @@
     });
   }
 
+  // Missing-data notice: says plainly what the launch monitor didn't send and what is an estimate.
+  function renderDataQuality(shot, snap) {
+    const el = $('data-quality-note');
+    if (!el) return;
+    const dq = shot && shot.dataQuality;
+    const cov = shot && shot.scorecard && shot.scorecard.coverage;
+    if (!dq || dq.clubRead) {
+      el.classList.add('hidden');
+      el.textContent = '';
+      return;
+    }
+    const st = snap && snap.sessionStats;
+    const rate = st && st.count > 1 ? ` Club read on ${st.clubReads}/${st.count} shots this session.` : '';
+    const graded = cov ? ` Score uses ${cov.graded} of ${cov.total} metrics.` : '';
+    el.innerHTML = `<strong>No club read</strong> (sticker missed): club speed, smash, path &amp; attack angle unavailable.
+      Delivery and strike below are <em>ball-flight estimates</em>.${esc(graded)}${esc(rate)}`;
+    el.classList.remove('hidden');
+  }
+
   function renderRigPill(el, health) {
     if (!el) return;
     if (!health || !health.state) {
@@ -728,6 +747,7 @@
   function renderScorecard(shot, snap) {
     const sc = shot.scorecard;
     $('scorecard-tier-label').textContent = `${sc.tierLabel} · ${shot.activeClubLabel}`;
+    renderDataQuality(shot, snap);
     $('sum-green').textContent = `${sc.counts.green} Green`;
     $('sum-yellow').textContent = `${sc.counts.yellow} Yellow`;
     $('sum-red').textContent = `${sc.counts.red} Red`;
@@ -739,6 +759,7 @@
       const parts = [`Session (${st.count})`];
       if (st.avgScore !== null && st.avgScore !== undefined) parts.push(`Avg ${st.avgScore}`);
       if (st.totalSg !== null && st.totalSg !== undefined) parts.push(fmtSg(st.totalSg));
+      if (typeof st.clubReads === 'number' && st.clubReads < st.count) parts.push(`Club read ${st.clubReads}/${st.count}`);
       sessChip.textContent = parts.join(' · ');
       sessChip.className = `tag ${st.avgSg !== null ? sgTagClass(st.avgSg) : 'tag-neutral'}`;
     } else {
@@ -754,7 +775,7 @@
       <div class="metric-tile grade-${esc(c.grade)}" data-idx="${idx}">
         <div class="mt-top">
           <span class="mt-label">${esc(c.label)}</span>
-          <span class="mt-src src-${esc(c.source)}">${esc(c.source === 'measured' ? 'BLP' : c.source === 'estimated' ? 'EST' : c.source === 'physics' ? 'PHYS' : c.source)}</span>
+          <span class="mt-src src-${esc(c.source)}">${esc(c.source === 'measured' ? 'BLP' : c.source === 'estimated' ? 'EST' : c.source === 'physics' ? 'PHYS' : c.source === 'missing' ? 'NO READ' : c.source)}</span>
         </div>
         <div class="mt-value">${esc(c.value)}<span class="mt-unit">${esc(c.unit)}</span></div>
         <div class="mt-foot">

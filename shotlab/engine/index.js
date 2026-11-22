@@ -141,6 +141,12 @@ function normalizeRawShot(raw) {
     ? Math.round((ballSpeed / validClubSpeed) * 100) / 100
     : null;
 
+  // The 1-dot BLP reads club speed, path and AoA from the same club marker, so they arrive together or not
+  // at all. With no valid club speed the marker wasn't read: drop the rest too, so 0/placeholder path & AoA
+  // (some connectors send zeros instead of omitting ClubData) are never graded as a perfect 0.0°.
+  // Any positive club speed means the marker was read (a slow chip can be < 20 mph); the 20 mph floor above
+  // only guards smash / club-speed grading against junk values.
+  const clubRead = clubSpeed !== null && clubSpeed > 0;
   const reportedRaw = raw.club || raw.gspro_club || (raw.Player && raw.Player.Club);
 
   return {
@@ -162,12 +168,164 @@ function normalizeRawShot(raw) {
       sideSpin,
       clubSpeed: validClubSpeed,
       smash,
-      path: cd ? toNum(cd.path) : null,
-      rawFace: cd ? toNum(cd.face) : null,
-      aoa: cd ? toNum(cd.aoa) : null,
+      path: clubRead ? toNum(cd.path) : null,
+      rawFace: clubRead ? toNum(cd.face) : null,
+      aoa: clubRead ? toNum(cd.aoa) : null,
+      clubRead,
     },
     raw,
   };
+}
+
+// Grade cards that need the club marker (BLP 1-dot sticker) read.
+const CLUB_METRIC_KEYS = new Set(['clubSpeed', 'smash', 'aoa', 'path', 'faceToPath']);
+// "Nothing wrong" delivery verdicts; without club data they can't actually be confirmed.
+const HEALTHY_DELIVERY_IDS = new Set(['pure_compression', 'neutral_delivery', 'tour_sweep', 'solid_driver']);
+
+/**
+ * Missing-data policy (mutates delivery / strike / scorecard in place, returns the dataQuality summary).
+ *
+ * Measured values are never invented: anything the launch monitor didn't send stays null and shows "—".
+ * When the club marker wasn't read we keep what ball flight genuinely supports and say so:
+ *  - Face-to-target still estimates from start line (already labelled EST by analyzeDPlane).
+ *  - Delivery FAULTS still fire from launch/spin (AoA assumed for the club) but at reduced confidence,
+ *    labelled "(ball-flight estimate)". "All good" verdicts become "Launch & Spin On Window" because
+ *    compression, AoA and shaft lean can't be confirmed without club data.
+ *  - Strike: a clean result can't be claimed without smash, so it becomes "Strike not measured";
+ *    a thin/fat/toe/heel signal from launch & spin is kept at low confidence, labelled "(estimate)".
+ *  - Quiet Mode grades club-only metrics, so with no club read there is nothing to grade: "No club read".
+ */
+function applyDataQuality({ metrics, clubSpec, delivery, strike, scorecard, practiceMode }) {
+  const clubRead = metrics.clubRead !== false;
+  const missing = [];
+  if (!clubRead) missing.push('Club Speed', 'Smash', 'Club Path', 'Angle of Attack');
+  if (metrics.vla === null) missing.push('Launch Angle');
+  if (metrics.hla === null) missing.push('Start Direction');
+  if (metrics.totalSpin === null) missing.push('Spin');
+  if (metrics.spinAxis === null) missing.push('Spin Axis');
+  const dq = { clubRead, basis: clubRead ? 'full' : 'ball_only', missing, note: null };
+
+  if (scorecard && Array.isArray(scorecard.cards)) {
+    const graded = scorecard.cards.filter((c) => c.grade && c.grade !== 'neutral').length;
+    scorecard.coverage = { graded, total: scorecard.cards.length };
+    scorecard.basis = dq.basis;
+  }
+  if (clubRead) return dq;
+
+  const club = clubSpec.label;
+  dq.note = 'No club read (sticker missed): club speed, smash, path and AoA unavailable. '
+    + 'Delivery and strike are estimates from ball flight only.';
+
+  if (scorecard && Array.isArray(scorecard.cards)) {
+    for (const c of scorecard.cards) {
+      if (CLUB_METRIC_KEYS.has(c.key) && (c.raw === null || c.raw === undefined)) {
+        c.source = 'missing';
+        c.target = 'no club read';
+      }
+    }
+  }
+
+  if (delivery) {
+    delivery.basis = 'ball_only';
+    if (practiceMode === 'almost') {
+      Object.assign(delivery, {
+        id: 'no_data',
+        name: 'No club read',
+        severity: 'neutral',
+        confidence: 0,
+        tagline: 'Quiet Mode grades club path and attack angle, but the club sticker wasn\'t read on this swing.',
+        cues: ['Check the club sticker is clean, flat and square to the face'],
+        evidence: [],
+        alternates: [],
+        estDynamicLoft: null,
+        estShaftLean: null,
+        spinLoft: null,
+      });
+    } else if (HEALTHY_DELIVERY_IDS.has(delivery.id)) {
+      // No club-based fault fired. Read what launch & spin alone say, graded against this club's window.
+      const card = (key) => (scorecard && scorecard.cards || []).find((c) => c.key === key) || null;
+      const vlaCard = card('vla');
+      const spinCard = card('backSpin');
+      const vlaDelta = metrics.vla !== null ? metrics.vla - clubSpec.vla.ideal : 0;
+      const spinDelta = metrics.backSpin !== null ? metrics.backSpin - clubSpec.spin.ideal : 0;
+      const offWindow = [vlaCard, spinCard].some((c) => c && (c.grade === 'yellow' || c.grade === 'red'));
+      const anyRed = [vlaCard, spinCard].some((c) => c && c.grade === 'red');
+      if (offWindow && vlaDelta > 0 && spinDelta >= 0) {
+        Object.assign(delivery, {
+          id: 'flipping_floater',
+          name: 'High Launch & Spin (ball-flight estimate)',
+          severity: anyRed ? 'red' : 'yellow',
+          confidence: 0.45,
+          tagline: `No club read: launch and spin are high for a ${club}, the usual sign of added loft at impact (flip / scoop). Can't confirm without club data.`,
+          cues: ['Hands ahead of the ball at impact', 'Check the club sticker is clean, flat and square to the face'],
+          evidence: [
+            `Launch ${metrics.vla}° vs ${clubSpec.vla.ideal}° typical ${club}`,
+            metrics.backSpin !== null ? `Backspin ${Math.round(metrics.backSpin)} rpm vs ${clubSpec.spin.ideal} typical` : '',
+          ].filter(Boolean),
+          estShaftLean: null,
+          spinLoft: null,
+          alternates: [],
+        });
+      } else if (offWindow && vlaDelta < 0 && spinDelta <= 0) {
+        Object.assign(delivery, {
+          id: 'over_hold',
+          name: 'Low Launch & Spin (ball-flight estimate)',
+          severity: anyRed ? 'red' : 'yellow',
+          confidence: 0.45,
+          tagline: `No club read: launch and spin are low for a ${club}: delofted or held-off delivery, or a thin strike. Can't confirm without club data.`,
+          cues: ['Let the club release through impact', 'Check the club sticker is clean, flat and square to the face'],
+          evidence: [
+            `Launch ${metrics.vla}° vs ${clubSpec.vla.ideal}° typical ${club}`,
+            metrics.backSpin !== null ? `Backspin ${Math.round(metrics.backSpin)} rpm vs ${clubSpec.spin.ideal} typical` : '',
+          ].filter(Boolean),
+          estShaftLean: null,
+          spinLoft: null,
+          alternates: [],
+        });
+      } else {
+        Object.assign(delivery, {
+          id: 'ball_flight_ok',
+          name: 'Launch & Spin On Window',
+          severity: 'green',
+          confidence: Math.min(delivery.confidence || 0, 0.5),
+          tagline: `No club read: launch and spin look right for a ${club}, but compression, attack angle and shaft lean can't be confirmed.`,
+          cues: ['Check the club sticker is clean, flat and square to the face'],
+          estShaftLean: null,
+          spinLoft: null,
+        });
+        delivery.evidence = [
+          `Ball-flight only: attack angle assumed ${clubSpec.aoa.ideal}° (typical ${club})`,
+          ...(delivery.evidence || []).filter((e) => !/Smash|Angle of Attack|Shaft Lean|Spin Loft/i.test(e)),
+        ];
+      }
+    } else {
+      delivery.confidence = Math.round(Math.min((delivery.confidence || 0) * 0.7, 0.6) * 100) / 100;
+      delivery.name = `${delivery.name} (ball-flight estimate)`;
+      delivery.evidence = [
+        `No club read: attack angle assumed ${clubSpec.aoa.ideal}° for ${club}; verdict from launch & spin only`,
+        ...(delivery.evidence || []),
+      ];
+    }
+  }
+
+  if (strike && practiceMode !== 'almost') {
+    strike.basis = 'ball_only';
+    if (strike.location === 'center') {
+      Object.assign(strike, {
+        location: 'unknown',
+        label: 'Strike not measured',
+        severity: 'neutral',
+        confidence: 0,
+        coords: null,
+        rationale: ['No club read, so smash factor (the main strike signal) is unavailable. Launch and spin show no clear thin/fat pattern.'],
+      });
+    } else if (strike.location !== 'unknown') {
+      strike.confidence = Math.min(strike.confidence || 0, 0.5);
+      strike.label = `${strike.label} (estimate)`;
+      strike.rationale = ['No club read: inferred from launch & spin only', ...(strike.rationale || [])];
+    }
+  }
+  return dq;
 }
 
 /**
@@ -215,8 +373,11 @@ function analyzeShot(rawShot, options = {}) {
   // Active club priority: explicit override > confirmed club > detected club (when confident) > GSPro reported full-swing club > 7I
   const overrideClub = normalizeClubCode(options.clubOverride) || norm.confirmedClub;
   const reportedFullClub = normalizeClubCode(norm.reportedClub);
+  // Without club data (Quiet Mode foam balls, or the club sticker wasn't read) ball-only detection is circular:
+  // a floaty 7-iron simply "looks like" a normal PW. Trust the club selected in GSPro in that case.
+  const trustReportedClub = practiceMode === 'almost' || !norm.metrics.clubRead;
   const activeClub = overrideClub
-    || (practiceMode === 'almost' && reportedFullClub ? reportedFullClub : null)
+    || (trustReportedClub && reportedFullClub ? reportedFullClub : null)
     || (clubDetection.predictedClub && clubDetection.confidence >= 0.45 ? clubDetection.predictedClub : null)
     || reportedFullClub
     || clubDetection.predictedClub
@@ -317,8 +478,11 @@ function analyzeShot(rawShot, options = {}) {
     clubDetection.predictedClub &&
     clubDetection.confidence >= (cal.autoSwitch.minConfidence || 0.90) &&
     norm.reportedClub &&
-    clubDetection.predictedClub !== norm.reportedClub
+    clubDetection.predictedClub !== norm.reportedClub &&
+    norm.metrics.clubRead // no club read: ball-only detection isn't trusted to change GSPro's club
   );
+
+  const dataQuality = applyDataQuality({ metrics: norm.metrics, clubSpec, delivery, strike, scorecard, practiceMode });
 
   const clipInfo = deriveSiblingClips(norm.raw.clip || null);
 
@@ -370,6 +534,7 @@ function analyzeShot(rawShot, options = {}) {
     delivery,
     strike,
     scorecard,
+    dataQuality,
     strokesGained,
     clubDetection,
     shouldAutoSwitch,

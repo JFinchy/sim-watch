@@ -160,6 +160,7 @@
   function cleanCue(text) {
     return String(text || '')
       .replace(/^Quiet Mode:\s*/i, '')
+      .replace(/\s*\((ball-flight )?estimate\)/gi, '') // "No club read" is spoken separately
       .replace(/[±]/g, 'plus or minus ')
       .replace(/°/g, ' degrees')
       .replace(/\s+/g, ' ')
@@ -225,6 +226,9 @@
 
     if (typeof m.smash === 'number' && Number.isFinite(m.smash) && m.smash > 0.5) {
       parts.push(`Smash ${m.smash.toFixed(2)}`);
+    }
+    if (shot.dataQuality && shot.dataQuality.clubRead === false) {
+      parts.push('No club read'); // eyes-free cue to check the club sticker
     }
 
     if (del.severity === 'green') {

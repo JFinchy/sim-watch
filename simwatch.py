@@ -4755,7 +4755,9 @@ def openconnect_to_shot(obj: dict, club: str | None = None, ts: str | None = Non
             "face": _num(cd.get("FaceToTarget")),
             "aoa": _num(cd.get("AngleOfAttack")),
         }
-        if all(v is None for v in club_data.values()):
+        # BLP reads speed, path and AoA from one club marker: no valid speed means the marker wasn't read,
+        # and some connectors then send 0 placeholders instead of omitting ClubData. Never record those.
+        if club_data["speed"] is None or club_data["speed"] <= 0:
             club_data = None
 
     shot_num = obj.get("ShotNumber")

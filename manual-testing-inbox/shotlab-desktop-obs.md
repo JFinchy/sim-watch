@@ -28,6 +28,13 @@ All physics, club classifier (including Markov stickiness, partial-swing guard &
 6b. **Switch lock:** click **⇄ Sync GSPro** twice quickly. The second click should toast "previous switch still settling" and GSPro must step exactly once to the target (no overshoot).
 6c. **Bridge reconnect:** with ShotLab open, stop SimWatch (close its window). Within ~5s the bridge pill should go `Offline`; restart SimWatch and confirm it flips back to `Live` on its own and the next shot arrives. (If SimWatch hangs rather than exits, ShotLab now drops the stream after 45s of no heartbeat.)
 
+6d. **No club read (sticker missed):** peel the club sticker off (or cover it with a finger of tape) and hit 3 shots.
+   - The yellow **"No club read"** notice appears above the metric tiles; club speed, smash, path and AoA tiles show `—` with a `NO READ` tag and "no club read".
+   - Delivery reads "Launch & Spin On Window" or a fault ending "(ball-flight estimate)", never "Pure Compression". The clubface map shows `?` instead of a strike dot.
+   - The shot is graded against the club selected in GSPro, not a guessed one. Auto-Switch does not fire.
+   - The session chip shows `Club read 0/3`; with Audio Caddie on, the callout includes "No club read".
+   - Check `Swings/Sessions/<today>/shots.jsonl`: those shots have `"club_data": null` (not zeros). If they show zeros with a club speed, note it here: GameChanger is sending something the guard doesn't catch.
+
 ### ShotLab v2 Features Checklist
 7. **SQLite Swing DB & Patterns (`shotlab/data/swings.sqlite`):**
    - Confirm shots save to `shotlab/data/swings.sqlite` and survive restarting ShotLab.

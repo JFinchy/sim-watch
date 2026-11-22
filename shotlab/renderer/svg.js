@@ -175,6 +175,7 @@
     const h = 104;
     const isLH = handedness === 'LH';
     const isWood = clubSpec && (clubSpec.category === 'driver' || clubSpec.category === 'wood' || clubSpec.category === 'hybrid');
+    const unknown = Boolean(strike && strike.location === 'unknown'); // no club read: don't draw a fake hotspot
     const coords = (strike && strike.coords) || { x: 0, y: 0 };
     const color = gradeColor(strike ? strike.severity : 'green');
 
@@ -221,10 +222,12 @@
           <line x1="${cx - 8}" y1="${cy}" x2="${cx + 8}" y2="${cy}" stroke="#64748b" stroke-width="1" stroke-dasharray="2 2"/>
           <line x1="${cx}" y1="${cy - 8}" x2="${cx}" y2="${cy + 8}" stroke="#64748b" stroke-width="1" stroke-dasharray="2 2"/>
           <circle cx="${cx}" cy="${cy}" r="11" fill="none" stroke="#475569" stroke-width="0.9" stroke-dasharray="2 2"/>
-          <!-- Inferred strike hotspot -->
+          ${unknown ? '' : `<!-- Inferred strike hotspot -->
           <circle cx="${hitX.toFixed(1)}" cy="${hitY.toFixed(1)}" r="18" fill="url(#${uid}_spot)"/>
-          <circle cx="${hitX.toFixed(1)}" cy="${hitY.toFixed(1)}" r="5" fill="${color}" stroke="#f8fafc" stroke-width="1.4"/>
+          <circle cx="${hitX.toFixed(1)}" cy="${hitY.toFixed(1)}" r="5" fill="${color}" stroke="#f8fafc" stroke-width="1.4"/>`}
         </g>
+        ${unknown ? `<text x="${cx}" y="${cy + 6}" text-anchor="middle" fill="#94a3b8" font-size="18" font-weight="800">?</text>
+        <text x="${cx}" y="${h - 18}" text-anchor="middle" fill="#94a3b8" font-size="8">no club read</text>` : ''}
         <!-- Labels -->
         <text x="12" y="99" fill="#64748b" font-size="8.5" font-weight="700">${isLH ? 'TOE' : 'HEEL'}</text>
         <text x="${w - 12}" y="99" text-anchor="end" fill="#64748b" font-size="8.5" font-weight="700">${isLH ? 'HEEL' : 'TOE'}</text>
