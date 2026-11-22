@@ -13,6 +13,7 @@ run on macOS/Linux; you can only read, edit and run pure-logic tests and the dri
 - `Swings/` - Kinovea workspaces, OBS scene collection, My-Go-To and Pros reference clips
 - `drills/` - offline drills hub (`index.html`, `drills_data.js`, `shorts/`, `tools/`)
 - `SETUP.md` - install checklist; `README.md` - feature docs
+- `docs/SHORTCUTS.md` - generated hotkey map (`python simwatch.py keys md`; source: `HOTKEY_ACTIONS` in simwatch.py + `video.hotkeys`)
 - `manual-testing-inbox/` - human verification queue
 
 ## Commands

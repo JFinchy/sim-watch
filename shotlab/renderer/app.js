@@ -67,6 +67,46 @@
     toastTimer = setTimeout(() => el.classList.add('hidden'), 3200);
   }
 
+  // ---- Flight chart benchmark lines (Tour / Scratch / Low HCP / Mid HCP), toggled by the chips under the chart
+  let lastTrajShot = null;
+
+  function visibleRefLines() {
+    const v = state && state.settings && state.settings.refLines;
+    return Array.isArray(v) ? v : ['tour'];
+  }
+
+  function renderTrajectoryWithRefs() {
+    const shot = lastTrajShot;
+    const wrap = $('side-traj-wrap');
+    if (!wrap) return;
+    if (!shot || !shot.flight) {
+      wrap.innerHTML = window.ShotLabSVG.renderSideTrajectory(null, null);
+      return;
+    }
+    const refs = Array.isArray(shot.references) ? shot.references : [];
+    const shown = visibleRefLines();
+    const svg = window.ShotLabSVG.renderSideTrajectory(
+      shot.flight, shot.potential, shot.shotShape && shot.shotShape.severity, refs, shown);
+    const chips = refs.map((r) => {
+      const on = shown.includes(r.id);
+      const tip = `${r.label}: ${r.carryYds} yds carry, ${r.apexFt} ft apex, ${r.descentAngleDeg}° landing (${r.source}). Click to ${on ? 'hide' : 'show'}.`;
+      return `<button type="button" class="ref-chip${on ? ' on' : ''}" data-ref="${esc(r.id)}" title="${esc(tip)}" style="--ref:${esc(r.color)}">`
+        + `<span class="ref-swatch"></span>${esc(r.label)}${on ? ` <span class="ref-num">${r.carryYds}y · ${r.apexFt}ft</span>` : ''}</button>`;
+    }).join('');
+    wrap.innerHTML = svg + (chips ? `<div class="ref-chips" aria-label="Benchmark lines">${chips}</div>` : '');
+    wrap.querySelectorAll('.ref-chip').forEach((btn) => {
+      btn.onclick = () => {
+        const id = btn.getAttribute('data-ref');
+        const cur = new Set(visibleRefLines());
+        if (cur.has(id)) cur.delete(id); else cur.add(id);
+        const next = [...cur];
+        if (state && state.settings) state.settings.refLines = next;  // instant redraw; main persists it
+        window.shotlabAPI.updateSettings({ refLines: next });
+        renderTrajectoryWithRefs();
+      };
+    });
+  }
+
   function esc(str) {
     return String(str ?? '')
       .replace(/&/g, '&amp;')
@@ -402,6 +442,14 @@
     const isRunning = Boolean(audio && typeof audio.isTempoRunning === 'function' && audio.isTempoRunning());
     const runningPreset = isRunning && typeof audio.getTempoPreset === 'function' ? audio.getTempoPreset() : 'off';
     tempoSel.value = isRunning ? (runningPreset || '24/8') : 'off';
+    const tempoSettings = (state && state.settings) || {};
+    const soundSel = $('select-tempo-sound');
+    const gapSel = $('select-tempo-gap');
+    if (soundSel && document.activeElement !== soundSel) soundSel.value = tempoSettings.tempoSound || 'tones';
+    if (gapSel && document.activeElement !== gapSel) gapSel.value = String(tempoSettings.tempoGapSec || 0);
+    if (audio && typeof audio.setTempoOptions === 'function') {
+      audio.setTempoOptions({ sound: tempoSettings.tempoSound || 'tones', gapSec: tempoSettings.tempoGapSec || 0 });
+    }
 
     // Local DB pill
     const pillDb = $('pill-db');
@@ -521,7 +569,8 @@
     }
 
     $('shape-icon-wrap').innerHTML = window.ShotLabSVG.renderShotShapeIcon(sh.svgParams, { width: 112, height: 112 });
-    $('side-traj-wrap').innerHTML = window.ShotLabSVG.renderSideTrajectory(fl, shot.potential, sh.severity);
+    lastTrajShot = shot;
+    renderTrajectoryWithRefs();
 
     $('stat-carry').textContent = `${Math.round(shot.metrics.effectiveCarry)} yds`;
     $('stat-total').textContent = `Total ${Math.round(shot.metrics.totalYds)} yds (+${Math.round(fl.rollYds)} roll)`;
@@ -839,7 +888,8 @@
     $('shape-sg-pill').classList.add('hidden');
     $('shape-quiet-badge').classList.add('hidden');
     $('shape-icon-wrap').innerHTML = '';
-    $('side-traj-wrap').innerHTML = window.ShotLabSVG.renderSideTrajectory(null, null);
+    lastTrajShot = null;
+    renderTrajectoryWithRefs();
     $('stat-carry').textContent = '—';
     $('stat-total').textContent = 'Total — yds';
     $('stat-curve').textContent = '—';
@@ -1840,10 +1890,36 @@
       window.shotlabAPI.updateSettings({ tempoPreset: 'off' });
       showToast('Tour Tempo metronome stopped');
     } else {
-      if (audio && typeof audio.startTempo === 'function') audio.startTempo(preset);
+      if (audio && typeof audio.startTempo === 'function') audio.startTempo(preset, null, currentTempoOptions());
       window.shotlabAPI.updateSettings({ tempoPreset: preset });
-      showToast(`Tour Tempo ${preset} started`);
+      const opts = currentTempoOptions();
+      showToast(`Tour Tempo ${preset} started` + (opts.gapSec > 0 ? ` · ${opts.gapSec}s rest between swings` : ''));
     }
+  };
+
+  function currentTempoOptions() {
+    const soundSel = $('select-tempo-sound');
+    const gapSel = $('select-tempo-gap');
+    return {
+      sound: (soundSel && soundSel.value) || 'tones',
+      gapSec: Number((gapSel && gapSel.value) || 0) || 0,
+    };
+  }
+
+  // Tempo sound + rest between swings: apply live (next beat) and persist.
+  $('select-tempo-sound').onchange = (ev) => {
+    const audio = window.ShotLabAudio;
+    if (audio && typeof audio.setTempoOptions === 'function') audio.setTempoOptions({ sound: ev.target.value });
+    window.shotlabAPI.updateSettings({ tempoSound: ev.target.value });
+    const set = audio && audio.TEMPO_SOUNDS && audio.TEMPO_SOUNDS[ev.target.value];
+    showToast(`Tempo sound: ${set ? set.label : ev.target.value}`);
+  };
+  $('select-tempo-gap').onchange = (ev) => {
+    const gapSec = Number(ev.target.value) || 0;
+    const audio = window.ShotLabAudio;
+    if (audio && typeof audio.setTempoOptions === 'function') audio.setTempoOptions({ gapSec });
+    window.shotlabAPI.updateSettings({ tempoGapSec: gapSec });
+    showToast(gapSec > 0 ? `Tempo: ${gapSec}s rest between swings (quiet tick 1s before each)` : 'Tempo: non-stop');
   };
 
   // Mat Glance button & close

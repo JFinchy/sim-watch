@@ -100,6 +100,7 @@ LOG = logging.getLogger("simwatch")
 GSPRO_PORT = 921
 VIDEO_EXTS = (".mp4", ".mkv", ".avi", ".mov")
 STATUS_PATH = HERE / "simwatch_status.json"
+VIDEO_STATE_PATH = HERE / "video_state.json"  # video rig runtime: layout profile, replay/compare state, hotkey registration
 _SINGLETON_MUTEX = None
 # Daemon coordination files (all gitignored, next to this script):
 DAEMON_INFO_PATH = HERE / "simwatch_daemon.json"  # {pid, command, started} of the daemon holding the singleton
@@ -356,6 +357,29 @@ def validate_config(cfg: dict, check_paths: bool | None = None) -> list[tuple[st
     sl = cfg.get("video", {}).get("swing_lines", {}) if isinstance(cfg.get("video"), dict) else {}
     if isinstance(sl, dict) and sl.get("handedness") and str(sl["handedness"]).lower() not in ("left", "right"):
         warn(f"video.swing_lines.handedness {sl['handedness']!r} is not 'left' or 'right' (treated as right)")
+    vraw = cfg.get("video") if isinstance(cfg.get("video"), dict) else {}
+    lay = vraw.get("layout")
+    if lay is not None and not isinstance(lay, dict):
+        warn("video.layout must be an object (using the defaults)")
+    elif isinstance(lay, dict):
+        prof = str(lay.get("profile", "auto")).lower()
+        if prof != "auto" and prof not in VIDEO_LAYOUT_PROFILES:
+            warn(f"video.layout.profile {lay.get('profile')!r} is not auto/{'/'.join(VIDEO_LAYOUT_PROFILES)} (using auto)")
+        for k in ("capture_hide", "replay_hide"):
+            if k in lay and str(lay[k]).lower() not in HIDE_METHODS:
+                warn(f"video.layout.{k} {lay[k]!r} is not {'/'.join(HIDE_METHODS)} (using behind)")
+    rep = vraw.get("replay")
+    if rep is not None and not isinstance(rep, dict):
+        warn("video.replay must be an object (using the defaults)")
+    elif isinstance(rep, dict):
+        if "mode" in rep and str(rep["mode"]).lower() not in ("auto", "off"):
+            warn(f"video.replay.mode {rep['mode']!r} is not auto/off (using auto)")
+        for k in ("delay_sec", "show_sec", "manual_delay_sec", "clip_wait_sec", "input_grace_sec"):
+            if k in rep and not _is_num(rep[k]):
+                warn(f"video.replay.{k} must be a non-negative number (got {rep[k]!r})")
+        by = rep.get("delay_by_club")
+        if by is not None and not (isinstance(by, dict) and all(v is None or _is_num(v) for v in by.values())):
+            warn("video.replay.delay_by_club must map Driver/Iron/Wedge/Putter to seconds or null")
     bcfg = cfg.get("bridge")
     if isinstance(bcfg, dict) and "lan" in bcfg and not isinstance(bcfg["lan"], bool):
         warn(f"bridge.lan {bcfg['lan']!r} is not true/false (treated as false: phone access stays off)")
@@ -557,6 +581,16 @@ def read_daemon_info() -> dict | None:
         return None
     if pid == os.getpid() or not psutil.pid_exists(pid):
         return None
+    # A crash (or a kill) skips the atexit cleanup, and Windows reuses pids quickly: a live pid that is not a
+    # python process is someone else's (e.g. `stop` would otherwise wait 20 s on an unrelated program).
+    try:
+        name = (psutil.Process(pid).name() or "").lower()
+        if name and not name.startswith("python"):
+            return None
+    except psutil.NoSuchProcess:
+        return None
+    except psutil.Error:
+        pass  # access denied (elevated daemon): trust the file
     return info
 
 
@@ -670,6 +704,48 @@ def request_stop(timeout: float = 20.0) -> int:
         except OSError:
             pass
     return len(pids)
+
+
+def scheduled_task_running(name: str = "SimWatch") -> bool | None:
+    """True/False from `schtasks /Query` (CSV), None if the task can't be queried."""
+    rc, out = _run_cmd(["schtasks", "/Query", "/TN", name, "/FO", "CSV", "/NH"], 15)
+    if rc != 0 or not out.strip():
+        return None
+    return '"running"' in out.strip().splitlines()[-1].lower()
+
+
+def cmd_restart(wait_task_sec: float = 15.0, wait_start_sec: float = 90.0) -> int:
+    """`simwatch.py restart`: clean stop, make sure the scheduled task has really ended (its launcher window can
+    linger and keep the task 'Running', so a plain `schtasks /Run` silently does nothing), start it again and wait
+    until the new daemon is up. One shift-free command for the rig after `git pull`."""
+    n = request_stop()
+    print(f"Stopped {n} running SimWatch background instance(s).")
+    deadline = time.time() + wait_task_sec
+    state = scheduled_task_running()
+    while state and time.time() < deadline:
+        time.sleep(1)
+        state = scheduled_task_running()
+    if state is None:
+        print("Scheduled task 'SimWatch' not found (run install_autostart.bat), or schtasks failed.")
+        return 1
+    if state:
+        print("Scheduled task still shows Running after the stop; ending it.")
+        _run_cmd(["schtasks", "/End", "/TN", "SimWatch"], 20)
+        time.sleep(2)
+    rc, out = _run_cmd(["schtasks", "/Run", "/TN", "SimWatch"], 20)
+    if rc != 0:
+        print(f"schtasks /Run failed: {out.strip()}")
+        return 1
+    print(f"Started the SimWatch task; waiting up to {wait_start_sec:.0f}s for it to come up...")
+    deadline = time.time() + wait_start_sec
+    while time.time() < deadline:
+        info = read_daemon_info()
+        if info and info.get("pid") and psutil.pid_exists(int(info["pid"])):
+            print(f"SimWatch is running (pid {info['pid']}, `{info.get('command', '?')}`).")
+            return 0
+        time.sleep(1)
+    print("SimWatch did not report in yet; check logs\\launcher.log and simwatch.log, or run `simwatch.py status`.")
+    return 1
 
 
 def video_request_active() -> bool:
@@ -981,10 +1057,7 @@ def gspro_configure(cfg, app) -> bool:
             return False
         dlg = spec.wrapper_object().handle
         idx, disp, projector_on = choose_display(cfg)
-        gdisp = cfg.get("gspro_display", {})
-        windowed = bool(gdisp.get("windowed", False))
-        if not projector_on and cfg.get("video", {}).get("enabled", False) and gdisp.get("windowed_when_projector_off", True):
-            windowed = True
+        windowed = gspro_effective_windowed(cfg, projector_on)
 
         cls = win32gui.GetClassName
         txt = win32gui.GetWindowText
@@ -2746,7 +2819,7 @@ def setup_video_rig_2025(cfg: dict, layout: dict, ref_name: str | None, club: st
         except OSError as e:
             LOG.warning("Could not write Kinovea window %s: %s", path, e)
     if launch:
-        for name in KINOVEA_WINDOW_NAMES:
+        for name in kinovea_windows_to_launch(cfg):
             pids[name] = launch_kinovea_instance(cfg, name, None)
     return {"layout": layout, "workspaces": paths, "pids": pids, "reference": active_ref,
             "ref_clips": (ref_dtl, ref_fo), "backend": "2025"}
@@ -2916,7 +2989,10 @@ class _FileLock:
                 self.fd = os.open(str(self.path), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
                 os.write(self.fd, str(os.getpid()).encode())
                 return self
-            except FileExistsError:
+            except (FileExistsError, PermissionError):
+                # PermissionError: on Windows, O_EXCL on a lock file the previous holder just unlinked (still
+                # "delete pending" while AV/indexer holds a handle) fails with ACCESS_DENIED, not EEXIST.
+                # Treat it as busy and retry; otherwise the second clip-ready angle / a shot append is dropped.
                 try:
                     if time.time() - self.path.stat().st_mtime > self.stale_sec:
                         self.path.unlink(missing_ok=True)
@@ -3870,7 +3946,8 @@ def setup_video_rig(cfg, ref_name: str | None = None, club: str | None = None,
     if launch:
         pids["Capture"] = launch_kinovea_instance(cfg, "Capture", cap_xml)
         pids["LiveReplay"] = launch_kinovea_instance(cfg, "LiveReplay", live_xml)
-        pids["Reference"] = launch_kinovea_instance(cfg, "Reference", ref_xml, force_reload=reload_ref)
+        if "Reference" in kinovea_windows_to_launch(cfg):
+            pids["Reference"] = launch_kinovea_instance(cfg, "Reference", ref_xml, force_reload=reload_ref)
     return {
         "layout": layout,
         "workspaces": {"Capture": cap_xml, "LiveReplay": live_xml, "Reference": ref_xml},
@@ -3882,7 +3959,8 @@ def setup_video_rig(cfg, ref_name: str | None = None, club: str | None = None,
 
 
 def tile_video_windows(cfg, wait_sec: float = 0.0) -> None:
-    """Position LiveReplay (top 50%) and Reference (bottom 50%) as a 2x2 grid on the TV."""
+    """The 2x2 grid (video.layout.profile = "grid"): LiveReplay (top 50%) and Reference (bottom 50%) on the TV.
+    The default adaptive layout uses VideoLayoutController instead."""
     import win32con
     import win32gui
     wl, wt, wr, wb = get_primary_work_area()
@@ -4191,7 +4269,7 @@ class ProjectorPiPController:
             return
         if self._apply_overlay(True):
             if not self.pinned:
-                self.hide_at = time.time() + float(pc.get("popup_seconds", 12))
+                self.hide_at = time.time() + cfg_number(pc.get("popup_seconds", 12), 12.0)
             LOG.info("Projector PiP shown (%s)", "pinned" if self.pinned else f"{pc.get('popup_seconds', 12)}s")
 
     def toggle_pin(self) -> None:
@@ -4224,6 +4302,707 @@ class ProjectorPiPController:
             rem = max(0, int(self.hide_at - time.time()))
             return f"Auto-Pop ({rem}s)"
         return "Hidden"
+
+
+# --------------------------------------------------------------------------- adaptive layout, post-shot replay, compare
+# Pure logic first (select_video_layout, ReplayScheduler, compare cycling) so it is testable off Windows; the
+# Win32 side lives in KinoveaWindowOps, which VideoLayoutController calls through a small interface.
+
+_VIDEO_STATE_LOCK = threading.Lock()
+
+
+def read_video_state(path: Path | None = None) -> dict:
+    try:
+        doc = json.loads((path or VIDEO_STATE_PATH).read_text(encoding="utf-8"))
+        return doc if isinstance(doc, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def write_video_state(path: Path | None = None, **sections) -> None:
+    """Merge sections into video_state.json (atomic). Read by `status` and `doctor`. Never raises."""
+    target = path or VIDEO_STATE_PATH
+    with _VIDEO_STATE_LOCK:
+        doc = read_video_state(target)
+        if doc.get("pid") != os.getpid():
+            doc = {}  # written by an earlier run: start fresh
+        doc.update(sections)
+        doc["pid"] = os.getpid()
+        doc["updated"] = datetime.now().isoformat(timespec="seconds")
+        try:
+            tmp = target.with_name(target.name + ".tmp")
+            tmp.write_text(json.dumps(doc, indent=2, default=str), encoding="utf-8")
+            os.replace(tmp, target)
+        except OSError as e:
+            log_throttled("video-state-write", f"could not write {target}: {e}")
+
+
+def video_state_live(state: dict) -> bool:
+    """True when video_state.json was written by a process that is still running."""
+    pid = state.get("pid") if isinstance(state, dict) else None
+    try:
+        return bool(pid) and psutil.pid_exists(int(pid))
+    except (ValueError, TypeError, psutil.Error):
+        return False
+
+
+VIDEO_LAYOUT_PROFILES = ("single_small", "single_large", "dual", "grid")
+HIDE_METHODS = ("behind", "offscreen", "minimized")
+COMPARE_WINDOW = "Compare"
+VIDEO_LAYOUT_DEFAULTS = {
+    "profile": "auto",          # auto | single_small | single_large | dual | grid (grid = the old 2x2 tiling)
+    "large_min_width": 1600,    # one display at least this wide -> single_large
+    "capture_hide": "behind",   # where the recording Capture window waits: behind | offscreen | minimized
+    "replay_hide": "behind",    # where LiveReplay waits between replays (same choices)
+    "display_poll_sec": 5,      # how often to re-check the displays (projector on/off, resolution change)
+    "profiles": {
+        "single_small": {"replay_width_pct": 100, "replay_height_pct": 80, "anchor": "top"},
+        "single_large": {"replay_width_pct": 75, "replay_height_pct": 65, "anchor": "top",
+                         "strip": False, "strip_width_pct": 30, "strip_height_pct": 22,
+                         "strip_corner": "bottom-right"},
+        "dual": {"replay_width_pct": 100, "replay_height_pct": 100, "anchor": "top", "always_on": True},
+    },
+}
+REPLAY_DEFAULTS = {
+    "mode": "auto",                 # auto (pop up after each shot) | off (only on Alt+V)
+    "delay_sec": 8,                 # wait after the shot before the replay (ball flight + GSPro result panel)
+    "delay_by_club": {"Driver": 9, "Iron": 8, "Wedge": 6, "Putter": None},  # null = no replay for that club
+    "show_sec": 10,                 # how long the replay stays up (~one 4.5 s clip loop at 50 % speed)
+    "manual_delay_sec": 4,          # Alt+C manual trigger: no ball flight, just wait for the clip
+    "clip_wait_sec": 4,             # if the clip isn't saved by show time, wait up to this much longer
+    "dismiss_on_input": False,      # opt-in: ANY key/mouse input closes the replay (a bumped mouse counts; GetLastInputInfo cannot tell them apart)
+    "input_grace_sec": 1.5,         # ...except in the first moments after it appears / after a hotkey
+    "cancel_on_club_change": False,  # GSPro auto-selects the next club right after landing: off by default
+    "restore_focus": True,          # give GSPro the keyboard back if a Kinovea window took it
+}
+
+
+def _merge_defaults(defaults: dict, over) -> dict:
+    out = _jcopy(defaults)
+    if isinstance(over, dict):
+        for k, v in over.items():
+            if isinstance(v, dict) and isinstance(out.get(k), dict):
+                out[k] = _merge_defaults(out[k], v)
+            else:
+                out[k] = _jcopy(v)
+    return out
+
+
+def video_layout_cfg(cfg: dict | None) -> dict:
+    vcfg = (cfg or {}).get("video") if isinstance((cfg or {}).get("video"), dict) else {}
+    return _merge_defaults(VIDEO_LAYOUT_DEFAULTS, vcfg.get("layout"))
+
+
+def replay_cfg(cfg: dict | None) -> dict:
+    vcfg = (cfg or {}).get("video") if isinstance((cfg or {}).get("video"), dict) else {}
+    out = _merge_defaults(REPLAY_DEFAULTS, vcfg.get("replay"))
+    if isinstance(vcfg.get("replay"), dict) and isinstance(vcfg["replay"].get("delay_by_club"), dict):
+        out["delay_by_club"] = dict(vcfg["replay"]["delay_by_club"])  # an explicit table replaces the defaults
+    return out
+
+
+def replay_delay_for_club(rcfg: dict, club: str | None) -> float | None:
+    """Seconds to wait after a shot before the replay, or None for no replay (e.g. Putter)."""
+    by = rcfg.get("delay_by_club") if isinstance(rcfg.get("delay_by_club"), dict) else {}
+    if club:
+        cat = club_category(club)
+        if cat in by:
+            v = by[cat]
+            if v is None or v is False:
+                return None
+            return max(0.0, cfg_number(v, cfg_number(rcfg.get("delay_sec"), 8.0)))
+    return max(0.0, cfg_number(rcfg.get("delay_sec"), 8.0))
+
+
+def gspro_effective_windowed(cfg: dict, projector_on: bool) -> bool:
+    """What gspro_configure picks: gspro_display.windowed, or windowed anyway while the projector is off and the
+    video rig is enabled (gspro_display.windowed_when_projector_off)."""
+    gdisp = cfg.get("gspro_display", {}) if isinstance(cfg.get("gspro_display"), dict) else {}
+    windowed = bool(gdisp.get("windowed", False))
+    if (not projector_on and (cfg.get("video") or {}).get("enabled", False)
+            and gdisp.get("windowed_when_projector_off", True)):
+        windowed = True
+    return windowed
+
+
+def _pct_rect(d: dict, width_pct, height_pct, anchor: str = "top") -> tuple[int, int, int, int]:
+    w = max(320, min(d["width"], int(d["width"] * cfg_number(width_pct, 100) / 100)))
+    h = max(180, min(d["height"], int(d["height"] * cfg_number(height_pct, 100) / 100)))
+    x = d["left"] + (d["width"] - w) // 2
+    anchor = str(anchor or "top").lower()
+    if anchor == "bottom":
+        y = d["top"] + d["height"] - h
+    elif anchor == "center":
+        y = d["top"] + (d["height"] - h) // 2
+    else:
+        y = d["top"]
+    return x, y, w, h
+
+
+def _corner_rect(d: dict, width_pct, height_pct, corner: str, margin: int = 12) -> tuple[int, int, int, int]:
+    w = max(240, int(d["width"] * cfg_number(width_pct, 30) / 100))
+    h = max(135, int(d["height"] * cfg_number(height_pct, 22) / 100))
+    corner = str(corner or "bottom-right").lower()
+    x = d["left"] + margin if "left" in corner else d["left"] + d["width"] - w - margin
+    y = d["top"] + margin if "top" in corner else d["top"] + d["height"] - h - margin
+    return x, y, w, h
+
+
+_FALLBACK_DISPLAY = {"device": "DISPLAY1", "left": 0, "top": 0, "width": 1920, "height": 1080, "primary": True}
+
+
+def select_video_layout(displays: list[dict], lcfg: dict | None = None, gspro_index: int = 0) -> dict:
+    """Pure: displays (list_displays order) + video.layout config + GSPro's display -> the layout profile and the
+    rectangles to use. Never raises."""
+    lcfg = _merge_defaults(VIDEO_LAYOUT_DEFAULTS, lcfg)
+    displays = [d for d in (displays or []) if isinstance(d, dict) and d.get("width") and d.get("height")]
+    if not displays:
+        displays = [dict(_FALLBACK_DISPLAY)]
+    gidx = gspro_index if isinstance(gspro_index, int) and 0 <= gspro_index < len(displays) else 0
+    g = displays[gidx]
+    min_w = cfg_number(lcfg.get("large_min_width"), 1600)
+    want = str(lcfg.get("profile") or "auto").strip().lower()
+    note = ""
+    if want != "auto" and want not in VIDEO_LAYOUT_PROFILES:
+        note, want = f"unknown video.layout.profile {want!r}, using auto", "auto"
+    if want == "dual" and len(displays) < 2:
+        note, want = "dual requested but only one display is connected, using auto", "auto"
+    if want == "auto":
+        if len(displays) >= 2:
+            profile = "dual"
+        elif g["width"] >= min_w:
+            profile = "single_large"
+        else:
+            profile = "single_small"
+        forced = False
+    else:
+        profile, forced = want, True
+
+    ridx = gidx
+    if profile == "dual":
+        others = [i for i in range(len(displays)) if i != gidx]
+        ridx = max(others, key=lambda i: (displays[i]["width"] * displays[i]["height"], displays[i].get("primary", False)))
+    r = displays[ridx]
+    sizes = " + ".join(f"{d['width']}x{d['height']}" for d in displays)
+    if profile == "dual":
+        reason = (f"{len(displays)} displays ({sizes}): GSPro on Display {gidx + 1}, "
+                  f"replay screen = Display {ridx + 1}")
+    elif profile == "grid":
+        reason = "2x2 grid (video.layout.profile = grid)"
+    else:
+        cmp_ = ">=" if g["width"] >= min_w else "<"
+        reason = f"{len(displays)} display(s) ({sizes}); GSPro display {g['width']} px wide {cmp_} {int(min_w)}"
+    if forced:
+        reason = f"forced by video.layout.profile; {reason}"
+    if note:
+        reason = f"{reason} ({note})"
+
+    pcfg = lcfg.get("profiles", {}).get(profile, {}) if isinstance(lcfg.get("profiles"), dict) else {}
+    pcfg = pcfg if isinstance(pcfg, dict) else {}
+    replay_rect = _pct_rect(r, pcfg.get("replay_width_pct", 100), pcfg.get("replay_height_pct", 100),
+                            pcfg.get("anchor", "top"))
+    strip_rect = None
+    if profile == "single_large" and pcfg.get("strip"):
+        strip_rect = _corner_rect(r, pcfg.get("strip_width_pct", 30), pcfg.get("strip_height_pct", 22),
+                                  pcfg.get("strip_corner", "bottom-right"))
+
+    def _method(key: str) -> str:
+        m = str(lcfg.get(key) or "behind").strip().lower()
+        return m if m in HIDE_METHODS else "behind"
+
+    vright = max(d["left"] + d["width"] for d in displays)
+    return {
+        "profile": profile,
+        "reason": reason,
+        "displays": len(displays),
+        "gspro_display": gidx,
+        "replay_display": ridx,
+        "replay_rect": replay_rect,
+        "strip_rect": strip_rect,
+        "always_on": bool(pcfg.get("always_on", profile == "dual")),
+        "topmost": profile != "dual",   # over GSPro on a shared screen; a normal window on its own screen
+        "capture_hide": _method("capture_hide"),
+        "replay_hide": _method("replay_hide"),
+        "park_rect": (g["left"], g["top"], g["width"], g["height"]),           # behind GSPro, same display
+        "offscreen_rect": (vright + 64, g["top"], g["width"], g["height"]),     # right of every display
+    }
+
+
+def layout_summary(layout: dict | None) -> str:
+    """One line for logs/status/doctor (also accepts the trimmed copy stored in video_state.json)."""
+    if not layout:
+        return "unknown"
+    s = f"{layout.get('profile')} - {layout.get('reason', '')}"
+    if layout.get("profile") != "grid" and layout.get("replay_rect"):
+        x, y, w, h = layout["replay_rect"]
+        s += f"; replay {w}x{h} at ({x},{y}); Capture hidden: {layout.get('capture_hide')}"
+        if layout.get("always_on"):
+            s += "; replay always on"
+    return s
+
+
+class ReplayScheduler:
+    """Post-shot replay timing (pure, thread-safe; `now` is passed in). Methods return the window action the
+    caller must perform: "show", "hide" or None.
+
+    shot -> wait delay (per club) -> show (once the clip is saved, or clip_wait_sec later) -> hide after
+    show_sec, or on the next shot / any user input / Alt+X. Pinned (Alt+K, or held by compare mode) never
+    auto-hides. always_on (dual screen): never auto-hides; a shot only refreshes it."""
+
+    IDLE, WAITING, SHOWING = "idle", "waiting", "showing"
+
+    def __init__(self, rcfg: dict | None = None, always_on: bool = False):
+        self.cfg = _merge_defaults(REPLAY_DEFAULTS, rcfg)
+        if isinstance((rcfg or {}).get("delay_by_club"), dict):
+            self.cfg["delay_by_club"] = dict(rcfg["delay_by_club"])
+        mode = str(self.cfg.get("mode") or "auto").lower()
+        self.mode = mode if mode in ("auto", "off") else "auto"
+        self.always_on = bool(always_on)
+        self.state = self.IDLE
+        self.pinned = False
+        self.show_at = self.hide_at = self.clip_deadline = self.shown_at = 0.0
+        self.clip_ready = False
+        self.ignore_input_until = 0.0
+        self._lock = threading.Lock()
+
+    def _num(self, key: str, default: float) -> float:
+        return max(0.0, cfg_number(self.cfg.get(key), default))
+
+    def _show(self, now: float, pinned: bool = False) -> str:
+        self.state = self.SHOWING
+        self.shown_at = now
+        self.pinned = pinned
+        self.hide_at = 0.0 if (pinned or self.always_on) else now + self._num("show_sec", 10.0)
+        self.ignore_input_until = max(self.ignore_input_until, now + self._num("input_grace_sec", 1.5))
+        return "show"
+
+    def _hide(self) -> str | None:
+        was = self.state == self.SHOWING
+        self.state, self.pinned, self.hide_at = self.IDLE, False, 0.0
+        return "hide" if was else None
+
+    def on_shot(self, now: float, club: str | None = None, delay: float | None = -1.0) -> str | None:
+        """A new shot. delay=-1 -> look it up per club; None -> no replay for this shot."""
+        with self._lock:
+            if delay is not None and delay < 0:
+                delay = replay_delay_for_club(self.cfg, club)
+            if self.always_on:
+                if self.state != self.SHOWING:
+                    self.state, self.show_at = self.WAITING, now
+                    self.clip_ready, self.clip_deadline = False, now + self._num("clip_wait_sec", 4.0)
+                return None
+            action = self._hide() if self.state == self.SHOWING else None  # watch the new ball fly
+            if self.mode == "off" or delay is None:
+                self.state = self.IDLE
+                return action
+            self.state, self.show_at, self.clip_ready = self.WAITING, now + delay, False
+            self.clip_deadline = self.show_at + self._num("clip_wait_sec", 4.0)
+            return action
+
+    def on_clip_ready(self, now: float) -> None:
+        with self._lock:
+            self.clip_ready = True
+
+    def on_club_change(self, now: float) -> str | None:
+        with self._lock:
+            if not self.cfg.get("cancel_on_club_change") or self.always_on:
+                return None
+            if self.state == self.WAITING:
+                self.state = self.IDLE
+                return None
+            if self.state == self.SHOWING and not self.pinned:
+                return self._hide()
+            return None
+
+    def tick(self, now: float, last_input: float | None = None) -> str | None:
+        with self._lock:
+            if self.state == self.WAITING:
+                if now >= self.show_at and (self.clip_ready or now >= self.clip_deadline):
+                    return self._show(now)
+                return None
+            if self.state != self.SHOWING or self.pinned or self.always_on:
+                return None
+            if self.hide_at and now >= self.hide_at:
+                return self._hide()
+            if (self.cfg.get("dismiss_on_input", False) and last_input is not None
+                    and last_input > self.ignore_input_until and last_input > self.shown_at):
+                return self._hide()
+            return None
+
+    def note_hotkey(self, now: float) -> None:
+        """A SimWatch hotkey was pressed: that key press must not count as 'user input -> dismiss'."""
+        with self._lock:
+            self.ignore_input_until = max(self.ignore_input_until, now + self._num("input_grace_sec", 1.5))
+
+    def show_now(self, now: float) -> str:
+        with self._lock:
+            return self._show(now, pinned=self.pinned)
+
+    def toggle_pin(self, now: float) -> str | None:
+        with self._lock:
+            if self.state == self.SHOWING and self.pinned:
+                return self._hide()
+            if self.state == self.SHOWING:
+                self.pinned, self.hide_at = True, 0.0
+                return None
+            return self._show(now, pinned=True)
+
+    def hold(self, now: float) -> str | None:
+        """Keep it open (compare mode). Returns "show" if it wasn't showing."""
+        with self._lock:
+            if self.state == self.SHOWING:
+                self.pinned, self.hide_at = True, 0.0
+                return None
+            return self._show(now, pinned=True)
+
+    def release(self, now: float) -> None:
+        """End a hold: back to a normal timed replay."""
+        with self._lock:
+            if self.state == self.SHOWING:
+                self.pinned = False
+                self.hide_at = 0.0 if self.always_on else now + self._num("show_sec", 10.0)
+                self.ignore_input_until = max(self.ignore_input_until, now + self._num("input_grace_sec", 1.5))
+
+    def dismiss(self, now: float) -> str | None:
+        with self._lock:
+            if self.state == self.WAITING:
+                self.state = self.IDLE
+                return None
+            return self._hide()
+
+    def toggle_mode(self, now: float) -> str:
+        with self._lock:
+            self.mode = "off" if self.mode == "auto" else "auto"
+            if self.mode == "off" and self.state == self.WAITING:
+                self.state = self.IDLE
+            return self.mode
+
+    def status_text(self, now: float) -> str:
+        with self._lock:
+            if self.state == self.SHOWING:
+                if self.pinned:
+                    return "showing (kept open)"
+                if self.always_on:
+                    return "showing (replay screen)"
+                return f"showing ({max(0, int(self.hide_at - now))}s left)"
+            if self.state == self.WAITING:
+                return f"replay in {max(0, int(self.show_at - now))}s"
+            return f"auto ({'on' if self.mode == 'auto' else 'off'})"
+
+
+COMPARE_CYCLE = ("off", "DTL", "FO")
+
+
+def next_compare_state(cur: str | None) -> str:
+    """off -> DTL (you | ref) -> FO (you | ref) -> off (your DTL | FO)."""
+    try:
+        return COMPARE_CYCLE[(COMPARE_CYCLE.index(cur or "off") + 1) % len(COMPARE_CYCLE)]
+    except ValueError:
+        return "DTL"
+
+
+def _angle_rx(angle: str) -> re.Pattern:
+    return re.compile(rf"(?:^|[_\-\s]){re.escape(angle)}(?:$|[_\-\s.])", re.I)
+
+
+def library_swing_clips(day_dir: Path, angle: str) -> list[Path]:
+    """Today's organized clips (NNN_<club>..._<angle>.mp4) newest shot first."""
+    rx = _angle_rx(angle)
+    out = []
+    try:
+        for p in day_dir.glob("*"):
+            m = re.match(r"^(\d+)_", p.name)
+            if m and p.is_file() and p.suffix.lower() in VIDEO_EXTS and rx.search(p.stem):
+                out.append((int(m.group(1)), p.stat().st_mtime, p))
+    except OSError:
+        return []
+    out.sort(key=lambda t: (t[0], t[1]), reverse=True)
+    return [p for _n, _t, p in out]
+
+
+def pick_compare_clips(cfg: dict, angle: str, ref_name: str, club: str | None,
+                       you_clip: Path | None = None) -> tuple[Path | None, Path | None, str]:
+    """(your clip, reference clip, why-not) for one angle. Last-Swing compares with your previous swing."""
+    layout = ensure_swings_layout(cfg)
+    lib = library_swing_clips(layout["today"], angle)
+    you = you_clip if (you_clip and Path(you_clip).exists()) else None
+    if you is None:
+        you = lib[0] if lib else next(iter(_latest_clips_in(layout["today"], angle)), None)
+    if you is None:
+        return None, None, f"no {angle} swing recorded yet today"
+    if ref_name == "Last-Swing":
+        prev = [p for p in lib if p.resolve() != Path(you).resolve()]
+        if not prev:
+            return you, None, "Last-Swing needs two swings today"
+        return you, prev[0], ""
+    dtl, fo = resolve_reference_clips(cfg, ref_name, club)
+    ref = dtl if angle == "DTL" else fo
+    cat = club_category(club)
+    if ref is None or layout["sessions"] in Path(ref).parents:
+        where = (layout["goto"] / cat) if ref_name == "My-Go-To" else (layout["pros"] / ref_name)
+        return you, None, (f"no {ref_name} {angle} reference for {cat} - add one to {where} "
+                           f"(Alt+G saves your last swing as My-Go-To)")
+    return you, Path(ref), ""
+
+
+def build_compare_screens(you: Path, ref: Path, speed) -> list[dict]:
+    return [{"type": "playback", "full_path": str(p), "autoplay": True, "speed": speed, "stretch": True,
+             "is_watcher": False} for p in (you, ref)]
+
+
+def launch_compare_window(cfg: dict, screens: list[dict]) -> int | None:
+    """Load `screens` into the named Kinovea window "Compare" (you | reference). Kinovea 2025 can't load a file into
+    a running window by command, so a changed pair means: close Compare, rewrite its descriptor, relaunch (~2-4 s).
+    The same pair again just returns the running instance."""
+    layout = ensure_swings_layout(cfg)
+    if resolve_kinovea_backend(cfg) != "2025":
+        xml_path = layout["workspaces"] / "Compare.xml"
+        write_kinovea_workspace(xml_path, screens)
+        return launch_kinovea_instance(cfg, COMPARE_WINDOW, xml_path, force_reload=True)
+    kdir = kinovea_settings_dir(create=True)
+    if kdir is None:
+        LOG.warning("Kinovea settings folder unavailable; cannot open the Compare window")
+        return None
+    xml = build_kinovea_window_xml(COMPARE_WINDOW, screens)
+    wid = kinovea_guid(f"window/{COMPARE_WINDOW}")
+    path = kdir / "Windows" / f"{wid}.xml"
+    try:
+        cur = path.read_bytes() if path.exists() else None
+    except OSError:
+        cur = None
+    running = find_kinovea_instance_pid(COMPARE_WINDOW)
+    if running and kinovea_window_signature(cur) == kinovea_window_signature(xml):
+        return running
+    if running:
+        _close_kinovea_instance(COMPARE_WINDOW)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _trash_duplicate_kinovea_windows(path.parent, COMPARE_WINDOW, wid)
+        write_text_if_changed(path, xml, backup=False)
+    except OSError as e:
+        LOG.warning("Could not write Kinovea Compare window %s: %s", path, e)
+        return None
+    return launch_kinovea_instance(cfg, COMPARE_WINDOW, None)
+
+
+def kinovea_windows_to_launch(cfg: dict) -> tuple[str, ...]:
+    """The adaptive layout never shows the Reference window (compare uses its own window and resolves the
+    reference clips when you ask), so only the 2x2 grid launches it."""
+    if video_layout_cfg(cfg).get("profile") == "grid":
+        return KINOVEA_WINDOW_NAMES
+    return tuple(n for n in KINOVEA_WINDOW_NAMES if n != "Reference")
+
+
+def evaluate_replay_gspro_mode(cfg: dict, projector_on: bool | None) -> tuple[str, str, str]:
+    """Doctor row: pop-up replays + fullscreen-exclusive GSPro don't mix (a window over it can minimize it)."""
+    item = "replay vs GSPro window mode"
+    if video_layout_cfg(cfg).get("profile") == "grid":
+        return INFO, item, "2x2 grid layout: no pop-up replay over GSPro"
+    if replay_cfg(cfg).get("mode") == "off":
+        return INFO, item, "auto replay off (video.replay.mode); Alt+V still pops it up on demand"
+    gdisp = cfg.get("gspro_display", {}) if isinstance(cfg.get("gspro_display"), dict) else {}
+    if gdisp.get("windowed"):
+        return PASS, item, "GSPro runs windowed/borderless (gspro_display.windowed) - safe for pop-up replays"
+    if projector_on is False and gspro_effective_windowed(cfg, False):
+        return WARN, item, ("GSPro is windowed now (projector off, windowed_when_projector_off), but with the "
+                            "projector on it starts exclusive fullscreen (gspro_display.windowed=false); a replay "
+                            "window can then minimize or flicker it. Recommended: gspro_display.windowed = true")
+    return WARN, item, ("auto replay is on but GSPro starts exclusive fullscreen (gspro_display.windowed=false): "
+                        "a replay window over it can minimize it. Set gspro_display.windowed = true (borderless) "
+                        "or video.replay.mode = off")
+
+
+class KinoveaWindowOps:
+    """The Win32 side of the adaptive layout (VideoLayoutController talks only to this; tests use a fake)."""
+
+    def __init__(self, cfg: dict):
+        self.cfg = cfg
+
+    def displays(self) -> list[dict]:
+        return list_displays()
+
+    def gspro_index(self, displays: list[dict]) -> int:
+        idx, _disp, _on = choose_display(self.cfg)
+        return idx
+
+    def find(self, name: str, wait_sec: float = 0.0) -> int | None:
+        deadline = time.time() + max(0.0, float(wait_sec))
+        while True:
+            pid = find_kinovea_instance_pid(name)
+            if pid:
+                hwnd = find_window_for_pid(pid, title_re=r"^Kinovea", include_minimized=True)
+                if hwnd:
+                    return hwnd
+            if time.time() >= deadline:
+                return None
+            time.sleep(0.3)
+
+    def alive(self, hwnd: int) -> bool:
+        import win32gui
+        return bool(win32gui.IsWindow(hwnd))
+
+    def show(self, hwnd: int, rect, topmost: bool = True) -> None:
+        import win32con
+        import win32gui
+        x, y, w, h = rect
+        if win32gui.IsIconic(hwnd):
+            win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
+        win32gui.SetWindowPos(hwnd, win32con.HWND_TOPMOST if topmost else win32con.HWND_NOTOPMOST, x, y, w, h,
+                              win32con.SWP_NOACTIVATE | win32con.SWP_SHOWWINDOW)
+
+    def park(self, hwnd: int, method: str, layout: dict) -> None:
+        import win32con
+        import win32gui
+        if method == "minimized":
+            win32gui.SetWindowPos(hwnd, win32con.HWND_NOTOPMOST, 0, 0, 0, 0,
+                                  win32con.SWP_NOACTIVATE | win32con.SWP_NOMOVE | win32con.SWP_NOSIZE)
+            if not win32gui.IsIconic(hwnd):
+                win32gui.ShowWindow(hwnd, win32con.SW_SHOWMINNOACTIVE)
+            return
+        if win32gui.IsIconic(hwnd):
+            win32gui.ShowWindow(hwnd, win32con.SW_SHOWNOACTIVATE)
+        x, y, w, h = layout["offscreen_rect"] if method == "offscreen" else layout["park_rect"]
+        # HWND_BOTTOM also drops TOPMOST: below GSPro (and everything else), still open and recording.
+        win32gui.SetWindowPos(hwnd, win32con.HWND_BOTTOM, x, y, w, h, win32con.SWP_NOACTIVATE)
+
+    def restore_gspro_focus(self) -> bool:
+        """Give GSPro the foreground back, but only when a Kinovea window / SimWatch itself took it (never pull
+        focus away from a browser or app the user switched to on purpose)."""
+        import win32con
+        import win32gui
+        import win32process
+        try:
+            gs = _find_gspro_main_hwnd(self.cfg)
+            fg = win32gui.GetForegroundWindow()
+            if not gs or fg == gs:
+                return False
+            if fg:
+                _tid, fg_pid = win32process.GetWindowThreadProcessId(fg)
+                kin = {p.pid for p in find_procs("Kinovea.exe")}
+                if fg_pid not in kin and fg_pid != os.getpid():
+                    return False
+            if win32gui.IsIconic(gs):
+                win32gui.ShowWindow(gs, win32con.SW_RESTORE)
+            user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+            fg_tid = user32.GetWindowThreadProcessId(fg, None) if fg else 0
+            me = kernel32.GetCurrentThreadId()
+            attached = bool(fg_tid and fg_tid != me and user32.AttachThreadInput(me, fg_tid, True))
+            try:
+                user32.BringWindowToTop(gs)
+                ok = bool(user32.SetForegroundWindow(gs))
+            finally:
+                if attached:
+                    user32.AttachThreadInput(me, fg_tid, False)
+            if not ok:
+                log_throttled("gspro-focus", "could not give GSPro the foreground back (click GSPro once)")
+            return ok
+        except Exception as e:
+            log_throttled("gspro-focus-err", f"restore GSPro focus failed: {e}")
+            return False
+
+    def last_input_time(self) -> float | None:
+        """Epoch seconds of the last keyboard/mouse input anywhere (GetLastInputInfo)."""
+        class _LII(ctypes.Structure):
+            _fields_ = [("cbSize", ctypes.c_uint), ("dwTime", ctypes.c_uint)]
+        try:
+            lii = _LII(ctypes.sizeof(_LII), 0)
+            if not ctypes.windll.user32.GetLastInputInfo(ctypes.byref(lii)):
+                return None
+            idle_ms = (ctypes.windll.kernel32.GetTickCount() - lii.dwTime) & 0xFFFFFFFF
+            return time.time() - idle_ms / 1000.0
+        except Exception:
+            return None
+
+
+class VideoLayoutController:
+    """Picks the layout profile from the connected displays (re-checked every display_poll_sec) and positions the
+    Kinovea windows for it: Capture parked out of sight (still recording), LiveReplay / Compare shown over GSPro
+    (single screen) or on the free screen (dual) only when the replay is up."""
+
+    def __init__(self, cfg: dict, ops=None):
+        self.cfg = cfg
+        self.ops = ops if ops is not None else KinoveaWindowOps(cfg)
+        self.layout: dict | None = None
+        self._sig = None
+        self._next_check = 0.0
+        self._hwnds: dict[str, int] = {}
+
+    def _hwnd(self, name: str, wait_sec: float = 0.0) -> int | None:
+        h = self._hwnds.get(name)
+        try:
+            if h and self.ops.alive(h):
+                return h
+        except Exception:
+            pass
+        h = self.ops.find(name, wait_sec)
+        if h:
+            self._hwnds[name] = h
+        else:
+            self._hwnds.pop(name, None)
+        return h
+
+    def is_grid(self) -> bool:
+        return bool(self.layout) and self.layout["profile"] == "grid"
+
+    def refresh(self, now: float | None = None, force: bool = False) -> bool:
+        """Re-read the displays; True when the layout changed (and was logged + written to video_state.json)."""
+        now = time.time() if now is None else now
+        if not force and now < self._next_check:
+            return False
+        lcfg = video_layout_cfg(self.cfg)
+        self._next_check = now + max(1.0, cfg_number(lcfg.get("display_poll_sec"), 5))
+        try:
+            displays = self.ops.displays()
+            gidx = self.ops.gspro_index(displays)
+        except Exception as e:
+            log_throttled("layout-displays", f"could not read the displays: {e}")
+            if self.layout is not None:
+                return False
+            displays, gidx = [], 0
+        sig = (tuple((d.get("left"), d.get("top"), d.get("width"), d.get("height"), bool(d.get("primary")))
+                     for d in displays), gidx)
+        if sig == self._sig and self.layout is not None:
+            return False
+        self._sig = sig
+        self.layout = select_video_layout(displays, lcfg, gidx)
+        LOG.info("Video layout: %s", layout_summary(self.layout))
+        write_video_state(layout={k: self.layout[k] for k in ("profile", "reason", "replay_rect", "strip_rect",
+                                                              "always_on", "capture_hide", "replay_hide")})
+        return True
+
+    def apply(self, replay_visible: bool, compare_visible: bool = False, wait_sec: float = 0.0) -> None:
+        if self.layout is None:
+            self.refresh(force=True)
+        L = self.layout
+        if L["profile"] == "grid":
+            tile_video_windows(self.cfg, wait_sec=wait_sec)
+            return
+        ops = self.ops
+        try:
+            cap = self._hwnd("Capture", wait_sec)
+            if cap:
+                ops.park(cap, L["capture_hide"], L)
+            ref = self._hwnd("Reference", 0)
+            if ref:
+                ops.park(ref, "minimized", L)
+            live = self._hwnd("LiveReplay", wait_sec)
+            cmp_ = self._hwnd(COMPARE_WINDOW, wait_sec if compare_visible else 0)
+            if compare_visible and cmp_:
+                ops.show(cmp_, L["replay_rect"], L["topmost"])
+                if live:
+                    ops.park(live, L["replay_hide"], L)
+                return
+            if cmp_:
+                ops.park(cmp_, "minimized", L)
+            if live:
+                if replay_visible:
+                    ops.show(live, L["replay_rect"], L["topmost"])
+                elif L.get("strip_rect"):
+                    ops.show(live, L["strip_rect"], True)
+                else:
+                    ops.park(live, L["replay_hide"], L)
+        except Exception as e:
+            log_throttled("layout-apply", f"positioning the Kinovea windows failed: {e}")
 
 
 _OC_TOP_KEYS = ("ShotNumber", "BallData", "Player", "ShotDataOptions", "DeviceID")
@@ -5006,6 +5785,8 @@ class ShotHub:
         self.health: dict | None = None
         self.sniffer = None  # an OpenConnectMonitor (its .active flag is reported as sniffer_ok)
         self.demo = False    # `bridge --demo`: synthetic shots, tagged "demo": true (kept out of real sessions)
+        self.cfg: dict | None = None                # for /api/shortcuts (the hotkey map lives in the config)
+        self.hotkey_registration: dict | None = None  # set by the video rig once its hotkeys are registered
         self.heartbeat_sec = 15.0
         self.max_subscribers = BRIDGE_MAX_SUBSCRIBERS
         self.drill_idle_timeout = DRILL_IDLE_TIMEOUT_SEC
@@ -5359,6 +6140,9 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
             if sid is not None and not valid_context_id(sid):
                 return self._json(400, {"error": "session_id must be 1-80 chars of [A-Za-z0-9_-]"})
             return self._json(200, session_stats(self.hub.read_shots(date_str), date_str, sid))
+        if url.path == "/api/shortcuts":
+            return self._json(200, hotkeys_doc(getattr(self.hub, "cfg", None),
+                                               getattr(self.hub, "hotkey_registration", None)))
         if url.path == "/api/events":
             return self._serve_events()
         if url.path.startswith("/api/"):
@@ -5550,6 +6334,7 @@ def start_bridge(cfg: dict, force: bool = False, port: int | None = None,
     try:
         hub = ShotHub(ShotStore(bridge_sessions_dir(cfg, demo)))
         hub.demo = demo
+        hub.cfg = cfg
         lan_token = bridge_token(create=True) if bridge_lan_enabled(cfg) else None
         if bridge_lan_enabled(cfg) and not lan_token:
             LOG.warning("bridge.lan is on but no pairing token could be created; serving 127.0.0.1 only")
@@ -5921,6 +6706,8 @@ class ShotLabSupervisor:
             return
         if not self._installed():
             self.state, self.detail = "not_installed", "run setup.bat (or run_shotlab.bat once) to install Electron"
+            log_throttled("shotlab-missing", f"ShotLab not launched: {self.detail} "
+                          f"({shotlab_electron_exe(self.cfg)} missing)", every_sec=3600.0)
             return
         proc = self._launch()
         if proc is None:
@@ -6005,56 +6792,15 @@ def cmd_bridge(cfg: dict, demo: bool = False, demo_interval: float = 4.0, port: 
         server.stop()
 
 
-# The one list of global hotkeys: (config action, default keys, what it does). The HUD (Alt+H), the
-# `hotkeys` command, simwatch_status.json and ShotLab's Keys pill all read this, so they never drift.
-HOTKEY_ACTIONS: list[tuple[str, str, str]] = [
-    ("cheatsheet", "Alt+H", "Show / hide this key cheat sheet"),
-    ("toggle_shotlab", "Alt+S", "Show / hide ShotLab (opens it if closed)"),
-    ("toggle_pip", "Alt+P", "Pin / unpin OBS Projector PiP"),
-    ("trigger_shot", "Alt+C", "Manual swing capture + PiP"),
-    ("bookmark_goto", "Alt+G", "Bookmark last swing -> My-Go-To"),
-    ("cycle_reference", "Alt+R", "Cycle bottom reference (Go-To / Pros)"),
-    ("toggle_lines", "Alt+L", "Toggle Kinovea swing plane lines"),
-    ("save_lines", "Alt+Shift+L", "Save dragged swing lines as default"),
-    ("open_folder", "Alt+O", "Open today's Swings folder"),
-    ("open_drills", "Alt+D", "Open the drills hub"),
-]
-
-
-def effective_hotkeys(hotkeys_cfg: dict | None) -> dict[str, str]:
-    """Defaults overlaid with config (a config value of "" or null disables that hotkey)."""
-    cfg_hk = hotkeys_cfg if isinstance(hotkeys_cfg, dict) else {}
-    out = {}
-    for action, default, _ in HOTKEY_ACTIONS:
-        spec = cfg_hk.get(action, default)
-        if spec:
-            out[action] = str(spec)
-    return out
-
-
-def hotkey_rows(hotkeys_cfg: dict | None, registration: dict | None = None) -> list[dict]:
-    """[{action, keys, label, state}] for display; state is ok | ctrl_alt_only | failed | invalid | unknown."""
-    keys = effective_hotkeys(hotkeys_cfg)
-    reg = registration or {}
-    return [{"action": a, "keys": keys[a], "label": label, "state": reg.get(a, "unknown")}
-            for a, _, label in HOTKEY_ACTIONS if a in keys]
-
-
-def format_hotkey_cheatsheet(rows: list[dict]) -> str:
-    notes = {"ctrl_alt_only": "  (bare key taken by another app: use Ctrl+{k})",
-             "failed": "  !! NOT REGISTERED (another app owns it; change it in config.json video.hotkeys)",
-             "invalid": "  !! invalid key spec in config.json"}
-    lines = ["== SimWatch hotkeys (live while SimWatch is running with video.enabled) =="]
-    for r in rows:
-        note = notes.get(r["state"], "").format(k=r["keys"])
-        lines.append(f"  {r['keys']:<12} {r['label']}{note}")
-    lines.append("  Every bare Alt+<key> also works as Ctrl+Alt+<key>.")
-    return "\n".join(lines)
+_HOTKEY_OEM = {"/": 0xBF, ";": 0xBA, "=": 0xBB, ",": 0xBC, "-": 0xBD, ".": 0xBE, "`": 0xC0,
+               "[": 0xDB, "\\": 0xDC, "]": 0xDD, "'": 0xDE}
 
 
 def parse_hotkey(spec: str) -> tuple[int, int] | None:
-    """Parse 'Alt+H' / 'Ctrl+Shift+P' / 'F8' into (win32_mods, vk_code)."""
+    """Parse 'Alt+H' / 'Ctrl+Shift+P' / 'F8' / 'Alt+/' into (win32_mods, vk_code)."""
     MOD_ALT, MOD_CONTROL, MOD_SHIFT, MOD_WIN, MOD_NOREPEAT = 0x0001, 0x0002, 0x0004, 0x0008, 0x4000
+    if not isinstance(spec, str):
+        return None
     mods = MOD_NOREPEAT
     parts = [p.strip().upper() for p in spec.split("+") if p.strip()]
     if not parts:
@@ -6069,8 +6815,12 @@ def parse_hotkey(spec: str) -> tuple[int, int] | None:
             mods |= MOD_SHIFT
         elif m in ("WIN", "SUPER"):
             mods |= MOD_WIN
+        else:
+            return None
     if len(key) == 1 and ("A" <= key <= "Z" or "0" <= key <= "9"):
         return mods, ord(key)
+    if key in _HOTKEY_OEM:
+        return mods, _HOTKEY_OEM[key]
     if key.startswith("F") and key[1:].isdigit():
         num = int(key[1:])
         if 1 <= num <= 24:
@@ -6081,14 +6831,312 @@ def parse_hotkey(spec: str) -> tuple[int, int] | None:
     return None
 
 
-class HotkeyOverlayManager:
-    """Global Win32 hotkeys + Always-on-Top tkinter Key Mapping & Status HUD."""
+# --------------------------------------------------------------------------- shortcut map (single source of truth)
+# HOTKEY_ACTIONS is the ONE list of global shortcuts: (action, default key, group, plain-English description).
+# config.json `video.hotkeys` overrides the key per action ("" or null disables one; a list gives aliases).
+# Every consumer renders it: the HUD (Alt+H), `simwatch.py keys` / `hotkeys`, docs/SHORTCUTS.md (`keys md`),
+# the bridge's /api/shortcuts (drills hub panel), /api/status + simwatch_status.json `hotkeys` (ShotLab's Keys
+# pill: [{action, keys, label, state}]) and the doctor rows.
+# Keys are Alt+<letter> on purpose: GSPro binds many bare letter keys and some Ctrl combos, but no Alt+<letter>
+# that we know of, and a registered global hotkey is swallowed before GSPro could see it anyway.
 
-    def __init__(self, hotkeys_cfg: dict, callbacks: dict, status_fn):
-        self.hotkeys_cfg = effective_hotkeys(hotkeys_cfg)
+HOTKEY_GROUPS = ("Replay", "Compare", "Reference", "Session / Bookmark", "System")
+HOTKEY_ACTIONS: tuple[tuple[str, str, str, str], ...] = (
+    ("replay_now", "Alt+V", "Replay", "Show the last swing replay now (DTL | FO)"),
+    ("replay_pin", "Alt+K", "Replay", "Keep the replay open; press again to close it"),
+    ("replay_dismiss", "Alt+X", "Replay", "Close the replay / comparison and go back to GSPro"),
+    ("replay_auto", "Alt+A", "Replay", "Auto replay after each shot: on / off"),
+    ("toggle_lines", "Alt+L", "Replay", "Show / hide the swing plane lines on the replay"),
+    ("save_lines", "Alt+Shift+L", "Replay", "Save the lines you dragged in Kinovea as the new default"),
+    ("compare_cycle", "Alt+M", "Compare", "Match up with the reference: DTL you|ref -> FO you|ref -> back"),
+    ("cycle_reference", "Alt+R", "Reference", "Next reference: My-Go-To -> each pro -> your previous swing"),
+    ("bookmark_goto", "Alt+G", "Session / Bookmark", "Save the last swing as your My-Go-To for this club"),
+    ("trigger_shot", "Alt+C", "Session / Bookmark", "Record a swing now (manual camera trigger)"),
+    ("open_folder", "Alt+O", "Session / Bookmark", "Open today's swing folder in Explorer"),
+    ("open_drills", "Alt+D", "Session / Bookmark", "Open the drills hub"),
+    ("cheatsheet", "Alt+H", "System", "Show / hide this shortcut map (auto-hides)"),
+    ("toggle_shotlab", "Alt+S", "System", "Show / hide ShotLab (opens it if closed)"),
+    ("toggle_pip", "Alt+P", "System", "Pin / unpin the OBS projector picture-in-picture"),
+)
+HOTKEY_ACTION_NAMES = tuple(d[0] for d in HOTKEY_ACTIONS)
+_HOTKEY_GROUP_OF = {d[0]: d[2] for d in HOTKEY_ACTIONS}
+_HOTKEY_LABEL_OF = {d[0]: d[3] for d in HOTKEY_ACTIONS}
+# Free-key candidates offered when a shortcut can't be registered (another app owns it). Alt+Z / Alt+F-keys are
+# skipped: NVIDIA/AMD overlays commonly own them.
+HOTKEY_SUGGEST_POOL = ("Alt+B", "Alt+J", "Alt+N", "Alt+U", "Alt+Y", "Alt+I", "Alt+Q", "Alt+W", "Alt+E",
+                       "Alt+T", "Alt+1", "Alt+2", "Alt+3", "Alt+4", "Alt+5", "Alt+6", "Alt+7", "Alt+8", "Alt+9")
+_HOTKEY_RESERVED = {  # (mods without NOREPEAT, vk) -> why
+    (0x0001, 0x09): "Alt+Tab (Windows task switcher)", (0x0001, 0x73): "Alt+F4 (closes the active window)",
+    (0x0001, 0x20): "Alt+Space (window menu)", (0x0001, 0x1B): "Alt+Esc (Windows window cycling)",
+    (0x0001, 0x0D): "Alt+Enter (Unity/GSPro fullscreen toggle)",
+}
+
+
+def hotkey_specs(value) -> list[str]:
+    """A config hotkey value -> list of key specs ("" / None -> disabled; list -> aliases)."""
+    if value is None or value is False:
+        return []
+    if isinstance(value, str):
+        return [value.strip()] if value.strip() else []
+    if isinstance(value, (list, tuple)):
+        return [v.strip() for v in value if isinstance(v, str) and v.strip()]
+    return []
+
+
+def hotkeys_cfg_of(cfg: dict | None) -> dict:
+    """The `video.hotkeys` override dict of a full config ({} when absent or malformed)."""
+    vcfg = (cfg or {}).get("video", {}) if isinstance(cfg, dict) else {}
+    vcfg = vcfg if isinstance(vcfg, dict) else {}
+    return vcfg.get("hotkeys") if isinstance(vcfg.get("hotkeys"), dict) else {}
+
+
+def effective_hotkeys(hotkeys_cfg: dict | None) -> dict[str, list[str]]:
+    """action -> key specs for EVERY action in HOTKEY_ACTIONS: the defaults overlaid with `video.hotkeys`
+    (pass that dict, e.g. hotkeys_cfg_of(cfg)). A disabled action maps to []. Idempotent: feeding the result
+    back in gives the same map."""
+    over = hotkeys_cfg if isinstance(hotkeys_cfg, dict) else {}
+    return {action: (hotkey_specs(over[action]) if action in over else [default])
+            for action, default, _g, _d in HOTKEY_ACTIONS}
+
+
+def hotkey_states(registration: dict | None, hk_map: dict[str, list[str]] | None = None) -> dict[str, str]:
+    """action -> ok | ctrl_alt_only | failed | invalid, from either a register_hotkeys() report
+    ({ok: [...], failed: [...]}) or an already-flat {action: state} dict (e.g. read back from /api/status)."""
+    reg = registration if isinstance(registration, dict) else {}
+    if not ("ok" in reg or "failed" in reg):
+        return {str(a): str(s) for a, s in reg.items() if isinstance(s, str)}
+    by_spec = {s: a for a, specs in (hk_map or {}).items() for s in specs}
+    states: dict[str, str] = {}
+    for o in reg.get("ok") or []:
+        if isinstance(o, dict) and o.get("action"):
+            states.setdefault(o["action"], "ok")
+    rank = {"ok": 0, "ctrl_alt_only": 1, "failed": 2, "invalid": 3}
+    for f in reg.get("failed") or []:
+        if not isinstance(f, dict):
+            continue
+        action = f.get("action") or by_spec.get(f.get("spec"))
+        if not action:
+            continue
+        st = "invalid" if f.get("error") else ("ctrl_alt_only" if f.get("fallback") else "failed")
+        if rank[st] > rank.get(states.get(action, "ok"), 0):
+            states[action] = st
+    return states
+
+
+def hotkey_rows(hotkeys_cfg: dict | None, registration: dict | None = None) -> list[dict]:
+    """[{action, keys, label, state}] in HOTKEY_ACTIONS order, disabled actions omitted. `keys` is one string
+    ("Alt+H" or "Alt+H / Alt+/"): this is the /api/status + simwatch_status.json shape ShotLab's Keys pill reads.
+    state: ok | ctrl_alt_only | failed | invalid | unknown (registration not known)."""
+    hk = effective_hotkeys(hotkeys_cfg)
+    states = hotkey_states(registration, hk)
+    return [{"action": a, "keys": " / ".join(hk[a]), "label": label, "state": states.get(a, "unknown")}
+            for a, _k, _g, label in HOTKEY_ACTIONS if hk[a]]
+
+
+def hotkey_groups(cfg: dict | None) -> list[dict]:
+    """[{group, keys: [{action, keys: [..], description}]}] in HOTKEY_GROUPS order (disabled actions omitted)."""
+    hk = effective_hotkeys(hotkeys_cfg_of(cfg))
+    groups = []
+    for g in HOTKEY_GROUPS:
+        rows = [{"action": a, "keys": hk[a], "description": d} for a, _k, grp, d in HOTKEY_ACTIONS
+                if grp == g and hk[a]]
+        if rows:
+            groups.append({"group": g, "keys": rows})
+    return groups
+
+
+HOTKEY_FALLBACK_NOTE = ("Every plain Alt+<key> shortcut also works as Ctrl+Alt+<key> (registered as a fallback in "
+                        "case another program already owns the Alt+<key> combination).")
+
+
+def format_hotkey_cheatsheet(rows: list[dict]) -> str:
+    """hotkey_rows() as grouped plain text (CLI `keys` / `hotkeys`, startup log), flagging unregistered keys."""
+    lines = ["== SimWatch shortcuts (change them in config.json -> video.hotkeys) =="]
+    for g in HOTKEY_GROUPS:
+        grows = [r for r in rows if _HOTKEY_GROUP_OF.get(r.get("action")) == g]
+        if not grows:
+            continue
+        lines += ["", g]
+        for r in grows:
+            keys = r["keys"]
+            note = {
+                "failed": f"   [NOT REGISTERED: {keys} - another app owns it; `simwatch.py doctor` suggests a free key]",
+                "ctrl_alt_only": "   (taken by another app: use " + " / ".join("Ctrl+" + k for k in keys.split(" / "))
+                                 + ")",
+                "invalid": f"   [NOT REGISTERED: {keys} is not a valid key spec in config.json]",
+            }.get(r.get("state"), "")
+            lines.append(f"  {keys:<14} {r['label']}{note}")
+    lines += ["", HOTKEY_FALLBACK_NOTE]
+    return "\n".join(lines)
+
+
+def render_hotkeys_text(cfg: dict | None, registration: dict | None = None) -> str:
+    """The grouped shortcut map of a full config as plain text."""
+    return format_hotkey_cheatsheet(hotkey_rows(hotkeys_cfg_of(cfg), registration))
+
+
+def _md(text: str) -> str:
+    """Markdown-safe: `Alt+<key>`-style placeholders in code spans, pipes escaped for table cells."""
+    return re.sub(r"(\S*<\w+>)", r"`\1`", text).replace("|", "\\|")
+
+
+def render_hotkeys_markdown(cfg: dict | None) -> str:
+    """docs/SHORTCUTS.md content (regenerate with `python simwatch.py keys md`)."""
+    out = ["# SimWatch shortcuts", "",
+           "<!-- Generated by `python simwatch.py keys md` from HOTKEY_ACTIONS in simwatch.py + config.json "
+           "`video.hotkeys`. Do not edit by hand. -->", "",
+           "Global shortcuts work while SimWatch's video rig runs, even when GSPro has focus. Press **"
+           + " / ".join(effective_hotkeys(hotkeys_cfg_of(cfg)).get("cheatsheet") or ["Alt+H"])
+           + "** for the on-screen map. Change any key in `config.json` -> `video.hotkeys` (\"\" disables one; "
+           "a list such as `[\"Alt+H\", \"Alt+/\"]` gives aliases).", ""]
+    for g in hotkey_groups(cfg):
+        out += [f"## {g['group']}", "", "| Shortcut | What it does |", "|---|---|"]
+        for row in g["keys"]:
+            out.append(f"| {' / '.join('`' + k + '`' for k in row['keys'])} | {_md(row['description'])} |")
+        out.append("")
+    out += ["## Notes", "", f"- {_md(HOTKEY_FALLBACK_NOTE)}",
+            "- If a shortcut can't be registered (another program owns it), the startup log says so and suggests "
+            "a free one; `python simwatch.py doctor` shows the registration status.",
+            "- The same list appears on screen (Alt+H), in `python simwatch.py keys`, in ShotLab's Keys pill and in "
+            "the drills hub Shortcuts panel.",
+            _md("- Shortcuts use Alt+<key> because GSPro uses many single-letter keys. Avoid bare letters, F-keys "
+                "without a modifier, Ctrl+<letter>, Alt+Enter (fullscreen toggle) and Alt+Tab/F4/Space/Esc."), ""]
+    return "\n".join(out)
+
+
+def hotkeys_doc(cfg: dict | None, registration: dict | None = None) -> dict:
+    """JSON for the bridge's /api/shortcuts."""
+    doc = {"groups": hotkey_groups(cfg), "note": HOTKEY_FALLBACK_NOTE}
+    if registration:
+        doc["registration"] = registration
+    return doc
+
+
+def _hotkey_canon(spec: str) -> tuple[int, int] | None:
+    parsed = parse_hotkey(spec)
+    return (parsed[0] & ~0x4000, parsed[1]) if parsed else None
+
+
+def hotkey_conflicts(cfg: dict | None) -> list[tuple[str, str]]:
+    """Static problems in the shortcut map: [(severity, message)]. Pure (no registration attempt)."""
+    out: list[tuple[str, str]] = []
+    over = hotkeys_cfg_of(cfg)
+    for k in over:
+        if k not in HOTKEY_ACTION_NAMES and not str(k).startswith("_"):
+            out.append(("warning", f"video.hotkeys.{k}: unknown action (valid: {', '.join(HOTKEY_ACTION_NAMES)})"))
+    seen: dict[tuple[int, int], str] = {}
+    for action, specs in effective_hotkeys(over).items():
+        for spec in specs:
+            canon = _hotkey_canon(spec)
+            if canon is None:
+                out.append(("warning", f"{action}: {spec!r} is not a valid key (e.g. Alt+V, Ctrl+Alt+F8, Alt+/)"))
+                continue
+            mods, vk = canon
+            if canon in seen and seen[canon] != action:
+                out.append(("warning", f"{spec} is assigned to both {seen[canon]} and {action}"))
+            seen.setdefault(canon, action)
+            if canon in _HOTKEY_RESERVED:
+                out.append(("warning", f"{action}: {spec} overrides {_HOTKEY_RESERVED[canon]}"))
+            elif mods == 0:
+                out.append(("warning", f"{action}: {spec} has no modifier - GSPro (and every other app) would "
+                                       f"never receive that key while SimWatch runs; use Alt+<key>"))
+            elif mods in (0x0002, 0x0004, 0x0006):
+                out.append(("warning", f"{action}: {spec} (Ctrl/Shift without Alt) may collide with GSPro or "
+                                       f"Kinovea shortcuts; Alt+<key> is safer"))
+    return out
+
+
+def suggest_free_hotkey(hk_map: dict[str, list[str]], probe=None, exclude: set | None = None) -> str | None:
+    """First HOTKEY_SUGGEST_POOL key not used by `hk_map` (effective_hotkeys), not excluded, and (if `probe`)
+    registrable right now."""
+    used = {_hotkey_canon(s) for specs in hk_map.values() for s in specs}
+    used |= {_hotkey_canon(s) for s in (exclude or set())}
+    for cand in HOTKEY_SUGGEST_POOL:
+        if _hotkey_canon(cand) in used:
+            continue
+        try:
+            if probe is None or probe(cand):
+                return cand
+        except Exception:
+            continue
+    return None
+
+
+def probe_hotkey(spec: str) -> bool:
+    """True if `spec` can be registered right now (registers + immediately unregisters). Windows only."""
+    parsed = parse_hotkey(spec)
+    if not parsed or not IS_WINDOWS:
+        return False
+    user32 = ctypes.windll.user32
+    probe_id = 0xBF00
+    if user32.RegisterHotKey(None, probe_id, parsed[0], parsed[1]):
+        user32.UnregisterHotKey(None, probe_id)
+        return True
+    return False
+
+
+def register_hotkeys(hk: dict[str, list[str]], actions, register, probe=None) -> tuple[list, dict]:
+    """Register each action's keys (+ the Ctrl+Alt fallback for a bare Alt+<key>) through `register`.
+
+    hk: effective_hotkeys(...). register(hk_id, mods, vk) -> bool and probe(spec) -> bool are injected so this
+    is testable. Returns (registered [(hk_id, action, spec)], {ok: [{action, spec}], failed: [{action, spec,
+    fallback, suggest}]}); hotkey_states() flattens the report to per-action states."""
+    registered, ok, failed = [], [], []
+    hk_id = 1
+    taken: set[str] = set()
+    for action in actions:
+        for spec in hk.get(action, []):
+            parsed = parse_hotkey(spec)
+            if not parsed:
+                failed.append({"action": action, "spec": spec, "error": "invalid key", "fallback": None,
+                               "suggest": None})
+                continue
+            mods, vk = parsed
+            primary_ok = bool(register(hk_id, mods, vk))
+            if primary_ok:
+                registered.append((hk_id, action, spec))
+                hk_id += 1
+                ok.append({"action": action, "spec": spec})
+            fallback = None
+            if (mods & 0x0001) and not (mods & (0x0002 | 0x0004 | 0x0008)):
+                fb = "Ctrl+" + spec
+                if register(hk_id, mods | 0x0002, vk):
+                    registered.append((hk_id, action, fb))
+                    hk_id += 1
+                    fallback = fb
+            if not primary_ok:
+                suggest = suggest_free_hotkey(hk, probe=probe, exclude=taken)
+                if suggest:
+                    taken.add(suggest)
+                failed.append({"action": action, "spec": spec, "fallback": fallback, "suggest": suggest})
+    return registered, {"ok": ok, "failed": failed}
+
+
+def hotkey_failure_message(f: dict) -> str:
+    msg = f"Could not register hotkey {f['spec']} ({f['action']})"
+    if f.get("error"):
+        return msg + f": {f['error']}"
+    msg += ": another program already uses it."
+    if f.get("fallback"):
+        msg += f" {f['fallback']} works instead."
+    if f.get("suggest"):
+        msg += f" Free alternative: set video.hotkeys.{f['action']} to \"{f['suggest']}\" in config.local.json."
+    return msg
+
+
+class HotkeyOverlayManager:
+    """Global Win32 hotkeys + an Always-on-Top tkinter shortcut map & status HUD (auto-hides)."""
+
+    def __init__(self, hotkeys_cfg: dict, callbacks: dict, status_fn, on_hotkey=None, on_registered=None,
+                 hud_seconds: float = 15.0):
+        # hotkeys_cfg: the `video.hotkeys` overrides (or an effective_hotkeys() map - same result).
+        self.hk_map = effective_hotkeys(hotkeys_cfg)
         self.callbacks = callbacks
-        self.registration: dict[str, str] = {}  # action -> ok | ctrl_alt_only | failed | invalid
         self.status_fn = status_fn
+        self.on_hotkey = on_hotkey
+        self.on_registered = on_registered
+        self.hud_seconds = hud_seconds
+        self.registration: dict | None = None  # register_hotkeys() report {ok, failed} while registered
         self._stop = threading.Event()
         self._hk_thread = None
         self._hud_thread = None
@@ -6130,66 +7178,58 @@ class HotkeyOverlayManager:
         self._hud_queue.put("TOGGLE")
 
     def rows(self) -> list[dict]:
-        return hotkey_rows(self.hotkeys_cfg, self.registration if self._hk_thread_id else {})
+        """hotkey_rows() with live registration state (/api/status + simwatch_status.json; ShotLab Keys pill)."""
+        return hotkey_rows(self.hk_map, self.registration if self._hk_thread_id else None)
 
     def show_hud(self) -> None:
         self._hud_queue.put("SHOW")
 
+    def dispatch(self, action: str) -> None:
+        """Run one hotkey action (called on the hotkey thread)."""
+        if self.on_hotkey is not None:
+            try:
+                self.on_hotkey(action)
+            except Exception:
+                pass
+        try:
+            self.callbacks[action]()
+        except Exception as e:
+            LOG.warning("Hotkey %s error: %s", action, e)
+
     def _run_hotkeys(self) -> None:
         user32 = ctypes.windll.user32
         self._hk_thread_id = ctypes.windll.kernel32.GetCurrentThreadId()
-        actions = list(self.callbacks.keys())
-        registered = []
-        hk_id = 1
-        for action in actions:
-            spec = self.hotkeys_cfg.get(action)
-            if not spec:
-                continue
-            parsed = parse_hotkey(spec)
-            if not parsed:
-                LOG.warning("Invalid hotkey %s=%r", action, spec)
-                self.registration[action] = "invalid"
-                continue
-            mods, vk = parsed
-            main_ok = bool(user32.RegisterHotKey(None, hk_id, mods, vk))
-            if main_ok:
-                registered.append((hk_id, action))
-                hk_id += 1
-            # Also bind Ctrl+Alt+<Key> as a non-conflicting fallback for bare Alt+<Key> shortcuts
-            fallback_ok = False
-            if (mods & 0x0001) and not (mods & (0x0002 | 0x0004 | 0x0008)):
-                if user32.RegisterHotKey(None, hk_id, mods | 0x0002, vk):
-                    registered.append((hk_id, action))
-                    hk_id += 1
-                    fallback_ok = True
-            self.registration[action] = "ok" if main_ok else ("ctrl_alt_only" if fallback_ok else "failed")
-            if not main_ok:
-                LOG.warning("Could not register hotkey %s (%s)%s", spec, action,
-                            "; Ctrl+" + spec + " still works" if fallback_ok else " - another app owns it")
-
-        LOG.info("\n%s", format_hotkey_cheatsheet(hotkey_rows(self.hotkeys_cfg, self.registration)))
+        registered, reg = register_hotkeys(
+            self.hk_map, list(self.callbacks.keys()),
+            register=lambda hk_id, mods, vk: user32.RegisterHotKey(None, hk_id, mods, vk), probe=probe_hotkey)
+        for f in reg["failed"]:
+            LOG.warning(hotkey_failure_message(f))
+        LOG.info("Hotkeys: %d registered%s", len(reg["ok"]),
+                 f", {len(reg['failed'])} failed" if reg["failed"] else " (all)")
+        self.registration = reg
+        LOG.info("\n%s", format_hotkey_cheatsheet(hotkey_rows(self.hk_map, reg)))
+        if self.on_registered is not None:
+            try:
+                self.on_registered(reg)
+            except Exception:
+                pass
+        by_id = {hk_id: action for hk_id, action, _spec in registered}
 
         msg = ctypes.wintypes.MSG()
         while not self._stop.is_set():
             ret = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
             if ret <= 0:
                 break
-            if msg.message == 0x0312:  # WM_HOTKEY
-                for idx, action in registered:
-                    if msg.wParam == idx:
-                        try:
-                            self.callbacks[action]()
-                        except Exception as e:
-                            LOG.warning("Hotkey %s error: %s", action, e)
-                        break
+            if msg.message == 0x0312 and msg.wParam in by_id:  # WM_HOTKEY
+                self.dispatch(by_id[msg.wParam])
 
-        for idx, _ in registered:
+        for idx in by_id:
             try:
                 user32.UnregisterHotKey(None, idx)
             except Exception:
                 pass
         self._hk_thread_id = None
-        self.registration = {}
+        self.registration = None
 
     def _run_hud(self) -> None:
         try:
@@ -6200,64 +7240,86 @@ class HotkeyOverlayManager:
             root = tk.Tk()
         except Exception:
             return
-        root.title("SimWatch Hotkeys")
+        root.title("SimWatch Shortcuts")
         root.overrideredirect(True)
         root.attributes("-topmost", True)
-        root.attributes("-alpha", 0.93)
+        root.attributes("-alpha", 0.94)
         root.configure(bg="#111827")
         root.withdraw()
         visible = [False]
+        hide_at = [0.0]
+        try:  # never take the keyboard from GSPro: WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW on the real toplevel
+            # Tk creates the toplevel's wrapper HWND lazily (at the first idle map, even while withdrawn); before
+            # that GetParent() does not return the wrapper and the style would land on the wrong window.
+            root.update_idletasks()
+            hwnd = ctypes.windll.user32.GetParent(root.winfo_id()) or root.winfo_id()
+            ex = ctypes.windll.user32.GetWindowLongW(hwnd, -20)
+            ctypes.windll.user32.SetWindowLongW(hwnd, -20, ex | 0x08000000 | 0x00000080)
+        except Exception:
+            pass
 
-        frame = tk.Frame(root, bg="#111827", highlightbackground="#38bdf8", highlightthickness=2, padx=16, pady=12)
+        frame = tk.Frame(root, bg="#111827", highlightbackground="#38bdf8", highlightthickness=2, padx=14, pady=10)
         frame.pack(fill="both", expand=True)
-        tk.Label(
-            frame, text="SimWatch Swing & Video Controls",
-            fg="#38bdf8", bg="#111827", font=("Segoe UI", 12, "bold"),
-        ).pack(anchor="w", pady=(0, 6))
-
-        state_labels: dict[str, "tk.Label"] = {}
-        for action, _, desc in HOTKEY_ACTIONS:
-            hk = self.hotkeys_cfg.get(action)
-            if not hk:
-                continue
-            row = tk.Frame(frame, bg="#111827")
-            row.pack(fill="x", pady=2)
-            tk.Label(row, text=f"{hk:<12}", fg="#facc15", bg="#1f2937",
-                     font=("Consolas", 10, "bold"), padx=6, pady=2).pack(side="left")
-            tk.Label(row, text=f"  {desc}", fg="#e5e7eb", bg="#111827",
-                     font=("Segoe UI", 10)).pack(side="left")
-            state_labels[action] = tk.Label(row, text="", fg="#f87171", bg="#111827", font=("Segoe UI", 9))
-            state_labels[action].pack(side="left")
-        tk.Label(frame, text="Every Alt+<key> also works as Ctrl+Alt+<key>.", fg="#6b7280", bg="#111827",
-                 font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 0))
+        tk.Label(frame, text="SimWatch shortcuts", fg="#38bdf8", bg="#111827",
+                 font=("Segoe UI", 12, "bold")).grid(row=0, column=0, columnspan=2, sticky="w", pady=(0, 4))
+        failed = set()
+        groups = hotkey_groups({"video": {"hotkeys": self.hk_map}})
+        cols = [tk.Frame(frame, bg="#111827"), tk.Frame(frame, bg="#111827")]
+        cols[0].grid(row=1, column=0, sticky="nw", padx=(0, 18))
+        cols[1].grid(row=1, column=1, sticky="nw")
+        key_labels = []
+        split = (sum(len(g["keys"]) + 1 for g in groups) + 1) // 2
+        used = 0
+        for g in groups:
+            col = cols[0] if used < split else cols[1]
+            used += len(g["keys"]) + 1
+            tk.Label(col, text=g["group"].upper(), fg="#94a3b8", bg="#111827",
+                     font=("Segoe UI", 9, "bold")).pack(anchor="w", pady=(6, 1))
+            for row in g["keys"]:
+                r = tk.Frame(col, bg="#111827")
+                r.pack(fill="x", pady=1)
+                kl = tk.Label(r, text=f"{' / '.join(row['keys']):<11}", fg="#facc15", bg="#1f2937",
+                              font=("Consolas", 10, "bold"), padx=5, pady=1)
+                kl.pack(side="left")
+                key_labels.append((kl, row["keys"]))
+                tk.Label(r, text=f"  {row['description']}", fg="#e5e7eb", bg="#111827",
+                         font=("Segoe UI", 10)).pack(side="left")
 
         status_var = tk.StringVar(value="")
-        tk.Label(
-            frame, textvariable=status_var, fg="#9ca3af", bg="#111827",
-            font=("Segoe UI", 9), justify="left", pady=6,
-        ).pack(anchor="w")
+        tk.Label(frame, textvariable=status_var, fg="#9ca3af", bg="#111827", font=("Segoe UI", 9),
+                 justify="left", pady=6).grid(row=2, column=0, columnspan=2, sticky="w")
+
+        def mark_failed():
+            reg = self.registration or {}
+            bad = {f.get("spec") for f in reg.get("failed", [])}
+            if bad == failed:
+                return
+            failed.clear()
+            failed.update(bad)
+            for kl, keys in key_labels:
+                kl.configure(fg="#f87171" if any(k in bad for k in keys) else "#facc15")
 
         def refresh_status():
-            for action, lbl in state_labels.items():
-                state = self.registration.get(action)
-                lbl.configure(text={"failed": "  (taken by another app)", "invalid": "  (bad key in config)",
-                                    "ctrl_alt_only": "  (use Ctrl+Alt)"}.get(state, ""))
             try:
                 st = self.status_fn()
-                status_var.set(
-                    f"Club: {st['club'] or '-'}   |   Reference: {st['reference']}   |   PiP: {st['pip']}\n"
-                    f"Last Swing: {st['last_swing'] or 'None yet'}"
-                )
+                lines = [f"Club: {st.get('club') or '-'}   |   Reference: {st.get('reference')}   |   "
+                         f"PiP: {st.get('pip')}"]
+                if st.get("layout"):
+                    lines.append(f"Layout: {st['layout']}   |   Replay: {st.get('replay', '-')}"
+                                 + (f"   |   Compare: {st['compare']}" if st.get("compare") else ""))
+                lines.append(f"Last swing: {st.get('last_swing') or 'none yet'}")
+                if failed:
+                    lines.append("Red keys could not be registered (another app owns them) - "
+                                 "see simwatch.log / doctor for a free alternative.")
+                status_var.set("\n".join(lines))
             except Exception:
                 pass
 
         def place_top_center():
             root.update_idletasks()
             wl, wt, wr, wb = get_primary_work_area()
-            rw, rh = root.winfo_width(), root.winfo_height()
-            x = wl + ((wr - wl) - rw) // 2
-            y = wt + 36
-            root.geometry(f"+{x}+{y}")
+            rw = root.winfo_width()
+            root.geometry(f"+{wl + ((wr - wl) - rw) // 2}+{wt + 24}")
 
         def poll():
             if self._stop.is_set():
@@ -6274,6 +7336,8 @@ class HotkeyOverlayManager:
                     elif cmd == "SHOW":
                         visible[0] = True
                     if visible[0]:
+                        hide_at[0] = time.time() + self.hud_seconds if self.hud_seconds > 0 else 0.0
+                        mark_failed()
                         refresh_status()
                         place_top_center()
                         root.deiconify()
@@ -6281,6 +7345,9 @@ class HotkeyOverlayManager:
                         root.withdraw()
             except queue.Empty:
                 pass
+            if visible[0] and hide_at[0] and time.time() >= hide_at[0]:
+                visible[0] = False
+                root.withdraw()
             if visible[0]:
                 refresh_status()
             root.after(150, poll)
@@ -6316,14 +7383,32 @@ class SwingSessionManager:
         self._pending_ref_club: str | None = None
         self._ref_swap_thread: threading.Thread | None = None
         self._ref_swap_sync = False  # tests: apply the swap inline instead of on the worker thread
+        # Club-change reference reloads are debounced (scrolling I/K through GSPro's clubs relaunches Kinovea
+        # once, for the club you land on) and never run after stop(): see _ref_swap_worker.
+        self._ref_swap_debounce = cfg_number(self.vcfg.get("club_reload_debounce_sec"), 1.5)
+        self._pending_ref_at = 0.0
+        self._ref_swap_stop = threading.Event()
+        self._stopped = False
         self.hub: ShotHub | None = None  # shot-data bridge (set by watch()/cmd_video() when enabled)
         self.shotlab: "ShotLabSupervisor | None" = None  # set by watch() when shotlab.enabled
 
         self.pip = ProjectorPiPController(cfg)
         self.oc_monitor = OpenConnectMonitor(self._on_openconnect_shot, self._on_club_change)
+        # Adaptive layout + post-shot replay + compare (see VideoLayoutController / ReplayScheduler).
+        self.layout_ctl = VideoLayoutController(cfg)
+        self.replay = ReplayScheduler(replay_cfg(cfg))
+        self.replay_visible = False
+        self.compare_state = "off"
+        self._win_lock = threading.RLock()       # serializes window moves from the shot/hotkey/tick threads
+        self._compare_lock = threading.Lock()    # one Compare (re)launch at a time
         self.hotkeys = HotkeyOverlayManager(
-            self.vcfg.get("hotkeys", {}),
+            effective_hotkeys(hotkeys_cfg_of(cfg)),
             {
+                "replay_now": self.replay_show_now,
+                "replay_pin": self.replay_toggle_pin,
+                "replay_dismiss": self.replay_dismiss,
+                "replay_auto": self.replay_toggle_auto,
+                "compare_cycle": self.compare_cycle,
                 "cheatsheet": self._toggle_cheatsheet,
                 "toggle_shotlab": self.toggle_shotlab,
                 "toggle_pip": self.pip.toggle_pin,
@@ -6336,6 +7421,9 @@ class SwingSessionManager:
                 "save_lines": self.save_dragged_lines,
             },
             self.get_hud_status,
+            on_hotkey=self._on_hotkey,
+            on_registered=self._on_hotkeys_registered,
+            hud_seconds=cfg_number(self.vcfg.get("hud_seconds"), 15.0),
         )
         self._started = False
 
@@ -6356,13 +7444,24 @@ class SwingSessionManager:
         if launch_rig:
             setup_video_rig(self.cfg, ref_name=self.active_reference, club=self.current_club, launch=True)
             ensure_obs_running(self.cfg)
-            tile_video_windows(self.cfg, wait_sec=6.0)
+            self.layout_ctl.refresh(force=True)
+            self.replay.always_on = bool(self.layout_ctl.layout and self.layout_ctl.layout.get("always_on"))
+            if self.replay.always_on:
+                self.replay_visible = self.replay.show_now(time.time()) == "show"
+            self._retile(wait_sec=6.0)
+            if self._replay_enabled():
+                # The freshly launched Kinovea windows may have taken the foreground from GSPro (and minimized
+                # it in exclusive fullscreen); parking them behind GSPro does not give the keyboard back.
+                # Only acts when a Kinovea window / SimWatch holds the foreground (see restore_gspro_focus).
+                self._focus_gspro()
         else:
             install_kinovea_custom_golf_tools(self.cfg)
             apply_swing_lines_to_active_clips(self.cfg, club=self.current_club, overwrite=False)
         self._snapshot_existing_files()
         if self.hub is not None:
             self.hub.sniffer = self.oc_monitor
+        self._stopped = False
+        self._ref_swap_stop.clear()
         self.oc_monitor.start()
         self.hotkeys.start()
         self._started = True
@@ -6371,9 +7470,15 @@ class SwingSessionManager:
     def stop(self) -> None:
         if not self._started:
             return
+        # Drop any queued club reload and wake a debouncing worker: Kinovea is never relaunched after stop().
+        with self._state_lock:
+            self._stopped = True
+            self._pending_ref_club = None
+        self._ref_swap_stop.set()
         self.oc_monitor.stop()
         self.hotkeys.stop()
         self._started = False
+        write_video_state(hotkeys=None, replay=None)  # hotkeys released: doctor may probe them again
 
     def _snapshot_existing_files(self) -> None:
         for folder in self._watch_folders():
@@ -6409,9 +7514,12 @@ class SwingSessionManager:
             self.current_club = club
             new_cat = club_category(club)
             LOG.info("Active club changed -> %s (%s)", club, new_cat)
+            if getattr(self, "replay", None) is not None and self.replay.on_club_change(time.time()) == "hide":
+                threading.Thread(target=self._hide_replay, name="ReplayHide", daemon=True).start()
             if new_cat == "Putter":
                 return  # no capture and no reference swap; keep whatever full-swing reference is loaded
             self._pending_ref_club = club
+            self._pending_ref_at = time.monotonic()
             if not getattr(self, "_ref_swap_sync", False) and getattr(self, "_ref_swap_thread", None) is None:
                 self._ref_swap_thread = threading.Thread(target=self._ref_swap_worker, name="ReferenceSwap",
                                                          daemon=True)
@@ -6421,8 +7529,29 @@ class SwingSessionManager:
         elif start_worker:
             self._ref_swap_thread.start()
 
+    def _ref_swap_wait_quiet(self) -> None:
+        """Debounce: wait until no club change arrived for _ref_swap_debounce seconds (stop() cuts it short)."""
+        quiet = getattr(self, "_ref_swap_debounce", 0.0) or 0.0
+        stop_ev = getattr(self, "_ref_swap_stop", None)
+        while quiet > 0:
+            with self._state_lock:
+                wait = getattr(self, "_pending_ref_at", 0.0) + quiet - time.monotonic()
+                if self._pending_ref_club is None or getattr(self, "_stopped", False):
+                    return
+            if wait <= 0:
+                return
+            if stop_ev is not None:
+                if stop_ev.wait(min(wait, 0.5)):
+                    return
+            else:
+                time.sleep(min(wait, 0.5))
+
     def _ref_swap_worker(self) -> None:
+        """The ONE reference-reload path for club changes. Runs off the sniffer thread (the UDP trigger / shot
+        path never waits on it: they only take the short _state_lock), coalesces to the latest club,
+        debounces, and serializes with Alt+R / bookmark rig work through self._lock."""
         while True:
+            self._ref_swap_wait_quiet()
             try:
                 self._apply_pending_ref_swap()
             except Exception:
@@ -6440,13 +7569,20 @@ class SwingSessionManager:
             with self._state_lock:
                 club, self._pending_ref_club = self._pending_ref_club, None
                 prev_cat = getattr(self, "_swing_cat", None) or club_category(None)
-            if club is None:
-                return False
+                stopped = getattr(self, "_stopped", False)
+            if club is None or stopped:
+                return False  # stop() raced the worker: never relaunch Kinovea after shutdown
             new_cat = club_category(club)
             if new_cat == "Putter" or new_cat == prev_cat:
                 return False
+            if "Reference" not in kinovea_windows_to_launch(self.cfg):
+                # Adaptive layouts have no Reference window to reload (Compare resolves the reference clips for
+                # the current club when you ask); just remember the category for _ref_club().
+                with self._state_lock:
+                    self._swing_cat = new_cat
+                return False
             setup_video_rig(self.cfg, ref_name=self.active_reference, club=club, launch=True, reload_ref=True)
-            tile_video_windows(self.cfg, wait_sec=4.0)
+            self._retile(wait_sec=4.0)
             # Record the category only once the swap succeeded, so a failed swap is retried next change.
             with self._state_lock:
                 self._swing_cat = new_cat
@@ -6484,6 +7620,7 @@ class SwingSessionManager:
             LOG.info("Putt - skipping video capture")
             return
         self.pip.show_for_shot()
+        self._schedule_replay(info.get("club") or self.current_club)
 
     def trigger_capture(self) -> None:
         """2025: one UDP datagram (Kinovea's Delay/MaxDuration/quiet period do the rest).
@@ -6491,13 +7628,16 @@ class SwingSessionManager:
         Takes only the short _state_lock, never the rig lock a reference swap holds."""
         with self._state_lock:
             now = time.time()
-            post_sec = float(self.vcfg.get("post_trigger_sec", 1.5))
-            pre_sec = float(self.vcfg.get("pre_trigger_sec", 3.0))
+            # cfg_number, not float(): a typo'd/null value here must never cost the trigger (or, by raising
+            # into the sniffer callback, the shot record too).
+            post_sec = cfg_number(self.vcfg.get("post_trigger_sec", 1.5), 1.5)
+            pre_sec = cfg_number(self.vcfg.get("pre_trigger_sec", 3.0), 3.0)
             if resolve_kinovea_backend(self.cfg) == "2025":
                 if now - getattr(self, "_last_udp_trigger", 0.0) < 1.0:
                     return
                 self._last_udp_trigger = now
-                port = int(self.vcfg.get("udp_trigger_port", KINOVEA_DEFAULT_UDP_PORT))
+                port = int(cfg_number(self.vcfg.get("udp_trigger_port", KINOVEA_DEFAULT_UDP_PORT),
+                                      KINOVEA_DEFAULT_UDP_PORT))
                 if send_udp_trigger(port):
                     LOG.info("Sent Kinovea UDP trigger to 127.0.0.1:%d (pre=%.1fs, post=%.1fs)", port, pre_sec, post_sec)
                 return
@@ -6515,6 +7655,8 @@ class SwingSessionManager:
     def trigger_manual_shot(self) -> None:
         self.trigger_capture()
         self.pip.show_for_shot()
+        rc = replay_cfg(self.cfg)
+        self._schedule_replay(None, delay=cfg_number(rc.get("manual_delay_sec"), 4.0))
 
     def _toggle_cheatsheet(self) -> None:
         self.hotkeys.toggle_hud()
@@ -6524,14 +7666,215 @@ class SwingSessionManager:
         LOG.info("Hotkey: ShotLab %s", result)
 
     def get_hud_status(self) -> dict:
-        with self._lock:
-            last = self.last_saved_dtl or self.last_saved_fo
-            return {
-                "club": self.current_club or "Iron",
-                "reference": self.active_reference,
-                "pip": self.pip.status_text(),
-                "last_swing": last.name if last else None,
-            }
+        # Deliberately not under self._lock (a reference swap can hold it for seconds; the HUD polls this).
+        last = self.last_saved_dtl or self.last_saved_fo
+        ctl = getattr(self, "layout_ctl", None)
+        sched = getattr(self, "replay", None)
+        cmp_state = getattr(self, "compare_state", "off")
+        return {
+            "club": self.current_club or "Iron",
+            "reference": self.active_reference,
+            "pip": self.pip.status_text(),
+            "last_swing": last.name if last else None,
+            "layout": ctl.layout["profile"] if ctl is not None and ctl.layout else None,
+            "replay": sched.status_text(time.time()) if sched is not None else None,
+            "compare": None if cmp_state == "off" else f"{cmp_state}: you | {self.active_reference}",
+        }
+
+    # ------------------------------------------------------------------ adaptive layout / replay / compare
+
+    def _replay_enabled(self) -> bool:
+        ctl = getattr(self, "layout_ctl", None)
+        return ctl is not None and getattr(self, "replay", None) is not None and not ctl.is_grid()
+
+    def _retile(self, wait_sec: float = 0.0) -> None:
+        """Position the Kinovea windows for the current layout (the old 2x2 tiling when profile = grid)."""
+        ctl = getattr(self, "layout_ctl", None)
+        if ctl is None:
+            tile_video_windows(self.cfg, wait_sec=wait_sec)
+            return
+        with self._win_lock:
+            ctl.apply(bool(getattr(self, "replay_visible", False)),
+                      getattr(self, "compare_state", "off") != "off", wait_sec=wait_sec)
+
+    def _publish_replay_state(self) -> None:
+        sched = self.replay
+        write_video_state(replay={"mode": sched.mode, "state": sched.state, "pinned": sched.pinned,
+                                  "compare": self.compare_state})
+
+    def _on_hotkey(self, action: str) -> None:
+        sched = getattr(self, "replay", None)
+        if sched is not None:
+            sched.note_hotkey(time.time())
+
+    def _on_hotkeys_registered(self, reg: dict) -> None:
+        write_video_state(hotkeys=reg)
+        if self.hub is not None:
+            self.hub.hotkey_registration = reg
+
+    def _schedule_replay(self, club: str | None, delay: float | None = -1.0) -> None:
+        """Shot path (sniffer thread): schedule the post-shot replay; hide one that's up so the ball can be seen."""
+        self._shot_gen = getattr(self, "_shot_gen", 0) + 1  # lets a Compare that's still loading notice the shot
+        if not self._replay_enabled():
+            return
+        now = time.time()
+        was_compare = self.compare_state != "off"
+        if was_compare:
+            self.compare_state = "off"
+            self.replay.release(now)
+        act = self.replay.on_shot(now, club, delay)
+        # Window work off the sniffer thread: it must stay free for the next OpenConnect message.
+        if act == "hide":
+            threading.Thread(target=self._hide_replay, name="ReplayHide", daemon=True).start()
+        elif was_compare:
+            threading.Thread(target=self._retile, name="ReplayRetile", daemon=True).start()
+        LOG.info("Replay: %s", self.replay.status_text(now))
+
+    def _show_replay(self) -> None:
+        with self._win_lock:
+            self.replay_visible = True
+            self._retile()
+            self._focus_gspro()
+        LOG.info("Replay shown (%s)", self.replay.status_text(time.time()))
+        self._publish_replay_state()
+
+    def _hide_replay(self) -> None:
+        with self._win_lock:
+            self.replay_visible = False
+            self.compare_state = "off"
+            self._retile()
+            self._focus_gspro()
+        self._publish_replay_state()
+
+    def _focus_gspro(self) -> None:
+        if replay_cfg(self.cfg).get("restore_focus", True):
+            try:
+                self.layout_ctl.ops.restore_gspro_focus()
+            except Exception:
+                log_throttled("gspro-focus-mgr", "restore GSPro focus failed", exc_info=True)
+
+    def _do(self, action: str | None) -> None:
+        if action == "show":
+            self._show_replay()
+        elif action == "hide":
+            self._hide_replay()
+
+    def replay_show_now(self) -> None:
+        if self._replay_enabled():
+            self._do(self.replay.show_now(time.time()))
+
+    def replay_toggle_pin(self) -> None:
+        if self._replay_enabled():
+            act = self.replay.toggle_pin(time.time())
+            LOG.info("Replay %s", "kept open" if self.replay.pinned else "closed")
+            self._do(act)
+            self._publish_replay_state()
+
+    def replay_dismiss(self) -> None:
+        if self._replay_enabled():
+            act = self.replay.dismiss(time.time())
+            if act is None and (self.replay_visible or self.compare_state != "off"):
+                act = "hide"
+            self._do(act)
+
+    def replay_toggle_auto(self) -> None:
+        if self._replay_enabled():
+            mode = self.replay.toggle_mode(time.time())
+            LOG.info("Auto replay after each shot: %s", "ON" if mode == "auto" else "OFF (Alt+V still shows it)")
+            try:
+                winsound.Beep(988 if mode == "auto" else 523, 120)
+            except Exception:
+                pass
+            self._publish_replay_state()
+
+    def compare_cycle(self) -> None:
+        """Alt+M: DTL you|ref -> FO you|ref -> back to your DTL|FO. Loading a pair relaunches the Kinovea Compare
+        window (~2-4 s), so it runs on a worker thread; presses while it loads are ignored."""
+        if not self._replay_enabled():
+            LOG.info("Compare needs the adaptive layout (video.layout.profile is 'grid')")
+            return
+        nxt = next_compare_state(self.compare_state)
+        if nxt == "off":
+            self._exit_compare()
+            return
+        threading.Thread(target=self._start_compare, args=(nxt,), name="Compare", daemon=True).start()
+
+    def _start_compare(self, angle: str) -> bool:
+        if not self._compare_lock.acquire(blocking=False):
+            LOG.info("Compare is still loading; press again in a moment")
+            return False
+        try:
+            gen0 = getattr(self, "_shot_gen", 0)
+            you_clip = self.last_saved_dtl if angle == "DTL" else self.last_saved_fo
+            you, ref, why = pick_compare_clips(self.cfg, angle, self.active_reference, self._ref_club(), you_clip)
+            if not (you and ref):
+                LOG.warning("Compare %s: %s", angle, why)
+                try:
+                    winsound.Beep(392, 180)
+                except Exception:
+                    pass
+                return False
+            speed = self.vcfg.get("replay_speed_pct", 50)
+            if getattr(self, "_stopped", False):
+                return False
+            if not launch_compare_window(self.cfg, build_compare_screens(you, ref, speed)):
+                LOG.warning("Compare %s: could not start the Kinovea Compare window", angle)
+                return False
+            self.layout_ctl._hwnd(COMPARE_WINDOW, 8.0)  # wait for the (re)launched window outside the lock
+            if getattr(self, "_stopped", False) or getattr(self, "_shot_gen", 0) != gen0:
+                # A shot landed (or the rig stopped) while Compare loaded: the shot wins; don't pop over GSPro.
+                LOG.info("Compare %s cancelled: a new shot arrived while it was loading", angle)
+                return False
+            self.compare_state = angle
+            self.replay.hold(time.time())
+            with self._win_lock:
+                self.replay_visible = True
+                self.layout_ctl.apply(True, True)
+                self._focus_gspro()
+            LOG.info("Compare %s: you (%s) | %s (%s)", angle, you.name, self.active_reference, ref.name)
+            self._publish_replay_state()
+            return True
+        finally:
+            self._compare_lock.release()
+
+    def _exit_compare(self) -> None:
+        self.compare_state = "off"
+        self.replay.release(time.time())
+        with self._win_lock:
+            self.replay_visible = self.replay.state == ReplayScheduler.SHOWING
+            self._retile()
+            self._focus_gspro()
+        LOG.info("Compare off: back to your DTL | FO replay")
+        self._publish_replay_state()
+
+    def _tick_replay(self, now: float | None = None) -> None:
+        """Every ~0.5 s: re-check displays (layout change -> re-position) and run the replay timer."""
+        if getattr(self, "layout_ctl", None) is None or getattr(self, "replay", None) is None:
+            return
+        now = time.time() if now is None else now
+        if self.layout_ctl.refresh(now):
+            was_always_on = self.replay.always_on
+            self.replay.always_on = bool(self.layout_ctl.layout.get("always_on"))
+            if self.replay.always_on and self.replay.state != ReplayScheduler.SHOWING:
+                self.replay.show_now(now)
+                self.replay_visible = True
+            elif was_always_on and not self.replay.always_on:
+                self.replay.release(now)  # dual -> single screen: the replay now times out normally
+            self._retile()
+        if self.layout_ctl.is_grid():
+            return
+        last_input = None
+        if self.replay.state == ReplayScheduler.SHOWING and not self.replay.pinned:
+            try:
+                last_input = self.layout_ctl.ops.last_input_time()
+            except Exception:
+                last_input = None
+        self._do(self.replay.tick(now, last_input))
+
+    def _note_clip_ready(self) -> None:
+        sched = getattr(self, "replay", None)
+        if sched is not None:
+            sched.on_clip_ready(time.time())
 
     def _infer_angle(self, p: Path) -> str:
         text = f"{p.parent.name}/{p.name}"
@@ -6618,10 +7961,11 @@ class SwingSessionManager:
                     self._pending_clip_links = pending
                 LOG.info("Swing clip ready: %s", ev["clip"])
         if got:
+            self._note_clip_ready()
             self.pip.show_for_shot()
             if not self._retiled_on_first_clip:
                 self._retiled_on_first_clip = True
-                tile_video_windows(self.cfg, wait_sec=2.0)
+                self._retile(wait_sec=2.0)
 
     def _poll_new_recordings(self) -> None:
         with self._lock:
@@ -6707,10 +8051,11 @@ class SwingSessionManager:
                     LOG.warning("Failed organizing swing clip %s: %s", src, e)
                 self._processed_files.add(src)
 
+            self._note_clip_ready()
             self.pip.show_for_shot()
             if not self._retiled_on_first_clip:
                 self._retiled_on_first_clip = True
-                tile_video_windows(self.cfg, wait_sec=2.0)
+                self._retile(wait_sec=2.0)
 
     def bookmark_last_swing(self, club_override: str | None = None) -> tuple[Path | None, Path | None]:
         with self._lock:
@@ -6773,7 +8118,7 @@ class SwingSessionManager:
                     pass
                 if self.active_reference == "My-Go-To" and find_kinovea_instance_pid("Reference"):
                     setup_video_rig(self.cfg, ref_name=self.active_reference, club=club, launch=True, reload_ref=True)
-                    tile_video_windows(self.cfg, wait_sec=3.0)
+                    self._retile(wait_sec=3.0)
             else:
                 LOG.warning("No recent swing clips found to bookmark")
             return saved_dtl, saved_fo
@@ -6783,7 +8128,7 @@ class SwingSessionManager:
             self.active_reference = ref_name
             setup_video_rig(self.cfg, ref_name=ref_name, club=self._ref_club(), launch=launch_rig, reload_ref=launch_rig)
             if launch_rig:
-                tile_video_windows(self.cfg, wait_sec=4.0)
+                self._retile(wait_sec=4.0)
             LOG.info("Reference switched -> %s", ref_name)
 
     def cycle_reference(self) -> None:
@@ -6794,6 +8139,9 @@ class SwingSessionManager:
             except ValueError:
                 idx = 0
             self.set_reference(choices[idx], launch_rig=True)
+        cmp_state = getattr(self, "compare_state", "off")
+        if cmp_state != "off":  # comparing: reload the same angle against the new reference
+            threading.Thread(target=self._start_compare, args=(cmp_state,), name="Compare", daemon=True).start()
 
     def open_today_folder(self) -> None:
         layout = ensure_swings_layout(self.cfg)
@@ -6817,7 +8165,7 @@ class SwingSessionManager:
         with self._lock:
             written = apply_swing_lines_to_active_clips(self.cfg, club=self.current_club, overwrite=False)
             toggled = []
-            for inst in ("LiveReplay", "Reference"):
+            for inst in ("LiveReplay", "Reference", COMPARE_WINDOW):
                 if kinovea_send_command(inst, "PlayerScreen.ToggleDrawingsVisibility"):
                     toggled.append(inst)
             LOG.info("Toggled swing lines (new_kva=%d, windows=%s)", len(written), toggled)
@@ -6860,6 +8208,8 @@ class SwingSessionManager:
                     else:
                         self._poll_new_recordings()
                 self.pip.tick()
+                if allow_new_work or getattr(self, "replay_visible", False):
+                    self._tick_replay()  # (auto-hide still runs while paused, like the PiP)
             except Exception:
                 log_throttled("video-tick", "SwingSessionManager.tick error", exc_info=True)
 
@@ -7395,19 +8745,56 @@ def running_watchdog_status() -> dict | None:
     return doc
 
 
-def print_hotkey_cheatsheet(cfg: dict) -> None:
-    """Print the hotkeys; if a SimWatch watchdog is running, include which ones it actually registered."""
-    registration = None
+def live_hotkey_registration() -> tuple[dict | None, str]:
+    """(registration, source) of the running SimWatch's hotkeys: the full register_hotkeys() report from
+    video_state.json (with free-key suggestions) when the video rig is live, else the per-action states from
+    simwatch_status.json. source: "rig" | "watchdog" | "no_rig" (watchdog running, video rig off) | "not_running"."""
+    st = read_video_state()
+    reg = st.get("hotkeys") if video_state_live(st) else None
+    if isinstance(reg, dict):
+        return reg, "rig"
     doc = running_watchdog_status()
-    hk = doc.get("hotkeys") if doc else None
-    if isinstance(hk, list):
-        registration = {r.get("action"): r.get("state") for r in hk if isinstance(r, dict)}
-    print()
-    print(format_hotkey_cheatsheet(hotkey_rows(cfg.get("video", {}).get("hotkeys"), registration)))
     if doc is None:
+        return None, "not_running"
+    hk = doc.get("hotkeys")
+    if isinstance(hk, list) and hk:
+        return {r.get("action"): r.get("state") for r in hk if isinstance(r, dict) and r.get("action")}, "watchdog"
+    return None, "no_rig"
+
+
+def print_hotkey_cheatsheet(cfg: dict) -> None:
+    """Print the grouped shortcut map; if SimWatch is running, include which keys it actually registered."""
+    reg, source = live_hotkey_registration()
+    print()
+    print(render_hotkeys_text(cfg, reg))
+    for _sev, msg in hotkey_conflicts(cfg):
+        print(f"  ! {msg}")
+    if source == "rig":
+        for f in reg.get("failed", []):
+            print(f"  ! {hotkey_failure_message(f)}")
+    elif source == "not_running":
         print("  (SimWatch isn't running, so key registration couldn't be checked.)")
-    elif registration is None:
-        print("  (SimWatch is running without the video rig (video.enabled=false), so no hotkeys are active.)")
+    elif source == "no_rig":
+        print("  (SimWatch is running without the video rig, so no hotkeys are active.)")
+
+
+SHORTCUTS_DOC_PATH = HERE / "docs" / "SHORTCUTS.md"
+
+
+def cmd_keys(cfg: dict, mode: str | None = None, doc_path: Path | None = None) -> int:
+    """`keys`: print the grouped shortcut map. `keys md`: regenerate docs/SHORTCUTS.md from the same table."""
+    mode = (mode or "show").strip().lower()
+    if mode == "md":
+        path = doc_path or SHORTCUTS_DOC_PATH
+        path.parent.mkdir(parents=True, exist_ok=True)
+        changed = write_text_if_changed(path, render_hotkeys_markdown(cfg), backup=False)
+        print(f"{'Wrote' if changed else 'Up to date:'} {path}")
+        return 0
+    if mode not in ("show", "list", "text"):
+        print(f"Invalid keys mode {mode!r} (valid: md, or nothing to print the map)")
+        return 2
+    print_hotkey_cheatsheet(cfg)
+    return 0
 
 
 def cmd_video(cfg: dict, mode: str | None = None) -> int:
@@ -7577,6 +8964,11 @@ def doctor_report(config_path: Path) -> list[tuple[str, str, str]]:
                 add(FAIL if needed else WARN, item, f"not found: {path}")
 
     rows.extend(doctor_shotlab_rows(cfg_raw))
+    if vcfg.get("enabled"):
+        try:
+            rows.extend(doctor_video_rows(cfg_raw))
+        except Exception as e:  # a doctor row must never crash the report
+            add(WARN, "video layout / hotkeys", f"check failed: {type(e).__name__}: {e}")
 
     # ports
     dev = cfg_raw.get("device", {}) if isinstance(cfg_raw.get("device"), dict) else {}
@@ -7624,6 +9016,81 @@ def doctor_shotlab_rows(cfg_raw: dict) -> list[tuple[str, str, str]]:
         rows.append((WARN if owner else INFO, f"ShotLab :{port}",
                      f"port held by another program (pid {owner})" if owner else
                      "not running (fine; the watchdog starts it with GSPro)"))
+    return rows
+
+
+def current_video_layout(cfg: dict) -> tuple[dict | None, str]:
+    """(layout, source) for status/doctor: live from the displays on Windows, else what the running rig wrote."""
+    if IS_WINDOWS:
+        try:
+            displays = list_displays()
+            gidx = choose_display(cfg)[0]
+            return select_video_layout(displays, video_layout_cfg(cfg), gidx), "displays now"
+        except Exception as e:
+            return None, f"could not read displays: {e}"
+    st = read_video_state()
+    if video_state_live(st) and isinstance(st.get("layout"), dict):
+        return st["layout"], "running rig"
+    return None, "Windows only"
+
+
+def replay_settings_text(cfg: dict) -> str:
+    rc = replay_cfg(cfg)
+    by = rc.get("delay_by_club") if isinstance(rc.get("delay_by_club"), dict) else {}
+    parts = []
+    for club, v in by.items():
+        d = replay_delay_for_club({"delay_by_club": {club: v}, "delay_sec": rc.get("delay_sec")}, club)
+        parts.append(f"{club} {'no replay' if d is None else f'{d:g}s'}")
+    clubs = ", ".join(parts) or "same for every club"
+    return (f"{rc.get('mode')} - {cfg_number(rc.get('delay_sec'), 8):g}s after the shot ({clubs}), "
+            f"shown {cfg_number(rc.get('show_sec'), 10):g}s")
+
+
+def doctor_video_rows(cfg: dict) -> list[tuple[str, str, str]]:
+    """Doctor: layout profile, replay vs GSPro fullscreen, shortcut conflicts + registration."""
+    rows: list[tuple[str, str, str]] = []
+    layout, src = current_video_layout(cfg)
+    if layout:
+        rows.append((INFO, "video layout", f"{layout_summary(layout)} ({src})"))
+    else:
+        rows.append((SKIP if src == "Windows only" else WARN, "video layout",
+                     f"{video_layout_cfg(cfg).get('profile')} ({src})"))
+    rows.append((INFO, "replay", replay_settings_text(cfg)))
+    projector_on = None
+    if IS_WINDOWS:
+        try:
+            projector_on = bool(choose_display(cfg)[2])
+        except Exception:
+            projector_on = None
+    rows.append(evaluate_replay_gspro_mode(cfg, projector_on))
+
+    conflicts = hotkey_conflicts(cfg)
+    n_keys = sum(len(v) for v in effective_hotkeys(hotkeys_cfg_of(cfg)).values())
+    if conflicts:
+        rows.extend((WARN, "hotkeys (config)", m) for _sev, m in conflicts)
+    else:
+        rows.append((PASS, "hotkeys (config)", f"{n_keys} shortcuts, no conflicts (list: python simwatch.py keys)"))
+
+    st = read_video_state()
+    reg = st.get("hotkeys") if video_state_live(st) else None
+    if isinstance(reg, dict):
+        for f in reg.get("failed", []):
+            rows.append((WARN, "hotkey registration", hotkey_failure_message(f)))
+        if not reg.get("failed"):
+            rows.append((PASS, "hotkey registration",
+                         f"all {len(reg.get('ok', []))} registered by the running SimWatch (pid {st.get('pid')})"))
+    elif IS_WINDOWS:
+        hk = effective_hotkeys(hotkeys_cfg_of(cfg))
+        bad = [(a, spec) for a, specs in hk.items() for spec in specs if not probe_hotkey(spec)]
+        for a, spec in bad:
+            sug = suggest_free_hotkey(hk, probe=probe_hotkey)
+            rows.append((WARN, "hotkey registration",
+                         f"{spec} ({a}) is already taken by another program"
+                         + (f"; free alternative: video.hotkeys.{a} = \"{sug}\"" if sug else "")))
+        if not bad:
+            rows.append((PASS, "hotkey registration", f"all {n_keys} keys are free (probed; the video rig isn't running)"))
+    else:
+        rows.append((SKIP, "hotkey registration", "Windows only"))
     return rows
 
 
@@ -8346,6 +9813,24 @@ def _doc_oc_target(cfg):
     return [evaluate_openconnect_targets(found)]
 
 
+def disk_space_row(free_bytes: int, where: str = "C:") -> tuple[str, str, str]:
+    """Doctor row for free disk space: swing clips at 260 fps, logs and shot files all need room."""
+    gb = free_bytes / 1024 ** 3
+    item = f"free disk space ({where})"
+    fix = "-> fix: run `python simwatch.py space` to see what's using it, then delete or move files"
+    if gb < 2:
+        return (FAIL, item, f"{gb:.2f} GB free - Kinovea can't save clips, logs/shots may fail {fix}")
+    if gb < 10:
+        return (WARN, item, f"{gb:.1f} GB free - getting low {fix}")
+    return (PASS, item, f"{gb:.0f} GB free")
+
+
+def _doc_disk(cfg):
+    import shutil
+    drive = os.environ.get("SystemDrive", "C:")
+    return [disk_space_row(shutil.disk_usage(drive + "\\").free, drive)]
+
+
 def doctor_system_rows(cfg: dict) -> list[tuple[str, str, str]]:
     """Read-only Windows environment checks (each PASS/WARN/FAIL/INFO with a one-line fix). SKIP off Windows."""
     if not IS_WINDOWS:
@@ -8360,6 +9845,10 @@ def doctor_system_rows(cfg: dict) -> list[tuple[str, str, str]]:
             rows.extend(fn(cfg))
         except Exception as e:  # a broken probe must never take down the whole report
             rows.append((WARN, name, f"check crashed: {type(e).__name__}: {e}"))
+    try:
+        rows.extend(_doc_disk(cfg))
+    except Exception as e:
+        rows.append((WARN, "free disk space", f"check crashed: {type(e).__name__}: {e}"))
     return rows
 
 
@@ -8716,7 +10205,8 @@ def harden_offer_integrator_restart(cfg: dict, wait_sec: float = 30.0) -> bool |
 
 # --------------------------------------------------------------------------- main
 
-STATUS_LOG_PATTERNS = ("passive shot monitor", "Shot bridge", "Shot ", "Kinovea", "ERROR", "WARNING", "All green")
+STATUS_LOG_PATTERNS = ("passive shot monitor", "Shot bridge", "Shot ", "Kinovea", "ERROR", "WARNING", "All green",
+                       "Video layout", "Hotkeys:")
 
 
 def cmd_status(cfg: dict, tail: int = 15) -> int:
@@ -8741,6 +10231,12 @@ def cmd_status(cfg: dict, tail: int = 15) -> int:
         print(f"\nToday's shots: {n} in {shots}")
     except OSError:
         print(f"\nToday's shots: none yet ({shots} missing)")
+    try:
+        import shutil
+        st, _item, msg = disk_space_row(shutil.disk_usage(HERE).free, str(HERE.anchor or HERE))
+        print(f"Disk: {st} {msg}")
+    except OSError:
+        pass
     log = HERE / "simwatch.log"
     try:
         lines = log.read_text(encoding="utf-8", errors="replace").splitlines()
@@ -8754,6 +10250,21 @@ def cmd_status(cfg: dict, tail: int = 15) -> int:
     print("\nSimWatch daemon: " + (f"running (pid {d['pid']}, `{d['command']}`)" if d else "not running"))
     print("Practice video request (VIDEO_ON): " + ("ON - clear with: python simwatch.py video off"
                                                   if video_request_active() else "off"))
+    if (cfg.get("video") or {}).get("enabled") or video_request_active():
+        layout, src = current_video_layout(cfg)
+        if layout:
+            print(f"Video layout ({src}): {layout_summary(layout)}")
+        else:
+            print(f"Video layout: {video_layout_cfg(cfg).get('profile')} ({src})")
+        print("Replay: " + replay_settings_text(cfg))
+        vst = read_video_state()
+        if video_state_live(vst):
+            rep = vst.get("replay") or {}
+            if rep:
+                print(f"  running: mode {rep.get('mode')}, {rep.get('state')}"
+                      + (f", comparing {rep.get('compare')}" if rep.get("compare") not in (None, "off") else ""))
+            for f in (vst.get("hotkeys") or {}).get("failed", []):
+                print("  " + hotkey_failure_message(f))
     if bridge_lan_enabled(cfg):
         url = bridge_phone_url(cfg)
         print(f"Phone URL (same Wi-Fi): {url or 'no home-network IPv4 address found'}")
@@ -8820,6 +10331,104 @@ def clip_ready_log_handler(path: Path | None = None, max_bytes: int = CLIP_READY
     return logging.FileHandler(path, encoding="utf-8")
 
 
+def _dir_size(path: Path, budget: list) -> int:
+    """Total bytes under `path` (no symlinks/junctions; unreadable entries skipped). `budget` = [max entries]."""
+    total = 0
+    stack = [path]
+    while stack:
+        cur = stack.pop()
+        try:
+            with os.scandir(cur) as it:
+                for e in it:
+                    budget[0] -= 1
+                    if budget[0] < 0:
+                        return total
+                    try:
+                        if e.is_symlink():
+                            continue
+                        if e.is_dir(follow_symlinks=False):
+                            # Skip Windows junctions/reparse points (e.g. "Application Data") to avoid loops.
+                            st = e.stat(follow_symlinks=False)
+                            if getattr(st, "st_file_attributes", 0) & 0x400:
+                                continue
+                            stack.append(Path(e.path))
+                        else:
+                            total += e.stat(follow_symlinks=False).st_size
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+    return total
+
+
+def _gb(n: float) -> str:
+    return f"{n / 1024 ** 3:7.1f} GB"
+
+
+def cmd_space(cfg: dict, top: int = 15, folder: str | None = None) -> int:
+    """`simwatch.py space`: free disk space plus the biggest folders in the places that usually fill a sim PC
+    (swing captures, Kinovea, the user profile, GSPro, Program Files). Shift-free, read-only."""
+    import shutil
+    drive = Path(os.environ.get("SystemDrive", "C:") + "\\") if os.name == "nt" else Path("/")
+    try:
+        du = shutil.disk_usage(drive)
+        print(f"{drive}  used {_gb(du.used).strip()}  free {_gb(du.free).strip()}  of {_gb(du.total).strip()}")
+    except OSError as e:
+        print(f"could not read disk usage for {drive}: {e}")
+    if folder:  # `simwatch.py space <folder>`: size each child of that folder (files too), biggest first
+        base = Path(folder).expanduser()
+        rows_f: list[tuple[int, str]] = []
+        try:
+            entries = list(os.scandir(base))
+        except OSError as e:
+            print(f"cannot read {base}: {e}")
+            return 1
+        print(f"Scanning {base} (read-only)...")
+        for e in entries:
+            try:
+                size = (_dir_size(Path(e.path), [3_000_000]) if e.is_dir(follow_symlinks=False)
+                        else e.stat(follow_symlinks=False).st_size)
+            except OSError:
+                continue
+            rows_f.append((size, e.name + ("\\" if e.is_dir(follow_symlinks=False) else "")))
+        rows_f.sort(reverse=True)
+        print(f"\nBiggest items in {base} (top {top}):")
+        for size, name in rows_f[:top]:
+            print(f"  {_gb(size)}  {name}")
+        return 0
+    home = Path.home()
+    roots = [HERE / "Swings", kinovea_capture_root(cfg), *_read_kinovea_capture_dirs()]
+    groups = [home, home / "AppData" / "Local", home / "AppData" / "Roaming", home / "OneDrive",
+              Path(os.environ.get("ProgramData", "C:\\ProgramData")), Path("C:\\GSProV1"),
+              Path(os.environ.get("ProgramFiles", "C:\\Program Files")),
+              Path(os.environ.get("ProgramFiles(x86)", "C:\\Program Files (x86)")), Path("C:\\Windows\\Temp"),
+              home / "AppData" / "Local" / "Temp", Path("C:\\$Recycle.Bin")]
+    rows: list[tuple[int, Path]] = []
+    seen: set[str] = set()
+    print("Scanning (read-only, can take a minute or two)...")
+    for r in roots:
+        if r.exists() and str(r).lower() not in seen:
+            seen.add(str(r).lower())
+            rows.append((_dir_size(r, [3_000_000]), r))
+    for g in groups:
+        try:
+            children = [Path(e.path) for e in os.scandir(g) if e.is_dir(follow_symlinks=False)]
+        except OSError:
+            continue
+        for c in children:
+            key = str(c).lower()
+            if key in seen or any(key == str(x).lower() for x in groups):
+                continue  # don't double count a folder listed as its own group
+            seen.add(key)
+            rows.append((_dir_size(c, [3_000_000]), c))
+    rows.sort(key=lambda t: t[0], reverse=True)
+    print(f"\nBiggest folders (top {top}):")
+    for size, path in rows[:top]:
+        print(f"  {_gb(size)}  {path}")
+    print("\nNothing was deleted. Free space by removing what you don't need (or move swing captures to another drive).")
+    return 0
+
+
 def _configure_logging(command: str | None = None) -> None:
     handlers: list[logging.Handler] = []
     if sys.stderr is not None:  # pythonw.exe (clip-ready from Kinovea) has no console
@@ -8854,10 +10463,10 @@ def main() -> None:
     ap.add_argument(
         "command",
         choices=[
-            "discover", "dump", "calibrate", "check", "recover", "watch", "startup", "stop",
+            "discover", "dump", "calibrate", "check", "recover", "watch", "startup", "stop", "restart",
             "displays", "reconnect", "release-device",
             "video", "bookmark", "reference", "obs-setup", "hotkeys", "drills", "lines", "save-lines",
-            "doctor", "bridge", "harden", "clip-ready", "status", "phone", "shotlab",
+            "doctor", "bridge", "harden", "clip-ready", "status", "space", "phone", "shotlab", "keys",
         ],
     )
     ap.add_argument("arg", nargs="?")
@@ -8876,6 +10485,8 @@ def main() -> None:
 
     if a.command == "clip-ready":  # Kinovea post-recording command: light, never fails (exit 0)
         sys.exit(cmd_clip_ready(Path(a.config), a.arg, a.arg2))
+    if a.command == "restart":
+        sys.exit(cmd_restart())
     if a.command == "stop":
         stopped = request_stop()
         print(f"Stopped {stopped} running SimWatch background instance(s).")
@@ -8902,8 +10513,12 @@ def main() -> None:
     cfg = load_config(Path(a.config), command=a.command)
     if a.command == "status":
         sys.exit(cmd_status(cfg))
+    if a.command == "space":
+        sys.exit(cmd_space(cfg, folder=a.arg))
     if a.command == "phone":
         sys.exit(cmd_phone(cfg))
+    if a.command == "keys":
+        sys.exit(cmd_keys(cfg, a.arg))
     if a.command == "bridge":
         return cmd_bridge(cfg, demo=a.demo, demo_interval=a.demo_interval, port=a.port)
     if a.command == "shotlab":
@@ -8985,6 +10600,7 @@ def main() -> None:
             print("\nSimWatch is running: press Alt+H (or Ctrl+Alt+H) to show the on-screen cheat sheet.")
             return
         mgr = SwingSessionManager(cfg)
+        mgr.hotkeys.hud_seconds = 0  # stay up until Ctrl+C
         mgr.hotkeys.start()
         mgr.hotkeys.show_hud()
         print("\nShowing Key Mapping HUD (press Ctrl+C to close)...")

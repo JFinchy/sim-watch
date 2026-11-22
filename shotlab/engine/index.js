@@ -35,6 +35,7 @@ const {
 const { computeShotStrokesGained, computeDispersionStats } = require('./strokesGained');
 const { SwingDatabase, deriveSiblingClips } = require('./swingDb');
 const { loadDrillsHubData, recommendDrillsForFault, detectFaultStreak } = require('./drillsBridge');
+const { referenceFlights, REFERENCE_LINES } = require('./benchmarks');
 
 function toNum(v) {
   if (v === null || v === undefined || v === '' || typeof v === 'boolean') return null;
@@ -522,6 +523,8 @@ function analyzeShot(rawShot, options = {}) {
     },
     flight,
     potential,
+    // Benchmark trajectories for this club (Tour / Scratch / Low HCP / Mid HCP) for the chart's toggleable lines.
+    references: referenceFlights(activeClub, altitudeFt),
     dplane: {
       faceToTarget: dplane.faceToTarget,
       faceToPath: dplane.faceToPath,
@@ -722,4 +725,6 @@ module.exports = {
   loadDrillsHubData,
   recommendDrillsForFault,
   detectFaultStreak,
+  referenceFlights,
+  REFERENCE_LINES,
 };

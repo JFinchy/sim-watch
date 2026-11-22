@@ -202,6 +202,16 @@ select:focus, input:focus { border-color: var(--cyan); }
   padding: 4px 4px 2px;
 }
 .traj-svg { width: 100%; height: auto; display: block; }
+.ref-chips { display: flex; flex-wrap: wrap; gap: 4px; padding: 3px 2px 2px; }
+.ref-chip {
+  display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  font: 600 10px/1.2 var(--mono); color: var(--text-dim);
+  background: transparent; border: 1px solid #1f2a3c; border-radius: 999px; padding: 2px 7px;
+}
+.ref-chip .ref-swatch { width: 12px; height: 0; border-top: 2px dashed var(--ref); opacity: 0.5; }
+.ref-chip.on { color: #e2e8f0; border-color: var(--ref); }
+.ref-chip.on .ref-swatch { opacity: 1; }
+.ref-chip .ref-num { color: var(--ref); font-weight: 700; }
 
 /* BOX 2: CLUB AUTO-DETECTOR */
 .club-headline { display: flex; align-items: center; gap: 8px; }

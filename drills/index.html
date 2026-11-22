@@ -10381,5 +10381,29 @@
       if (backupIsStale()) setTimeout(() => showToast("Reminder: " + backupStatusText() + " (Editor tab > Export Full Backup)"), 1200);
     })();
   </script>
+  <!-- SimWatch shortcuts panel (self-contained; data from the bridge's /api/shortcuts, source: HOTKEY_ACTIONS in simwatch.py) -->
+  <div id="sw-keys" style="position:fixed;right:8px;top:8px;z-index:800;text-align:right;font:13px system-ui,sans-serif">
+    <button type="button" id="sw-keys-btn" aria-expanded="false" style="padding:6px 10px;border-radius:8px;border:1px solid #38bdf8;background:#111827;color:#e5e7eb;cursor:pointer">Shortcuts</button>
+    <div id="sw-keys-panel" hidden style="text-align:left;margin-top:6px;max-height:70vh;overflow:auto;width:min(380px,calc(100vw - 24px));padding:10px 12px;border-radius:10px;background:#111827;color:#e5e7eb;border:1px solid #38bdf8"></div>
+  </div>
+  <script>
+    (function () {
+      const base = /^https?:$/.test(location.protocol) ? location.origin : "http://127.0.0.1:8765";
+      const btn = document.getElementById("sw-keys-btn"), panel = document.getElementById("sw-keys-panel");
+      const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+      btn.addEventListener("click", async () => {
+        const open = panel.hidden; panel.hidden = !open; btn.setAttribute("aria-expanded", String(open));
+        if (!open) return;
+        panel.textContent = "Loading...";
+        try {
+          const doc = await (await fetch(base + "/api/shortcuts", { cache: "no-store" })).json();
+          const failed = new Set(((doc.registration || {}).failed || []).map((f) => f.spec));
+          panel.innerHTML = doc.groups.map((g) => `<div style="margin:6px 0 2px;color:#94a3b8;font-weight:600">${esc(g.group)}</div>` +
+            g.keys.map((k) => `<div><code style="color:${k.keys.some((x) => failed.has(x)) ? "#f87171" : "#facc15"}">${esc(k.keys.join(" / "))}</code> ${esc(k.description)}</div>`).join("")).join("") +
+            `<div style="margin-top:8px;color:#9ca3af">${esc(doc.note || "")}</div>`;
+        } catch (e) { panel.textContent = "Shortcuts need the SimWatch bridge (python simwatch.py bridge, or the watchdog). Or run: python simwatch.py keys"; }
+      });
+    })();
+  </script>
 </body>
 </html>

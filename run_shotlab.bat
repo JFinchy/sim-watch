@@ -42,6 +42,12 @@ if not exist "node_modules\electron\dist\electron.exe" (
         exit /b 1
     )
 )
+if not exist "node_modules\electron\dist\electron.exe" (
+  rem npm 11+ skips package install scripts unless approved, so Electron's binary download never runs.
+  echo [ShotLab] Downloading the Electron runtime...
+  node "node_modules\electron\install.js"
+)
+if not exist "node_modules\electron\dist\electron.exe" echo [ShotLab] WARNING: Electron did not install ^(check free disk space, then rerun^).
 
 echo [ShotLab] Launching ShotLab Desktop + OBS Overlay Server (http://127.0.0.1:8766)...
 call npm start -- %*

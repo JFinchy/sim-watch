@@ -83,3 +83,12 @@ run `schtasks /Run /TN SimWatch`).
 - B: the phone works with the token, gets 401 without it, and loopback/file:// behave as before.
 - C: GameChanger and FSX Pro still discover and connect after a full reboot with the narrowed rules, and
   doctor shows the firewall rows as PASS.
+
+## Restart command (2026-11-20)
+
+Seen on the rig: after a clean `stop` the launcher log said "stopped by simwatch.py stop" but a `cmd` stayed alive and
+the task kept showing Running, so `schtasks /run` did nothing until `schtasks /end`.
+
+1. From the Administrator prompt: `python simwatch.py restart`. Expect "Stopped N ...", possibly "still shows Running ... ending it",
+   then "SimWatch is running (pid ...)" within about 90 s.
+2. `python simwatch.py status` shows the daemon running, the layout line, and all green.

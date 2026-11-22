@@ -1,5 +1,6 @@
 """ShotLab companion supervisor: launch/adopt/crash/hang/user-close state machine (pure logic, no Electron)."""
 import json
+from pathlib import Path
 
 import simwatch as sw
 
@@ -191,14 +192,22 @@ def test_launch_now_reopens_after_user_close_and_is_then_supervised():
 
 def test_effective_hotkeys_defaults_overrides_and_disable():
     hk = sw.effective_hotkeys({"toggle_pip": "F9", "open_drills": ""})
-    assert hk["cheatsheet"] == "Alt+H" and hk["toggle_shotlab"] == "Alt+S"
-    assert hk["toggle_pip"] == "F9" and "open_drills" not in hk
-    assert all(sw.parse_hotkey(spec) for spec in sw.effective_hotkeys({}).values())
+    assert hk["cheatsheet"] == ["Alt+H"] and hk["toggle_shotlab"] == ["Alt+S"]
+    assert hk["toggle_pip"] == ["F9"] and hk["open_drills"] == []      # disabled
+    assert all(sw.parse_hotkey(spec) for specs in sw.effective_hotkeys({}).values() for spec in specs)
 
 
 def test_default_hotkeys_are_unique():
-    specs = [d.upper() for _, d, _ in sw.HOTKEY_ACTIONS]
-    assert len(specs) == len(set(specs))
+    """No two actions share a key: in the code defaults, in the shipped config.json, or as Ctrl+Alt fallbacks."""
+    canon = [sw._hotkey_canon(d[1]) for d in sw.HOTKEY_ACTIONS]
+    assert None not in canon and len(canon) == len(set(canon))
+    shipped = json.loads((Path(sw.__file__).parent / "config.json").read_text(encoding="utf-8"))
+    used = [sw._hotkey_canon(s) for specs in sw.effective_hotkeys(sw.hotkeys_cfg_of(shipped)).values()
+            for s in specs]
+    assert len(used) == len(set(used))
+    assert not [m for _s, m in sw.hotkey_conflicts(shipped) if "assigned to both" in m]
+    hk = sw.effective_hotkeys({})
+    assert hk["toggle_shotlab"] == ["Alt+S"] and hk["compare_cycle"] == ["Alt+M"] and hk["trigger_shot"] == ["Alt+C"]
 
 
 def test_cheatsheet_flags_unregistered_keys():
@@ -214,8 +223,11 @@ def test_bridge_status_includes_hotkeys(tmp_path):
     assert hub.status()["hotkeys"] == []
     hub.hotkeys_fn = lambda: sw.hotkey_rows({}, {"cheatsheet": "ok"})
     doc = hub.status()
-    assert doc["hotkeys"][0] == {"action": "cheatsheet", "keys": "Alt+H",
-                                 "label": "Show / hide this key cheat sheet", "state": "ok"}
+    row = next(r for r in doc["hotkeys"] if r["action"] == "cheatsheet")
+    assert row == {"action": "cheatsheet", "keys": "Alt+H", "label": sw._HOTKEY_LABEL_OF["cheatsheet"],
+                   "state": "ok"}
+    assert all(set(r) == {"action", "keys", "label", "state"} and isinstance(r["keys"], str)
+               for r in doc["hotkeys"])  # the shape ShotLab's sanitizeHotkeys() accepts
 
 
 def test_running_watchdog_status_requires_a_live_simwatch_process(tmp_path, monkeypatch):

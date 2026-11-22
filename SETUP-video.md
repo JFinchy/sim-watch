@@ -1,6 +1,6 @@
 # Video rig setup: cameras + Kinovea 2025.2
 
-SimWatch drives Kinovea for the 2x2 swing grid. **Kinovea 2025.1 or newer (2025.2 recommended)** gets
+SimWatch drives Kinovea for swing video (adaptive layout + post-shot replay, see section 7; the old 2x2 grid is `video.layout.profile: "grid"`). **Kinovea 2025.1 or newer (2025.2 recommended)** gets
 the reliable path: one UDP packet per shot triggers both cameras, and Kinovea itself runs
 `simwatch.py clip-ready` when each clip is saved. Kinovea 2024.1 still works as a legacy fallback
 (window-message toggle), but it is less reliable.
@@ -103,3 +103,47 @@ pre + post seconds (`RecordingSeconds`). The audio trigger is turned off. Set `v
 to use only Kinovea's audio trigger instead. Clips are organized by the watchdog after the file has been
 stable for 1.5 s and can be opened exclusively. Generated workspaces live in `Swings\Workspaces\*.xml`
 (gitignored).
+
+## 7. Adaptive layout, post-shot replay and compare
+
+SimWatch launches two Kinovea windows: **Capture** (both cameras, records on the UDP trigger) and **LiveReplay**
+(DTL | FO, watches the replay folders, loops the newest clip at `video.replay_speed_pct`). **Compare** is launched
+on demand by `Alt+M`; **Reference** only for the `grid` profile.
+
+**Layout profile** (`video.layout`, logged as `Video layout: ...`, shown by `status` and `doctor`):
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `profile` | `auto` | `auto` picks `single_small` (one display < `large_min_width`), `single_large`, or `dual` (2+ displays); `grid` = old 2x2 |
+| `large_min_width` | 1600 | width (px) of GSPro's display at which `single_large` starts |
+| `capture_hide` | `behind` | where Capture waits while recording: `behind` (below GSPro, same display) / `offscreen` / `minimized` |
+| `replay_hide` | `behind` | where LiveReplay waits between replays (same choices) |
+| `profiles.single_small` | 100 % x 80 %, top | replay rectangle over GSPro (1366x768: 1366x614, GSPro's bottom bar stays visible) |
+| `profiles.single_large` | 75 % x 65 %, top | + `strip: true` for an always-on corner strip (`strip_*_pct`, `strip_corner`) |
+| `profiles.dual` | 100 % x 100 %, `always_on` | the free display is a dedicated replay screen |
+| `display_poll_sec` | 5 | how often displays are re-checked (projector switched on/off) |
+
+**Does Capture keep recording while hidden?** Kinovea records from its camera/delay buffer threads, not from what
+is drawn, so `behind` and `offscreen` (window open, just not visible) should be safe; `minimized` is likely fine
+too but unverified. Check once per method on the rig (see `manual-testing-inbox/adaptive-replay-layout.md`) and
+keep the one that records every swing.
+
+**Replay timing** (`video.replay`): `delay_sec` 8 (per club: Driver 9, Iron 8, Wedge 6, Putter none) after the shot
+is detected on `:921`, then `show_sec` 10. Rationale: GSPro shows the ball flight (about 5-7 s of hang time) and
+then the shot result panel; the clip itself is saved about 3-4 s after the shot (`post_trigger_sec` + save), so by
+the delay it is already loaded. Shorten `delay_by_club` if you'd rather see the swing sooner, lengthen it if the
+replay covers the landing. With `dismiss_on_input: true` (off by default), any keyboard/mouse input after the first `input_grace_sec`
+closes the replay; a bumped mouse counts too. `cancel_on_club_change` is off because GSPro auto-selects the next club right after the ball
+lands, which would cancel every replay.
+
+**GSPro must be windowed/borderless** for pop-up replays (`gspro_display.windowed: true`, or at least
+`windowed_when_projector_off: true` on the single-display rig). A window shown over exclusive-fullscreen GSPro can
+make it minimize; `doctor` warns about this.
+
+**Compare** (`Alt+M`, "match up"): one angle at a time, your latest swing next to the active reference (My-Go-To for the club
+category, the pro selected with `Alt+R`, or your previous swing for `Last-Swing`). Kinovea 2025 can't load a file
+into a running window (its external commands only cover playback/recording/drawings), so SimWatch writes the
+`Compare` window descriptor (`%APPDATA%\Kinovea\Windows\<id>.xml`) with the two files and restarts that window:
+about 2-4 s per step, but it uses only the descriptor + `-name` launch path that already drives Capture/LiveReplay.
+The same pair again reuses the running window. The two panes are not frame-synchronized (Kinovea's sync is manual);
+both start at the clip start, and SimWatch's clips put impact at about `pre_trigger_sec` (3.0 s).

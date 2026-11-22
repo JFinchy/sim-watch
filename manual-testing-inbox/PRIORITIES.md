@@ -23,6 +23,8 @@
 - [ ] ShotLab Electron desktop dashboard, club auto-detector & OBS Studio overlays - see `shotlab-desktop-obs.md`
 - [ ] SimWatch ↔ ShotLab integration (supervisor, Rig pill, setup/doctor) - see `shotlab-simwatch-integration.md`
 - [ ] Practice-video handoff, phone access (bridge.lan) & narrowed firewall rules - see `video-handoff-phone-firewall.md`
+- [ ] Adaptive replay layout, post-shot replay, compare & shortcut map - see `adaptive-replay-layout.md`
+- [ ] Bug-hunt review fixes (lock retry, rig-start focus, HUD no-activate) - see `bug-hunt-review-fixes.md`
 
 ## Minor
 

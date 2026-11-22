@@ -60,6 +60,12 @@ if errorlevel 2 goto :skipshotlab
 pushd "%~dp0shotlab"
 call npm install
 if errorlevel 1 echo [SimWatch] WARNING: ShotLab npm install failed. SimWatch still works without it.
+if not exist "node_modules\electron\dist\electron.exe" (
+  rem npm 11+ skips package install scripts unless approved, so Electron's binary download never runs.
+  echo [SimWatch] ShotLab: Downloading the Electron runtime...
+  node "node_modules\electron\install.js"
+)
+if not exist "node_modules\electron\dist\electron.exe" echo [SimWatch] ShotLab: WARNING: Electron did not install ^(check free disk space, then rerun^).
 popd
 :skipshotlab
 

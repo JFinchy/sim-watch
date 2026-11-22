@@ -198,7 +198,7 @@ def test_system_rows_skip_off_windows(monkeypatch, real_cfg):
 def test_system_rows_survive_crashing_probe(monkeypatch, real_cfg):
     monkeypatch.setattr(sw, "IS_WINDOWS", True)
     for name in ("_doc_task", "_doc_sniffer", "_doc_firewall", "_doc_gamechanger", "_doc_device",
-                 "_doc_power", "_doc_fsx_hold", "_doc_kinovea", "_doc_oc_target", "_doc_bridge_lan"):
+                 "_doc_power", "_doc_fsx_hold", "_doc_kinovea", "_doc_oc_target", "_doc_bridge_lan", "_doc_disk"):
         monkeypatch.setattr(sw, name, lambda cfg: (_ for _ in ()).throw(RuntimeError("boom")))
     rows = sw.doctor_system_rows(real_cfg)
     assert rows and all(r[0] == sw.WARN and "boom" in r[2] for r in rows)
