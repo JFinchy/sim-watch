@@ -35,6 +35,7 @@ Commands:
 Run from an ADMIN terminal if any sim app runs as admin (Windows blocks clicks & raw sockets otherwise).
 """
 import argparse
+import contextlib
 import atexit
 import ctypes
 import functools
@@ -1140,6 +1141,30 @@ def _find_gspro_main_hwnd(cfg) -> int | None:
         if hwnd:
             return hwnd
     return None
+
+
+def gspro_process_name(cfg: dict | None) -> str:
+    """GSPro's process name from config (apps_by_key.gspro.process), default GSPro.exe."""
+    try:
+        return str(((cfg or {}).get("apps_by_key") or {}).get("gspro", {}).get("process") or "GSPro.exe")
+    except AttributeError:
+        return "GSPro.exe"
+
+
+def foreground_process_name() -> str | None:
+    """Process name owning the foreground window (Windows), else None. Never raises."""
+    if not IS_WINDOWS:
+        return None
+    try:
+        import win32gui
+        import win32process
+        fg = win32gui.GetForegroundWindow()
+        if not fg:
+            return None
+        _tid, pid = win32process.GetWindowThreadProcessId(fg)
+        return psutil.Process(pid).name()
+    except Exception:
+        return None
 
 
 def enforce_gspro_window_state(cfg) -> None:
@@ -5024,6 +5049,8 @@ class OpenConnectMonitor:
         self._buf = ""
         self._last_seg_key = None
         self.active = False  # True while the raw :921 sniffer socket is open (reported by /api/status)
+        # Serializes message handling: the sniffer thread and POST /api/simulate-shot (inject) share _recent_shots.
+        self._handle_lock = threading.Lock()
 
     def start(self) -> None:
         old = self._thread
@@ -5079,14 +5106,20 @@ class OpenConnectMonitor:
                     except Exception:
                         log_throttled("oc-shot-map", "could not map OpenConnect shot JSON", exc_info=True)
                         shot = None
-                    self.on_shot({
+                    info = {
                         "shot_num": shot_num,
                         "club": self._last_club,
                         "ball_speed": speed,
                         "carry": float(carry) if carry is not None else None,
                         "timestamp": now,
                         "shot": shot,  # full bridge shot record (see openconnect_to_shot), or None
-                    })
+                    }
+                    sim = simulated_marker(obj)
+                    if sim is not None:  # POST /api/simulate-shot (never sent by GSPro / a connector)
+                        info["simulated"] = True
+                        if sim.get("replay_delay") is not None:
+                            info["replay_delay"] = sim["replay_delay"]
+                    self.on_shot(info)
 
     @staticmethod
     def _shot_dedup_key(shot_num, ball: dict, speed: float) -> tuple:
@@ -5100,10 +5133,17 @@ class OpenConnectMonitor:
     def _safe_handle(self, obj) -> None:
         """_handle_json, but a malformed message or a raising callback (e.g. a reference swap that hits an
         OSError) is logged instead of propagating into _run() and killing the sniffer thread."""
+        lock = getattr(self, "_handle_lock", None) or contextlib.nullcontext()
         try:
-            self._handle_json(obj)
+            with lock:
+                self._handle_json(obj)
         except Exception:
             log_throttled("oc-handle", "OpenConnect monitor: message handling failed", exc_info=True)
+
+    def inject(self, obj: dict) -> None:
+        """Feed one synthetic OpenConnect message through the exact path a sniffed :921 message takes
+        (POST /api/simulate-shot). Works whether or not the raw-socket thread is running."""
+        self._safe_handle(obj)
 
     def _feed_text(self, text: str) -> None:
         self._buf = (self._buf + text)[-32768:]
@@ -5248,6 +5288,9 @@ BRIDGE_ALLOWED_HOSTS = ("127.0.0.1", "localhost")
 BRIDGE_TOKEN_PATH = HERE / "bridge_token.txt"  # phone pairing token for bridge.lan (gitignored, created on demand)
 BRIDGE_TOKEN_COOKIE = "simwatch_token"
 BRIDGE_LAN_FIREWALL_RULE = "SimWatch bridge LAN (phone)"
+# POST endpoints that act on this PC (keystrokes into GSPro, synthetic shots into the rig): no Origin header at all
+# (a browser, even a file:// page, always sends one on POST) and a loopback client only - LAN token or not.
+LOCAL_ONLY_POST_PATHS = ("/api/gspro/club", "/api/simulate-shot")
 
 
 def bridge_config(cfg: dict | None) -> dict:
@@ -5465,7 +5508,8 @@ def session_stats(shots: list[dict], date: str | None = None, session_id: str | 
     """Pure per-session summary of a list of shot dicts (v1 or v2). See the contract in the bridge notes:
     cold start (phase "cold", else first 3), first3-vs-last3 dispersion per club (clubs with >= 6 shots,
     else all shots pooled), per-cluster / per-feel averages, and carry std dev (strike consistency)."""
-    shots = [normalize_shot(s) for s in shots if isinstance(s, dict)]
+    # Simulated test shots (`simwatch.py simulate-shot` / `selftest`) are not golf: never in the stats.
+    shots = [normalize_shot(s) for s in shots if isinstance(s, dict) and not s.get("simulated")]
     if session_id is not None:
         shots = [s for s in shots if s.get("session_id") == session_id]
 
@@ -5554,7 +5598,7 @@ def openconnect_to_shot(obj: dict, club: str | None = None, ts: str | None = Non
         "spin": spin,
         "spin_axis": axis,
     }
-    return {
+    rec = {
         "ts": ts or local_iso_now(),
         "shot_num": shot_num,
         "club": (str(club).strip() or None) if club else None,
@@ -5570,6 +5614,24 @@ def openconnect_to_shot(obj: dict, club: str | None = None, ts: str | None = Non
         "note": None,
         "derived": derive_shot_metrics(ball_out, club_data),
     }
+    sim = simulated_marker(obj)
+    if sim is not None:
+        # A test shot (POST /api/simulate-shot): flagged, and source "demo" is what ShotLab already uses to keep
+        # synthetic shots out of its swing database, calibration and club auto-switch.
+        rec["simulated"] = True
+        rec["source"] = "demo"
+        if sim.get("sim_id"):
+            rec["sim_id"] = str(sim["sim_id"])
+    return rec
+
+
+SIM_MARKER_KEY = "SimWatchSimulated"  # top-level key only POST /api/simulate-shot puts in an OpenConnect message
+
+
+def simulated_marker(obj) -> dict | None:
+    """The simulate-shot marker of an OpenConnect message ({sim_id, replay_delay}), or None for a real shot."""
+    m = obj.get(SIM_MARKER_KEY) if isinstance(obj, dict) else None
+    return m if isinstance(m, dict) else None
 
 
 SHOTS_LOCK_NAME = ".shots.lock"   # <day>/.shots.lock: cross-process lock (watchdog appends vs clip-ready links)
@@ -5784,6 +5846,7 @@ class ShotHub:
         self.last_shot_ts: str | None = None
         self.health: dict | None = None
         self.sniffer = None  # an OpenConnectMonitor (its .active flag is reported as sniffer_ok)
+        self.video_mgr = None  # the SwingSessionManager whose oc_monitor feeds this hub (set by its start())
         self.demo = False    # `bridge --demo`: synthetic shots, tagged "demo": true (kept out of real sessions)
         self.cfg: dict | None = None                # for /api/shortcuts (the hotkey map lives in the config)
         self.hotkey_registration: dict | None = None  # set by the video rig once its hotkeys are registered
@@ -5858,6 +5921,24 @@ class ShotHub:
             doc["health"] = health
         if self.demo:
             doc["demo"] = True
+        return doc
+
+    def pipeline_status(self) -> dict:
+        """GET /api/status `pipeline`: what the shot path did last (UDP trigger, replay, focus, clips) so
+        `simwatch.py selftest` can verify each stage. Cheap; only computed for GET /api/status."""
+        vm = self.video_mgr
+        mon = self.sniffer
+        doc = {
+            "rig_running": bool(vm is not None and getattr(vm, "_started", False)
+                                and mon is not None and mon is getattr(vm, "oc_monitor", None)),
+            "sniffer": None if mon is None else ("video_rig" if vm is not None and mon is getattr(vm, "oc_monitor", None)
+                                                  else "bridge"),
+        }
+        if vm is not None and hasattr(vm, "pipeline_status"):
+            try:
+                doc.update(vm.pipeline_status())
+            except Exception:
+                log_throttled("pipeline-status", "pipeline status failed", exc_info=True)
         return doc
 
     def set_drill(self, drill_id: str | None) -> str | None:
@@ -6102,9 +6183,9 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_OPTIONS(self):
         url = urllib.parse.urlsplit(self.path)
-        if url.path == "/api/gspro/club" and self.headers.get("Origin") is not None:
+        if url.path in LOCAL_ONLY_POST_PATHS and self.headers.get("Origin") is not None:
             self._cors_origin = None
-            return self._json(403, {"error": "cross-origin club switching not allowed"})
+            return self._json(403, {"error": "cross-origin requests to this endpoint are not allowed"})
         self.send_response(204)
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
@@ -6116,7 +6197,9 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
         url = urllib.parse.urlsplit(self.path)
         if url.path == "/api/status":
             self.hub.expire_drill_if_idle()
-            return self._json(200, self.hub.status())
+            doc = self.hub.status()
+            doc["pipeline"] = self.hub.pipeline_status()
+            return self._json(200, doc)
         if url.path == "/api/shots":
             q = urllib.parse.parse_qs(url.query)
             date_str = (q.get("date") or [time.strftime("%Y-%m-%d")])[0]
@@ -6156,14 +6239,15 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_POST(self):
         url = urllib.parse.urlsplit(self.path)
-        if url.path not in ("/api/drill", "/api/context", "/api/gspro/club"):
+        if url.path not in ("/api/drill", "/api/context") + LOCAL_ONLY_POST_PATHS:
             return self._json(404, {"error": "unknown endpoint"})
-        if url.path == "/api/gspro/club" and (self.headers.get("Origin") is not None
-                                              or not self._client_is_loopback()):
-            # Keystroke injection stays on this PC: never from a browser/sandboxed-iframe Origin (including
+        if url.path in LOCAL_ONLY_POST_PATHS and (self.headers.get("Origin") is not None
+                                                  or not self._client_is_loopback()):
+            # Keystroke / shot injection stays on this PC: never from a browser/sandboxed-iframe Origin (including
             # Origin: "null") and never from the LAN, even with the bridge.lan pairing token.
             self._cors_origin = None
-            return self._json(403, {"error": "club switching is only allowed from this PC (no browser origin)"})
+            what = "club switching" if url.path == "/api/gspro/club" else "shot simulation"
+            return self._json(403, {"error": f"{what} is only allowed from this PC (no browser origin)"})
         ctype = (self.headers.get("Content-Type") or "").split(";", 1)[0].strip().lower()
         if ctype != "application/json":
             # Keeps this a preflighted request for browsers (see the policy note above).
@@ -6190,6 +6274,8 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
             if not ok:
                 return self._json(503, {"ok": False, "error": detail})
             return self._json(200, {"ok": True, "key": key, "steps": steps, "club": doc.get("club"), "detail": detail})
+        if url.path == "/api/simulate-shot":
+            return self._simulate_shot(doc)
         if url.path == "/api/context":
             try:
                 ctx = self.hub.set_context(doc)
@@ -6199,6 +6285,57 @@ class BridgeRequestHandler(http.server.SimpleHTTPRequestHandler):
         if not isinstance(doc, dict) or "drill_id" not in doc or not valid_drill_id(doc["drill_id"]):
             return self._json(400, {"error": "expected {\"drill_id\": null | 1-80 chars of [A-Za-z0-9_-]}"})
         return self._json(200, {"active_drill": self.hub.set_drill(doc["drill_id"])})
+
+    def _simulate_shot(self, doc) -> None:
+        """POST /api/simulate-shot {club?, ball_speed?, count? (1-20), interval? (s), replay_delay? (s)}."""
+        if doc is None:
+            doc = {}
+        if not isinstance(doc, dict):
+            return self._json(400, {"error": "expected a JSON object"})
+
+        def num(key, lo, hi):
+            v = doc.get(key)
+            if v is None:
+                return None
+            if isinstance(v, bool) or not isinstance(v, (int, float)) or not lo <= v <= hi:
+                raise ValueError(f"{key} must be a number {lo}-{hi}")
+            return float(v)
+
+        try:
+            club_raw = doc.get("club")
+            if club_raw is not None and not isinstance(club_raw, str):
+                raise ValueError("club must be a string (e.g. 7I, DR, PW)")
+            club = normalize_sim_club(club_raw)
+            ball_speed = num("ball_speed", 1, 250)
+            replay_delay = num("replay_delay", 0, 60)
+            interval = num("interval", 0.5, 120)
+            count = doc.get("count", 1)
+            if isinstance(count, bool) or not isinstance(count, int) or not 1 <= count <= SIM_SHOT_MAX_COUNT:
+                raise ValueError(f"count must be an integer 1-{SIM_SHOT_MAX_COUNT}")
+        except ValueError as e:
+            return self._json(400, {"error": str(e)})
+        hub = self.hub
+        try:
+            res = simulate_shot(hub, club, ball_speed, replay_delay)
+        except Exception as e:
+            LOG.warning("simulate-shot failed: %s", e, exc_info=True)
+            return self._json(500, {"ok": False, "error": f"{type(e).__name__}: {e}"})
+        if count > 1:
+            gap = interval if interval is not None else 3.0
+
+            def _more() -> None:
+                for _ in range(count - 1):
+                    if hub.stopping.wait(gap):
+                        return
+                    try:
+                        simulate_shot(hub, res["club"], ball_speed, replay_delay)
+                    except Exception:
+                        log_throttled("simulate-shot", "queued simulated shot failed", exc_info=True)
+
+            threading.Thread(target=_more, name="SimulateShots", daemon=True).start()
+            res["queued"] = count - 1
+            res["interval"] = gap
+        return self._json(200 if res.get("ok") else 500, res)
 
     def _serve_events(self) -> None:
         hub = self.hub
@@ -6729,13 +6866,22 @@ class ShotLabSupervisor:
         return doc
 
 
-def demo_openconnect_message(n: int) -> dict:
-    """A plausible synthetic OpenConnect v1 shot (for `bridge --demo`), with coherent club data:
-    start line follows face (~75%) and path (~25%), spin axis follows face-to-path, AoA follows the club."""
-    club, speed, vla, spin, aoa_mu, smash = random.choice([
-        ("Driver", 148, 12.5, 2600, 1.5, 1.45), ("7Iron", 118, 17.5, 6500, -4.0, 1.33),
-        ("PW", 98, 26.0, 8800, -5.0, 1.24), ("5Iron", 128, 14.0, 5200, -3.0, 1.38),
-    ])
+_DEMO_PROFILES = [  # (club, ball speed, VLA, spin, AoA mean, smash)
+    ("Driver", 148, 12.5, 2600, 1.5, 1.45), ("7Iron", 118, 17.5, 6500, -4.0, 1.33),
+    ("PW", 98, 26.0, 8800, -5.0, 1.24), ("5Iron", 128, 14.0, 5200, -3.0, 1.38),
+]
+_DEMO_PROFILE_BY_CATEGORY = {"Driver": _DEMO_PROFILES[0], "Iron": _DEMO_PROFILES[1], "Wedge": _DEMO_PROFILES[2],
+                             "Putter": ("PT", 7, 1.5, 300, 0.0, 1.0)}
+
+
+def demo_openconnect_message(n: int, club: str | None = None) -> dict:
+    """A plausible synthetic OpenConnect v1 shot (for `bridge --demo` and `simulate-shot`), with coherent club
+    data: start line follows face (~75%) and path (~25%), spin axis follows face-to-path, AoA follows the club.
+    club: a GSPro club code (DR, 7I, PW, PT...) - ball numbers follow its category; None picks one at random."""
+    if club:
+        _c, speed, vla, spin, aoa_mu, smash = _DEMO_PROFILE_BY_CATEGORY[club_category(club)]
+    else:
+        club, speed, vla, spin, aoa_mu, smash = random.choice(_DEMO_PROFILES)
     path = random.gauss(-1.0, 2.5)
     face = path + random.gauss(0.0, 1.8)  # face-to-path drives curvature
     f2p = face - path
@@ -6762,6 +6908,97 @@ def demo_openconnect_message(n: int) -> dict:
         "Path": round(path, 1),
     }
     return msg
+
+
+SIM_SHOT_MAX_COUNT = 20
+_SIM_SEQ = [0]
+_SIM_SEQ_LOCK = threading.Lock()
+
+
+def _sim_shot_number() -> int:
+    """A ShotNumber no real launch monitor uses (and unique per call), so OC dedup never swallows a test shot."""
+    with _SIM_SEQ_LOCK:
+        _SIM_SEQ[0] += 1
+        return 900_000_000 + (int(time.time()) % 1_000_000) * 100 + _SIM_SEQ[0] % 100
+
+
+def normalize_sim_club(club) -> str | None:
+    """'7i' -> '7I', 'dr' -> 'DR' (shift-free typing on the rig keyboard). None/'' -> None."""
+    c = str(club or "").strip().upper()
+    if not c:
+        return None
+    if not re.match(r"^[A-Z0-9]{1,8}$", c):
+        raise ValueError("club must be 1-8 letters/digits (e.g. 7I, DR, PW)")
+    return c
+
+
+def simulated_openconnect_message(club: str, ball_speed: float | None = None,
+                                  replay_delay: float | None = None) -> dict:
+    """A realistic OpenConnect shot for `club`, tagged with the simulate-shot marker (unique ShotNumber)."""
+    msg = demo_openconnect_message(_sim_shot_number(), club=club)
+    msg["DeviceID"] = "SimWatch Simulated"
+    msg["Player"]["Club"] = club
+    if ball_speed is not None:
+        old = float(msg["BallData"]["Speed"]) or 1.0
+        msg["BallData"]["Speed"] = round(float(ball_speed), 1)
+        msg["BallData"]["CarryDistance"] = round(msg["BallData"]["CarryDistance"] * float(ball_speed) / old, 1)
+        msg["ClubData"]["Speed"] = round(msg["ClubData"]["Speed"] * float(ball_speed) / old, 1)
+    marker = {"sim_id": uuid.uuid4().hex}
+    if replay_delay is not None:
+        marker["replay_delay"] = float(replay_delay)
+    msg[SIM_MARKER_KEY] = marker
+    return msg
+
+
+def simulate_shot(hub: ShotHub, club: str | None = None, ball_speed: float | None = None,
+                  replay_delay: float | None = None) -> dict:
+    """Inject one synthetic shot into the running daemon through the SAME entry point a sniffed :921 message
+    uses (the hub's OpenConnectMonitor -> _safe_handle -> _handle_json -> on_shot): with the video rig live that
+    is SwingSessionManager._on_openconnect_shot (UDP trigger, shot record, replay schedule; Kinovea's clip-ready
+    then links the clips), otherwise the bridge-only sniffer (record + SSE). With no monitor at all the shot is
+    recorded via the hub directly. Returns a JSON-able report incl. the stored record."""
+    mon = hub.sniffer
+    vm = hub.video_mgr
+    rig = bool(vm is not None and getattr(vm, "_started", False) and mon is not None
+               and mon is getattr(vm, "oc_monitor", None))
+    current = getattr(mon, "_last_club", None) or hub.current_club
+    club = normalize_sim_club(club) or current or "7I"  # default: GSPro's current club (no reference swap)
+    msg = simulated_openconnect_message(club, ball_speed, replay_delay)
+    sim_id = msg[SIM_MARKER_KEY]["sim_id"]
+    skipped: list[str] = []
+    if mon is not None:
+        path = "video_rig" if rig else "bridge_sniffer"
+        mon.inject(msg)
+        if not rig:
+            skipped += ["udp_trigger (video rig not running)", "replay (video rig not running)",
+                        "clips (no Kinovea trigger)"]
+    else:
+        path = "hub_only"
+        shot = openconnect_to_shot(msg, club=club)
+        hub.record_shot(shot)
+        skipped += ["udp_trigger (video rig not running)", "replay (video rig not running)",
+                    "clips (no Kinovea trigger)"]
+    date_str = time.strftime("%Y-%m-%d")
+    rec = next((r for r in reversed(hub.store.read(date_str)) if r.get("sim_id") == sim_id), None)
+    putt = is_putt(club, msg["BallData"]["Speed"], msg["BallData"]["VLA"])
+    if rig and putt:
+        skipped += ["udp_trigger (putt: no video capture)", "replay (putt)"]
+    replay = None
+    if rig and not putt:
+        sched = getattr(vm, "replay", None)
+        enabled = vm._replay_enabled()
+        delay = (max(0.0, float(replay_delay)) if replay_delay is not None
+                 else replay_delay_for_club(sched.cfg, club) if sched is not None else None)
+        replay = {"enabled": enabled, "mode": getattr(sched, "mode", None), "delay_sec": delay,
+                  "show_sec": sched._num("show_sec", 10.0) if sched is not None else None,
+                  "clip_wait_sec": sched._num("clip_wait_sec", 4.0) if sched is not None else None}
+        if not enabled:
+            skipped.append("replay (layout profile is grid: no auto replay)")
+    LOG.info("Simulated shot injected (club=%s, speed=%s, path=%s, recorded=%s)", club,
+             msg["BallData"]["Speed"], path, bool(rec))
+    return {"ok": rec is not None, "path": path, "rig_running": rig, "club": club, "putt": putt,
+            "sim_id": sim_id, "shot": rec, "skipped": skipped, "replay": replay,
+            "error": None if rec is not None else "shot was not recorded (see simwatch.log)"}
 
 
 def cmd_bridge(cfg: dict, demo: bool = False, demo_interval: float = 4.0, port: int | None = None) -> None:
@@ -7399,6 +7636,7 @@ class SwingSessionManager:
         self.replay = ReplayScheduler(replay_cfg(cfg))
         self.replay_visible = False
         self.compare_state = "off"
+        self.pipeline: dict = {}  # last trigger/replay/focus/clip timestamps (see _note_pipeline, /api/status)
         self._win_lock = threading.RLock()       # serializes window moves from the shot/hotkey/tick threads
         self._compare_lock = threading.Lock()    # one Compare (re)launch at a time
         self.hotkeys = HotkeyOverlayManager(
@@ -7460,6 +7698,7 @@ class SwingSessionManager:
         self._snapshot_existing_files()
         if self.hub is not None:
             self.hub.sniffer = self.oc_monitor
+            self.hub.video_mgr = self  # GET /api/status `pipeline` + POST /api/simulate-shot know the rig is live
         self._stopped = False
         self._ref_swap_stop.clear()
         self.oc_monitor.start()
@@ -7612,6 +7851,8 @@ class SwingSessionManager:
                 log_throttled("bridge-record", "shot bridge failed to record shot", exc_info=True)
         with self._state_lock:
             self.last_shot_info = info
+        self._note_pipeline(_count="shots", last_shot_at=time.time(), last_shot_simulated=bool(info.get("simulated")),
+                            last_shot_putt=putt)
         LOG.info(
             "Shot detected on :921 (club=%s, speed=%.1f mph, carry=%s)",
             info.get("club") or "-", info.get("ball_speed") or 0.0, info.get("carry"),
@@ -7620,7 +7861,38 @@ class SwingSessionManager:
             LOG.info("Putt - skipping video capture")
             return
         self.pip.show_for_shot()
-        self._schedule_replay(info.get("club") or self.current_club)
+        delay = info.get("replay_delay")
+        if delay is not None:  # simulate-shot --quick: a short replay delay for this one shot
+            self._schedule_replay(info.get("club") or self.current_club, delay=max(0.0, cfg_number(delay, 0.0)))
+        else:
+            self._schedule_replay(info.get("club") or self.current_club)
+
+    def _note_pipeline(self, **fields) -> None:
+        """Record a shot-path milestone for GET /api/status `pipeline` (selftest). Never raises."""
+        try:
+            pl = getattr(self, "pipeline", None)
+            if pl is None:
+                pl = self.pipeline = {}
+            n = fields.pop("_count", None)
+            if n:
+                pl[n] = int(pl.get(n) or 0) + 1
+            pl.update(fields)
+        except Exception:
+            pass
+
+    def pipeline_status(self) -> dict:
+        pl = dict(getattr(self, "pipeline", None) or {})
+        sched = getattr(self, "replay", None)
+        pl["replay_enabled"] = self._replay_enabled()
+        pl["replay_mode"] = getattr(sched, "mode", None)
+        pl["replay_state"] = getattr(sched, "state", None)
+        pl["replay_visible"] = bool(getattr(self, "replay_visible", False))
+        pl["replay_show_sec"] = sched._num("show_sec", 10.0) if sched is not None else None
+        pl["replay_clip_wait_sec"] = sched._num("clip_wait_sec", 4.0) if sched is not None else None
+        pl["kinovea_backend"] = resolve_kinovea_backend(self.cfg)
+        pl["gspro_process"] = gspro_process_name(self.cfg)
+        pl["foreground_now"] = foreground_process_name()
+        return pl
 
     def trigger_capture(self) -> None:
         """2025: one UDP datagram (Kinovea's Delay/MaxDuration/quiet period do the rest).
@@ -7639,6 +7911,8 @@ class SwingSessionManager:
                 port = int(cfg_number(self.vcfg.get("udp_trigger_port", KINOVEA_DEFAULT_UDP_PORT),
                                       KINOVEA_DEFAULT_UDP_PORT))
                 if send_udp_trigger(port):
+                    self._note_pipeline(_count="udp_triggers", last_trigger_at=now, last_trigger_kind="udp",
+                                        udp_port=port)
                     LOG.info("Sent Kinovea UDP trigger to 127.0.0.1:%d (pre=%.1fs, post=%.1fs)", port, pre_sec, post_sec)
                 return
             if str(self.vcfg.get("legacy_trigger", "toggle")).lower() == "audio":
@@ -7650,6 +7924,7 @@ class SwingSessionManager:
                 # Assumed recording until RecordingSeconds elapses (+ margin); never toggle in that window,
                 # or we would stop it early / start a second recording.
                 self._stop_capture_at = now + max(1.0, pre_sec + post_sec) + 0.75
+                self._note_pipeline(_count="legacy_triggers", last_trigger_at=now, last_trigger_kind="legacy")
                 LOG.info("Triggered Kinovea Capture recording (pre=%.1fs, post=%.1fs)", pre_sec, post_sec)
 
     def trigger_manual_shot(self) -> None:
@@ -7723,6 +7998,8 @@ class SwingSessionManager:
             self.compare_state = "off"
             self.replay.release(now)
         act = self.replay.on_shot(now, club, delay)
+        if self.replay.state == ReplayScheduler.WAITING:
+            self._note_pipeline(replay_scheduled_at=now, replay_show_at=self.replay.show_at)
         # Window work off the sniffer thread: it must stay free for the next OpenConnect message.
         if act == "hide":
             threading.Thread(target=self._hide_replay, name="ReplayHide", daemon=True).start()
@@ -7734,7 +8011,8 @@ class SwingSessionManager:
         with self._win_lock:
             self.replay_visible = True
             self._retile()
-            self._focus_gspro()
+            self._note_pipeline(_count="replay_shows", replay_shown_at=time.time())
+            self._focus_gspro("show")
         LOG.info("Replay shown (%s)", self.replay.status_text(time.time()))
         self._publish_replay_state()
 
@@ -7743,15 +8021,23 @@ class SwingSessionManager:
             self.replay_visible = False
             self.compare_state = "off"
             self._retile()
-            self._focus_gspro()
+            self._note_pipeline(_count="replay_hides", replay_hidden_at=time.time())
+            self._focus_gspro("hide")
         self._publish_replay_state()
 
-    def _focus_gspro(self) -> None:
+    def _focus_gspro(self, after: str | None = None) -> None:
         if replay_cfg(self.cfg).get("restore_focus", True):
+            ok = None
             try:
-                self.layout_ctl.ops.restore_gspro_focus()
+                ok = bool(self.layout_ctl.ops.restore_gspro_focus())
             except Exception:
                 log_throttled("gspro-focus-mgr", "restore GSPro focus failed", exc_info=True)
+                ok = False
+            if after:
+                # restore_gspro_focus returns False also when GSPro already had it or another app was in front on
+                # purpose, so the foreground process recorded right after is what selftest judges.
+                self._note_pipeline(focus_after=after, focus_at=time.time(), focus_restored=ok,
+                                    foreground_after_focus=foreground_process_name())
 
     def _do(self, action: str | None) -> None:
         if action == "show":
@@ -7872,6 +8158,7 @@ class SwingSessionManager:
         self._do(self.replay.tick(now, last_input))
 
     def _note_clip_ready(self) -> None:
+        self._note_pipeline(_count="clip_events", last_clip_event_at=time.time())
         sched = getattr(self, "replay", None)
         if sched is not None:
             sched.on_clip_ready(time.time())
@@ -10288,6 +10575,332 @@ def print_ascii_qr(text: str) -> bool:
         return False
 
 
+# --------------------------------------------------------------------------- testing without hitting balls
+
+SELFTEST_CLIP_TIMEOUT_SEC = 25.0
+SELFTEST_DIR = HERE / "logs"
+
+
+class BridgeUnavailable(OSError):
+    """The shot bridge (127.0.0.1:<bridge.port>) did not answer."""
+
+
+def bridge_request(cfg: dict, method: str, path: str, body: dict | None = None,
+                   timeout: float = 10.0) -> tuple[int, dict]:
+    """One JSON request to the local bridge, the way a script on this PC sends it: loopback, no Origin header.
+    Raises BridgeUnavailable when nothing is listening / it does not answer."""
+    import http.client
+    port = int(bridge_config(cfg).get("port") or BRIDGE_DEFAULTS["port"])
+    conn = http.client.HTTPConnection("127.0.0.1", port, timeout=timeout)
+    try:
+        data = json.dumps(body).encode("utf-8") if body is not None else None
+        headers = {"Content-Type": "application/json"} if data is not None else {}
+        conn.request(method, path, body=data, headers=headers)
+        resp = conn.getresponse()
+        raw = resp.read(1_000_000)
+        try:
+            doc = json.loads(raw.decode("utf-8", "replace") or "{}")
+        except ValueError:
+            doc = {"error": raw[:200].decode("utf-8", "replace")}
+        return resp.status, doc if isinstance(doc, dict) else {"data": doc}
+    except (OSError, http.client.HTTPException) as e:
+        raise BridgeUnavailable(f"shot bridge not reachable on 127.0.0.1:{port} ({e})") from e
+    finally:
+        conn.close()
+
+
+def _bridge_down_message(cfg: dict, err: Exception) -> str:
+    d = running_daemon()
+    who = (f"SimWatch is running (pid {d['pid']}, `{d['command']}`) but its bridge did not answer - check "
+           "bridge.enabled in config.json and simwatch.log" if d else
+           "SimWatch is not running. Start it (python simwatch.py startup, or the desktop shortcut)")
+    return f"{err}\n{who}. Bridge only (records shots, no video): python simwatch.py bridge"
+
+
+def _fmt_sim_result(res: dict) -> str:
+    shot = res.get("shot") or {}
+    ball = shot.get("ball") or {}
+    parts = [f"club {res.get('club')}", f"{ball.get('speed')} mph", f"carry {ball.get('carry')} yd",
+             f"recorded as shot {shot.get('shot_num')}" if shot else "NOT recorded",
+             f"path {res.get('path')}"]
+    rp = res.get("replay") or {}
+    if rp.get("enabled") and rp.get("mode") == "auto" and rp.get("delay_sec") is not None:
+        parts.append(f"replay in {rp['delay_sec']:g} s for {rp.get('show_sec'):g} s")
+    return ", ".join(parts)
+
+
+def cmd_simulate_shot(cfg: dict, club: str | None = None, count: int = 1, interval: float = 12.0,
+                      ball_speed: float | None = None, quick: bool = False) -> int:
+    """`simwatch.py simulate-shot [club] [--count N] [--interval SEC] [--speed MPH] [--quick]`: fire synthetic
+    shots into the running SimWatch (POST /api/simulate-shot) - no ball needed."""
+    try:
+        club = normalize_sim_club(club)
+    except ValueError as e:
+        print(f"Bad club: {e}")
+        return 2
+    count = max(1, min(SIM_SHOT_MAX_COUNT, int(count or 1)))
+    interval = max(0.5, float(interval))
+    body: dict = {}
+    if club:
+        body["club"] = club
+    if ball_speed is not None:
+        body["ball_speed"] = float(ball_speed)
+    if quick:
+        body["replay_delay"] = 1
+    failures = 0
+    for i in range(count):
+        if i:
+            time.sleep(interval)
+        try:
+            code, res = bridge_request(cfg, "POST", "/api/simulate-shot", body)
+        except BridgeUnavailable as e:
+            print(_bridge_down_message(cfg, e))
+            return 1
+        if code != 200 or not res.get("ok"):
+            failures += 1
+            print(f"Shot {i + 1}/{count}: FAILED (HTTP {code}): {res.get('error') or res}")
+            if code in (400, 403, 404):
+                return 1  # won't get better by retrying
+            continue
+        print(f"Shot {i + 1}/{count}: {_fmt_sim_result(res)}")
+        for sk in res.get("skipped") or []:
+            print(f"    skipped: {sk}")
+    if count > 1:
+        print(f"Done: {count - failures}/{count} simulated shot(s) recorded (flagged simulated; ShotLab treats them "
+              "as demo shots).")
+    return 1 if failures else 0
+
+
+def _poll(fn, deadline: float, step: float = 0.5):
+    """Call fn() until it returns something truthy or the deadline passes; returns the last value."""
+    while True:
+        v = fn()
+        if v or time.time() >= deadline:
+            return v
+        time.sleep(step)
+
+
+def cmd_selftest(cfg: dict, club: str | None = None, quick: bool = False,
+                 clip_timeout: float = SELFTEST_CLIP_TIMEOUT_SEC, report_dir: Path | None = None) -> int:
+    """`simwatch.py selftest [club] [--quick]`: fire ONE simulated shot into the running SimWatch and verify every
+    stage of the shot pipeline with timeouts (PASS / FAIL / SKIP per stage). Exit 0 when nothing failed."""
+    results: list[dict] = []
+    started = time.time()
+
+    def add(stage: str, status: str, detail: str = "") -> None:
+        results.append({"stage": stage, "status": status, "detail": detail, "t": round(time.time() - started, 2)})
+        print(f"  {status:<4}  {stage}: {detail}", flush=True)
+
+    def status_doc() -> dict | None:
+        try:
+            code, doc = bridge_request(cfg, "GET", "/api/status", timeout=5)
+            return doc if code == 200 else None
+        except BridgeUnavailable:
+            return None
+
+    def finish(extra: dict | None = None) -> int:
+        failed = [r for r in results if r["status"] == FAIL]
+        overall = FAIL if failed else PASS
+        print(f"\nSelftest {overall}: {sum(r['status'] == PASS for r in results)} passed, {len(failed)} failed, "
+              f"{sum(r['status'] == SKIP for r in results)} skipped ({time.time() - started:.0f} s)")
+        report = {"started": datetime.fromtimestamp(started).astimezone().isoformat(timespec="seconds"),
+                  "overall": overall, "club": club, "quick": quick, "stages": results, **(extra or {})}
+        out_dir = Path(report_dir) if report_dir else SELFTEST_DIR
+        try:
+            out_dir.mkdir(parents=True, exist_ok=True)
+            path = out_dir / f"selftest-{datetime.fromtimestamp(started).strftime('%Y%m%d-%H%M%S')}.json"
+            path.write_text(json.dumps(report, indent=1), encoding="utf-8")
+            print(f"Report: {path}")
+        except OSError as e:
+            print(f"(could not write the report: {e})")
+        return 1 if failed else 0
+
+    try:
+        club = normalize_sim_club(club)
+    except ValueError as e:
+        print(f"Bad club: {e}")
+        return 2
+    print("SimWatch selftest: one simulated shot through the real pipeline (no ball needed)\n")
+
+    # 1. bridge + daemon
+    try:
+        code, st = bridge_request(cfg, "GET", "/api/status", timeout=5)
+        st = st if code == 200 else None
+        add("bridge reachable", PASS if st else FAIL,
+            f"127.0.0.1:{bridge_config(cfg).get('port')}" + ("" if st else f" answered HTTP {code}"))
+    except BridgeUnavailable as e:
+        st = None
+        add("bridge reachable", FAIL, _bridge_down_message(cfg, e).replace("\n", " "))
+    info = read_daemon_info()
+    add("daemon running", PASS if info else FAIL,
+        f"pid {info.get('pid')} (`{info.get('command')}`)" if info else
+        "no watch/startup/video daemon (simwatch_daemon.json); start SimWatch first")
+    if st is None:
+        return finish()
+
+    pl0 = st.get("pipeline") or {}
+    rig = bool(pl0.get("rig_running"))
+    gspro_proc = pl0.get("gspro_process") or gspro_process_name(cfg)
+    kin_before = {p.pid for p in find_procs("Kinovea.exe")}
+    if kin_before:
+        add("Kinovea running (before)", PASS, f"{len(kin_before)} Kinovea.exe process(es)")
+    else:
+        add("Kinovea running (before)", FAIL if rig else SKIP,
+            "no Kinovea.exe process" + ("" if rig else " (video rig not running)"))
+    sl_port = int(shotlab_config(cfg).get("obs_port") or 8766)
+    sl0 = probe_shotlab_health(sl_port)
+
+    # 2. fire the shot
+    body: dict = {"club": club} if club else {}
+    if quick:
+        body["replay_delay"] = 1
+    t0 = time.time()
+    try:
+        code, res = bridge_request(cfg, "POST", "/api/simulate-shot", body)
+    except BridgeUnavailable as e:
+        code, res = 0, {"error": str(e)}
+    if code != 200 or not res.get("ok"):
+        add("simulated shot injected", FAIL, f"HTTP {code}: {res.get('error') or res}")
+        return finish({"response": res})
+    shot = res.get("shot") or {}
+    ts, club = shot.get("ts"), res.get("club")
+    add("simulated shot injected", PASS, _fmt_sim_result(res))
+    for sk in res.get("skipped") or []:
+        print(f"        (skipped by the daemon: {sk})")
+    rig = bool(res.get("rig_running"))
+    putt = bool(res.get("putt"))
+
+    # 3. shot recorded (read back through the bridge = the day's shots.jsonl)
+    def find_shot() -> dict | None:
+        try:
+            code_, doc = bridge_request(cfg, "GET", f"/api/shots?date={str(ts)[:10]}", timeout=5)
+        except BridgeUnavailable:
+            return None
+        return next((s for s in (doc.get("shots") or []) if s.get("ts") == ts), None) if code_ == 200 else None
+
+    rec = find_shot()
+    if rec and rec.get("simulated") and rec.get("source") == "demo":
+        add("shot recorded", PASS, f"shots.jsonl shot {rec.get('shot_num')} (simulated, source=demo)")
+    else:
+        add("shot recorded", FAIL, "not found in /api/shots" if not rec else "found but not flagged simulated")
+
+    # 4. UDP trigger
+    if not rig or putt:
+        add("Kinovea trigger sent", SKIP, "putt (no capture)" if putt else "video rig not running")
+    else:
+        pl = (status_doc() or {}).get("pipeline") or {}
+        key = "udp_triggers" if pl.get("kinovea_backend") == "2025" else "legacy_triggers"
+        fired = int(pl.get(key) or 0) > int(pl0.get(key) or 0) and float(pl.get("last_trigger_at") or 0) >= t0 - 1
+        add("Kinovea trigger sent", PASS if fired else FAIL,
+            (f"{pl.get('last_trigger_kind')} trigger" + (f" to 127.0.0.1:{pl.get('udp_port')}" if pl.get("udp_port")
+                                                         else "")) if fired else
+            f"no new trigger ({key} {pl0.get(key) or 0} -> {pl.get(key) or 0}; debounced or send failed: see log)")
+
+    # 5. clips saved + linked
+    if not rig or putt:
+        for angle in ("DTL", "FO"):
+            add(f"{angle} clip saved and linked", SKIP, "putt" if putt else "video rig not running")
+    else:
+        deadline = t0 + clip_timeout
+
+        def both_linked():
+            r = find_shot() or {}
+            c = r.get("clips") if isinstance(r.get("clips"), dict) else {}
+            return r if (c.get("DTL") and c.get("FO")) else None
+
+        rec = _poll(both_linked, deadline, 1.0) or find_shot() or {}
+        clips = rec.get("clips") if isinstance(rec.get("clips"), dict) else {}
+        for angle in ("DTL", "FO"):
+            add(f"{angle} clip saved and linked", PASS if clips.get(angle) else FAIL,
+                str(clips.get(angle)) if clips.get(angle) else
+                f"no {angle} clip linked within {clip_timeout:.0f} s (Kinovea recording / clip-ready: see "
+                "logs/clip-ready.log)")
+
+    # 6. replay shown, then hidden; 7. GSPro foreground after it
+    rp = res.get("replay") or {}
+    shown_at = hidden_at = None
+    pl = {}
+    if not rig or putt or not rp.get("enabled") or rp.get("mode") != "auto" or rp.get("delay_sec") is None:
+        why = ("video rig not running" if not rig else "putt" if putt else
+               "layout profile grid (no auto replay)" if not rp.get("enabled") else
+               "auto replay is off (Alt+O)" if rp.get("mode") != "auto" else "no replay for this club")
+        add("replay shown", SKIP, why)
+        add("replay hidden", SKIP, why)
+    else:
+        def shown():
+            p = (status_doc() or {}).get("pipeline") or {}
+            return p if float(p.get("replay_shown_at") or 0) >= t0 else None
+
+        show_deadline = t0 + float(rp["delay_sec"]) + float(rp.get("clip_wait_sec") or 4) + 6
+        pl = _poll(shown, show_deadline) or {}
+        shown_at = pl.get("replay_shown_at")
+        add("replay shown", PASS if shown_at else FAIL,
+            f"{float(shown_at) - t0:.1f} s after the shot" if shown_at else
+            f"not shown within {show_deadline - t0:.0f} s")
+        if shown_at:
+            def hidden():
+                p = (status_doc() or {}).get("pipeline") or {}
+                return p if float(p.get("replay_hidden_at") or 0) >= float(shown_at) else None
+
+            hide_deadline = float(shown_at) + float(rp.get("show_sec") or 10) + 6
+            pl = _poll(hidden, max(hide_deadline, time.time() + 1)) or pl
+            hidden_at = pl.get("replay_hidden_at") if float(pl.get("replay_hidden_at") or 0) >= float(shown_at) else None
+            add("replay hidden", PASS if hidden_at else FAIL,
+                f"after {float(hidden_at) - float(shown_at):.1f} s on screen" if hidden_at else
+                f"still up {hide_deadline - float(shown_at):.0f} s after it appeared (pinned with Alt+K?)")
+        else:
+            add("replay hidden", SKIP, "replay never appeared")
+    if not hidden_at:
+        add("GSPro in front after the replay", SKIP, "no replay hide to check")
+    elif pl.get("focus_after") != "hide" or float(pl.get("focus_at") or 0) < float(hidden_at):
+        add("GSPro in front after the replay", SKIP, "focus restore is off (video.replay.restore_focus)")
+    else:
+        fg = str(pl.get("foreground_after_focus") or "")
+        if fg.lower() == str(gspro_proc).lower():
+            add("GSPro in front after the replay", PASS, f"foreground: {fg}")
+        elif "kinovea" in fg.lower():
+            add("GSPro in front after the replay", FAIL, f"foreground is still {fg}: Kinovea kept the keyboard")
+        else:
+            add("GSPro in front after the replay", SKIP,
+                f"foreground was {fg or 'unknown'}: SimWatch only takes focus back from Kinovea/itself, never from "
+                "the app you are using (click GSPro after starting selftest to test this)")
+
+    # 8. Kinovea still alive
+    kin_after = {p.pid for p in find_procs("Kinovea.exe")}
+    died = kin_before - kin_after
+    if not kin_before and not rig:
+        add("Kinovea running (after)", SKIP, "video rig not running")
+    elif died:
+        add("Kinovea running (after)", FAIL, f"Kinovea pid(s) {sorted(died)} exited during the test")
+    elif kin_after:
+        add("Kinovea running (after)", PASS, f"{len(kin_after)} Kinovea.exe process(es)")
+    else:
+        add("Kinovea running (after)", FAIL, "no Kinovea.exe process")
+
+    # 9. ShotLab got it
+    def sl_shots(h: dict | None) -> int:
+        return int((h or {}).get("shots") or 0)
+
+    def sl_got_it() -> dict | None:  # ShotLab keeps its newest 200 shots: a full list can't grow
+        h = probe_shotlab_health(sl_port)
+        return h if h and (sl0 is None or sl_shots(h) != sl_shots(sl0) or sl_shots(h) >= 200) else None
+
+    sl1 = (_poll(sl_got_it, time.time() + 5) if sl0 else None) or probe_shotlab_health(sl_port)
+    if sl0 is None and sl1 is None:
+        add("ShotLab received the shot", SKIP, f"ShotLab not running (no /api/health on :{sl_port})")
+    elif sl0 is None:
+        add("ShotLab received the shot", SKIP, "ShotLab started during the test; run selftest again")
+    elif sl1 is None:
+        add("ShotLab received the shot", FAIL, "ShotLab stopped answering /api/health during the test")
+    elif not sl1.get("bridgeConnected"):
+        add("ShotLab received the shot", FAIL, "ShotLab is running but not connected to the bridge")
+    elif sl_shots(sl1) == sl_shots(sl0) and sl_shots(sl1) < 200:
+        add("ShotLab received the shot", FAIL, f"ShotLab shot count unchanged ({sl_shots(sl1)})")
+    else:
+        add("ShotLab received the shot", PASS, f"connected, {sl1.get('shots')} shot(s) in its list (as a demo shot)")
+    return finish({"shot": rec or shot, "response": res})
+
+
 def cmd_phone(cfg: dict) -> int:
     """Print the drills-hub URL (with pairing token) for a phone on the same Wi-Fi."""
     if not bridge_lan_enabled(cfg):
@@ -10467,6 +11080,7 @@ def main() -> None:
             "displays", "reconnect", "release-device",
             "video", "bookmark", "reference", "obs-setup", "hotkeys", "drills", "lines", "save-lines",
             "doctor", "bridge", "harden", "clip-ready", "status", "space", "phone", "shotlab", "keys",
+            "simulate-shot", "selftest",
         ],
     )
     ap.add_argument("arg", nargs="?")
@@ -10479,6 +11093,11 @@ def main() -> None:
                     help="discover: detect app exe paths and write them to config.local.json")
     ap.add_argument("--apply", action="store_true",
                     help="harden: run the commands (Administrator, asks before each); default is a dry run")
+    ap.add_argument("--count", type=int, default=1, help="simulate-shot: number of shots (1-20)")
+    ap.add_argument("--interval", type=float, default=12.0, help="simulate-shot: seconds between shots")
+    ap.add_argument("--speed", type=float, default=None, help="simulate-shot: ball speed in mph")
+    ap.add_argument("--quick", action="store_true",
+                    help="simulate-shot / selftest: replay 1 s after the shot instead of the per-club delay")
     a = ap.parse_args()
 
     _configure_logging(a.command)
@@ -10519,6 +11138,10 @@ def main() -> None:
         sys.exit(cmd_phone(cfg))
     if a.command == "keys":
         sys.exit(cmd_keys(cfg, a.arg))
+    if a.command == "simulate-shot":
+        sys.exit(cmd_simulate_shot(cfg, a.arg, count=a.count, interval=a.interval, ball_speed=a.speed, quick=a.quick))
+    if a.command == "selftest":
+        sys.exit(cmd_selftest(cfg, a.arg, quick=a.quick))
     if a.command == "bridge":
         return cmd_bridge(cfg, demo=a.demo, demo_interval=a.demo_interval, port=a.port)
     if a.command == "shotlab":

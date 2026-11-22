@@ -99,3 +99,36 @@ Branch: `feature/coach-system` (working tree). Files: `simwatch.py`, `tests/test
    `shots.jsonl`. Then hit a shot: exactly one line, even if GSPconnect reconnects within 30 s afterwards.
 
 Pass: no shot is lost or duplicated, clip links survive a busy file, and demo shots never reach the real sessions.
+
+## Testing without hitting balls: simulate-shot + selftest (2026-11-21)
+
+Branch: `master` (working tree). Files: `simwatch.py` (`POST /api/simulate-shot`, `simulate-shot`, `selftest`,
+`/api/status` `pipeline` block), `tests/test_simulate_shot.py`, `README.md`.
+
+The Mac test runs the real pipeline in-process, but only the rig can show that Kinovea really records on the
+injected trigger, that `clip-ready` links both clips, and that the replay pops up and gives GSPro the keyboard back.
+
+1. With SimWatch running normally (GSPro open, video rig up), in a console in the repo folder run:
+   `python simwatch.py selftest`
+   Expect PASS for: bridge reachable, daemon running, Kinovea running (before), simulated shot injected, shot
+   recorded, Kinovea trigger sent, DTL clip saved and linked, FO clip saved and linked, replay shown, replay
+   hidden, Kinovea running (after). "GSPro in front after the replay" is SKIP while this console is in front.
+   ShotLab is PASS when it's running, SKIP when not. The last line is `Selftest PASS`, and a report appears in
+   `logs\selftest-<date>-<time>.json`.
+2. Focus check: run `python simwatch.py selftest`, then click into GSPro straight away. Expect "GSPro in front
+   after the replay" PASS (foreground: GSPro.exe).
+3. Quick timing: `python simwatch.py selftest dr --quick`. The replay appears about 1 s after the clips are saved
+   (not 9 s), and all the same stages pass.
+4. Several shots: `python simwatch.py simulate-shot 7i --count 3 --interval 15`. It prints 3 "Shot n/3" lines.
+   Kinovea records 3 swings, and `Get-Content .\Swings\Sessions\$(Get-Date -Format yyyy-MM-dd)\shots.jsonl -Tail 3`
+   shows 3 lines with `"simulated":true,"source":"demo"` and `clips` {DTL, FO} on each.
+5. ShotLab: with ShotLab open, the simulated shots appear in its list, but its swing history and calibration
+   don't change (they're demo shots).
+6. Locked down: from a browser console on any page, `fetch('http://127.0.0.1:8765/api/simulate-shot',
+   {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})` fails (403 or a CORS error), and
+   no new line appears in `shots.jsonl`.
+7. Daemon down: `python simwatch.py stop`, then `python simwatch.py simulate-shot`. It prints "shot bridge not
+   reachable ... SimWatch is not running" and exits 1. Start SimWatch again afterwards.
+
+Pass: selftest PASS on the rig with real clips linked, the replay shown and hidden, GSPro back in front when it was
+clicked, and simulated shots kept out of ShotLab's history and the session stats.

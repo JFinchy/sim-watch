@@ -369,7 +369,50 @@ records every shot the OpenConnect (:921) sniffer sees and serves it to `drills/
 - **Testing:** `python simwatch.py bridge` runs only the server + sniffer; add `--demo` (optionally
   `--demo-interval 2`, `--port 8766`) to emit a synthetic shot every few seconds. The demo runs on macOS too.
   Demo shots go to `Swings/Sessions-demo/` (`bridge.demo_sessions_dir`), are tagged `"demo": true`, and the
-  real :921 sniffer is not started, so demo and real shots never mix.
+  real :921 sniffer is not started, so demo and real shots never mix. To push one test shot through the running daemon's real
+  pipeline instead, see [Testing without hitting balls](#testing-without-hitting-balls).
+
+## Testing without hitting balls
+
+Two commands push a fake shot through the **real** shot pipeline of the running SimWatch (the `watch`/`startup`
+daemon or standalone `video`). Everything is typed without Shift, so they work from the rig's remote keyboard.
+
+```powershell
+python simwatch.py simulate-shot                  # one shot with GSPro's current club (7I if unknown)
+python simwatch.py simulate-shot 7i --count 5 --interval 15
+python simwatch.py simulate-shot dr --speed 150 --quick
+python simwatch.py selftest                       # one shot, every stage checked: PASS / FAIL / SKIP, exit 0 or 1
+python simwatch.py selftest pw --quick            # replay 1 s after the shot instead of the per-club delay
+```
+
+- **How it works:** the CLI calls `POST /api/simulate-shot` on the bridge (`{"club", "ball_speed", "count",
+  "interval", "replay_delay"}`, all optional). The daemon builds a realistic OpenConnect message for that club
+  (the same generator `bridge --demo` uses) and feeds it to the OpenConnect monitor the video rig listens to, the
+  same function every sniffed :921 message goes through. So the Kinovea UDP trigger, the `shots.jsonl` record,
+  the SSE `shot` event, the replay timer, Kinovea's recording + `clip-ready` linking, the replay popping up and
+  hiding, and GSPro getting the keyboard back all happen for real. Without the video rig (video off / GSPro
+  closed) the shot is still recorded via the bridge, and the reply lists what was skipped.
+- **Club:** leave it out to use GSPro's current club. A different club counts as a club change (the hub and
+  ShotLab show it until GSPro next reports its own club).
+- **Flagged:** simulated records carry `"simulated": true` and `"source": "demo"`. ShotLab already treats
+  `source: "demo"` as a demo shot: it shows it but keeps it out of its swing database, calibration and club
+  auto-switch. Session stats (`/api/session-stats`) skip simulated shots. They still appear in the drills hub
+  feed and in `shots.jsonl`, and their clips go into the session folder like any other shot.
+- **Locked down:** like `POST /api/gspro/club`, the endpoint refuses any request with an `Origin` header (every
+  browser POST has one, `file://` pages included) and any client that isn't on this PC, pairing token or not.
+- **What `selftest` checks:** bridge reachable; daemon running; Kinovea.exe running before and after (no crash);
+  shot injected and recorded (read back from `/api/shots`, flagged simulated); the Kinovea trigger was sent
+  (`/api/status` -> `pipeline.udp_triggers`); DTL and FO clips saved and linked to that shot within 25 s; the
+  replay shown, then hidden (timeouts come from the club delay + `clip_wait_sec` + `show_sec`); GSPro in
+  front after the replay; ShotLab received it (its `/api/health` shot count; SKIP when ShotLab isn't running).
+  It writes `logs/selftest-<timestamp>.json`.
+- **What it can't check:** the raw :921 sniffer and GameChanger/Launch Pro (the shot never crosses the
+  network); whether the cameras actually show a swing (the clips just have to exist); what is on screen (the
+  replay check reads SimWatch's own show/hide timestamps). The focus check is a SKIP when the console you typed
+  the command in is in front: SimWatch only takes the keyboard back from Kinovea or itself, never from the app
+  you're using. To test it, click into GSPro right after starting `selftest`.
+- `GET /api/status` now includes a `pipeline` block (trigger count and time, replay scheduled/shown/hidden times,
+  the foreground process after the last focus restore, clip events) for this.
 
 ## Manual Setup & What We Need From You (One-Time Checklist)
 
@@ -456,6 +499,8 @@ python simwatch.py keys [md]             # print the grouped shortcut map; `md` 
 python simwatch.py phone                 # drills-hub URL (with pairing token) for a phone on your Wi-Fi (bridge.lan)
 python simwatch.py drills                # open the local Golf Drills & Daily Delivery Hub
 python simwatch.py bridge [--demo]       # run only the shot-data bridge (:8765) + :921 sniffer
+python simwatch.py simulate-shot [club] [--count N] [--interval SEC] [--speed MPH] [--quick]  # fake shot through the real pipeline
+python simwatch.py selftest [club] [--quick]  # one fake shot, check every pipeline stage, report in logs/
 python simwatch.py shotlab               # open ShotLab now (or focus it); the watchdog adopts it
 python simwatch.py obs-setup             # generate Swings/ layout, workspaces & OBS scene JSON
 python simwatch.py lines [apply|on|off|toggle]  # apply or toggle Kinovea swing plane .kva lines

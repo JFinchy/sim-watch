@@ -10,7 +10,7 @@
 ## Important
 
 - [ ] Kinovea 2025 integration (UDP trigger, clip-ready, legacy fallback) - see `kinovea-2025.md`
-- [ ] Shot-data bridge (simwatch.py → drills hub) - see `shot-bridge.md`
+- [ ] Shot-data bridge (simwatch.py → drills hub; incl. simulate-shot / selftest) - see `shot-bridge.md`
 - [ ] Tonight's Session + Mat mode + live auto-scoring - see `tonights-session-mat-mode.md`
 - [ ] Drills content accuracy & safety (HackMotion, Gym-Sore, new drills) - see `drills-content-accuracy.md`
 - [ ] Drills hub fixes - see `drills-hub-fixes.md`
