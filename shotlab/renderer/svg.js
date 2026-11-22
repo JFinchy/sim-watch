@@ -21,7 +21,7 @@
   /**
    * 1. Top-Down Shot Shape Flight Curve SVG (hero or compact badge).
    */
-  function renderShotShapeIcon(svgParams, { width = 140, height = 140, compact = false } = {}) {
+  function renderShotShapeIcon(svgParams, { width = 140, height = 140, compact = false, intendedShape = null, handedness = 'RH' } = {}) {
     const p = svgParams || { hlaDeg: 0, curveYds: 0, offlineYds: 0, carryYds: 160, severity: 'green' };
     const color = gradeColor(p.severity);
     const w = width;
@@ -40,6 +40,15 @@
     const ctrlY = startY - spanY * 0.52;
     const endX = toX(p.offlineYds || 0);
     const startLineEndX = toX(startLineYds);
+    const shapeKey = typeof intendedShape === 'string' ? intendedShape.toLowerCase() : '';
+    const handSign = handedness === 'LH' ? -1 : 1;
+    const goalCurveHtml = !compact && (shapeKey === 'draw' || shapeKey === 'fade')
+      ? (() => {
+          const goalStart = shapeKey === 'draw' ? toX(9 * handSign) : toX(-9 * handSign);
+          const goalEnd = shapeKey === 'draw' ? toX(-3 * handSign) : toX(3 * handSign);
+          return `<path d="M ${cx} ${startY} Q ${goalStart.toFixed(1)} ${ctrlY.toFixed(1)} ${goalEnd.toFixed(1)} ${endY}" fill="none" stroke="#10f296" stroke-width="1.5" stroke-dasharray="4 3" opacity="0.65"/>`;
+        })()
+      : '';
 
     const strokeW = compact ? 3 : 3.5;
     const dotR = compact ? 4 : 5.5;
@@ -69,6 +78,7 @@
         ${compact ? `<line x1="${cx}" y1="${startY}" x2="${cx}" y2="${endY}" stroke="#475569" stroke-width="1" stroke-dasharray="2 2" opacity="0.65"/>` : ''}
         <!-- Tee dot -->
         <circle cx="${cx}" cy="${startY}" r="${compact ? 2.2 : 3}" fill="#cbd5e1"/>
+        ${goalCurveHtml}
         <!-- Ball flight curve -->
         <path d="M ${cx} ${startY} Q ${ctrlX.toFixed(1)} ${ctrlY.toFixed(1)} ${endX.toFixed(1)} ${endY}"
               fill="none" stroke="url(#${uid}_grad)" stroke-width="${strokeW}" stroke-linecap="round"
@@ -85,14 +95,18 @@
   }
 
   /**
-   * 2. Side-View Ballistic Trajectory SVG (Actual flight vs Center-Strike Potential ghost arc).
+   * 2. Side-View Ballistic Trajectory SVG (Actual flight vs Center-Strike Potential ghost arc vs Dotted Goal & Reference Benchmarks).
    */
-  function renderSideTrajectory(flight, potential, severity = 'green', references = [], visibleRefs = []) {
+  function renderSideTrajectory(flight, potential, severity = 'green', references = [], visibleRefs = [], opts = {}) {
     const w = 360;
     const h = 132;
     const padL = 26, padR = 16, padT = 16, padB = 24;
     const pts = (flight && flight.points && flight.points.length >= 2) ? flight.points : [];
     const ghost = (potential && potential.ghostPoints && potential.ghostPoints.length >= 2) ? potential.ghostPoints : [];
+    const goalFlight = (opts && opts.goalFlight && Array.isArray(opts.goalFlight.points) && opts.goalFlight.points.length >= 2)
+      ? opts.goalFlight
+      : null;
+    const goalPts = goalFlight ? goalFlight.points : [];
     const shown = new Set(Array.isArray(visibleRefs) ? visibleRefs : []);
     const refs = (Array.isArray(references) ? references : [])
       .filter((r) => r && shown.has(r.id) && Array.isArray(r.points) && r.points.length >= 2);
@@ -106,12 +120,14 @@
       100,
       ...pts.map((p) => p.x),
       ...ghost.map((p) => p.x),
+      ...goalPts.map((p) => p.x),
       ...refPts.map((p) => p.x)
     ) * 1.07;
     const maxY = Math.max(
       60,
       ...pts.map((p) => p.y),
       ...ghost.map((p) => p.y),
+      ...goalPts.map((p) => p.y),
       ...refPts.map((p) => p.y)
     ) * 1.18;
 
@@ -159,6 +175,14 @@
             <circle cx="${sx(land.x).toFixed(1)}" cy="${(h - padB)}" r="2.2" fill="${r.color}"/>`;
         }).join('')}
 
+        <!-- Toggleable Dotted Goal Trajectory (Intended Shot Shape Target) -->
+        ${goalFlight ? (() => {
+          const gLand = goalPts[goalPts.length - 1];
+          return `
+            <path d="${pathOf(goalPts)}" fill="none" stroke="#10f296" stroke-width="1.6" stroke-dasharray="5 3" opacity="0.82"/>
+            <circle cx="${sx(gLand.x).toFixed(1)}" cy="${(h - padB)}" r="2.8" fill="#10f296" opacity="0.9"/>`;
+        })() : ''}
+
         <!-- Potential Ghost Arc (Center-Face Optimal) -->
         ${showGhost ? `
           <path d="${pathOf(ghost)}" fill="none" stroke="#38bdf8" stroke-width="1.75" stroke-dasharray="5 4" opacity="0.72"/>
@@ -182,71 +206,129 @@
   }
 
   /**
-   * 3. Clubface Strike Map SVG (Driver/Wood vs Iron/Wedge face silhouette + inferred impact hotspot).
+   * 3. Photorealistic CAD Clubface Strike Map SVG (4 silhouettes: driver | hybrid/wood | iron | wedge).
    * coords: x (-1 heel .. +1 toe), y (-1 low/thin .. +1 high).
    * Mirrors hosel + HEEL/TOE sides automatically for Left-Handed golfers.
    */
   function renderClubfaceMap(strike, clubSpec, handedness = 'RH') {
-    const w = 160;
-    const h = 104;
+    const w = 176;
+    const h = 114;
     const isLH = handedness === 'LH';
-    const isWood = clubSpec && (clubSpec.category === 'driver' || clubSpec.category === 'wood' || clubSpec.category === 'hybrid');
-    const unknown = Boolean(strike && strike.location === 'unknown'); // no club read: don't draw a fake hotspot
+    const cat = clubSpec && clubSpec.category ? clubSpec.category : 'mid_iron';
+    const kind = cat === 'driver' ? 'driver'
+      : (cat === 'wood' || cat === 'hybrid') ? 'hybrid'
+      : cat === 'wedge' ? 'wedge'
+      : 'iron';
+    const isWood = kind === 'driver' || kind === 'hybrid';
+    const isUnknown = Boolean(strike && strike.location === 'unknown');
+    const isFoam = Boolean(strike && strike.location === 'foam_na');
+    const noHotspot = isUnknown || isFoam; // no club read or foam quiet mode: don't draw a fake hotspot
     const coords = (strike && strike.coords) || { x: 0, y: 0 };
     const color = gradeColor(strike ? strike.severity : 'green');
 
     // RH view looking at the clubface: Heel (hosel) on LEFT, Toe on RIGHT (mirrored via <g> for LH)
-    const cx = w / 2;
+    const cx = w / 2 + 4;
     const cy = h / 2 + 2;
-    const hitX = cx + Math.max(-1, Math.min(1, coords.x || 0)) * (isWood ? 44 : 40);
-    const hitY = cy - Math.max(-1, Math.min(1, coords.y || 0)) * (isWood ? 26 : 24);
+    const labelX = isLH ? (w - cx) : cx;
+    const hitX = cx + Math.max(-1, Math.min(1, coords.x || 0)) * (kind === 'driver' ? 42 : isWood ? 38 : 36);
+    const hitY = cy - Math.max(-1, Math.min(1, coords.y || 0)) * (kind === 'driver' ? 25 : 22);
 
     const uid = `cf_${Math.random().toString(36).slice(2, 7)}`;
 
-    const faceOutline = isWood
-      ? `<path d="M 26 68 C 22 44, 34 22, 64 18 C 98 14, 134 24, 138 50 C 141 72, 118 86, 80 86 C 46 86, 29 80, 26 68 Z"
-               fill="#151d2e" stroke="#475569" stroke-width="1.8"/>`
-      : `<path d="M 28 76 L 34 30 C 35 24, 42 22, 54 22 L 122 18 C 134 18, 139 26, 137 40 L 132 72 C 130 81, 120 84, 102 84 L 40 84 C 31 84, 27 81, 28 76 Z"
-               fill="#151d2e" stroke="#475569" stroke-width="1.8"/>`;
-
-    const grooves = isWood
-      ? [36, 44, 52, 60, 68].map((gy) =>
-          `<line x1="38" y1="${gy}" x2="62" y2="${gy}" stroke="#334155" stroke-width="1"/>
-           <line x1="98" y1="${gy}" x2="122" y2="${gy}" stroke="#334155" stroke-width="1"/>`
-        ).join('')
-      : [34, 42, 50, 58, 66, 74].map((gy) =>
-          `<line x1="42" y1="${gy}" x2="120" y2="${gy}" stroke="#334155" stroke-width="1.1"/>`
-        ).join('');
+    let headSvg = '';
+    if (kind === 'driver') {
+      headSvg = `
+        <!-- Stepped Loft-Sleeve Hosel + Ti Pearl Body + Split-Groove Milling -->
+        <path d="M 22 6 L 32 6 L 37 42 L 26 44 Z" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+        <rect x="25" y="34" width="12" height="3.5" rx="1" fill="#94a3b8"/>
+        <path d="M 32 72 C 26 42, 46 20, 90 17 C 134 14, 158 32, 160 58 C 162 84, 130 96, 88 96 C 52 96, 36 86, 32 72 Z"
+              fill="url(#${uid}_ti)" stroke="#64748b" stroke-width="1.8"/>
+        <path d="M 40 36 C 62 20, 126 18, 150 35 C 124 25, 64 26, 40 36 Z" fill="#090d16" opacity="0.88"/>
+        <path d="M 44 69 C 40 48, 56 32, 91 29 C 126 27, 145 41, 146 58 C 147 78, 124 88, 91 88 C 60 88, 46 79, 44 69 Z"
+              fill="#111827" stroke="#334155" stroke-width="1"/>
+        ${[42, 49, 56, 63, 70, 77].map((gy) =>
+          `<line x1="50" y1="${gy}" x2="72" y2="${gy}" stroke="#475569" stroke-width="1.1" stroke-linecap="round"/>
+           <line x1="110" y1="${gy}" x2="134" y2="${gy}" stroke="#475569" stroke-width="1.1" stroke-linecap="round"/>`
+        ).join('')}
+      `;
+    } else if (kind === 'hybrid') {
+      headSvg = `
+        <path d="M 24 8 L 33 8 L 37 46 L 26 48 Z" fill="#1e293b" stroke="#475569" stroke-width="1"/>
+        <rect x="26" y="38" width="11" height="3" rx="1" fill="#38bdf8" opacity="0.7"/>
+        <path d="M 30 74 C 27 52, 42 32, 90 30 C 132 28, 156 42, 158 63 C 160 84, 134 94, 89 94 C 52 94, 33 87, 30 74 Z"
+              fill="url(#${uid}_ti)" stroke="#64748b" stroke-width="1.8"/>
+        <path d="M 40 72 C 38 56, 52 40, 91 38 C 126 37, 144 48, 145 63 C 146 78, 126 86, 90 86 C 58 86, 42 81, 40 72 Z"
+              fill="#111827" stroke="#334155" stroke-width="1"/>
+        ${[48, 55, 62, 69, 76].map((gy) =>
+          `<line x1="49" y1="${gy}" x2="74" y2="${gy}" stroke="#475569" stroke-width="1.1"/>
+           <line x1="108" y1="${gy}" x2="134" y2="${gy}" stroke="#475569" stroke-width="1.1"/>`
+        ).join('')}
+      `;
+    } else if (kind === 'wedge') {
+      headSvg = `
+        <path d="M 23 6 L 33 6 L 38 66 L 26 68 Z" fill="url(#${uid}_steel)" stroke="#64748b" stroke-width="1"/>
+        <rect x="24" y="20" width="11" height="5" rx="1" fill="#0f172a" stroke="#475569" stroke-width="0.7"/>
+        <path d="M 30 84 L 35 42 C 37 33, 46 31, 60 30 C 96 27, 134 15, 146 18 C 156 21, 159 34, 156 54 L 151 80 C 148 91, 136 94, 114 94 L 44 94 C 33 94, 29 90, 30 84 Z"
+              fill="url(#${uid}_steel)" stroke="#94a3b8" stroke-width="1.8"/>
+        ${[30, 36, 42, 48, 54, 60, 66, 72, 78, 84].map((gy) => {
+          const x1 = gy < 42 ? 84 : 44;
+          return `<line x1="${x1}" y1="${gy}" x2="143" y2="${gy}" stroke="#334155" stroke-width="1.15"/>`;
+        }).join('')}
+        <line x1="42" y1="88.5" x2="139" y2="88.5" stroke="#e2e8f0" stroke-width="1.5" opacity="0.65"/>
+      `;
+    } else {
+      headSvg = `
+        <!-- Forged Blade Iron Silhouette with Ferrule, Hosel & Scorelines -->
+        <path d="M 23 6 L 33 6 L 38 68 L 26 70 Z" fill="url(#${uid}_steel)" stroke="#64748b" stroke-width="1"/>
+        <rect x="24" y="21" width="11" height="5" rx="1" fill="#0f172a" stroke="#38bdf8" stroke-width="0.7"/>
+        <path d="M 30 84 L 36 37 C 38 30, 46 27, 62 26 L 136 19 C 149 18, 156 26, 155 42 L 149 78 C 146 89, 134 92, 114 92 L 42 92 C 32 92, 29 89, 30 84 Z"
+              fill="url(#${uid}_steel)" stroke="#94a3b8" stroke-width="1.8"/>
+        ${[34, 41, 48, 55, 62, 69, 76, 83].map((gy) =>
+          `<line x1="46" y1="${gy}" x2="138" y2="${gy}" stroke="#334155" stroke-width="1.2"/>`
+        ).join('')}
+        <line x1="44" y1="87.5" x2="136" y2="87.5" stroke="#e2e8f0" stroke-width="1.4" opacity="0.6"/>
+      `;
+    }
 
     const faceGroupOpen = isLH ? `<g transform="translate(${w}, 0) scale(-1, 1)">` : '<g>';
 
     return `
       <svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}" class="clubface-svg" aria-label="Inferred clubface strike location">
         <defs>
+          <linearGradient id="${uid}_ti" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#1e293b"/>
+            <stop offset="55%" stop-color="#0f172a"/>
+            <stop offset="100%" stop-color="#1e293b"/>
+          </linearGradient>
+          <linearGradient id="${uid}_steel" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#334155"/>
+            <stop offset="50%" stop-color="#1e293b"/>
+            <stop offset="100%" stop-color="#0f172a"/>
+          </linearGradient>
+          ${noHotspot ? '' : `
           <radialGradient id="${uid}_spot" cx="50%" cy="50%" r="50%">
             <stop offset="0%" stop-color="${color}" stop-opacity="0.95"/>
             <stop offset="55%" stop-color="${color}" stop-opacity="0.45"/>
             <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
-          </radialGradient>
+          </radialGradient>`}
         </defs>
         ${faceGroupOpen}
-          <!-- Hosel hint on heel side -->
-          <line x1="20" y1="8" x2="29" y2="56" stroke="#334155" stroke-width="5" stroke-linecap="round"/>
-          ${faceOutline}
-          ${grooves}
+          ${headSvg}
           <!-- Sweet spot crosshairs -->
           <line x1="${cx - 8}" y1="${cy}" x2="${cx + 8}" y2="${cy}" stroke="#64748b" stroke-width="1" stroke-dasharray="2 2"/>
           <line x1="${cx}" y1="${cy - 8}" x2="${cx}" y2="${cy + 8}" stroke="#64748b" stroke-width="1" stroke-dasharray="2 2"/>
           <circle cx="${cx}" cy="${cy}" r="11" fill="none" stroke="#475569" stroke-width="0.9" stroke-dasharray="2 2"/>
-          ${unknown ? '' : `<!-- Inferred strike hotspot -->
-          <circle cx="${hitX.toFixed(1)}" cy="${hitY.toFixed(1)}" r="18" fill="url(#${uid}_spot)"/>
+          ${noHotspot ? '' : `<!-- Inferred strike hotspot -->
+          <circle cx="${hitX.toFixed(1)}" cy="${hitY.toFixed(1)}" r="19" fill="url(#${uid}_spot)"/>
           <circle cx="${hitX.toFixed(1)}" cy="${hitY.toFixed(1)}" r="5" fill="${color}" stroke="#f8fafc" stroke-width="1.4"/>`}
         </g>
-        ${unknown ? `<text x="${cx}" y="${cy + 6}" text-anchor="middle" fill="#94a3b8" font-size="18" font-weight="800">?</text>
-        <text x="${cx}" y="${h - 18}" text-anchor="middle" fill="#94a3b8" font-size="8">no club read</text>` : ''}
+        ${isUnknown ? `<text x="${labelX}" y="${cy + 6}" text-anchor="middle" fill="#94a3b8" font-size="18" font-weight="800">?</text>
+        <text x="${labelX}" y="${h - 20}" text-anchor="middle" fill="#94a3b8" font-size="8">no club read</text>` : ''}
+        ${isFoam ? `<text x="${labelX}" y="${cy + 4}" text-anchor="middle" fill="#a855f7" font-size="9" font-weight="800">QUIET</text>
+        <text x="${labelX}" y="${h - 20}" text-anchor="middle" fill="#94a3b8" font-size="8">foam paused</text>` : ''}
         <!-- Labels -->
-        <text x="12" y="99" fill="#64748b" font-size="8.5" font-weight="700">${isLH ? 'TOE' : 'HEEL'}</text>
-        <text x="${w - 12}" y="99" text-anchor="end" fill="#64748b" font-size="8.5" font-weight="700">${isLH ? 'HEEL' : 'TOE'}</text>
+        <text x="12" y="${h - 5}" fill="#64748b" font-size="8.5" font-weight="700">${isLH ? 'TOE' : 'HEEL'}</text>
+        <text x="${w - 12}" y="${h - 5}" text-anchor="end" fill="#64748b" font-size="8.5" font-weight="700">${isLH ? 'HEEL' : 'TOE'}</text>
       </svg>
     `;
   }
@@ -262,9 +344,12 @@
 
     // Amplify small angles (x2.8) so 2-5 deg differences are immediately legible at a glance
     const scale = 2.8;
-    const pathDeg = metrics && metrics.path !== null ? Math.max(-14, Math.min(14, metrics.path)) : 0;
-    const faceDeg = dplane && dplane.faceToTarget !== null ? Math.max(-14, Math.min(14, dplane.faceToTarget)) : 0;
-    const hlaDeg = metrics && metrics.hla !== null ? Math.max(-14, Math.min(14, metrics.hla)) : 0;
+    const rawPath = metrics && typeof metrics.path === 'number' && Number.isFinite(metrics.path) ? metrics.path : null;
+    const rawFace = dplane && typeof dplane.faceToTarget === 'number' && Number.isFinite(dplane.faceToTarget) ? dplane.faceToTarget : null;
+    const rawHla = metrics && typeof metrics.hla === 'number' && Number.isFinite(metrics.hla) ? metrics.hla : null;
+    const pathDeg = rawPath !== null ? Math.max(-14, Math.min(14, rawPath)) : 0;
+    const faceDeg = rawFace !== null ? Math.max(-14, Math.min(14, rawFace)) : 0;
+    const hlaDeg = rawHla !== null ? Math.max(-14, Math.min(14, rawHla)) : 0;
 
     const rad = (deg) => (deg * scale * Math.PI) / 180;
     const vec = (deg, len) => {
@@ -289,7 +374,7 @@
         <text x="${cx}" y="9" text-anchor="middle" fill="#64748b" font-size="8" font-weight="700">TARGET</text>
 
         <!-- Club Path vector (cyan) -->
-        ${metrics && metrics.path !== null ? `
+        ${rawPath !== null ? `
           <line x1="${(cx - Math.sin(rad(pathDeg)) * 30).toFixed(1)}" y1="${(cy + Math.cos(rad(pathDeg)) * 30).toFixed(1)}"
                 x2="${pFwd.x.toFixed(1)}" y2="${pFwd.y.toFixed(1)}"
                 stroke="#38bdf8" stroke-width="2.4" stroke-linecap="round"/>

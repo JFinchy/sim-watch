@@ -20,9 +20,16 @@ contextBridge.exposeInMainWorld('shotlabAPI', {
   copyText: (text) => ipcRenderer.invoke('shotlab:copy-text', text),
   openExternal: (url) => ipcRenderer.invoke('shotlab:open-external', url),
 
-  // ShotLab v2: Patterns, Bag Gapping, Video Compare, My-Go-To, Practice Context, History Sync & Debrief
+  // ShotLab v2 / v5: Patterns, Bag Gapping & Shot Manager, Video Compare, Plan, Review & Studio Persistence
   getPatterns: (opts) => ipcRenderer.invoke('shotlab:get-patterns', opts),
   getBagGapping: (opts) => ipcRenderer.invoke('shotlab:get-bag-gapping', opts),
+  getBagShots: (opts) => ipcRenderer.invoke('shotlab:get-bag-shots', opts),
+  deleteShot: (shotId) => ipcRenderer.invoke('shotlab:delete-shot', shotId),
+  restoreDeletedShots: (opts) => ipcRenderer.invoke('shotlab:restore-shots', opts),
+  getReviewData: (opts) => ipcRenderer.invoke('shotlab:get-review', opts),
+  getPlanData: () => ipcRenderer.invoke('shotlab:get-plan'),
+  updateStudioState: (patch) => ipcRenderer.invoke('shotlab:update-studio-state', patch),
+  setChallengeState: (payload) => ipcRenderer.invoke('shotlab:set-challenge-state', payload),
   getVideoCompare: (opts) => ipcRenderer.invoke('shotlab:get-video-compare', opts),
   promoteGoTo: (shotId) => ipcRenderer.invoke('shotlab:promote-goto', shotId),
   setPracticeContext: (ctx) => ipcRenderer.invoke('shotlab:set-practice-context', ctx),

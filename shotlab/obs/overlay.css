@@ -500,3 +500,25 @@ html, body {
   width: 8px; height: 8px; border-radius: 50%; background: var(--cyan);
   box-shadow: 0 0 10px var(--cyan);
 }
+
+/* 10. CHALLENGE PILL & 11. VERDICT PILL */
+.challenge-pill {
+  width: 312px;
+  padding: 10px 13px;
+  border-left: 4px solid var(--sev, var(--cyan));
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+.ch-left { min-width: 0; }
+.ch-kicker { display: block; font-size: 9px; font-weight: 800; letter-spacing: 0.1em; color: var(--cyan); }
+.ch-name { font-size: 14px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ch-sub { font-family: var(--mono); font-size: 10.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.verdict-pill {
+  width: 432px;
+  padding: 9px 13px;
+  border-left: 4px solid var(--sev, var(--cyan));
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.vp-main { min-width: 0; }
+.vp-top { font-size: 13.5px; font-weight: 800; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vp-sub { font-size: 11px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }

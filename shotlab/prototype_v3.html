@@ -1,0 +1,2068 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ShotLab v3 — 10x Golf Performance OS (Interactive Prototype)</title>
+<style>
+  :root {
+    --bg: #070b12;
+    --bg-elev: #0d1320;
+    --bg-card: #111827;
+    --bg-soft: #162033;
+    --border: rgba(148, 163, 184, 0.14);
+    --border-hi: rgba(34, 211, 238, 0.35);
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --dim: #64748b;
+    --cyan: #22d3ee;
+    --green: #34d399;
+    --yellow: #fbbf24;
+    --red: #f87171;
+    --purple: #a78bfa;
+    --orange: #fb923c;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: radial-gradient(circle at 18% 0%, #0e192c 0%, var(--bg) 52%);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.45;
+    min-height: 100vh;
+  }
+  button, select, input { font-family: inherit; color: inherit; }
+
+  /* Top Chrome */
+  .topbar {
+    position: sticky; top: 0; z-index: 40;
+    background: rgba(7, 11, 18, 0.92);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border);
+    padding: 10px 18px 0;
+  }
+  .topbar-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; flex-wrap: wrap; padding-bottom: 10px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 12px var(--cyan);
+  }
+  .brand-title { font-weight: 800; letter-spacing: 0.08em; font-size: 14px; }
+  .brand-pill {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 999px;
+    background: rgba(34, 211, 238, 0.14); color: var(--cyan);
+    border: 1px solid rgba(34, 211, 238, 0.35);
+  }
+  .brand-sub { color: var(--muted); font-size: 12px; }
+
+  .tabs {
+    display: flex; gap: 4px; overflow-x: auto; scrollbar-width: thin;
+  }
+  .tab-btn {
+    border: 1px solid transparent; border-bottom: none;
+    background: transparent; color: var(--muted);
+    padding: 8px 13px; border-radius: 8px 8px 0 0;
+    cursor: pointer; font-weight: 600; font-size: 12px; white-space: nowrap;
+    display: inline-flex; align-items: center; gap: 6px; transition: all 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); background: rgba(148, 163, 184, 0.08); }
+  .tab-btn.active {
+    color: var(--cyan); background: var(--bg-elev);
+    border-color: var(--border); border-bottom-color: var(--bg-elev);
+  }
+  .tab-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 17px; height: 17px; border-radius: 50%; font-size: 10px;
+    background: rgba(148, 163, 184, 0.14); color: var(--muted);
+  }
+  .tab-btn.active .tab-num { background: rgba(34, 211, 238, 0.2); color: var(--cyan); }
+
+  /* Layout */
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 18px; }
+  .panel { display: none; animation: fadeIn 0.18s ease; }
+  .panel.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+  .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .grid-asym { display: grid; grid-template-columns: 1.35fr 1fr; gap: 14px; }
+  @media (max-width: 980px) {
+    .grid-2, .grid-3, .grid-4, .grid-asym { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: linear-gradient(180deg, rgba(22, 32, 51, 0.85), rgba(13, 19, 32, 0.96));
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 15px 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+  }
+  .card-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px; margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .kicker {
+    font-size: 10px; font-weight: 700; letter-spacing: 0.09em; text-transform: uppercase;
+    color: var(--muted); display: block;
+  }
+  h2 { margin: 2px 0 0; font-size: 16px; font-weight: 700; }
+  h3 { margin: 0; font-size: 13.5px; font-weight: 700; }
+
+  /* Controls & Pills */
+  .btn {
+    border: 1px solid var(--border); background: var(--bg-soft); color: var(--text);
+    padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600;
+    cursor: pointer; transition: all 0.14s; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn:hover { border-color: rgba(148, 163, 184, 0.38); background: #1e2a42; }
+  .btn-cyan {
+    background: rgba(34, 211, 238, 0.15); border-color: rgba(34, 211, 238, 0.45); color: var(--cyan);
+  }
+  .btn-cyan:hover { background: rgba(34, 211, 238, 0.25); }
+  .btn-green {
+    background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.4); color: var(--green);
+  }
+  .btn-green:hover { background: rgba(52, 211, 153, 0.24); }
+  .btn-red {
+    background: rgba(248, 113, 113, 0.14); border-color: rgba(248, 113, 113, 0.4); color: var(--red);
+  }
+  .btn-yellow {
+    background: rgba(251, 191, 36, 0.14); border-color: rgba(251, 191, 36, 0.4); color: var(--yellow);
+  }
+  .btn-sm { padding: 4px 9px; font-size: 11px; }
+
+  .seg {
+    display: inline-flex; background: rgba(7, 11, 18, 0.7);
+    border: 1px solid var(--border); border-radius: 9px; padding: 3px; gap: 2px;
+  }
+  .seg button {
+    border: none; background: transparent; color: var(--muted);
+    padding: 5px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
+    cursor: pointer; transition: all 0.14s;
+  }
+  .seg button.active { background: rgba(34, 211, 238, 0.18); color: var(--cyan); }
+
+  .pill {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 700;
+    border: 1px solid var(--border); background: rgba(148, 163, 184, 0.1);
+  }
+  .pill-green { color: var(--green); background: rgba(52, 211, 153, 0.14); border-color: rgba(52, 211, 153, 0.35); }
+  .pill-yellow { color: var(--yellow); background: rgba(251, 191, 36, 0.14); border-color: rgba(251, 191, 36, 0.35); }
+  .pill-red { color: var(--red); background: rgba(248, 113, 113, 0.14); border-color: rgba(248, 113, 113, 0.35); }
+  .pill-cyan { color: var(--cyan); background: rgba(34, 211, 238, 0.14); border-color: rgba(34, 211, 238, 0.35); }
+  .pill-purple { color: var(--purple); background: rgba(167, 139, 250, 0.14); border-color: rgba(167, 139, 250, 0.35); }
+
+  select {
+    background: var(--bg-soft); border: 1px solid var(--border);
+    border-radius: 8px; padding: 5px 10px; font-size: 12px; color: var(--text);
+  }
+  input[type="range"] { accent-color: var(--cyan); cursor: pointer; }
+  .mono { font-family: var(--mono); }
+  .muted { color: var(--muted); }
+  .mt-12 { margin-top: 12px; }
+  .mt-14 { margin-top: 14px; }
+  .flex-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .spacer { flex: 1; }
+
+  /* Tab 1: Triage & Verdict */
+  .triage-bar {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;
+    margin-bottom: 12px;
+  }
+  .triage-step {
+    padding: 9px 11px; border-radius: 10px;
+    border: 1px solid var(--border); background: rgba(7, 11, 18, 0.55);
+    opacity: 0.52; transition: all 0.2s;
+  }
+  .triage-step.locked {
+    opacity: 1; border-color: rgba(248, 113, 113, 0.55);
+    background: rgba(248, 113, 113, 0.1);
+    box-shadow: 0 0 18px rgba(248, 113, 113, 0.14);
+  }
+  .triage-step.locked-yellow {
+    opacity: 1; border-color: rgba(251, 191, 36, 0.55);
+    background: rgba(251, 191, 36, 0.1);
+  }
+  .triage-step.locked-green {
+    opacity: 1; border-color: rgba(52, 211, 153, 0.55);
+    background: rgba(52, 211, 153, 0.1);
+  }
+  .triage-step.passed { opacity: 0.85; border-color: rgba(52, 211, 153, 0.25); }
+  .triage-num { font-size: 10px; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+  .triage-name { font-weight: 700; font-size: 12.5px; margin-top: 2px; }
+  .triage-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  .verdict-banner {
+    padding: 14px 16px; border-radius: 12px;
+    border: 1px solid rgba(34, 211, 238, 0.35);
+    background: linear-gradient(90deg, rgba(34, 211, 238, 0.1), rgba(13, 19, 32, 0.9));
+    display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+    margin-bottom: 14px;
+  }
+  .verdict-banner.sev-red { border-color: rgba(248, 113, 113, 0.45); background: linear-gradient(90deg, rgba(248, 113, 113, 0.14), rgba(13, 19, 32, 0.92)); }
+  .verdict-banner.sev-yellow { border-color: rgba(251, 191, 36, 0.45); background: linear-gradient(90deg, rgba(251, 191, 36, 0.13), rgba(13, 19, 32, 0.92)); }
+  .verdict-banner.sev-green { border-color: rgba(52, 211, 153, 0.45); background: linear-gradient(90deg, rgba(52, 211, 153, 0.13), rgba(13, 19, 32, 0.92)); }
+  .verdict-text { font-size: 15px; font-weight: 700; line-height: 1.35; }
+  .verdict-cue { font-size: 12px; color: var(--cyan); margin-top: 4px; font-weight: 600; }
+
+  .hero-simple {
+    display: grid; grid-template-columns: 240px 1fr; gap: 16px; align-items: center;
+  }
+  @media (max-width: 780px) { .hero-simple { grid-template-columns: 1fr; } }
+  .big-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+  .big-tile {
+    background: rgba(7, 11, 18, 0.65); border: 1px solid var(--border);
+    border-radius: 10px; padding: 14px 12px; text-align: center;
+  }
+  .big-tile .lbl { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+  .big-tile .val { font-size: 28px; font-weight: 800; font-family: var(--mono); margin: 4px 0 2px; }
+  .big-tile .sub { font-size: 11px; color: var(--muted); }
+  .big-tile.g-green { border-color: rgba(52, 211, 153, 0.4); }
+  .big-tile.g-green .val { color: var(--green); }
+  .big-tile.g-yellow { border-color: rgba(251, 191, 36, 0.4); }
+  .big-tile.g-yellow .val { color: var(--yellow); }
+  .big-tile.g-red { border-color: rgba(248, 113, 113, 0.45); }
+  .big-tile.g-red .val { color: var(--red); }
+
+  .metric-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(145px, 1fr)); gap: 8px; }
+  .m-cell {
+    background: rgba(7, 11, 18, 0.65); border: 1px solid var(--border);
+    border-left: 3px solid var(--dim); border-radius: 8px; padding: 8px 10px;
+  }
+  .m-cell.green { border-left-color: var(--green); }
+  .m-cell.yellow { border-left-color: var(--yellow); }
+  .m-cell.red { border-left-color: var(--red); }
+  .m-cell .m-k { font-size: 10px; text-transform: uppercase; color: var(--muted); }
+  .m-cell .m-v { font-size: 16px; font-weight: 700; font-family: var(--mono); margin-top: 2px; }
+  .m-cell .m-s { font-size: 10.5px; color: var(--dim); }
+
+  /* Bars & Tables */
+  .bar-row { margin-bottom: 10px; }
+  .bar-top { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; gap: 8px; }
+  .bar-track { height: 9px; border-radius: 999px; background: rgba(148, 163, 184, 0.12); overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 999px; transition: width 0.25s ease; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { padding: 7px 8px; border-bottom: 1px solid var(--border); text-align: left; }
+  th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+
+  /* Wedge Clock Matrix */
+  .wedge-matrix { display: grid; grid-template-columns: 70px repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .wm-head {
+    text-align: center; font-size: 10.5px; font-weight: 700; color: var(--muted);
+    padding: 6px; background: rgba(7, 11, 18, 0.5); border-radius: 6px;
+  }
+  .wm-club {
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-family: var(--mono); color: var(--cyan);
+    background: rgba(34, 211, 238, 0.08); border: 1px solid rgba(34, 211, 238, 0.2); border-radius: 8px;
+  }
+  .wm-cell {
+    padding: 10px 8px; border-radius: 8px; text-align: center; cursor: pointer;
+    background: rgba(7, 11, 18, 0.65); border: 1px solid var(--border); transition: all 0.14s;
+  }
+  .wm-cell:hover { border-color: var(--cyan); transform: translateY(-1px); }
+  .wm-cell.selected { border-color: var(--cyan); background: rgba(34, 211, 238, 0.16); box-shadow: 0 0 14px rgba(34, 211, 238, 0.18); }
+  .wm-yds { font-size: 18px; font-weight: 800; font-family: var(--mono); }
+  .wm-meta { font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+  /* Pressure Pips */
+  .pips { display: flex; gap: 10px; justify-content: center; margin: 16px 0; }
+  .pip {
+    width: 44px; height: 44px; border-radius: 50%;
+    border: 2px solid rgba(148, 163, 184, 0.3);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-family: var(--mono); font-size: 15px; color: var(--dim);
+    transition: all 0.2s;
+  }
+  .pip.made {
+    border-color: var(--green); background: rgba(52, 211, 153, 0.22);
+    color: var(--green); box-shadow: 0 0 16px rgba(52, 211, 153, 0.35);
+  }
+  .pip.next-pressure {
+    border-color: var(--yellow); color: var(--yellow);
+    animation: pulseRing 1.1s infinite;
+  }
+  @keyframes pulseRing {
+    0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.55); }
+    70% { box-shadow: 0 0 0 12px rgba(251, 191, 36, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+  }
+
+  /* Canvas Ghost Stage */
+  .canvas-wrap {
+    position: relative; background: #050911; border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+  }
+  canvas { display: block; width: 100%; height: auto; }
+
+  /* Heatmap */
+  .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+  @media (max-width: 780px) { .cal-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+  .cal-tile {
+    padding: 10px 8px; border-radius: 9px; text-align: center; cursor: pointer;
+    border: 1px solid var(--border); background: rgba(7, 11, 18, 0.6); transition: all 0.15s;
+  }
+  .cal-tile.locked { border-color: rgba(52, 211, 153, 0.45); background: rgba(52, 211, 153, 0.1); }
+  .cal-tile.learning { border-color: rgba(251, 191, 36, 0.45); background: rgba(251, 191, 36, 0.1); }
+  .cal-tile.selected { outline: 2px solid var(--cyan); }
+  .cal-club { font-weight: 800; font-family: var(--mono); font-size: 14px; }
+  .cal-n { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+  /* Foot Pedal Deck */
+  .pedal-deck { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .pedal {
+    padding: 14px 10px; border-radius: 10px; text-align: center; cursor: pointer;
+    background: linear-gradient(180deg, #1b2538, #0f1624);
+    border: 2px solid rgba(148, 163, 184, 0.25); transition: all 0.1s;
+  }
+  .pedal:hover { border-color: var(--cyan); }
+  .pedal:active { transform: translateY(2px); background: rgba(34, 211, 238, 0.18); }
+
+  /* OBS Broadcast Stage */
+  .obs-stage {
+    position: relative; min-height: 330px; border-radius: 12px; overflow: hidden;
+    border: 1px solid var(--border);
+    background:
+      radial-gradient(ellipse at 50% 25%, rgba(56, 189, 248, 0.18), transparent 55%),
+      linear-gradient(180deg, #0d2137 0%, #153b31 58%, #0a1f16 100%);
+    padding: 16px; display: flex; flex-direction: column; justify-content: space-between;
+  }
+  .obs-glass {
+    background: rgba(7, 11, 18, 0.84);
+    border: 1px solid rgba(34, 211, 238, 0.35);
+    border-radius: 10px; padding: 10px 14px;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Sliders */
+  .slider-row { margin-bottom: 11px; }
+  .slider-row label { display: flex; justify-content: space-between; font-size: 11.5px; margin-bottom: 3px; }
+  .slider-row input[type="range"] { width: 100%; }
+
+  /* Modal & Toast */
+  .modal-bg {
+    position: fixed; inset: 0; background: rgba(2, 6, 12, 0.78);
+    display: none; align-items: center; justify-content: center; z-index: 80; padding: 18px;
+  }
+  .modal-bg.open { display: flex; }
+  .modal-box {
+    background: var(--bg-elev); border: 1px solid var(--border-hi);
+    border-radius: 14px; max-width: 680px; width: 100%; padding: 18px 20px;
+    max-height: 88vh; overflow-y: auto;
+  }
+  .toast {
+    position: fixed; bottom: 18px; right: 18px; z-index: 90;
+    background: #0f1b2d; border: 1px solid var(--cyan); color: var(--text);
+    padding: 10px 14px; border-radius: 10px; font-weight: 600; font-size: 12px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.45);
+    opacity: 0; transform: translateY(10px); pointer-events: none; transition: all 0.2s;
+  }
+  .toast.show { opacity: 1; transform: none; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-row">
+    <div class="brand">
+      <span class="brand-dot"></span>
+      <span class="brand-title">SHOTLAB v3</span>
+      <span class="brand-pill">Interactive Prototype</span>
+      <span class="brand-sub">10x Golf Performance OS &middot; BLP 1-Dot + SQLite + Kinovea + OBS</span>
+    </div>
+    <div class="flex-row">
+      <span class="pill pill-green">Local SQLite: 1,428 swings</span>
+      <span class="pill pill-cyan">Simulated Live Preview</span>
+    </div>
+  </div>
+  <nav class="tabs" id="main-tabs">
+    <button class="tab-btn active" data-tab="t1"><span class="tab-num">1</span>One-Sentence Coach &amp; Density</button>
+    <button class="tab-btn" data-tab="t2"><span class="tab-num">2</span>Personal Swing DNA &amp; Cruise Speed</button>
+    <button class="tab-btn" data-tab="t3"><span class="tab-num">3</span>Combine, Wedge Clock &amp; Pressure</button>
+    <button class="tab-btn" data-tab="t4"><span class="tab-num">4</span>Ghost Overlay &amp; Pose Fusion</button>
+    <button class="tab-btn" data-tab="t5"><span class="tab-num">5</span>Conditions Bag Sim &amp; Mat-Fat</button>
+    <button class="tab-btn" data-tab="t6"><span class="tab-num">6</span>Calibration Wizard &amp; Hands-Free</button>
+    <button class="tab-btn" data-tab="t7"><span class="tab-num">7</span>OBS Challenge, Highlights &amp; Coach Packet</button>
+  </nav>
+</header>
+
+<main class="wrap">
+
+  <!-- ==================== TAB 1: ONE-SENTENCE COACH & DENSITY ==================== -->
+  <section class="panel active" id="t1">
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <span class="kicker">Skill-Hierarchy Triage &amp; Progressive Disclosure</span>
+          <h2>One-Sentence Coach &amp; Density Modes</h2>
+        </div>
+        <div class="flex-row">
+          <div class="seg" id="t1-density">
+            <button data-d="simple" class="active">Simple (Mat)</button>
+            <button data-d="coach">Coach</button>
+            <button data-d="lab">Lab (Deep)</button>
+          </div>
+          <select id="t1-shot-select" aria-label="Choose simulated shot"></select>
+          <button class="btn btn-cyan" id="t1-sim-next">&#9654; Simulate Next Shot</button>
+        </div>
+      </div>
+
+      <!-- Skill Hierarchy Pyramid Strip -->
+      <div class="triage-bar" id="t1-triage"></div>
+
+      <!-- Single Verdict Banner -->
+      <div class="verdict-banner" id="t1-verdict"></div>
+
+      <!-- Dynamic Density Content -->
+      <div id="t1-body"></div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 2: PERSONAL SWING DNA ==================== -->
+  <section class="panel" id="t2">
+    <div class="card-head" style="margin-bottom:14px;">
+      <div>
+        <span class="kicker">Automated SQLite Statistical Discovery</span>
+        <h2>Personal Swing DNA &amp; Optimal Cruise Speed</h2>
+      </div>
+      <div class="seg" id="t2-club-seg">
+        <button data-club="DR" class="active">Driver (n=184)</button>
+        <button data-club="7I">7-Iron (n=246)</button>
+        <button data-club="PW">Pitching Wedge (n=119)</button>
+      </div>
+    </div>
+
+    <div class="grid-asym">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <span class="kicker">Speed-Accuracy Pareto Frontier</span>
+            <h3 id="t2-cruise-title">Optimal Cruise Speed Curve</h3>
+          </div>
+          <span class="pill pill-green" id="t2-cruise-pill">Sweet Spot</span>
+        </div>
+        <div id="t2-cruise-svg"></div>
+        <div class="slider-row mt-12">
+          <label>
+            <span>Test Swing Speed: <strong class="mono" id="t2-speed-val">98 mph</strong></span>
+            <span class="muted" id="t2-speed-zone">Optimal Cruise Gear</span>
+          </label>
+          <input type="range" id="t2-speed-slider" min="88" max="106" step="0.5" value="98" />
+        </div>
+        <div class="grid-4 mt-12" id="t2-speed-kpis"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <span class="kicker">Regression Over Your DB</span>
+            <h3>Root-Cause Stroke-Leak Attribution</h3>
+          </div>
+          <span class="pill pill-cyan">Pearson r&sup2;</span>
+        </div>
+        <p class="muted" style="margin:0 0 12px;" id="t2-attr-summary"></p>
+        <div id="t2-attr-bars"></div>
+        <div style="border-top:1px solid var(--border); margin-top:14px; padding-top:12px;">
+          <div class="flex-row" style="justify-content:space-between; margin-bottom:6px;">
+            <h3>Two-Way vs. One-Way Miss Check</h3>
+            <span class="pill" id="t2-miss-pill">One-Way Miss</span>
+          </div>
+          <div id="t2-corridor-svg"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mt-14">
+      <div class="card-head">
+        <div>
+          <span class="kicker">Motor Learning Transfer Audit</span>
+          <h3>&ldquo;Did That Feel Stick?&rdquo; &mdash; Acquisition vs. 3-Session Retention</h3>
+        </div>
+        <span class="pill pill-purple">Proves Permanent Skill Transfer</span>
+      </div>
+      <div class="grid-2" style="align-items:center;">
+        <div id="t2-retention-svg"></div>
+        <div id="t2-retention-cards"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 3: COMBINE, WEDGE CLOCK & PRESSURE ==================== -->
+  <section class="panel" id="t3">
+    <div class="card" style="margin-bottom:14px; padding:11px 16px;">
+      <div class="flex-row" style="justify-content:space-between;">
+        <div class="flex-row">
+          <span class="kicker" style="margin-right:6px;">Auto-Detected Session Mix (30d):</span>
+          <span class="pill">Warmup: 14% (&minus;0.21 SG)</span>
+          <span class="pill pill-cyan">Block Drill: 54% (+0.08 SG)</span>
+          <span class="pill pill-green">GSPro Sim Rounds (Transfer): 32% (&minus;0.04 SG)</span>
+        </div>
+        <div class="seg" id="t3-sub-seg">
+          <button data-sub="combine" class="active">18-Ball Combine</button>
+          <button data-sub="wedge">Wedge Clock Matrix</button>
+          <button data-sub="pressure">Make 5 in a Row</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3A: Combine -->
+    <div id="t3-combine" class="t3-view">
+      <div class="grid-asym">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <span class="kicker" id="c-step-lbl">Target 1 of 18</span>
+              <h2 id="c-target-title">158 yds &middot; Draw &middot; 7-Iron</h2>
+            </div>
+            <div class="flex-row">
+              <button class="btn btn-green" id="c-hit-pure">Hit Pure</button>
+              <button class="btn btn-yellow" id="c-hit-avg">Hit Average</button>
+              <button class="btn btn-red" id="c-hit-miss">Hit Miss</button>
+              <button class="btn btn-sm" id="c-reset">Reset</button>
+            </div>
+          </div>
+          <div id="c-green-svg"></div>
+          <div class="flex-row mt-12" id="c-pips" style="gap:5px;"></div>
+        </div>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <span class="kicker">Live Benchmark Standing</span>
+              <h3>ShotLab Combine Score</h3>
+            </div>
+            <span class="pill pill-cyan" id="c-hcp-pill">Projected HCP: &mdash;</span>
+          </div>
+          <div class="grid-2" id="c-kpis"></div>
+          <div class="mt-14" style="max-height:220px; overflow-y:auto;">
+            <table>
+              <thead><tr><th>#</th><th>Target</th><th class="num">Prox</th><th class="num">SG</th><th class="num">Pts</th></tr></thead>
+              <tbody id="c-log"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3B: Wedge Clock -->
+    <div id="t3-wedge" class="t3-view" style="display:none;">
+      <div class="grid-asym">
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <span class="kicker">Auto-Built From SQLite Real Swings</span>
+              <h2>4-Swing Wedge Clock Matrix (Carry Yards)</h2>
+            </div>
+            <button class="btn btn-cyan" id="w-open-card">&#128424; Printable Pocket Yardage Card</button>
+          </div>
+          <div class="wedge-matrix" id="w-matrix"></div>
+        </div>
+        <div class="card" id="w-detail"></div>
+      </div>
+    </div>
+
+    <!-- 3C: Pressure Gate -->
+    <div id="t3-pressure" class="t3-view" style="display:none;">
+      <div class="card" style="text-align:center; max-width:840px; margin:0 auto;">
+        <div class="card-head" style="justify-content:space-between; text-align:left;">
+          <div>
+            <span class="kicker">Consequence Training &middot; First-Tee Nerves Simulator</span>
+            <h2 id="p-gate-title">Make 5 in a Row: Start Line Gate (&plusmn;1.5&deg;)</h2>
+          </div>
+          <div class="flex-row">
+            <select id="p-gate-select">
+              <option value="hla">Start Line Gate (&plusmn;1.5&deg; HLA)</option>
+              <option value="driver">Driver Fairway (240y+ &amp; &plusmn;15y)</option>
+              <option value="approach">7-Iron Green (Inside 20 ft)</option>
+            </select>
+            <label class="pill" style="cursor:pointer;">
+              <input type="checkbox" id="p-audio-toggle" checked /> Heartbeat Audio
+            </label>
+          </div>
+        </div>
+        <div class="pips" id="p-pips"></div>
+        <p id="p-status" style="font-size:15px; font-weight:700; margin:6px 0 14px;"></p>
+        <div class="flex-row" style="justify-content:center;">
+          <button class="btn btn-green" id="p-btn-make">&#10003; Simulate Made Shot</button>
+          <button class="btn btn-cyan" id="p-btn-rand">&#127922; Realistic Pressure Swing (72%)</button>
+          <button class="btn btn-red" id="p-btn-miss">&#10007; Simulate Miss (Reset to 0)</button>
+        </div>
+        <div class="flex-row mt-14" style="justify-content:center;">
+          <span class="pill pill-cyan" id="p-best">Session Best Streak: 0 / 5</span>
+          <span class="pill pill-green" id="p-clears">Gates Cleared: 0</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 4: GHOST OVERLAY & POSE FUSION ==================== -->
+  <section class="panel" id="t4">
+    <div class="grid-asym">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <span class="kicker">Auto-Impact Sync (T = 0.00s) &middot; Onion-Skin &amp; Split Wipe</span>
+            <h2>Kinovea DTL Ghost Overlay + Pose Skeleton</h2>
+          </div>
+          <div class="seg" id="t4-ghost-seg">
+            <button data-g="goto" class="active">Ghost: My-Go-To Best</button>
+            <button data-g="pro">Ghost: Rory McIlroy</button>
+          </div>
+        </div>
+
+        <div class="canvas-wrap">
+          <canvas id="t4-canvas" width="760" height="400"></canvas>
+        </div>
+
+        <div class="flex-row mt-12" style="justify-content:space-between;">
+          <div class="flex-row">
+            <button class="btn btn-cyan" id="t4-play">&#9654; Play</button>
+            <div class="seg" id="t4-speed-seg">
+              <button data-s="0.25" class="active">0.25&times;</button>
+              <button data-s="0.5">0.5&times;</button>
+              <button data-s="1">1.0&times;</button>
+            </div>
+            <button class="btn btn-sm" data-p="0">P1 Address</button>
+            <button class="btn btn-sm" data-p="45">P4 Top</button>
+            <button class="btn btn-sm" data-p="74">P6 Delivery</button>
+            <button class="btn btn-sm btn-yellow" data-p="84">P7 Impact (0.00s)</button>
+            <button class="btn btn-sm" data-p="98">P9 Finish</button>
+          </div>
+          <span class="mono pill pill-cyan" id="t4-time-pill">T = 0.00s (P7 Impact)</span>
+        </div>
+
+        <div class="grid-3 mt-12">
+          <div class="slider-row">
+            <label><span>Timeline Scrubber</span><span class="mono" id="t4-pct-lbl">84%</span></label>
+            <input type="range" id="t4-scrub" min="0" max="100" value="84" />
+          </div>
+          <div class="slider-row">
+            <label><span>Ghost Opacity</span><span class="mono" id="t4-op-lbl">55%</span></label>
+            <input type="range" id="t4-opacity" min="0" max="100" value="55" />
+          </div>
+          <div class="slider-row">
+            <label><span>Split-Wipe Curtain</span><span class="mono" id="t4-wipe-lbl">Off (Full Blend)</span></label>
+            <input type="range" id="t4-wipe" min="0" max="100" value="100" />
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <span class="kicker">Local MediaPipe Keyframes &times; SQLite BLP</span>
+            <h3>Biomechanics &rarr; Launch Correlations</h3>
+          </div>
+          <span class="pill pill-green">100% Local &middot; 0 Sensors</span>
+        </div>
+        <div class="metric-grid" id="t4-bio-metrics"></div>
+        <div class="mt-14">
+          <span class="kicker" style="margin-bottom:8px;">Discovered From Your Linked Clips (n=94)</span>
+          <div class="card" style="background:rgba(248,113,113,0.08); border-color:rgba(248,113,113,0.35); margin-bottom:10px; padding:11px;">
+            <div class="flex-row" style="justify-content:space-between;">
+              <strong>Early Extension &rarr; Flipping Floater</strong>
+              <span class="pill pill-red">r = 0.78</span>
+            </div>
+            <p class="muted" style="margin:5px 0 0;">When your pelvis drifts <strong>&gt; 1.8&Prime;</strong> toward the ball by P6, your AoA shallows by <strong>+2.2&deg;</strong> and Flipping rate jumps from 14% to <strong>76%</strong>.</p>
+          </div>
+          <div class="card" style="background:rgba(52,211,153,0.08); border-color:rgba(52,211,153,0.35); margin-bottom:10px; padding:11px;">
+            <div class="flex-row" style="justify-content:space-between;">
+              <strong>Trail Hip Depth Maintained &rarr; Pure Smash</strong>
+              <span class="pill pill-green">r = 0.71</span>
+            </div>
+            <p class="muted" style="margin:5px 0 0;">Swings staying on the butt-line at P6 average <strong>1.38 smash</strong> and <strong>+0.24 SG</strong> vs. 1.30 smash when standing up.</p>
+          </div>
+          <div class="card" style="background:rgba(251,191,36,0.08); border-color:rgba(251,191,36,0.35); padding:11px;">
+            <div class="flex-row" style="justify-content:space-between;">
+              <strong>Steep P6 Shaft (+4.5&deg;) &rarr; Out-to-In Pull</strong>
+              <span class="pill pill-yellow">r = 0.64</span>
+            </div>
+            <p class="muted" style="margin:5px 0 0;">Hands finishing above the Ghost forearm plane at P6 correlates with <strong>&minus;3.4&deg;</strong> path and heel contact.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 5: CONDITIONS BAG SIM & MAT-FAT ==================== -->
+  <section class="panel" id="t5">
+    <div class="grid-asym">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <span class="kicker">Aerodynamic Bag Warp (RK4 Scaling)</span>
+            <h2>Live 14-Club Conditions Simulator</h2>
+          </div>
+          <div class="flex-row">
+            <button class="btn btn-sm" data-preset="calm">Sea Level</button>
+            <button class="btn btn-sm btn-yellow" data-preset="links">Windy Links</button>
+            <button class="btn btn-sm btn-cyan" data-preset="denver">Denver (5,280ft)</button>
+            <button class="btn btn-sm btn-red" data-preset="rough">2&Prime; Rough</button>
+          </div>
+        </div>
+        <div id="t5-bag-bars"></div>
+      </div>
+
+      <div>
+        <div class="card">
+          <div class="card-head">
+            <div>
+              <span class="kicker">Course Environment Controls</span>
+              <h3>Weather, Altitude &amp; Lie</h3>
+            </div>
+            <span class="pill pill-cyan" id="t5-summary-pill">Stock Conditions</span>
+          </div>
+          <div class="slider-row">
+            <label><span>Headwind / Tailwind</span><strong class="mono" id="s-wind-v">0 mph</strong></label>
+            <input type="range" id="s-wind" min="-25" max="25" value="0" />
+          </div>
+          <div class="slider-row">
+            <label><span>Crosswind (L&rarr;R / R&rarr;L)</span><strong class="mono" id="s-xwind-v">0 mph</strong></label>
+            <input type="range" id="s-xwind" min="-20" max="20" value="0" />
+          </div>
+          <div class="slider-row">
+            <label><span>Temperature</span><strong class="mono" id="s-temp-v">70&deg;F</strong></label>
+            <input type="range" id="s-temp" min="40" max="100" value="70" />
+          </div>
+          <div class="slider-row">
+            <label><span>Elevation / Altitude</span><strong class="mono" id="s-alt-v">0 ft</strong></label>
+            <input type="range" id="s-alt" min="0" max="6500" step="250" value="0" />
+          </div>
+          <div class="slider-row">
+            <label><span>Surface / Lie</span></label>
+            <select id="s-lie" style="width:100%;">
+              <option value="mat">Indoor Sim Mat (Baseline)</option>
+              <option value="firm">Firm Fairway (+Rollout)</option>
+              <option value="soft">Soft Fairway (&minus;Rollout)</option>
+              <option value="rough">2&Prime; Rough (&minus;Spin Flyer / Drag)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="card mt-14">
+          <div class="card-head">
+            <div>
+              <span class="kicker">Indoor Forgiveness Audit</span>
+              <h3>Mat-Fat Detector (Sim vs. Real Turf)</h3>
+            </div>
+            <div class="seg" id="t5-fat-seg">
+              <button data-f="0" class="active">Mat-Saved Fat</button>
+              <button data-f="1">Pure Ball-First</button>
+              <button data-f="2">Heavy Chunk</button>
+            </div>
+          </div>
+          <div id="t5-fat-body"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 6: CALIBRATION WIZARD & HANDS-FREE ==================== -->
+  <section class="panel" id="t6">
+    <div class="grid-asym">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <span class="kicker">Empirical Bayes Bag Readiness</span>
+            <h2>10-Minute 14-Club Calibration Wizard</h2>
+          </div>
+          <span class="pill pill-cyan" id="t6-readiness-pill">Auto-Switch Confidence: 83%</span>
+        </div>
+        <div class="cal-grid" id="t6-heatmap"></div>
+        <div class="card mt-14" style="background:rgba(34,211,238,0.06); border-color:rgba(34,211,238,0.3);">
+          <div class="flex-row" style="justify-content:space-between;">
+            <div>
+              <span class="kicker">Active Calibration Target</span>
+              <h3 id="t6-wiz-title">Select any uncalibrated club</h3>
+              <p class="muted" id="t6-wiz-desc" style="margin:4px 0 0;"></p>
+            </div>
+            <div class="flex-row">
+              <div class="flex-row" id="t6-wiz-dots" style="gap:6px; margin-right:8px;"></div>
+              <button class="btn btn-cyan" id="t6-sim-cal">&#9654; Hit Calibration Ball</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <span class="kicker">Zero Mouse-Walking From the Mat</span>
+            <h3>Hands-Free Foot Pedal &amp; Voice Deck</h3>
+          </div>
+          <span class="pill pill-green">Bluetooth / Web Speech</span>
+        </div>
+        <p class="muted" style="margin:0 0 10px;">Tap a virtual foot pedal or voice phrase to test hands-free mat control:</p>
+        <div class="pedal-deck">
+          <div class="pedal" data-cmd="Confirm Active Club (7-Iron) &rarr; Calibration +1">
+            <span class="kicker">Left Pedal</span>
+            <div style="font-weight:800; font-size:13px; margin-top:4px;">&#10003; Confirm Club</div>
+            <div class="muted" style="font-size:10.5px;">Key: F13</div>
+          </div>
+          <div class="pedal" data-cmd="Toggle Kinovea Compare vs Best (0.25x Slow-Mo)">
+            <span class="kicker">Center Pedal</span>
+            <div style="font-weight:800; font-size:13px; margin-top:4px;">&#9654; Compare Best</div>
+            <div class="muted" style="font-size:10.5px;">Key: F14</div>
+          </div>
+          <div class="pedal" data-cmd="Promoted DTL + FO clips to Swings/My-Go-To/Iron/">
+            <span class="kicker">Right Pedal</span>
+            <div style="font-weight:800; font-size:13px; margin-top:4px;">&#9733; Promote Go-To</div>
+            <div class="muted" style="font-size:10.5px;">Key: F15</div>
+          </div>
+        </div>
+        <div class="mt-14">
+          <span class="kicker" style="margin-bottom:7px;">Voice Command Triggers (&ldquo;Hey ShotLab...&rdquo;)</span>
+          <div class="flex-row">
+            <button class="btn btn-sm" data-cmd="Voice: Confirmed 6-Iron &amp; sent GSPro I-key switch">&ldquo;Confirm 6 Iron&rdquo;</button>
+            <button class="btn btn-sm" data-cmd="Voice: Active Feel set to Lead Wrist Flat (synced to SimWatch)">&ldquo;Tag Feel Lead Wrist&rdquo;</button>
+            <button class="btn btn-sm" data-cmd="Voice: Switched to Kids-Asleep Quiet Mode (&plusmn;1.5&deg; Gate)">&ldquo;Kids Asleep Mode&rdquo;</button>
+            <button class="btn btn-sm" data-cmd="Voice: Loaded next Combine target (142y Fade)">&ldquo;Next Target&rdquo;</button>
+            <button class="btn btn-sm" data-cmd="Voice: Saved clip to Swings/My-Go-To/Driver/">&ldquo;Save as Go-To&rdquo;</button>
+          </div>
+        </div>
+        <div class="mt-14" style="background:rgba(7,11,18,0.65); border:1px solid var(--border); border-radius:8px; padding:10px; min-height:92px;">
+          <span class="kicker" style="margin-bottom:5px;">Live Action Log</span>
+          <div id="t6-log" class="mono" style="font-size:11px; color:var(--cyan);">Ready &mdash; listening for pedal or voice trigger...</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== TAB 7: BROADCAST, HIGHLIGHTS & COACH PACKET ==================== -->
+  <section class="panel" id="t7">
+    <div class="card">
+      <div class="card-head">
+        <div>
+          <span class="kicker">Live Transparent OBS Studio Browser Source Preview</span>
+          <h2>OBS Challenge HUD &amp; Swing DNA Broadcast Stage</h2>
+        </div>
+        <div class="flex-row">
+          <label class="pill" style="cursor:pointer;"><input type="checkbox" id="obs-tog-chal" checked /> ?widget=challenge</label>
+          <label class="pill" style="cursor:pointer;"><input type="checkbox" id="obs-tog-dna" checked /> ?widget=verdict</label>
+          <button class="btn btn-green btn-sm" id="obs-sim-make">+ Make Pip</button>
+          <button class="btn btn-red btn-sm" id="obs-sim-miss">Miss (Reset)</button>
+        </div>
+      </div>
+      <div class="obs-stage">
+        <!-- Top-Right OBS Challenge Widget -->
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:12px; flex-wrap:wrap;">
+          <span class="pill" style="background:rgba(7,11,18,0.6);">GSPro + Kinovea Sim Backdrop Preview</span>
+          <div class="obs-glass" id="obs-challenge-widget" style="min-width:300px;"></div>
+        </div>
+
+        <!-- Bottom OBS Verdict / Cruise Speed Lower-Third -->
+        <div class="obs-glass" id="obs-verdict-widget" style="display:flex; align-items:center; justify-content:space-between; gap:14px; flex-wrap:wrap;">
+          <div class="flex-row">
+            <span class="pill pill-cyan">7I &middot; 96%</span>
+            <div>
+              <div style="font-weight:800; font-size:14px;">Tour Push Draw &middot; <span style="color:var(--green);">168 yds Carry</span> &middot; <span style="color:var(--green);">+0.29 SG</span></div>
+              <div class="muted" style="font-size:11.5px;">Cruise Speed Sweet Spot (87.4 mph) &middot; Pure Compression (+6.2&deg; Lean)</div>
+            </div>
+          </div>
+          <div class="flex-row">
+            <span class="pill pill-green">Score 94</span>
+            <span class="pill pill-purple">Feel: Lead Wrist Flat</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2 mt-14">
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <span class="kicker">Auto-Exported via ffmpeg &rarr; Swings/Highlights/</span>
+            <h3>Auto Highlight Reel Queue</h3>
+          </div>
+          <span class="pill pill-yellow">Auto-Triggers: 90+ / PR / 5-Streak</span>
+        </div>
+        <div id="t7-highlights"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <div>
+            <span class="kicker">1-Click Self-Contained HTML Handoff</span>
+            <h3>&ldquo;Send to Coach&rdquo; Packet</h3>
+          </div>
+          <button class="btn btn-cyan" id="t7-download-packet">&#11015; Download Sample Coach Packet (.html)</button>
+        </div>
+        <p class="muted" style="margin:0 0 10px;">Generates a single standalone HTML file you can text or email to a PGA coach or post for review &mdash; zero login, works offline:</p>
+        <div style="background:rgba(7,11,18,0.65); border:1px solid var(--border); border-radius:9px; padding:12px;">
+          <div class="flex-row" style="justify-content:space-between; margin-bottom:8px;">
+            <strong>30-Day Performance Packet &mdash; Jacob (1,428 Swings)</strong>
+            <span class="pill pill-green">Est. Index: 6.4</span>
+          </div>
+          <ul style="margin:0; padding-left:18px; color:var(--muted); font-size:12px; line-height:1.7;">
+            <li><strong style="color:var(--text);">#1 Stroke Leak:</strong> Driver Over-Speed (&gt;101 mph) &rarr; Snap Hook (&minus;0.41 SG/shot)</li>
+            <li><strong style="color:var(--text);">Cruise Speed Target:</strong> Driver 97&ndash;99 mph (+0.14 SG) &middot; 7-Iron 86&ndash;88 mph (+0.19 SG)</li>
+            <li><strong style="color:var(--text);">Top Retained Feel:</strong> <em>Lead Wrist Flat Through Impact</em> (+0.18 SG retained 3 sessions later)</li>
+            <li><strong style="color:var(--text);">Biomech Flag:</strong> Pelvis drift +2.1&Prime; at P6 correlates with Flipping (r = 0.78)</li>
+            <li><strong style="color:var(--text);">Attached Clips:</strong> Best 7I DTL/FO vs. Worst Miss DTL/FO keyframes</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- Printable Pocket Wedge Yardage Card Modal -->
+<div class="modal-bg" id="wedge-modal">
+  <div class="modal-box">
+    <div class="card-head">
+      <div>
+        <span class="kicker">DECADE Pocket Yardage Book &middot; Exported from swings.sqlite</span>
+        <h2>Personal Wedge Clock Card</h2>
+      </div>
+      <div class="flex-row">
+        <button class="btn btn-cyan btn-sm" onclick="window.print()">&#128424; Print / Save PDF</button>
+        <button class="btn btn-sm" id="w-close-modal">Close</button>
+      </div>
+    </div>
+    <div id="w-printable-body"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+  let toastTimer = null;
+  function showToast(msg) {
+    const el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+  }
+
+  // ==================== MAIN TAB NAVIGATION ====================
+  document.querySelectorAll('#main-tabs .tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#main-tabs .tab-btn').forEach((b) => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach((p) => p.classList.remove('active'));
+      btn.classList.add('active');
+      $(btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab === 't4') drawGhostCanvas();
+    });
+  });
+
+  // ==================== TAB 1: ONE-SENTENCE COACH & DENSITY ====================
+  const T1_SHOTS = [
+    {
+      id: 'heel_fat',
+      label: '7I — Heel Pull-Fade + Mat-Fat Risk',
+      club: '7I', clubLabel: '7 Iron', shape: 'Pull Fade', sev: 'red', score: 54,
+      lockedLayer: 0, // 0=Contact, 1=Face, 2=Path, 3=Optimize
+      verdict: 'Heel strike + 3.8° out-to-in path cost you 14 yds and 0.28 strokes — and the sim mat saved a heavy fat strike.',
+      cue: 'Priority #1 (Contact): Keep sternum ahead of ball and feel trail elbow tucked; ignore spin numbers until smash ≥ 1.33.',
+      carry: 151, total: 158, turfCarry: 118, ballSpeed: 111.2, clubSpeed: 86.1, smash: 1.29,
+      vla: 18.2, hla: -2.6, spin: 7420, spinAxis: 9.4, aoa: -6.8, path: -3.8, face: -2.3, f2p: 1.5, lean: 4.1, sg: -0.28,
+      matFat: true, curve: 11, offline: 6, apex: 86, potLoss: 14,
+      curvePts: [0, -2, -3, -1, 3, 6],
+    },
+    {
+      id: 'overspeed_hook',
+      label: 'DR — Over-Speed Snap Hook (103.4 mph)',
+      club: 'DR', clubLabel: 'Driver', shape: 'Snap Hook', sev: 'red', score: 42,
+      lockedLayer: 1,
+      verdict: 'Swinging 4.4 mph above your 99 mph Cruise Speed shut the face (−4.1°) and triggered a diving Snap Hook (−0.46 SG).',
+      cue: 'Priority #2 (Face Control): Dial Driver back to your 98 mph Cruise Gear — you gain +0.55 SG/drive there.',
+      carry: 229, total: 246, turfCarry: 229, ballSpeed: 146.8, clubSpeed: 103.4, smash: 1.42,
+      vla: 9.4, hla: -3.2, spin: 1890, spinAxis: -21.5, aoa: 1.8, path: 2.1, face: -4.1, f2p: -6.2, lean: 2.6, sg: -0.46,
+      matFat: false, curve: -29, offline: -36, apex: 61, potLoss: 23,
+      curvePts: [0, -3, -8, -16, -26, -36],
+    },
+    {
+      id: 'pure_draw',
+      label: '7I — Pure Tour Push-Draw (+0.29 SG)',
+      club: '7I', clubLabel: '7 Iron', shape: 'Tour Push Draw', sev: 'green', score: 94,
+      lockedLayer: 3,
+      verdict: 'Tour-grade center compression (1.38 smash, +6.2° shaft lean) right inside your 87 mph Cruise Window (+0.29 SG).',
+      cue: 'All 3 foundation layers GREEN — lock this feel in ("Lead Wrist Flat") and repeat.',
+      carry: 168, total: 175, turfCarry: 168, ballSpeed: 120.6, clubSpeed: 87.4, smash: 1.38,
+      vla: 16.4, hla: 1.8, spin: 6420, spinAxis: -4.2, aoa: -4.4, path: 2.4, face: 1.6, f2p: -0.8, lean: 6.2, sg: +0.29,
+      matFat: false, curve: -6, offline: 1, apex: 94, potLoss: 2,
+      curvePts: [0, 3, 5, 5, 3, 1],
+    },
+    {
+      id: 'flip_floater',
+      label: 'DR — Flipping Floater (High Spin, −19y)',
+      club: 'DR', clubLabel: 'Driver', shape: 'Weak Fade', sev: 'yellow', score: 63,
+      lockedLayer: 2,
+      verdict: 'Hands flipped through impact (+3.4° added loft, 3,840 rpm spin), ballooning carry by 19 yds (−0.19 SG).',
+      cue: 'Priority #3 (Delivery / Path): Lead wrist flat through impact — match your P7 Ghost shaft lean.',
+      carry: 231, total: 237, turfCarry: 231, ballSpeed: 141.5, clubSpeed: 98.2, smash: 1.44,
+      vla: 16.1, hla: 0.9, spin: 3840, spinAxis: 7.5, aoa: -1.6, path: -2.4, face: 1.2, f2p: 3.6, lean: -2.4, sg: -0.19,
+      matFat: false, curve: 14, offline: 17, apex: 118, potLoss: 19,
+      curvePts: [0, 2, 5, 9, 13, 17],
+    },
+    {
+      id: 'knockdown_pw',
+      label: 'PW — Flighted 3/4 Knockdown (118y)',
+      club: 'PW', clubLabel: 'Pitching Wedge', shape: 'Controlled Draw', sev: 'green', score: 91,
+      lockedLayer: 3,
+      verdict: 'Intentional 82% knockdown recognized cleanly — auto-switch paused, piercing 46° descent stops within 4 ft (+0.22 SG).',
+      cue: 'Partial-swing guard active: speed graded neutral so your flighted shot scores accurately.',
+      carry: 118, total: 120, turfCarry: 118, ballSpeed: 92.4, clubSpeed: 73.1, smash: 1.26,
+      vla: 22.8, hla: 0.6, spin: 8450, spinAxis: -2.1, aoa: -5.2, path: 1.1, face: 0.5, f2p: -0.6, lean: 7.4, sg: +0.22,
+      matFat: false, curve: -2, offline: -1, apex: 72, potLoss: 0,
+      curvePts: [0, 1, 1, 0, -1, -1],
+    },
+  ];
+
+  let t1Idx = 0;
+  let t1Density = 'simple';
+
+  const t1Sel = $('t1-shot-select');
+  T1_SHOTS.forEach((s, i) => {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = s.label;
+    t1Sel.appendChild(opt);
+  });
+  t1Sel.addEventListener('change', () => { t1Idx = Number(t1Sel.value); renderTab1(); });
+  $('t1-sim-next').addEventListener('click', () => {
+    t1Idx = (t1Idx + 1) % T1_SHOTS.length;
+    t1Sel.value = String(t1Idx);
+    renderTab1();
+    showToast(`Simulated ${T1_SHOTS[t1Idx].label}`);
+  });
+  document.querySelectorAll('#t1-density button').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#t1-density button').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      t1Density = b.dataset.d;
+      renderTab1();
+    });
+  });
+
+  function miniFlightSvg(shot) {
+    const w = 220, h = 150;
+    const pts = shot.curvePts;
+    const color = shot.sev === 'green' ? '#34d399' : shot.sev === 'yellow' ? '#fbbf24' : '#f87171';
+    const coords = pts.map((off, i) => {
+      const x = w / 2 + off * 2.1;
+      const y = h - 18 - (i / (pts.length - 1)) * (h - 36);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    });
+    const last = coords[coords.length - 1].split(',');
+    return `
+      <svg viewBox="0 0 ${w} ${h}" width="100%" style="background:#070c15;border-radius:10px;border:1px solid var(--border);">
+        <line x1="${w/2}" y1="10" x2="${w/2}" y2="${h-10}" stroke="rgba(148,163,184,0.22)" stroke-dasharray="4 4" />
+        <circle cx="${w/2}" cy="${h-18}" r="4" fill="#e2e8f0" />
+        <polyline fill="none" stroke="${color}" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" points="${coords.join(' ')}" />
+        <circle cx="${last[0]}" cy="${last[1]}" r="5.5" fill="${color}" />
+        <text x="10" y="18" fill="#94a3b8" font-size="10" font-family="monospace">${esc(shot.club)} &middot; ${esc(shot.shape)}</text>
+        <text x="10" y="${h-8}" fill="#64748b" font-size="9.5" font-family="monospace">Offline ${shot.offline > 0 ? '+' : ''}${shot.offline}y</text>
+      </svg>`;
+  }
+
+  function renderTab1() {
+    const s = T1_SHOTS[t1Idx];
+    const layers = [
+      { n: '1. Contact & Low Point', sub: `Smash ${s.smash.toFixed(2)} · AoA ${s.aoa > 0 ? '+' : ''}${s.aoa}°` },
+      { n: '2. Face Control', sub: `Start HLA ${s.hla > 0 ? '+' : ''}${s.hla}° · Face ${s.face > 0 ? '+' : ''}${s.face}°` },
+      { n: '3. Path & Curvature', sub: `Path ${s.path > 0 ? '+' : ''}${s.path}° · F2P ${s.f2p > 0 ? '+' : ''}${s.f2p}°` },
+      { n: '4. Launch & Speed Opt.', sub: `VLA ${s.vla}° · Spin ${s.spin} rpm` },
+    ];
+    $('t1-triage').innerHTML = layers.map((l, idx) => {
+      let cls = 'triage-step';
+      let badge = 'DIMMED';
+      if (idx < s.lockedLayer) { cls += ' passed'; badge = 'PASSED'; }
+      else if (idx === s.lockedLayer) {
+        cls += s.sev === 'green' ? ' locked-green' : s.sev === 'yellow' ? ' locked-yellow' : ' locked';
+        badge = s.sev === 'green' ? 'OPTIMIZE' : 'LOCKED FOCUS';
+      }
+      return `
+        <div class="${cls}">
+          <div class="flex-row" style="justify-content:space-between;">
+            <span class="triage-num">Layer ${idx + 1}</span>
+            <span class="mono" style="font-size:9.5px;color:${idx === s.lockedLayer ? 'var(--cyan)' : 'var(--dim)'}">${badge}</span>
+          </div>
+          <div class="triage-name">${esc(l.n)}</div>
+          <div class="triage-sub">${esc(l.sub)}</div>
+        </div>`;
+    }).join('');
+
+    const sgStr = `${s.sg >= 0 ? '+' : ''}${s.sg.toFixed(2)} SG`;
+    const vb = $('t1-verdict');
+    vb.className = `verdict-banner sev-${s.sev}`;
+    vb.innerHTML = `
+      <div>
+        <div class="verdict-text">${esc(s.verdict)}</div>
+        <div class="verdict-cue">&#127919; ${esc(s.cue)}</div>
+      </div>
+      <div class="flex-row">
+        <span class="pill pill-${s.sev}">${esc(sgStr)}</span>
+        ${s.potLoss >= 5 ? `<span class="pill pill-yellow">&minus;${s.potLoss} yds left</span>` : '<span class="pill pill-green">Maxed Carry</span>'}
+        ${s.matFat ? '<span class="pill pill-red">&#9888; Mat-Saved Fat Risk</span>' : ''}
+      </div>`;
+
+    const sgGrade = s.sg >= 0.05 ? 'g-green' : s.sg >= -0.15 ? 'g-yellow' : 'g-red';
+    const smashGrade = s.smash >= 1.36 || (s.club === 'PW' && s.smash >= 1.24) ? 'g-green' : s.smash >= 1.31 ? 'g-yellow' : 'g-red';
+    const f2pGrade = Math.abs(s.f2p) <= 2 ? 'g-green' : Math.abs(s.f2p) <= 4 ? 'g-yellow' : 'g-red';
+
+    if (t1Density === 'simple') {
+      $('t1-body').innerHTML = `
+        <div class="hero-simple">
+          ${miniFlightSvg(s)}
+          <div>
+            <div class="big-metrics">
+              <div class="big-tile g-${s.sev}"><div class="lbl">Carry</div><div class="val">${s.carry}<span style="font-size:14px;">y</span></div><div class="sub">Total ${s.total}y</div></div>
+              <div class="big-tile ${smashGrade}"><div class="lbl">Smash</div><div class="val">${s.smash.toFixed(2)}</div><div class="sub">CS ${s.clubSpeed} mph</div></div>
+              <div class="big-tile ${f2pGrade}"><div class="lbl">Face-to-Path</div><div class="val">${s.f2p > 0 ? '+' : ''}${s.f2p}&deg;</div><div class="sub">Path ${s.path > 0 ? '+' : ''}${s.path}&deg;</div></div>
+              <div class="big-tile ${sgGrade}"><div class="lbl">Strokes Gained</div><div class="val">${s.sg >= 0 ? '+' : ''}${s.sg.toFixed(2)}</div><div class="sub">Score ${s.score}/100</div></div>
+            </div>
+            <p class="muted mt-12" style="margin-bottom:0;">Simple Mat Mode hides secondary metrics so you step onto the next ball with <strong>one clear cue</strong>. Switch to <em>Coach</em> or <em>Lab</em> above to inspect full telemetry.</p>
+          </div>
+        </div>`;
+    } else if (t1Density === 'coach') {
+      $('t1-body').innerHTML = `
+        <div class="grid-3">
+          <div class="card" style="background:rgba(7,11,18,0.5);">
+            <span class="kicker">Ball Flight</span>
+            <h3 style="margin:2px 0 8px;">${esc(s.clubLabel)} &middot; ${esc(s.shape)}</h3>
+            ${miniFlightSvg(s)}
+          </div>
+          <div class="card" style="background:rgba(7,11,18,0.5);">
+            <span class="kicker">Primary Coaching Layer</span>
+            <h3 style="margin:2px 0 8px;">${esc(layers[s.lockedLayer].n)}</h3>
+            <div class="metric-grid" style="grid-template-columns:1fr 1fr;">
+              <div class="m-cell ${smashGrade.replace('g-','')}"><div class="m-k">Smash</div><div class="m-v">${s.smash.toFixed(2)}</div></div>
+              <div class="m-cell ${f2pGrade.replace('g-','')}"><div class="m-k">Face-to-Path</div><div class="m-v">${s.f2p > 0 ? '+' : ''}${s.f2p}&deg;</div></div>
+              <div class="m-cell ${s.sev}"><div class="m-k">Est. Shaft Lean</div><div class="m-v">${s.lean > 0 ? '+' : ''}${s.lean}&deg;</div></div>
+              <div class="m-cell ${sgGrade.replace('g-','')}"><div class="m-k">Strokes Gained</div><div class="m-v">${sgStr}</div></div>
+            </div>
+            ${s.matFat ? `<div class="pill pill-red mt-12" style="border-radius:8px;width:100%;padding:8px;">&#9888; Turf-Adjusted Carry: ${s.turfCarry}y (Mat hid ~${s.carry - s.turfCarry}y chunk)</div>` : ''}
+          </div>
+          <div class="card" style="background:rgba(7,11,18,0.5);">
+            <span class="kicker">Next-Ball Mission</span>
+            <h3 style="margin:2px 0 8px;">Active Feel &amp; Gate</h3>
+            <p style="margin:0 0 10px;">${esc(s.cue)}</p>
+            <div class="flex-row">
+              <span class="pill pill-cyan">Target Gate: &plusmn;1.5&deg; HLA</span>
+              <span class="pill pill-green">Score: ${s.score}</span>
+            </div>
+          </div>
+        </div>`;
+    } else {
+      const cells = [
+        ['Carry', `${s.carry} yds`, `Total ${s.total}y`, s.sev],
+        ['Ball Speed', `${s.ballSpeed} mph`, 'Measured BLP', s.sev],
+        ['Club Speed', `${s.clubSpeed} mph`, '1-Dot Sticker', 'green'],
+        ['Smash', s.smash.toFixed(2), 'Efficiency', smashGrade.replace('g-','')],
+        ['Launch (VLA)', `${s.vla}°`, 'Measured', 'green'],
+        ['Start (HLA)', `${s.hla > 0 ? '+' : ''}${s.hla}°`, 'Start line', Math.abs(s.hla) <= 1.8 ? 'green' : 'red'],
+        ['Backspin', `${s.spin} rpm`, `Axis ${s.spinAxis}°`, Math.abs(s.spinAxis) < 7 ? 'green' : 'yellow'],
+        ['AoA', `${s.aoa > 0 ? '+' : ''}${s.aoa}°`, 'Attack angle', 'yellow'],
+        ['Club Path', `${s.path > 0 ? '+' : ''}${s.path}°`, s.path > 0 ? 'In-to-Out' : 'Out-to-In', Math.abs(s.path) <= 3 ? 'green' : 'yellow'],
+        ['Est. Face', `${s.face > 0 ? '+' : ''}${s.face}°`, 'D-Plane', Math.abs(s.face) <= 2 ? 'green' : 'red'],
+        ['Face-to-Path', `${s.f2p > 0 ? '+' : ''}${s.f2p}°`, 'Curvature driver', f2pGrade.replace('g-','')],
+        ['Est. Shaft Lean', `${s.lean > 0 ? '+' : ''}${s.lean}°`, 'Compression', s.lean >= 3 ? 'green' : 'red'],
+        ['Apex', `${s.apex} ft`, `Curve ${s.curve}y`, 'green'],
+        ['Turf-Adj Carry', `${s.turfCarry} yds`, s.matFat ? 'Mat bounce flagged' : 'Clean turf strike', s.matFat ? 'red' : 'green'],
+      ];
+      $('t1-body').innerHTML = `
+        <div class="metric-grid">
+          ${cells.map(([k, v, sub, g]) => `
+            <div class="m-cell ${g}">
+              <div class="m-k">${esc(k)}</div>
+              <div class="m-v">${esc(v)}</div>
+              <div class="m-s">${esc(sub)}</div>
+            </div>`).join('')}
+        </div>`;
+    }
+  }
+
+  // ==================== TAB 2: PERSONAL SWING DNA ====================
+  const DNA_DATA = {
+    DR: {
+      label: 'Driver', minS: 90, maxS: 106, sweetLo: 96.5, sweetHi: 99.5, cliff: 101.5, defaultS: 98,
+      baseCarry: 252,
+      curveFn: (sp) => {
+        if (sp <= 98.5) return -0.05 + (sp - 90) * 0.025;
+        if (sp <= 101) return 0.16 - (sp - 98.5) * 0.10;
+        return -0.09 - Math.pow(sp - 101, 1.45) * 0.14;
+      },
+      summary: 'Across 184 Driver swings, Face-to-Path at >101 mph accounts for 58% of all strokes lost (OB / Snap Hook cliff). Swinging at 97–99 mph gains +0.55 SG over max effort.',
+      attrs: [
+        { name: 'Face-to-Path (Over-Speed Hook)', pct: 58, color: '#f87171', tag: 'WORK ON THIS' },
+        { name: 'Strike Location (Heel/Toe Smash)', pct: 24, color: '#fbbf24', tag: 'SECONDARY' },
+        { name: 'Angle of Attack (Downward Steep)', pct: 12, color: '#22d3ee', tag: 'MONITOR' },
+        { name: 'Raw Club Speed Ceiling', pct: 6, color: '#64748b', tag: 'IGNORE FOR NOW' },
+      ],
+      missType: 'two-way', missLabel: 'Two-Way Miss Alert (−34y L to +28y R)', missMin: -34, missMax: 28,
+      retentions: [
+        { name: '98 mph Smooth Transition', base: -0.22, active: +0.16, later: +0.14, verdict: 'STUCK (+0.36 SG retained)', sev: 'green' },
+        { name: 'Stronger Trail Hand Grip', base: -0.22, active: +0.05, later: -0.19, verdict: 'DECAYED (Range-only)', sev: 'red' },
+        { name: 'Tee Higher + Upward Sweep', base: -0.22, active: +0.09, later: +0.03, verdict: 'PARTIAL RETENTION', sev: 'yellow' },
+      ],
+    },
+    '7I': {
+      label: '7-Iron', minS: 80, maxS: 93, sweetLo: 85.5, sweetHi: 88.0, cliff: 90.0, defaultS: 87,
+      baseCarry: 166,
+      curveFn: (sp) => {
+        if (sp <= 87.2) return -0.04 + (sp - 80) * 0.032;
+        if (sp <= 89.5) return 0.19 - (sp - 87.2) * 0.07;
+        return 0.03 - Math.pow(sp - 89.5, 1.4) * 0.12;
+      },
+      summary: 'Across 246 7-Iron swings, Face-to-Path explains 64% of your bad misses while Angle of Attack explains only 8%. Your dispersion is tightly playable one-way left.',
+      attrs: [
+        { name: 'Face-to-Path Control', pct: 64, color: '#f87171', tag: 'WORK ON THIS' },
+        { name: 'Center Contact (Smash ≥ 1.35)', pct: 22, color: '#fbbf24', tag: 'SECONDARY' },
+        { name: 'Angle of Attack Window', pct: 8, color: '#22d3ee', tag: 'IGNORE FOR NOW' },
+        { name: 'Club Speed Variance', pct: 6, color: '#64748b', tag: 'IGNORE FOR NOW' },
+      ],
+      missType: 'one-way', missLabel: 'Playable One-Way Draw (−16y L to +4y R)', missMin: -16, missMax: 4,
+      retentions: [
+        { name: 'Lead Wrist Flat Through Impact', base: -0.11, active: +0.21, later: +0.18, verdict: 'STUCK (+0.29 SG retained)', sev: 'green' },
+        { name: 'Pause at Top (27/9 Tempo)', base: -0.11, active: +0.12, later: +0.06, verdict: 'HOLDING STEADY', sev: 'yellow' },
+        { name: 'Exaggerated In-to-Out Path', base: -0.11, active: +0.02, later: -0.15, verdict: 'CAUSED HOOKS', sev: 'red' },
+      ],
+    },
+    PW: {
+      label: 'Pitching Wedge', minS: 72, maxS: 84, sweetLo: 76.0, sweetHi: 79.0, cliff: 81.5, defaultS: 77.5,
+      baseCarry: 126,
+      curveFn: (sp) => {
+        if (sp <= 78) return 0.02 + (sp - 72) * 0.035;
+        return 0.23 - Math.pow(sp - 78, 1.35) * 0.085;
+      },
+      summary: 'Across 119 PW swings, Distance Control (speed variance) explains 52% of strokes lost — flighting PW at 77 mph produces your tightest proximity (13.4 ft avg).',
+      attrs: [
+        { name: 'Distance / Speed Control', pct: 52, color: '#f87171', tag: 'WORK ON THIS' },
+        { name: 'Start Line (HLA Gate)', pct: 29, color: '#fbbf24', tag: 'SECONDARY' },
+        { name: 'Spin / Shaft Lean', pct: 13, color: '#22d3ee', tag: 'SOLID' },
+        { name: 'Path Curvature', pct: 6, color: '#64748b', tag: 'IGNORE FOR NOW' },
+      ],
+      missType: 'one-way', missLabel: 'Tight Wedge Window (−8y L to +6y R)', missMin: -8, missMax: 6,
+      retentions: [
+        { name: '18/9 Short-Game Tempo', base: +0.01, active: +0.24, later: +0.21, verdict: 'STUCK (+0.20 SG retained)', sev: 'green' },
+        { name: 'Chest Rotates Through', base: +0.01, active: +0.15, later: +0.11, verdict: 'STUCK', sev: 'green' },
+        { name: 'Hit Hard 100% Full PW', base: +0.01, active: -0.09, later: -0.12, verdict: 'AVOID (Flyers)', sev: 'red' },
+      ],
+    },
+  };
+
+  let t2Club = 'DR';
+  let t2Speed = 98;
+
+  document.querySelectorAll('#t2-club-seg button').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#t2-club-seg button').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      t2Club = b.dataset.club;
+      const d = DNA_DATA[t2Club];
+      const sl = $('t2-speed-slider');
+      sl.min = d.minS; sl.max = d.maxS; sl.value = d.defaultS;
+      t2Speed = d.defaultS;
+      renderTab2();
+    });
+  });
+  $('t2-speed-slider').addEventListener('input', (e) => {
+    t2Speed = Number(e.target.value);
+    renderTab2();
+  });
+
+  function renderTab2() {
+    const d = DNA_DATA[t2Club];
+    $('t2-cruise-title').textContent = `${d.label}: Club Speed vs. Strokes Gained`;
+    $('t2-cruise-pill').textContent = `Sweet Spot: ${d.sweetLo}–${d.sweetHi} mph`;
+    $('t2-speed-val').textContent = `${t2Speed.toFixed(1)} mph`;
+
+    const sgNow = d.curveFn(t2Speed);
+    const inSweet = t2Speed >= d.sweetLo && t2Speed <= d.sweetHi;
+    const overCliff = t2Speed >= d.cliff;
+    $('t2-speed-zone').textContent = inSweet ? 'Optimal Cruise Gear' : overCliff ? '⚠ Over-Swing Cliff!' : 'Sub-Max / Controlled';
+    $('t2-speed-zone').style.color = inSweet ? 'var(--green)' : overCliff ? 'var(--red)' : 'var(--yellow)';
+
+    // Pareto SVG
+    const W = 520, H = 200, padL = 42, padR = 16, padT = 18, padB = 30;
+    const xOf = (sp) => padL + ((sp - d.minS) / (d.maxS - d.minS)) * (W - padL - padR);
+    const yOf = (sg) => padT + ((0.35 - sg) / 0.95) * (H - padT - padB);
+    const pts = [];
+    for (let sp = d.minS; sp <= d.maxS + 0.01; sp += 0.5) {
+      pts.push(`${xOf(sp).toFixed(1)},${yOf(d.curveFn(sp)).toFixed(1)}`);
+    }
+    const cx = xOf(t2Speed), cy = yOf(sgNow);
+    const dotColor = inSweet ? '#34d399' : overCliff ? '#f87171' : '#fbbf24';
+
+    $('t2-cruise-svg').innerHTML = `
+      <svg viewBox="0 0 ${W} ${H}" width="100%" style="background:#070c15;border-radius:10px;border:1px solid var(--border);">
+        <rect x="${xOf(d.sweetLo)}" y="${padT}" width="${xOf(d.sweetHi)-xOf(d.sweetLo)}" height="${H-padT-padB}" fill="rgba(52,211,153,0.13)" />
+        <rect x="${xOf(d.cliff)}" y="${padT}" width="${xOf(d.maxS)-xOf(d.cliff)}" height="${H-padT-padB}" fill="rgba(248,113,113,0.12)" />
+        <line x1="${padL}" y1="${yOf(0)}" x2="${W-padR}" y2="${yOf(0)}" stroke="rgba(148,163,184,0.28)" stroke-dasharray="4 4" />
+        <polyline fill="none" stroke="#22d3ee" stroke-width="3" points="${pts.join(' ')}" />
+        <line x1="${cx}" y1="${padT}" x2="${cx}" y2="${H-padB}" stroke="${dotColor}" stroke-dasharray="3 3" opacity="0.7" />
+        <circle cx="${cx}" cy="${cy}" r="6.5" fill="${dotColor}" stroke="#070b12" stroke-width="2" />
+        <text x="${xOf(d.sweetLo)+4}" y="${padT+13}" fill="#34d399" font-size="9.5" font-weight="700">CRUISE ZONE</text>
+        <text x="${xOf(d.cliff)+4}" y="${padT+13}" fill="#f87171" font-size="9.5" font-weight="700">CLIFF</text>
+        <text x="6" y="${yOf(0)+3}" fill="#94a3b8" font-size="9.5" font-family="monospace">0.00</text>
+        <text x="6" y="${yOf(0.25)+3}" fill="#34d399" font-size="9.5" font-family="monospace">+0.25</text>
+        <text x="6" y="${yOf(-0.4)+3}" fill="#f87171" font-size="9.5" font-family="monospace">-0.40</text>
+        <text x="${padL}" y="${H-10}" fill="#64748b" font-size="10" font-family="monospace">${d.minS} mph</text>
+        <text x="${W-padR-42}" y="${H-10}" fill="#64748b" font-size="10" font-family="monospace">${d.maxS} mph</text>
+      </svg>`;
+
+    const carryProj = Math.round(d.baseCarry + (t2Speed - d.defaultS) * (t2Club === 'DR' ? 2.4 : 1.7) - (overCliff ? (t2Speed - d.cliff) * 2.2 : 0));
+    const fwPct = Math.max(18, Math.min(88, Math.round(74 - Math.max(0, t2Speed - d.sweetHi) * 7.5 - Math.max(0, d.sweetLo - t2Speed) * 1.2)));
+    const bigMiss = Math.min(58, Math.max(4, Math.round(8 + Math.max(0, t2Speed - d.sweetHi) * 6.8)));
+    $('t2-speed-kpis').innerHTML = `
+      <div class="m-cell ${inSweet ? 'green' : overCliff ? 'red' : 'yellow'}"><div class="m-k">Proj. SG</div><div class="m-v">${sgNow >= 0 ? '+' : ''}${sgNow.toFixed(2)}</div></div>
+      <div class="m-cell green"><div class="m-k">Proj. Carry</div><div class="m-v">${carryProj}y</div></div>
+      <div class="m-cell ${fwPct >= 62 ? 'green' : fwPct >= 45 ? 'yellow' : 'red'}"><div class="m-k">Target Hit %</div><div class="m-v">${fwPct}%</div></div>
+      <div class="m-cell ${bigMiss <= 12 ? 'green' : bigMiss <= 24 ? 'yellow' : 'red'}"><div class="m-k">Big Miss %</div><div class="m-v">${bigMiss}%</div></div>`;
+
+    $('t2-attr-summary').textContent = d.summary;
+    $('t2-attr-bars').innerHTML = d.attrs.map((a) => `
+      <div class="bar-row">
+        <div class="bar-top">
+          <span><strong>${esc(a.name)}</strong></span>
+          <span><span class="mono">${a.pct}%</span> &middot; <span style="color:${a.color};font-size:10.5px;font-weight:700;">${esc(a.tag)}</span></span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width:${a.pct}%;background:${a.color};"></div></div>
+      </div>`).join('');
+
+    const mp = $('t2-miss-pill');
+    mp.textContent = d.missType === 'two-way' ? '⚠ Two-Way Miss' : '✓ One-Way Playable';
+    mp.className = `pill ${d.missType === 'two-way' ? 'pill-red' : 'pill-green'}`;
+    const cw = 360, ch = 56, mid = cw / 2;
+    const lx = mid + d.missMin * 3.5, rx = mid + d.missMax * 3.5;
+    $('t2-corridor-svg').innerHTML = `
+      <svg viewBox="0 0 ${cw} ${ch}" width="100%" style="background:#070c15;border-radius:8px;border:1px solid var(--border);">
+        <line x1="${mid}" y1="6" x2="${mid}" y2="${ch-6}" stroke="rgba(255,255,255,0.4)" stroke-dasharray="3 3" />
+        <rect x="${lx}" y="16" width="${Math.max(8, rx-lx)}" height="22" rx="11" fill="${d.missType==='two-way' ? 'rgba(248,113,113,0.32)' : 'rgba(52,211,153,0.3)'}" stroke="${d.missType==='two-way' ? '#f87171' : '#34d399'}" stroke-width="2" />
+        <text x="10" y="13" fill="#94a3b8" font-size="9.5">${esc(d.missLabel)}</text>
+        <text x="${mid+4}" y="${ch-6}" fill="#64748b" font-size="9">Target 0y</text>
+      </svg>`;
+
+    // Retention SVG & Cards
+    const rW = 540, rH = 185, rPadL = 44, rPadR = 24, rPadT = 20, rPadB = 28;
+    const rxOf = (i) => rPadL + (i / 2) * (rW - rPadL - rPadR);
+    const ryOf = (v) => rPadT + ((0.3 - v) / 0.6) * (rH - rPadT - rPadB);
+    const colors = ['#34d399', '#fbbf24', '#f87171'];
+    const lines = d.retentions.map((r, idx) => {
+      const col = r.sev === 'green' ? '#34d399' : r.sev === 'yellow' ? '#fbbf24' : '#f87171';
+      const vals = [r.base, r.active, r.later];
+      const pstr = vals.map((v, i) => `${rxOf(i)},${ryOf(v)}`).join(' ');
+      return `
+        <polyline fill="none" stroke="${col}" stroke-width="2.8" points="${pstr}" />
+        ${vals.map((v, i) => `<circle cx="${rxOf(i)}" cy="${ryOf(v)}" r="4.5" fill="${col}" />`).join('')}`;
+    }).join('');
+    $('t2-retention-svg').innerHTML = `
+      <svg viewBox="0 0 ${rW} ${rH}" width="100%" style="background:#070c15;border-radius:10px;border:1px solid var(--border);">
+        <line x1="${rPadL}" y1="${ryOf(0)}" x2="${rW-rPadR}" y2="${ryOf(0)}" stroke="rgba(148,163,184,0.25)" stroke-dasharray="4 4" />
+        ${lines}
+        <text x="${rxOf(0)-22}" y="${rH-9}" fill="#94a3b8" font-size="10">Baseline</text>
+        <text x="${rxOf(1)-36}" y="${rH-9}" fill="#22d3ee" font-size="10">Active Feel</text>
+        <text x="${rxOf(2)-64}" y="${rH-9}" fill="#a78bfa" font-size="10">3 Sessions Later</text>
+        <text x="6" y="${ryOf(0.2)+3}" fill="#34d399" font-size="9.5" font-family="monospace">+0.20</text>
+        <text x="6" y="${ryOf(0)+3}" fill="#94a3b8" font-size="9.5" font-family="monospace"> 0.00</text>
+        <text x="6" y="${ryOf(-0.2)+3}" fill="#f87171" font-size="9.5" font-family="monospace">-0.20</text>
+      </svg>`;
+
+    $('t2-retention-cards').innerHTML = d.retentions.map((r) => `
+      <div class="card" style="padding:10px 12px;margin-bottom:8px;background:rgba(7,11,18,0.55);">
+        <div class="flex-row" style="justify-content:space-between;">
+          <strong>${esc(r.name)}</strong>
+          <span class="pill pill-${r.sev}">${esc(r.verdict)}</span>
+        </div>
+        <div class="muted mono" style="font-size:11px;margin-top:4px;">
+          Base ${r.base >= 0 ? '+' : ''}${r.base.toFixed(2)} &rarr; Active ${r.active >= 0 ? '+' : ''}${r.active.toFixed(2)} &rarr; 3-Session Retention ${r.later >= 0 ? '+' : ''}${r.later.toFixed(2)} SG
+        </div>
+      </div>`).join('');
+  }
+
+  // ==================== TAB 3: COMBINE, WEDGE CLOCK & PRESSURE ====================
+  document.querySelectorAll('#t3-sub-seg button').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#t3-sub-seg button').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active');
+      document.querySelectorAll('.t3-view').forEach((v) => v.style.display = 'none');
+      $(`t3-${b.dataset.sub}`).style.display = 'block';
+    });
+  });
+
+  // 3A: 18-Ball Combine
+  const COMBINE_TARGETS = [
+    { yds: 75, shape: 'Flighted', club: 'SW' }, { yds: 112, shape: 'Straight', club: 'GW' },
+    { yds: 158, shape: 'Draw', club: '7I' }, { yds: 255, shape: 'Fairway', club: 'DR' },
+    { yds: 136, shape: 'Fade', club: '9I' }, { yds: 92, shape: 'Low Spinner', club: 'SW' },
+    { yds: 174, shape: 'Draw', club: '6I' }, { yds: 255, shape: 'Fairway', club: 'DR' },
+    { yds: 124, shape: 'Straight', club: 'PW' }, { yds: 192, shape: 'Stock', club: '4H' },
+    { yds: 62, shape: 'Soft Pitch', club: 'LW' }, { yds: 148, shape: 'Fade', club: '8I' },
+    { yds: 255, shape: 'Fairway', club: 'DR' }, { yds: 104, shape: 'Knockdown', club: 'GW' },
+    { yds: 165, shape: 'Draw', club: '7I' }, { yds: 84, shape: 'High Soft', club: 'LW' },
+    { yds: 182, shape: 'Fade', club: '5I' }, { yds: 255, shape: 'Clutch Tee', club: 'DR' },
+  ];
+  let combineResults = [];
+
+  function hitCombine(quality) {
+    if (combineResults.length >= COMBINE_TARGETS.length) {
+      showToast('Combine complete! Click Reset to run another 18-ball test.');
+      return;
+    }
+    const t = COMBINE_TARGETS[combineResults.length];
+    let proxFt, sg, pts, dx, dy;
+    if (quality === 'pure') {
+      proxFt = Math.round(4 + Math.random() * 11);
+      sg = +(0.18 + Math.random() * 0.24).toFixed(2);
+      pts = Math.round(86 + Math.random() * 13);
+      dx = (Math.random() - 0.5) * 26; dy = (Math.random() - 0.5) * 24;
+    } else if (quality === 'avg') {
+      proxFt = Math.round(18 + Math.random() * 16);
+      sg = +(-0.06 + Math.random() * 0.14).toFixed(2);
+      pts = Math.round(64 + Math.random() * 18);
+      dx = (Math.random() - 0.5) * 64; dy = (Math.random() - 0.5) * 56;
+    } else {
+      proxFt = Math.round(44 + Math.random() * 34);
+      sg = +(-0.42 + Math.random() * 0.18).toFixed(2);
+      pts = Math.round(22 + Math.random() * 25);
+      dx = (Math.random() < 0.5 ? -1 : 1) * (46 + Math.random() * 34);
+      dy = (Math.random() - 0.5) * 70;
+    }
+    combineResults.push({ num: combineResults.length + 1, target: t, proxFt, sg, pts, dx, dy, quality });
+    renderCombine();
+    renderObsStage();
+  }
+
+  $('c-hit-pure').addEventListener('click', () => hitCombine('pure'));
+  $('c-hit-avg').addEventListener('click', () => hitCombine('avg'));
+  $('c-hit-miss').addEventListener('click', () => hitCombine('miss'));
+  $('c-reset').addEventListener('click', () => { combineResults = []; renderCombine(); renderObsStage(); });
+
+  function renderCombine() {
+    const idx = Math.min(combineResults.length, COMBINE_TARGETS.length - 1);
+    const cur = COMBINE_TARGETS[idx];
+    const done = combineResults.length >= COMBINE_TARGETS.length;
+    $('c-step-lbl').textContent = done ? 'COMBINE COMPLETE (18 / 18)' : `Target ${combineResults.length + 1} of 18`;
+    $('c-target-title').textContent = done
+      ? 'All 18 Balls Recorded — Review Your Handicap Index!'
+      : `${cur.yds} yds · ${cur.shape} · ${cur.club}`;
+
+    const W = 460, H = 220, cx = W / 2, cy = H / 2;
+    const dots = combineResults.map((r) => {
+      const col = r.quality === 'pure' ? '#34d399' : r.quality === 'avg' ? '#fbbf24' : '#f87171';
+      return `<circle cx="${(cx + r.dx).toFixed(1)}" cy="${(cy + r.dy).toFixed(1)}" r="5" fill="${col}" stroke="#070b12" stroke-width="1.5"><title>#${r.num} ${r.target.yds}y: ${r.proxFt}ft (${r.pts}pts)</title></circle>`;
+    }).join('');
+    $('c-green-svg').innerHTML = `
+      <svg viewBox="0 0 ${W} ${H}" width="100%" style="background:#07131a;border-radius:10px;border:1px solid var(--border);">
+        <circle cx="${cx}" cy="${cy}" r="90" fill="rgba(52,211,153,0.06)" stroke="rgba(148,163,184,0.18)" />
+        <circle cx="${cx}" cy="${cy}" r="54" fill="rgba(52,211,153,0.10)" stroke="rgba(52,211,153,0.25)" stroke-dasharray="4 4" />
+        <circle cx="${cx}" cy="${cy}" r="22" fill="rgba(52,211,153,0.18)" stroke="#34d399" />
+        <line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy-26}" stroke="#e2e8f0" stroke-width="2" />
+        <polygon points="${cx},${cy-26} ${cx+14},${cy-21} ${cx},${cy-16}" fill="#f87171" />
+        ${dots}
+        <text x="10" y="18" fill="#94a3b8" font-size="10" font-family="monospace">Inner ring: 15 ft &middot; Mid: 35 ft &middot; Outer: 60 ft</text>
+      </svg>`;
+
+    $('c-pips').innerHTML = COMBINE_TARGETS.map((_, i) => {
+      const r = combineResults[i];
+      const bg = !r ? (i === combineResults.length ? 'rgba(34,211,238,0.28)' : 'rgba(148,163,184,0.12)')
+        : r.quality === 'pure' ? '#34d399' : r.quality === 'avg' ? '#fbbf24' : '#f87171';
+      return `<div style="flex:1;height:8px;border-radius:4px;background:${bg};"></div>`;
+    }).join('');
+
+    const avgPts = combineResults.length ? Math.round(combineResults.reduce((a, r) => a + r.pts, 0) / combineResults.length) : 0;
+    const totSg = combineResults.reduce((a, r) => a + r.sg, 0);
+    const avgProx = combineResults.length ? Math.round(combineResults.reduce((a, r) => a + r.proxFt, 0) / combineResults.length) : 0;
+    const estHcp = combineResults.length ? Math.max(-2, +(16 - avgPts * 0.17).toFixed(1)) : null;
+    $('c-hcp-pill').textContent = estHcp === null ? 'Projected HCP: —' : `ShotLab HCP: ${estHcp <= 0 ? '+' + Math.abs(estHcp) : estHcp}`;
+
+    $('c-kpis').innerHTML = `
+      <div class="m-cell ${avgPts >= 80 ? 'green' : avgPts >= 65 ? 'yellow' : 'red'}"><div class="m-k">Combine Score</div><div class="m-v">${avgPts || '—'}</div></div>
+      <div class="m-cell ${totSg >= 0 ? 'green' : 'red'}"><div class="m-k">Cumulative SG</div><div class="m-v">${combineResults.length ? (totSg >= 0 ? '+' : '') + totSg.toFixed(2) : '—'}</div></div>
+      <div class="m-cell"><div class="m-k">Avg Proximity</div><div class="m-v">${avgProx ? avgProx + ' ft' : '—'}</div></div>
+      <div class="m-cell"><div class="m-k">Completed</div><div class="m-v">${combineResults.length} / 18</div></div>`;
+
+    $('c-log').innerHTML = combineResults.length
+      ? [...combineResults].reverse().map((r) => `
+          <tr>
+            <td class="mono">${r.num}</td>
+            <td>${r.target.yds}y ${esc(r.target.club)} (${esc(r.target.shape)})</td>
+            <td class="num">${r.proxFt} ft</td>
+            <td class="num" style="color:${r.sg >= 0 ? 'var(--green)' : 'var(--red)'}">${r.sg >= 0 ? '+' : ''}${r.sg.toFixed(2)}</td>
+            <td class="num"><strong>${r.pts}</strong></td>
+          </tr>`).join('')
+      : '<tr><td colspan="5" class="muted" style="text-align:center;padding:16px;">Click Hit Pure / Average / Miss to simulate the 18-ball combine.</td></tr>';
+  }
+
+  // 3B: Wedge Clock Matrix
+  const CLOCKS = ['7:30', '9:00', '10:30', 'Full'];
+  const WEDGE_MATRIX = [
+    { club: 'PW (46°)', cells: [
+      { carry: 72, roll: 5, spin: 6900, desc: 44, w80: 9, n: 14 },
+      { carry: 94, roll: 4, spin: 8100, desc: 47, w80: 11, n: 22 },
+      { carry: 112, roll: 3, spin: 8900, desc: 49, w80: 12, n: 19 },
+      { carry: 127, roll: 2, spin: 9450, desc: 50, w80: 15, n: 41 },
+    ]},
+    { club: 'GW (50°)', cells: [
+      { carry: 62, roll: 4, spin: 7300, desc: 45, w80: 8, n: 16 },
+      { carry: 82, roll: 3, spin: 8600, desc: 48, w80: 9, n: 28 },
+      { carry: 99, roll: 2, spin: 9400, desc: 50, w80: 11, n: 21 },
+      { carry: 114, roll: 1, spin: 9900, desc: 51, w80: 13, n: 35 },
+    ]},
+    { club: 'SW (54°)', cells: [
+      { carry: 51, roll: 3, spin: 7600, desc: 46, w80: 7, n: 19 },
+      { carry: 70, roll: 2, spin: 9050, desc: 49, w80: 8, n: 33 },
+      { carry: 86, roll: 1, spin: 9850, desc: 52, w80: 10, n: 24 },
+      { carry: 100, roll: 0, spin: 10300, desc: 53, w80: 12, n: 29 },
+    ]},
+    { club: 'LW (58°)', cells: [
+      { carry: 38, roll: 2, spin: 7400, desc: 47, w80: 6, n: 21 },
+      { carry: 56, roll: 1, spin: 9200, desc: 51, w80: 7, n: 29 },
+      { carry: 72, roll: 0, spin: 10150, desc: 54, w80: 9, n: 18 },
+      { carry: 84, roll: -1, spin: 10700, desc: 55, w80: 11, n: 25 },
+    ]},
+  ];
+  let selW = { r: 2, c: 1 };
+
+  function renderWedgeMatrix() {
+    let html = `<div class="wm-head">Club</div>` + CLOCKS.map((c) => `<div class="wm-head">${c} Arm</div>`).join('');
+    WEDGE_MATRIX.forEach((row, r) => {
+      html += `<div class="wm-club">${esc(row.club.split(' ')[0])}</div>`;
+      row.cells.forEach((cell, c) => {
+        const active = selW.r === r && selW.c === c ? 'selected' : '';
+        html += `<div class="wm-cell ${active}" data-r="${r}" data-c="${c}">
+          <div class="wm-yds">${cell.carry}<span style="font-size:11px;color:var(--muted);">y</span></div>
+          <div class="wm-meta">${(cell.spin/1000).toFixed(1)}k &middot; n=${cell.n}</div>
+        </div>`;
+      });
+    });
+    $('w-matrix').innerHTML = html;
+    $('w-matrix').querySelectorAll('.wm-cell').forEach((el) => {
+      el.addEventListener('click', () => {
+        selW = { r: Number(el.dataset.r), c: Number(el.dataset.c) };
+        renderWedgeMatrix();
+      });
+    });
+
+    const row = WEDGE_MATRIX[selW.r], cell = row.cells[selW.c];
+    const stop = cell.desc >= 50 ? 'Zip / Stop Dead' : cell.desc >= 47 ? 'Drop & Stop' : '1-Hop Release';
+    $('w-detail').innerHTML = `
+      <span class="kicker">Selected Stock Wedge Shot</span>
+      <h2 style="margin-bottom:10px;">${esc(row.club)} &middot; ${CLOCKS[selW.c]} Swing</h2>
+      <div class="metric-grid" style="grid-template-columns:1fr 1fr;">
+        <div class="m-cell green"><div class="m-k">Avg Carry</div><div class="m-v">${cell.carry} yds</div><div class="m-s">${cell.n} SQLite swings</div></div>
+        <div class="m-cell green"><div class="m-k">Roll / Spin-Back</div><div class="m-v">${cell.roll >= 0 ? '+' + cell.roll : cell.roll} yds</div><div class="m-s">${stop}</div></div>
+        <div class="m-cell"><div class="m-k">Backspin</div><div class="m-v">${cell.spin.toLocaleString()}</div><div class="m-s">rpm</div></div>
+        <div class="m-cell"><div class="m-k">Descent / 80% Width</div><div class="m-v">${cell.desc}&deg; / &plusmn;${cell.w80}y</div><div class="m-s">DECADE window</div></div>
+      </div>
+      <p class="muted mt-12">Use <strong>18/9 Tempo</strong> on clock swings to lock carry within &plusmn;3 yards under tournament pressure.</p>`;
+  }
+
+  $('w-open-card').addEventListener('click', () => {
+    $('w-printable-body').innerHTML = `
+      <table>
+        <thead><tr><th>Wedge</th>${CLOCKS.map((c) => `<th class="num">${c} Carry (Roll)</th>`).join('')}</tr></thead>
+        <tbody>
+          ${WEDGE_MATRIX.map((row) => `<tr><td><strong>${esc(row.club)}</strong></td>${row.cells.map((c) => `<td class="num"><strong>${c.carry}y</strong> <span class="muted">(${c.roll >= 0 ? '+'+c.roll : c.roll}y)</span></td>`).join('')}</tr>`).join('')}
+        </tbody>
+      </table>
+      <p class="muted mt-12">Tip: Fits on a 3&Prime;&times;5&Prime; laminated pocket card or Apple Watch photo for Saturday rounds.</p>`;
+    $('wedge-modal').classList.add('open');
+  });
+  $('w-close-modal').addEventListener('click', () => $('wedge-modal').classList.remove('open'));
+
+  // 3C: Pressure Gate ("Make 5 in a Row")
+  let streak = 0, bestStreak = 0, gatesCleared = 0;
+  const GATE_LABELS = {
+    hla: 'Make 5 in a Row: Start Line Gate (±1.5° HLA)',
+    driver: 'Make 5 in a Row: Driver Fairway (240y+ & ±15y)',
+    approach: 'Make 5 in a Row: 7-Iron Approach (Inside 20 ft)',
+  };
+  let audioCtx = null;
+  function beep(freq, dur, vol = 0.08) {
+    if (!$('p-audio-toggle').checked) return;
+    try {
+      audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+      const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+      o.frequency.value = freq; g.gain.value = vol;
+      o.connect(g); g.connect(audioCtx.destination);
+      o.start(); o.stop(audioCtx.currentTime + dur);
+    } catch {}
+  }
+
+  function pressureAction(made) {
+    if (made) {
+      streak += 1;
+      bestStreak = Math.max(bestStreak, streak);
+      if (streak === 5) {
+        gatesCleared += 1;
+        beep(880, 0.14); setTimeout(() => beep(1174, 0.22), 140);
+        showToast('🏆 GATE CLEARED! 5 in a row under pressure!');
+        renderPressure();
+        renderObsStage();
+        setTimeout(() => { streak = 0; renderPressure(); renderObsStage(); }, 1800);
+        return;
+      }
+      beep(streak === 4 ? 740 : 560, 0.11);
+      if (streak === 4) setTimeout(() => beep(110, 0.18, 0.12), 160);
+    } else {
+      if (streak >= 3) showToast(`💔 Brutal miss at ${streak}/5 — reset to 0!`);
+      streak = 0;
+      beep(180, 0.22);
+    }
+    renderPressure();
+    renderObsStage();
+  }
+  $('p-gate-select').addEventListener('change', () => { streak = 0; renderPressure(); renderObsStage(); });
+  $('p-btn-make').addEventListener('click', () => pressureAction(true));
+  $('p-btn-miss').addEventListener('click', () => pressureAction(false));
+  $('p-btn-rand').addEventListener('click', () => pressureAction(Math.random() < (streak === 4 ? 0.62 : 0.74)));
+
+  function renderPressure() {
+    const key = $('p-gate-select').value;
+    $('p-gate-title').textContent = GATE_LABELS[key];
+    $('p-pips').innerHTML = [1, 2, 3, 4, 5].map((n) => {
+      const cls = n <= streak ? 'pip made' : (n === streak + 1 && streak >= 3 ? 'pip next-pressure' : 'pip');
+      return `<div class="${cls}">${n <= streak ? '&#10003;' : n}</div>`;
+    }).join('');
+    $('p-status').textContent = streak === 5
+      ? '🏆 CLUTCH! 5/5 Cleared — Highlight Auto-Saved!'
+      : streak === 4
+        ? '🔥 BALL #5 — ONE SWING TO CLEAR THE GATE! Don’t miss now...'
+        : streak > 0
+          ? `${streak} of 5 made — stay in your routine!`
+          : 'Step up and start a 5-ball streak.';
+    $('p-status').style.color = streak === 5 ? 'var(--green)' : streak === 4 ? 'var(--yellow)' : 'var(--text)';
+    $('p-best').textContent = `Session Best Streak: ${bestStreak} / 5`;
+    $('p-clears').textContent = `Gates Cleared: ${gatesCleared}`;
+  }
+
+  // ==================== TAB 4: GHOST OVERLAY & POSE CANVAS ====================
+  let t4Pct = 84, t4Ghost = 'goto', t4Opacity = 0.55, t4Wipe = 1.0, t4Speed = 0.25, t4Playing = false, t4Raf = null, t4LastTs = 0;
+
+  function lerp(a, b, t) { return a + (b - a) * t; }
+  function samplePose(pct, mode) {
+    // Keyframes along normalized swing 0..100 (84 = Impact)
+    // Coordinates in canvas space centered around golfer at x=360, ground y=340
+    const isGhost = mode !== 'current';
+    const isPro = mode === 'pro';
+    const keys = [
+      { p: 0,   hipX: 332, hipY: 222, shX: 374, shY: 146, hdX: 392, hdY: 112, hndX: 404, hndY: 238, clubA: 1.05 }, // P1 Address
+      { p: 45,  hipX: 326, hipY: 218, shX: 358, shY: 138, hdX: 388, hdY: 110, hndX: 320, hndY: 94,  clubA: -2.45 }, // P4 Top
+      { p: 74,  hipX: isGhost ? 328 : 352, hipY: isGhost ? 226 : 214, shX: isGhost ? 368 : 364, shY: isGhost ? 152 : 140, hdX: isGhost ? 390 : 386, hdY: isGhost ? 118 : 106, hndX: isGhost ? (isPro ? 378 : 384) : 412, hndY: isGhost ? 210 : 186, clubA: -0.35 }, // P6 Delivery
+      { p: 84,  hipX: isGhost ? 330 : 356, hipY: isGhost ? 224 : 211, shX: isGhost ? 374 : 366, shY: isGhost ? 150 : 138, hdX: isGhost ? 393 : 385, hdY: isGhost ? 116 : 104, hndX: isGhost ? 406 : 422, hndY: isGhost ? 236 : 220, clubA: isGhost ? 0.96 : 1.18 }, // P7 Impact
+      { p: 100, hipX: 344, hipY: 204, shX: 356, shY: 126, hdX: 368, hdY: 94,  hndX: 344, hndY: 108, clubA: -2.15 }, // P9 Finish
+    ];
+    let k0 = keys[0], k1 = keys[keys.length - 1];
+    for (let i = 0; i < keys.length - 1; i++) {
+      if (pct >= keys[i].p && pct <= keys[i + 1].p) { k0 = keys[i]; k1 = keys[i + 1]; break; }
+    }
+    const u = k1.p === k0.p ? 0 : (pct - k0.p) / (k1.p - k0.p);
+    const out = {};
+    for (const k of ['hipX', 'hipY', 'shX', 'shY', 'hdX', 'hdY', 'hndX', 'hndY', 'clubA']) {
+      out[k] = lerp(k0[k], k1[k], u);
+    }
+    return out;
+  }
+
+  function drawGolfer(ctx, pose, color, alpha, label) {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = color;
+    ctx.fillStyle = color;
+    ctx.lineCap = 'round';
+    // Feet & legs
+    const footX = 352, footY = 342;
+    const kneeX = (footX + pose.hipX) / 2 + 12, kneeY = (footY + pose.hipY) / 2 + 4;
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(footX, footY); ctx.lineTo(kneeX, kneeY); ctx.lineTo(pose.hipX, pose.hipY); ctx.stroke();
+    // Spine
+    ctx.lineWidth = 5;
+    ctx.beginPath(); ctx.moveTo(pose.hipX, pose.hipY); ctx.lineTo(pose.shX, pose.shY); ctx.stroke();
+    // Head
+    ctx.beginPath(); ctx.arc(pose.hdX, pose.hdY, 15, 0, Math.PI * 2); ctx.lineWidth = 3; ctx.stroke();
+    // Arms to hands
+    ctx.lineWidth = 3.5;
+    ctx.beginPath(); ctx.moveTo(pose.shX, pose.shY); ctx.lineTo(pose.hndX, pose.hndY); ctx.stroke();
+    // Club shaft
+    const clubLen = 112;
+    const tipX = pose.hndX + Math.cos(pose.clubA) * clubLen;
+    const tipY = pose.hndY + Math.sin(pose.clubA) * clubLen;
+    ctx.lineWidth = 2.6;
+    ctx.beginPath(); ctx.moveTo(pose.hndX, pose.hndY); ctx.lineTo(tipX, tipY); ctx.stroke();
+    // Clubhead
+    ctx.beginPath(); ctx.arc(tipX, tipY, 5, 0, Math.PI * 2); ctx.fill();
+    // Joint nodes
+    [ [pose.hipX, pose.hipY], [pose.shX, pose.shY], [pose.hndX, pose.hndY] ].forEach(([x, y]) => {
+      ctx.beginPath(); ctx.arc(x, y, 4.5, 0, Math.PI * 2); ctx.fill();
+    });
+    if (label) {
+      ctx.font = 'bold 11px monospace';
+      ctx.fillText(label, 14, label.includes('GHOST') ? 38 : 22);
+    }
+    ctx.restore();
+  }
+
+  function drawGhostCanvas() {
+    const canvas = $('t4-canvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    ctx.clearRect(0, 0, W, H);
+
+    // Subtle dark sim studio grid
+    ctx.fillStyle = '#060a12'; ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(148,163,184,0.08)'; ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+    // Ground, Ball & Ideal Swing Plane + Butt Line
+    ctx.strokeStyle = 'rgba(148,163,184,0.3)'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, 344); ctx.lineTo(700, 344); ctx.stroke();
+    // Ball
+    ctx.fillStyle = '#ffffff'; ctx.beginPath(); ctx.arc(462, 338, 6, 0, Math.PI * 2); ctx.fill();
+    // Butt Reference Line (Early Extension Detector!)
+    ctx.save(); ctx.setLineDash([5, 5]); ctx.strokeStyle = 'rgba(248,113,113,0.55)'; ctx.lineWidth = 1.6;
+    ctx.beginPath(); ctx.moveTo(328, 120); ctx.lineTo(328, 344); ctx.stroke();
+    ctx.fillStyle = '#f87171'; ctx.font = '10px monospace'; ctx.fillText('BUTT LINE (P1)', 232, 134);
+    // Ideal Swing Plane
+    ctx.strokeStyle = 'rgba(52,211,153,0.32)';
+    ctx.beginPath(); ctx.moveTo(462, 338); ctx.lineTo(270, 95); ctx.stroke();
+    ctx.fillStyle = '#34d399'; ctx.fillText('IDEAL PLANE', 202, 108);
+    ctx.restore();
+
+    const curPose = samplePose(t4Pct, 'current');
+    const ghPose = samplePose(t4Pct, t4Ghost);
+    const ghColor = t4Ghost === 'pro' ? '#f8fafc' : '#34d399';
+    const ghLabel = t4Ghost === 'pro' ? 'GHOST: RORY MCILROY (DTL)' : 'GHOST: MY-GO-TO BEST (7I)';
+
+    const wipeX = W * t4Wipe;
+    // Draw Ghost (right of wipe if split active, else full)
+    ctx.save();
+    if (t4Wipe < 0.99) { ctx.beginPath(); ctx.rect(wipeX, 0, W - wipeX, H); ctx.clip(); }
+    drawGolfer(ctx, ghPose, ghColor, t4Wipe < 0.99 ? 0.92 : t4Opacity, ghLabel);
+    ctx.restore();
+
+    // Draw Current Swing (left of wipe if split active, else full)
+    ctx.save();
+    if (t4Wipe < 0.99) { ctx.beginPath(); ctx.rect(0, 0, wipeX, H); ctx.clip(); }
+    drawGolfer(ctx, curPose, '#22d3ee', 0.96, 'CURRENT SWING (7I · FLIPPING)');
+    ctx.restore();
+
+    // Split wipe handle line
+    if (t4Wipe < 0.99) {
+      ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(wipeX, 0); ctx.lineTo(wipeX, H); ctx.stroke();
+      ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 10px monospace';
+      ctx.fillText('◀ CURRENT | GHOST ▶', Math.max(12, wipeX - 68), H - 12);
+    }
+
+    // Impact Flash Badge at P7
+    if (Math.abs(t4Pct - 84) <= 2) {
+      ctx.fillStyle = 'rgba(251,191,36,0.2)'; ctx.strokeStyle = '#fbbf24'; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.roundRect(545, 14, 198, 30, 8); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 11px monospace';
+      ctx.fillText('⚡ AUTO-IMPACT SYNCED', 562, 33);
+    }
+
+    // Update timecode + pose telemetry cards
+    const sec = ((t4Pct - 84) / 84 * 0.95).toFixed(2);
+    const pName = t4Pct < 15 ? 'P1 Address' : t4Pct < 58 ? 'P4 Top' : t4Pct < 80 ? 'P6 Delivery' : t4Pct <= 88 ? 'P7 Impact' : 'P9 Finish';
+    $('t4-time-pill').textContent = `T = ${Number(sec) >= 0 ? '+' : ''}${sec}s (${pName})`;
+    $('t4-pct-lbl').textContent = `${Math.round(t4Pct)}%`;
+
+    const eeInches = +((curPose.hipX - ghPose.hipX) * 0.085).toFixed(1);
+    const headDiff = +((ghPose.hdY - curPose.hdY) * 0.11).toFixed(1);
+    const handHigh = +((ghPose.hndY - curPose.hndY) * 0.13).toFixed(1);
+    const spineDelta = +(Math.abs(curPose.hipX - ghPose.hipX) * 0.34).toFixed(1);
+    $('t4-bio-metrics').innerHTML = `
+      <div class="m-cell ${eeInches > 1.2 ? 'red' : eeInches > 0.5 ? 'yellow' : 'green'}"><div class="m-k">Pelvis Drift (EE)</div><div class="m-v">${eeInches >= 0 ? '+' : ''}${eeInches}&Prime;</div><div class="m-s">vs Ghost Butt Line</div></div>
+      <div class="m-cell ${Math.abs(handHigh) > 1.5 ? 'red' : 'green'}"><div class="m-k">Hand Height &Delta;</div><div class="m-v">${handHigh >= 0 ? '+' : ''}${handHigh}&Prime;</div><div class="m-s">${handHigh > 1 ? 'Higher / Steep' : 'On Ghost Plane'}</div></div>
+      <div class="m-cell ${spineDelta > 4 ? 'yellow' : 'green'}"><div class="m-k">Spine Tilt Loss</div><div class="m-v">${spineDelta}&deg;</div><div class="m-s">Posture hold</div></div>
+      <div class="m-cell ${Math.abs(headDiff) > 1.2 ? 'yellow' : 'green'}"><div class="m-k">Head Vertical</div><div class="m-v">${headDiff >= 0 ? '+' : ''}${headDiff}&Prime;</div><div class="m-s">From address</div></div>`;
+  }
+
+  function tickGhost(ts) {
+    if (!t4Playing) return;
+    if (!t4LastTs) t4LastTs = ts;
+    const dt = (ts - t4LastTs) / 1000;
+    t4LastTs = ts;
+    t4Pct = (t4Pct + dt * 42 * t4Speed) % 100;
+    $('t4-scrub').value = String(Math.round(t4Pct));
+    drawGhostCanvas();
+    t4Raf = requestAnimationFrame(tickGhost);
+  }
+
+  $('t4-play').addEventListener('click', () => {
+    t4Playing = !t4Playing;
+    $('t4-play').innerHTML = t4Playing ? '&#10074;&#10074; Pause' : '&#9654; Play';
+    t4LastTs = 0;
+    if (t4Playing) t4Raf = requestAnimationFrame(tickGhost);
+    else cancelAnimationFrame(t4Raf);
+  });
+  $('t4-scrub').addEventListener('input', (e) => { t4Pct = Number(e.target.value); drawGhostCanvas(); });
+  $('t4-opacity').addEventListener('input', (e) => {
+    t4Opacity = Number(e.target.value) / 100;
+    $('t4-op-lbl').textContent = `${e.target.value}%`;
+    drawGhostCanvas();
+  });
+  $('t4-wipe').addEventListener('input', (e) => {
+    t4Wipe = Number(e.target.value) / 100;
+    $('t4-wipe-lbl').textContent = t4Wipe >= 0.99 ? 'Off (Full Blend)' : `${e.target.value}% Split`;
+    drawGhostCanvas();
+  });
+  document.querySelectorAll('#t4-ghost-seg button').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#t4-ghost-seg button').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active'); t4Ghost = b.dataset.g; drawGhostCanvas();
+    });
+  });
+  document.querySelectorAll('#t4-speed-seg button').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#t4-speed-seg button').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active'); t4Speed = Number(b.dataset.s);
+    });
+  });
+  document.querySelectorAll('#t4 [data-p]').forEach((b) => {
+    b.addEventListener('click', () => {
+      t4Playing = false; $('t4-play').innerHTML = '&#9654; Play'; cancelAnimationFrame(t4Raf);
+      t4Pct = Number(b.dataset.p); $('t4-scrub').value = String(t4Pct); drawGhostCanvas();
+    });
+  });
+
+  // ==================== TAB 5: CONDITIONS BAG SIM & MAT-FAT ====================
+  const BAG_STOCK = [
+    { club: 'DR', carry: 252, apex: 92 }, { club: '3W', carry: 228, apex: 86 },
+    { club: '5W', carry: 212, apex: 88 }, { club: '4H', carry: 196, apex: 89 },
+    { club: '5I', carry: 185, apex: 88 }, { club: '6I', carry: 175, apex: 90 },
+    { club: '7I', carry: 165, apex: 92 }, { club: '8I', carry: 153, apex: 94 },
+    { club: '9I', carry: 141, apex: 95 }, { club: 'PW', carry: 127, apex: 93 },
+    { club: 'GW', carry: 114, apex: 91 }, { club: 'SW', carry: 100, apex: 88 },
+    { club: 'LW', carry: 84, apex: 84 },
+  ];
+
+  function renderConditions() {
+    const wind = Number($('s-wind').value);
+    const xwind = Number($('s-xwind').value);
+    const temp = Number($('s-temp').value);
+    const alt = Number($('s-alt').value);
+    const lie = $('s-lie').value;
+
+    $('s-wind-v').textContent = wind === 0 ? 'Calm (0 mph)' : wind < 0 ? `${Math.abs(wind)} mph Hurting` : `${wind} mph Helping`;
+    $('s-xwind-v').textContent = xwind === 0 ? 'None' : xwind > 0 ? `${xwind} mph L→R` : `${Math.abs(xwind)} mph R→L`;
+    $('s-temp-v').textContent = `${temp}°F`;
+    $('s-alt-v').textContent = `${alt.toLocaleString()} ft`;
+
+    // TrackMan aerodynamic approximations:
+    // Hurting wind: ~1% carry loss per mph; Helping wind: ~0.5% gain per mph; Altitude: +1.15% per 1000ft; Temp: +0.2% per °F above 70
+    const windFactor = wind < 0 ? 1 + wind * 0.0105 : 1 + wind * 0.0055;
+    const altFactor = 1 + (alt / 1000) * 0.012;
+    const tempFactor = 1 + (temp - 70) * 0.0018;
+    const lieFactor = lie === 'rough' ? 0.93 : lie === 'soft' ? 0.98 : 1.0;
+
+    const totalPct = Math.round((windFactor * altFactor * tempFactor * lieFactor - 1) * 100);
+    $('t5-summary-pill').textContent = totalPct === 0 && xwind === 0 ? 'Stock Conditions' : `Carry ${totalPct >= 0 ? '+' : ''}${totalPct}%`;
+
+    $('t5-bag-bars').innerHTML = BAG_STOCK.map((c) => {
+      const adj = Math.round(c.carry * windFactor * altFactor * tempFactor * lieFactor);
+      const diff = adj - c.carry;
+      const aimOff = Math.round(xwind * (c.carry / 180) * 0.85);
+      const stockPct = Math.min(100, (c.carry / 290) * 100);
+      const adjPct = Math.min(100, (adj / 290) * 100);
+      const col = diff > 2 ? '#34d399' : diff < -2 ? '#f87171' : '#22d3ee';
+      return `
+        <div style="display:grid;grid-template-columns:44px 1fr 118px 92px;gap:10px;align-items:center;margin-bottom:7px;">
+          <strong class="mono" style="color:var(--cyan);">${c.club}</strong>
+          <div style="position:relative;height:14px;background:rgba(148,163,184,0.1);border-radius:6px;overflow:hidden;">
+            <div style="position:absolute;inset:0 auto 0 0;width:${stockPct}%;background:rgba(148,163,184,0.22);"></div>
+            <div style="position:absolute;top:2px;bottom:2px;left:0;width:${adjPct}%;background:${col};border-radius:4px;transition:width 0.15s;"></div>
+          </div>
+          <div class="mono" style="font-size:11.5px;text-align:right;">
+            <strong>${adj}y</strong> <span style="color:${col};">(${diff >= 0 ? '+' : ''}${diff}y)</span>
+          </div>
+          <div class="mono muted" style="font-size:10.5px;text-align:right;">
+            ${aimOff === 0 ? 'Aim 0y' : `Aim ${Math.abs(aimOff)}y ${aimOff > 0 ? 'L' : 'R'}`}
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  ['s-wind', 's-xwind', 's-temp', 's-alt', 's-lie'].forEach((id) => $(id).addEventListener('input', renderConditions));
+  document.querySelectorAll('#t5 [data-preset]').forEach((b) => {
+    b.addEventListener('click', () => {
+      const p = b.dataset.preset;
+      if (p === 'calm') { $('s-wind').value = 0; $('s-xwind').value = 0; $('s-temp').value = 70; $('s-alt').value = 0; $('s-lie').value = 'mat'; }
+      if (p === 'links') { $('s-wind').value = -18; $('s-xwind').value = 14; $('s-temp').value = 52; $('s-alt').value = 0; $('s-lie').value = 'firm'; }
+      if (p === 'denver') { $('s-wind').value = 4; $('s-xwind').value = 0; $('s-temp').value = 84; $('s-alt').value = 5250; $('s-lie').value = 'firm'; }
+      if (p === 'rough') { $('s-wind').value = -6; $('s-xwind').value = 0; $('s-temp').value = 68; $('s-alt').value = 0; $('s-lie').value = 'rough'; }
+      renderConditions();
+    });
+  });
+
+  const FAT_CASES = [
+    { sim: 156, turf: 118, risk: 'HIGH (Mat Bounce Masked Chunk)', sev: 'red', aoa: '-6.9°', smash: '1.28', cs: '84.5 mph (−3.2)', note: 'Steep AoA + clubhead deceleration before impact indicates turf contact 2" behind the ball. Your hitting strip bounced the clubhead into the ball!' },
+    { sim: 168, turf: 168, risk: 'LOW (Crisp Ball-First Compression)', sev: 'green', aoa: '-4.2°', smash: '1.38', cs: '87.4 mph', note: 'Optimal smash and clean speed retention through impact — this shot translates 100% to real grass.' },
+    { sim: 131, turf: 74, risk: 'SEVERE (Heavy Turf Grab)', sev: 'red', aoa: '-8.1°', smash: '1.16', cs: '79.2 mph (−8.5)', note: 'Massive energy loss before impact. On wet fairway turf this would leave a beaver-pelt divot 75 yds short.' },
+  ];
+  let fatIdx = 0;
+  document.querySelectorAll('#t5-fat-seg button').forEach((b) => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('#t5-fat-seg button').forEach((x) => x.classList.remove('active'));
+      b.classList.add('active'); fatIdx = Number(b.dataset.f); renderFat();
+    });
+  });
+  function renderFat() {
+    const f = FAT_CASES[fatIdx];
+    $('t5-fat-body').innerHTML = `
+      <div class="grid-2" style="margin-bottom:10px;">
+        <div class="m-cell"><div class="m-k">Indoor Sim Mat Result</div><div class="m-v">${f.sim} yds</div><div class="m-s">AoA ${f.aoa} &middot; Smash ${f.smash}</div></div>
+        <div class="m-cell ${f.sev}"><div class="m-k">Outdoor Turf Projection</div><div class="m-v">${f.turf} yds</div><div class="m-s">CS ${f.cs}</div></div>
+      </div>
+      <span class="pill pill-${f.sev}" style="margin-bottom:8px;">${esc(f.risk)}</span>
+      <p class="muted" style="margin:6px 0 0;">${esc(f.note)}</p>`;
+  }
+
+  // ==================== TAB 6: CALIBRATION WIZARD & HANDS-FREE ====================
+  const CAL_BAG = [
+    { club: 'DR', n: 18 }, { club: '3W', n: 6 }, { club: '5W', n: 3 }, { club: '4H', n: 1 },
+    { club: '4I', n: 0 }, { club: '5I', n: 2 }, { club: '6I', n: 4 }, { club: '7I', n: 15 },
+    { club: '8I', n: 7 }, { club: '9I', n: 6 }, { club: 'PW', n: 11 }, { club: 'GW', n: 5 },
+    { club: 'SW', n: 8 }, { club: 'LW', n: 2 },
+  ];
+  let calSel = 3; // 4H
+
+  function renderCal() {
+    const lockedCount = CAL_BAG.filter((c) => c.n >= 5).length;
+    const conf = Math.min(97, Math.round(74 + (lockedCount / CAL_BAG.length) * 23));
+    $('t6-readiness-pill').textContent = `Auto-Switch Confidence: ${conf}% (${lockedCount}/14 Locked)`;
+    $('t6-readiness-pill').className = `pill ${conf >= 92 ? 'pill-green' : 'pill-cyan'}`;
+
+    $('t6-heatmap').innerHTML = CAL_BAG.map((c, i) => {
+      const cls = c.n >= 5 ? 'locked' : c.n > 0 ? 'learning' : '';
+      const sel = i === calSel ? 'selected' : '';
+      return `<div class="cal-tile ${cls} ${sel}" data-i="${i}">
+        <div class="cal-club">${c.club}</div>
+        <div class="cal-n">${c.n}/5 ${c.n >= 5 ? '&#10003;' : ''}</div>
+      </div>`;
+    }).join('');
+    $('t6-heatmap').querySelectorAll('.cal-tile').forEach((el) => {
+      el.addEventListener('click', () => { calSel = Number(el.dataset.i); renderCal(); });
+    });
+
+    const cur = CAL_BAG[calSel];
+    const rem = Math.max(0, 5 - cur.n);
+    $('t6-wiz-title').textContent = `${cur.club} — ${rem === 0 ? 'Calibrated & Locked!' : `Hit ${rem} more full ball${rem > 1 ? 's' : ''} to lock`}`;
+    $('t6-wiz-desc').textContent = rem === 0
+      ? `Posterior Gaussian locked (${cur.n} confirmed shots). Click another yellow/gray club to keep building your bag.`
+      : `Each confirmed shot updates Welford mean/variance in swings.sqlite for 95%+ GSPro auto-switching.`;
+    $('t6-wiz-dots').innerHTML = [1, 2, 3, 4, 5].map((k) =>
+      `<span style="width:12px;height:12px;border-radius:50%;display:inline-block;background:${k <= cur.n ? '#34d399' : 'rgba(148,163,184,0.2)'};"></span>`
+    ).join('');
+  }
+
+  $('t6-sim-cal').addEventListener('click', () => {
+    CAL_BAG[calSel].n += 1;
+    if (CAL_BAG[calSel].n === 5) {
+      showToast(`✓ ${CAL_BAG[calSel].club} locked into personal calibration!`);
+      const nextUn = CAL_BAG.findIndex((c) => c.n < 5);
+      if (nextUn >= 0) calSel = nextUn;
+    }
+    renderCal();
+  });
+
+  document.querySelectorAll('#t6 [data-cmd]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const ts = new Date().toLocaleTimeString();
+      const cmd = el.dataset.cmd;
+      const log = $('t6-log');
+      log.innerHTML = `[${esc(ts)}] ${esc(cmd)}<br/>` + log.innerHTML.split('<br/>').slice(0, 4).join('<br/>');
+      showToast(cmd);
+    });
+  });
+
+  // ==================== TAB 7: OBS STAGE, HIGHLIGHTS & COACH PACKET ====================
+  function renderObsStage() {
+    $('obs-challenge-widget').style.display = $('obs-tog-chal').checked ? 'block' : 'none';
+    $('obs-verdict-widget').style.display = $('obs-tog-dna').checked ? 'flex' : 'none';
+    const avgPts = combineResults.length ? Math.round(combineResults.reduce((a, r) => a + r.pts, 0) / combineResults.length) : 84;
+    const pips = [1, 2, 3, 4, 5].map((n) =>
+      `<span style="width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;border:2px solid ${n <= streak ? '#34d399' : 'rgba(148,163,184,0.35)'};background:${n <= streak ? 'rgba(52,211,153,0.25)' : 'transparent'};color:${n <= streak ? '#34d399' : '#64748b'};">${n <= streak ? '✓' : n}</span>`
+    ).join('');
+    $('obs-challenge-widget').innerHTML = `
+      <div class="flex-row" style="justify-content:space-between;margin-bottom:6px;">
+        <span class="kicker" style="color:var(--cyan);">SHOTLAB CHALLENGE &middot; LIVE</span>
+        <span class="mono" style="font-size:11px;color:var(--yellow);">COMBINE ${avgPts}</span>
+      </div>
+      <div class="flex-row" style="justify-content:space-between;">
+        <strong style="font-size:13px;">MAKE 5 IN A ROW (${streak}/5)</strong>
+        <div class="flex-row" style="gap:5px;">${pips}</div>
+      </div>`;
+  }
+
+  $('obs-tog-chal').addEventListener('change', renderObsStage);
+  $('obs-tog-dna').addEventListener('change', renderObsStage);
+  $('obs-sim-make').addEventListener('click', () => pressureAction(true));
+  $('obs-sim-miss').addEventListener('click', () => pressureAction(false));
+
+  const HIGHLIGHTS = [
+    { title: 'Personal Carry PR — Driver 278y (+0.38 SG)', file: 'Swings/Highlights/2026-11-21_DR_278y_PR.mp4', badge: 'CARRY PR', sev: 'green', meta: 'DTL 240fps + 3D Tracer + Telemetry Lower-Third burned in' },
+    { title: '94-Score Pure 7-Iron Push Draw (168y)', file: 'Swings/Highlights/2026-11-21_7I_168y_Score94.mp4', badge: '90+ SCORE', sev: 'cyan', meta: 'Smash 1.38 · +6.2° Shaft Lean · Ready to share' },
+    { title: '5/5 Pressure Start-Line Gate Cleared', file: 'Swings/Highlights/2026-11-21_Gate5of5_Clutch.mp4', badge: 'CLUTCH STREAK', sev: 'yellow', meta: '5 consecutive balls inside ±1.5° HLA with OBS HUD overlay' },
+  ];
+  $('t7-highlights').innerHTML = HIGHLIGHTS.map((h) => `
+    <div class="card" style="padding:10px 12px;margin-bottom:9px;background:rgba(7,11,18,0.55);">
+      <div class="flex-row" style="justify-content:space-between;">
+        <strong>${esc(h.title)}</strong>
+        <span class="pill pill-${h.sev}">${esc(h.badge)}</span>
+      </div>
+      <div class="mono muted" style="font-size:10.5px;margin-top:3px;">${esc(h.file)}</div>
+      <div class="muted" style="font-size:11.5px;margin-top:3px;">${esc(h.meta)}</div>
+    </div>`).join('');
+
+  $('t7-download-packet').addEventListener('click', () => {
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>ShotLab Coach Packet — 30-Day Review</title>
+<style>body{font-family:-apple-system,sans-serif;background:#0b111d;color:#e2e8f0;max-width:860px;margin:28px auto;padding:0 18px;line-height:1.5}
+.box{background:#111a2c;border:1px solid #24324c;border-radius:10px;padding:16px;margin:14px 0}h1{color:#22d3ee}
+table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid #24324c;text-align:left}</style></head><body>
+<h1>ShotLab Coach Handoff Packet (30 Days &middot; 1,428 Swings)</h1>
+<div class="box"><h2>#1 Stroke Leak &amp; Cruise Speed Discovery</h2>
+<p><strong>Driver Over-Speed Cliff (&gt;101 mph):</strong> Accounts for 58% of tee strokes lost (&minus;0.41 SG). Optimal Cruise Gear is <strong>97&ndash;99 mph (+0.14 SG)</strong>.</p>
+<p><strong>7-Iron Root Cause:</strong> Face-to-Path explains 64% of lost strokes; AoA explains only 8%.</p></div>
+<div class="box"><h2>Biomechanics &times; BLP Correlation</h2>
+<p>Early Extension (Pelvis Drift &gt; 1.8&Prime; at P6) correlates with Flipping Floater (<strong>r = 0.78</strong>, +2.2&deg; AoA shallowing).</p></div>
+<div class="box"><h2>Feel Retention Audit</h2>
+<table><tr><th>Active Feel</th><th>Baseline</th><th>Active</th><th>3-Session Retention</th></tr>
+<tr><td>Lead Wrist Flat Through Impact</td><td>&minus;0.11 SG</td><td>+0.21 SG</td><td><strong>+0.18 SG (Stuck)</strong></td></tr>
+<tr><td>98 mph Smooth Transition</td><td>&minus;0.22 SG</td><td>+0.16 SG</td><td><strong>+0.14 SG (Stuck)</strong></td></tr></table></div></body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'ShotLab_Coach_Packet_Sample.html';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    showToast('Downloaded ShotLab_Coach_Packet_Sample.html!');
+  });
+
+  // Initial render of all views
+  renderTab1();
+  renderTab2();
+  renderCombine();
+  renderWedgeMatrix();
+  renderPressure();
+  drawGhostCanvas();
+  renderConditions();
+  renderFat();
+  renderCal();
+  renderObsStage();
+})();
+</script>
+</body>
+</html>

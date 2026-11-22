@@ -2,8 +2,8 @@
  * ShotLab — OBS Studio Browser Source Live Overlay Controller.
  *
  * URL parameters:
- *   ?widget=hud|shape|metrics|diagnosis|compact|club|tracer|dispersion|ticker  (default: hud)
- *   &autohide=<seconds>                                                       (default: uses ShotLab Settings, 0 = always visible)
+ *   ?widget=hud|shape|metrics|diagnosis|compact|club|tracer|dispersion|ticker|challenge|verdict  (default: hud)
+ *   &autohide=<seconds>                                                                         (default: uses ShotLab Settings, 0 = always visible)
  */
 (function () {
   'use strict';
@@ -21,6 +21,7 @@
   let hideTimer = null;
   let lastShotId = null;
   let lastRenderSig = null;
+  let lastChallengeSig = null;
   let receivedSse = false;
 
   function esc(s) {
@@ -103,7 +104,7 @@
         </div>
         <div class="hud-metrics">${tiles}</div>
         <div class="hud-coach">
-          <span class="hud-coach-kicker">Coach Diagnosis · Score ${esc(sc.score)}</span>
+          <span class="hud-coach-kicker">Coach Diagnosis · Score ${esc(sc.score != null ? sc.score : '—')}</span>
           <span class="hud-coach-main" style="color:${window.ShotLabSVG.gradeColor(del.severity)}">${esc(del.name)}</span>
           <span class="hud-coach-sub">${esc(st.label)}${leftYds >= 4 ? ` · +${leftYds}y pot.` : ' · Maxed'}</span>
         </div>
@@ -167,7 +168,7 @@
         </div>
         <div class="diag-info">
           <div style="display:flex;align-items:center;gap:6px;">
-            <span class="badge badge-${esc(del.severity)}">${esc(shot.activeClub || '—')} · Score ${esc(sc.score)}</span>
+            <span class="badge badge-${esc(del.severity)}">${esc(shot.activeClub || '—')} · Score ${esc(sc.score != null ? sc.score : '—')}</span>
             <span class="badge badge-${esc(st.severity)}">${esc(locLabel)}</span>
           </div>
           <div class="diag-title">${esc(del.name)}</div>
@@ -196,7 +197,7 @@
       <div class="ov-card compact-stack sev-${esc(sh.severity)} ${pulseClass}">
         <div class="cs-head">
           <span class="cs-club">${esc(shot.activeClubLabel || shot.activeClub || '—')}</span>
-          <span class="badge badge-${esc(sc.overallGrade)}">Score ${esc(sc.score)}</span>
+          <span class="badge badge-${esc(sc.overallGrade)}">Score ${esc(sc.score != null ? sc.score : '—')}</span>
         </div>
         <div class="cs-hero">
           <div class="cs-svg">
@@ -563,7 +564,7 @@
         <span class="tk-sep"></span>
         <div class="ticker-item">
           <span class="tk-lbl">AVG CARRY</span>
-          <span class="tk-val">${avgCarry !== null && Number.isFinite(Number(avgCarry)) ? `${Math.round(Number(avgCarry))}y` : '—'}</span>
+          <span class="tk-val">${typeof avgCarry === 'number' && Number.isFinite(avgCarry) ? `${Math.round(avgCarry)}y` : '—'}</span>
         </div>
         <span class="tk-sep"></span>
         <div class="ticker-item sev-${sgSeverity(avgSg)}">
@@ -583,8 +584,53 @@
         </div>
         <div class="ticker-db">
           <span class="tk-lbl">DB</span>
-          <span class="tk-val">${totalDb !== null && Number.isFinite(Number(totalDb)) ? `${Math.round(Number(totalDb))} swings` : '—'}</span>
+          <span class="tk-val">${typeof totalDb === 'number' && Number.isFinite(totalDb) ? `${Math.round(totalDb)} swings` : '—'}</span>
         </div>
+      </div>
+    `;
+  }
+
+  /**
+   * 10. Challenge / Pressure Combine Tracker (320x96).
+   */
+  function renderChallenge(payload, pulseClass) {
+    const ch = (payload && payload.challengeState) || { name: '5/5 Pressure Gate', score: '0 / 5', streak: 0, target: 'Start Line ±1.5°', status: 'Ready' };
+    const sev = ch.streak >= 4 ? 'green' : ch.streak >= 2 ? 'yellow' : 'neutral';
+    return `
+      <div class="ov-card challenge-pill sev-${sev} ${pulseClass}">
+        <div class="ch-left">
+          <span class="ch-kicker">SHOTLAB CHALLENGE</span>
+          <div class="ch-name">${esc(ch.name)}</div>
+          <div class="ch-sub">${esc(ch.target || ch.status || 'Live')}</div>
+        </div>
+        <div class="ch-right">
+          <span class="badge ${ch.streak >= 3 ? 'badge-green' : 'badge-cyan'}">${esc(ch.score)}</span>
+        </div>
+      </div>
+    `;
+  }
+
+  /**
+   * 11. Coupled Verdict Pill (440x76).
+   */
+  function renderVerdict(shot, pulseClass) {
+    if (!shot) {
+      return `<div class="ov-card waiting-pill"><span class="waiting-dot"></span> ShotLab Verdict Ready</div>`;
+    }
+    const sh = shot.shotShape || { name: '—', severity: 'neutral' };
+    const del = shot.delivery || { name: '—', tagline: '' };
+    const sc = shot.scorecard || { score: '—', overallGrade: 'neutral' };
+    const m = shot.metrics || {};
+    const isAlmost = (shot.practiceMode || 'real') === 'almost';
+    const clubLbl = shot.activeClub || '—';
+    const carryLbl = isAlmost ? 'Quiet Mode' : `${safeRound(m.effectiveCarry)}y`;
+    return `
+      <div class="ov-card verdict-pill sev-${esc(sh.severity)} ${pulseClass}">
+        <div class="vp-main">
+          <div class="vp-top">${esc(clubLbl)} · ${carryLbl} · ${esc(sh.name)}</div>
+          <div class="vp-sub">${esc(del.name)}${del.tagline ? ` — ${esc(del.tagline)}` : ''}</div>
+        </div>
+        <span class="badge badge-${esc(sc.overallGrade || sh.severity)}">Score ${esc(sc.score != null ? sc.score : '—')}</span>
       </div>
     `;
   }
@@ -600,6 +646,8 @@
       case 'tracer': return renderTracer(shot, pulseClass);
       case 'dispersion': return renderDispersion(payload, pulseClass);
       case 'ticker': return renderTicker(payload, pulseClass);
+      case 'challenge': return renderChallenge(payload, pulseClass);
+      case 'verdict': return renderVerdict(shot, pulseClass);
       case 'hud':
       default:
         return renderHud(shot, pulseClass);
@@ -614,13 +662,23 @@
       ? urlAutoHideSec
       : Math.max(0, Number(settings.obsAutoHideSec) || 0);
 
+    if (effectiveAutoHide === 0) {
+      if (hideTimer) {
+        clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+      root.classList.remove('fade-out');
+    }
+
     const canRenderWithoutShot =
       (widget === 'ticker' && payload && payload.sessionTicker) ||
+      (widget === 'challenge' && payload) ||
       (widget === 'dispersion' && payload && payload.dispersion && payload.dispersion.n > 0);
 
     if (!shot && !canRenderWithoutShot) {
       lastShotId = null;
       lastRenderSig = null;
+      lastChallengeSig = null;
       if (hideTimer) {
         clearTimeout(hideTimer);
         hideTimer = null;
@@ -630,26 +688,42 @@
       return;
     }
 
+    if (!shot && widget === 'ticker' && payload.sessionTicker && Number(payload.sessionTicker.count || 0) === 0) {
+      if (hideTimer) {
+        clearTimeout(hideTimer);
+        hideTimer = null;
+      }
+      root.classList.remove('fade-out');
+    }
+
     const currentId = shot ? shot.id : null;
-    const isShotOnlyWidget = widget !== 'dispersion' && widget !== 'ticker';
-    const renderSig = shot
-      ? [
-          shot.id || '',
-          shot.activeClub || '',
-          shot.confirmedClub || '',
-          handedness,
-          shot.practiceMode || settings.practiceMode || '',
-          shot.scorecard ? shot.scorecard.score : '',
-        ].join('|')
-      : null;
+    const isShotOnlyWidget = widget !== 'dispersion' && widget !== 'ticker' && widget !== 'challenge';
+    const challengeSig = widget === 'challenge' ? JSON.stringify((payload && payload.challengeState) || null) : '';
+    const renderSig = [
+      shot ? (shot.id || '') : '',
+      shot ? (shot.activeClub || '') : '',
+      shot ? (shot.confirmedClub || '') : '',
+      handedness,
+      settings.tierId || '',
+      shot ? (shot.practiceMode || settings.practiceMode || '') : (settings.practiceMode || ''),
+      shot && shot.scorecard ? (shot.scorecard.score ?? '') : '',
+      shot && shot.delivery ? (shot.delivery.name || '') : '',
+      shot && shot.metrics && typeof shot.metrics.effectiveCarry === 'number' ? Math.round(shot.metrics.effectiveCarry * 10) : '',
+      shot && shot.flight && typeof shot.flight.apexFt === 'number' ? Math.round(shot.flight.apexFt) : '',
+      shot && shot.shotShape ? (shot.shotShape.name || '') : '',
+      effectiveAutoHide,
+      challengeSig,
+    ].join('|');
 
     if (!isNewShot && isShotOnlyWidget && currentId !== null && currentId === lastShotId && renderSig === lastRenderSig) {
       return;
     }
 
-    const shotChanged = Boolean(shot) && (isNewShot || currentId !== lastShotId);
+    const challengeChanged = widget === 'challenge' && challengeSig !== lastChallengeSig;
+    const shotChanged = (Boolean(shot) && (isNewShot || currentId !== lastShotId)) || challengeChanged;
     lastShotId = currentId;
     lastRenderSig = renderSig;
+    lastChallengeSig = challengeSig;
 
     // Only wake a faded overlay and play entry animation when a new or newly-selected shot arrives
     if (shotChanged) {

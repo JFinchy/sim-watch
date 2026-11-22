@@ -1,0 +1,2020 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ShotLab — High-Def Spinning Ball, Club Whoosh &amp; Matrix Telemetry Prototypes</title>
+  <style>
+    :root {
+      --bg: #07080b;
+      --surface: #0d1016;
+      --surface-2: #12161f;
+      --surface-3: #181d29;
+      --line: #212736;
+      --line-hi: #323b4f;
+      --text: #f3f5f8;
+      --text-dim: #9aa3b2;
+      --text-muted: #5d6678;
+
+      --crimson: #ef233c;
+      --crimson-hi: #ff4d5e;
+      --crimson-soft: rgba(239, 35, 60, 0.14);
+      --green: #10b981;
+      --green-soft: rgba(16, 185, 129, 0.14);
+      --amber: #f59e0b;
+
+      --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 50% -10%, rgba(239, 35, 60, 0.06), transparent 55%),
+        var(--bg);
+      color: var(--text);
+      font-family: var(--sans);
+      font-size: 13px;
+      line-height: 1.45;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    .tnum { font-variant-numeric: tabular-nums; }
+
+    /* TOP HARDWARE BAR */
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 40;
+      background: rgba(7, 8, 11, 0.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--line);
+    }
+    .topbar-inner {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 11px 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      flex-wrap: wrap;
+    }
+    .brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+    }
+    .brand-lockup canvas {
+      border-radius: 7px;
+      display: block;
+    }
+    .brand-name {
+      font-weight: 900;
+      font-size: 14px;
+      letter-spacing: 0.14em;
+      color: #fff;
+    }
+    .brand-tag {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--text-dim);
+      letter-spacing: 0.06em;
+    }
+    .status-strip {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .hw-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text-dim);
+    }
+    .hw-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--crimson);
+      box-shadow: 0 0 8px var(--crimson);
+    }
+    .hw-dot.green {
+      background: var(--green);
+      box-shadow: 0 0 8px var(--green);
+    }
+
+    /* PAGE SHELL */
+    .shell {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 26px 22px 64px;
+      display: flex;
+      flex-direction: column;
+      gap: 38px;
+    }
+
+    .sec-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 10px;
+    }
+    .sec-kicker {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      color: var(--crimson-hi);
+      margin-bottom: 3px;
+    }
+    .sec-title {
+      margin: 0;
+      font-size: 19px;
+      font-weight: 800;
+      letter-spacing: -0.015em;
+      color: #fff;
+    }
+    .sec-sub {
+      margin: 3px 0 0;
+      font-size: 12.5px;
+      color: var(--text-dim);
+      max-width: 780px;
+    }
+
+    .filter-bar {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+
+    /* SECTION 1: 8 HIGH-DEF RENDERED ICON CONCEPTS + WINDOWS TEST */
+    .gallery-layout {
+      display: grid;
+      grid-template-columns: 1.65fr 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 1200px) {
+      .gallery-layout { grid-template-columns: 1fr; }
+    }
+
+    .renders-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+    @media (max-width: 680px) {
+      .renders-grid { grid-template-columns: 1fr; }
+    }
+
+    .render-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      cursor: pointer;
+      transition: border-color 0.15s ease, transform 0.15s ease, background 0.15s ease;
+    }
+    .render-card:hover {
+      border-color: var(--line-hi);
+      background: var(--surface-2);
+      transform: translateY(-1px);
+    }
+    .render-card.selected {
+      border-color: var(--crimson);
+      background: var(--surface-2);
+      box-shadow: 0 0 0 1px rgba(239, 35, 60, 0.35), 0 14px 32px rgba(0, 0, 0, 0.55);
+    }
+    .render-card-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .render-id {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      color: var(--text-dim);
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .new-badge {
+      font-size: 9px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: var(--green-soft);
+      border: 1px solid rgba(16, 185, 129, 0.45);
+      color: #6ee7b7;
+    }
+    .sel-tag {
+      display: none;
+      font-family: var(--mono);
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 4px;
+      background: var(--crimson-soft);
+      border: 1px solid rgba(239, 35, 60, 0.5);
+      color: #ff808e;
+      text-transform: uppercase;
+    }
+    .render-card.selected .sel-tag { display: inline-block; }
+
+    .render-stage {
+      background: #050608;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 15px;
+    }
+    .squircle-frame {
+      overflow: hidden;
+      border-radius: 22%;
+      background: #050608;
+      box-shadow: 0 12px 26px rgba(0, 0, 0, 0.65);
+      flex-shrink: 0;
+    }
+    .squircle-frame img {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .squircle-frame.crop-tight img {
+      transform: scale(1.06);
+    }
+    .scale-pair {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    .scale-chip {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+    }
+    .scale-chip span {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      color: var(--text-muted);
+    }
+    .render-name {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .render-desc {
+      margin: 0;
+      font-size: 11.5px;
+      color: var(--text-dim);
+      line-height: 1.42;
+    }
+
+    /* WINDOWS 11 PREVIEW PANEL */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 15px;
+      display: flex;
+      flex-direction: column;
+      gap: 13px;
+    }
+    .panel.sticky-win {
+      position: sticky;
+      top: 72px;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .win11-sim {
+      border-radius: 10px;
+      border: 1px solid var(--line-hi);
+      overflow: hidden;
+      background: radial-gradient(circle at 75% 20%, #192438 0%, #0b0f17 65%, #06080c 100%);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 280px;
+    }
+    .win11-desk-row {
+      padding: 16px;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+    }
+    .shortcut {
+      width: 78px;
+      padding: 7px 5px;
+      border-radius: 6px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .shortcut-lbl {
+      font-size: 11px;
+      color: #f8fafc;
+      text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+    }
+    .win-titlebar {
+      margin: 0 14px 14px;
+      border-radius: 7px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: #0b0d12;
+      overflow: hidden;
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.6);
+    }
+    .win-tb-bar {
+      height: 30px;
+      background: #10131a;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding-left: 9px;
+    }
+    .win-tb-left {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 11px;
+      color: #e2e8f0;
+      font-weight: 600;
+    }
+    .win-tb-btns {
+      display: flex;
+      height: 100%;
+    }
+    .win-tb-btns span {
+      width: 34px;
+      display: grid;
+      place-items: center;
+      font-size: 10.5px;
+      color: #94a3b8;
+    }
+    .win-tb-body {
+      padding: 9px 11px;
+      font-family: var(--mono);
+      font-size: 10.5px;
+      color: var(--text-dim);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .win11-taskbar {
+      height: 48px;
+      background: rgba(14, 17, 24, 0.92);
+      border-top: 1px solid rgba(255, 255, 255, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 0 12px;
+    }
+    .tb-slot {
+      width: 40px;
+      height: 38px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      position: relative;
+    }
+    .tb-slot.active {
+      background: rgba(255, 255, 255, 0.09);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1);
+    }
+    .tb-slot.active::after {
+      content: "";
+      position: absolute;
+      bottom: 2px;
+      width: 14px;
+      height: 3px;
+      border-radius: 99px;
+      background: var(--crimson);
+    }
+    .tb-slot.dot::after {
+      content: "";
+      position: absolute;
+      bottom: 2px;
+      width: 5px;
+      height: 3px;
+      border-radius: 99px;
+      background: #64748b;
+    }
+    .tb-peer {
+      width: 24px;
+      height: 24px;
+      border-radius: 5px;
+      display: grid;
+      place-items: center;
+      font-family: var(--mono);
+      font-size: 8.5px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .source-switcher {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .btn {
+      background: var(--surface-2);
+      border: 1px solid var(--line-hi);
+      color: var(--text);
+      border-radius: 7px;
+      padding: 6px 10px;
+      font-size: 11.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.13s ease;
+    }
+    .btn:hover { background: var(--surface-3); border-color: #4b5670; }
+    .btn.active {
+      background: var(--crimson-soft);
+      border-color: var(--crimson);
+      color: #fff;
+    }
+    .btn-crimson {
+      background: var(--crimson);
+      border-color: var(--crimson-hi);
+      color: #fff;
+    }
+    .btn-crimson:hover { filter: brightness(1.08); }
+
+    /* SECTION 2: REAL-TIME 3D WORKBENCH */
+    .workbench {
+      display: grid;
+      grid-template-columns: 360px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+    @media (max-width: 980px) {
+      .workbench { grid-template-columns: 1fr; }
+    }
+    .canvas-stage {
+      background: #040507;
+      border: 1px solid var(--line-hi);
+      border-radius: 12px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    #ball-canvas {
+      width: 280px;
+      height: 280px;
+      border-radius: 22%;
+      cursor: crosshair;
+      box-shadow: 0 18px 40px rgba(0, 0, 0, 0.75);
+      background: #07080c;
+    }
+    .mini-ladder {
+      width: 100%;
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 8px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+    .mini-item {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+    }
+    .mini-item canvas {
+      border-radius: 22%;
+      background: #07080c;
+      border: 1px solid var(--line);
+    }
+    .mini-item span {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      color: var(--text-muted);
+    }
+
+    .controls-panel {
+      display: flex;
+      flex-direction: column;
+      gap: 13px;
+    }
+    .preset-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .sliders-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px 14px;
+    }
+    @media (max-width: 640px) {
+      .sliders-grid { grid-template-columns: 1fr; }
+    }
+    .ctrl-field {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 11px;
+    }
+    .ctrl-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text-dim);
+    }
+    .ctrl-top strong {
+      font-family: var(--mono);
+      color: #fff;
+      font-size: 11px;
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--crimson);
+      cursor: pointer;
+    }
+    select {
+      background: var(--surface);
+      border: 1px solid var(--line-hi);
+      border-radius: 6px;
+      color: #fff;
+      padding: 4px 8px;
+      font-size: 11.5px;
+      font-family: inherit;
+      cursor: pointer;
+    }
+    .toggles-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .chk-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 9px;
+      border-radius: 7px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-dim);
+      cursor: pointer;
+    }
+    .chk-pill input { accent-color: var(--crimson); cursor: pointer; }
+
+    /* SECTION 3: HARDWARE PHOTOMETRY LOOK & FEEL */
+    .look-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 0.85fr;
+      gap: 16px;
+    }
+    @media (max-width: 1020px) {
+      .look-grid { grid-template-columns: 1fr; }
+    }
+    .cockpit-preview {
+      background: #08090c;
+      border: 1px solid var(--line-hi);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .cp-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--line);
+    }
+    .cp-body {
+      display: grid;
+      grid-template-columns: 196px 1fr;
+      gap: 16px;
+      align-items: center;
+    }
+    @media (max-width: 600px) {
+      .cp-body { grid-template-columns: 1fr; justify-items: center; }
+    }
+    #cockpit-ball {
+      width: 184px;
+      height: 184px;
+      border-radius: 16px;
+      background: #07080b;
+      border: 1px solid var(--line);
+    }
+    .cp-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 9px;
+      width: 100%;
+    }
+    .cp-tile {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-left: 2px solid var(--line-hi);
+      border-radius: 8px;
+      padding: 9px 11px;
+    }
+    .cp-tile.red { border-left-color: var(--crimson); }
+    .cp-tile.green { border-left-color: var(--green); }
+    .cp-k {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+    .cp-v {
+      font-family: var(--mono);
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+      margin-top: 2px;
+    }
+    .cp-s {
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-top: 1px;
+    }
+    .palette-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .swatch-row {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+    }
+    .swatch-box {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand-lockup">
+        <canvas id="topbar-live-icon" width="30" height="30"></canvas>
+        <div>
+          <div class="brand-name">SHOTLAB</div>
+          <div class="brand-tag">SPINNING BALL · CLUB WHOOSH · MATRIX TELEMETRY</div>
+        </div>
+      </div>
+      <div class="status-strip">
+        <span class="hw-chip"><span class="hw-dot"></span> 8 HIGH-DEF ICON RENDERS</span>
+        <span class="hw-chip"><span class="hw-dot green"></span> LIVE 3D MATRIX + WHOOSH SHADER</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <!-- SECTION 1: ALL 8 RENDERED ICON CONCEPTS + WINDOWS 11 PREVIEW -->
+    <section>
+      <div class="sec-head">
+        <div>
+          <div class="sec-kicker">01 // High-Definition Icon Concepts (01–08)</div>
+          <h1 class="sec-title">Original 4 + New Club-Path Whoosh &amp; Matrix Telemetry Variants</h1>
+          <p class="sec-sub">
+            Kept all 4 original concepts (<strong>01–04</strong>) and added 4 new explorations (<strong>05–08</strong>) combining an incoming aerodynamic club whoosh and depth-of-field Matrix launch-monitor metrics behind the ball. Click any card to inspect it in the Windows 11 preview.
+          </p>
+        </div>
+        <div class="filter-bar">
+          <button class="btn active" data-filter="all">All (11)</button>
+          <button class="btn" data-filter="iron">Iron Contact (03, 09–11)</button>
+          <button class="btn" data-filter="orig">Original (01–04)</button>
+          <button class="btn" data-filter="new">Whoosh &amp; Matrix (05–08)</button>
+        </div>
+      </div>
+
+      <div class="gallery-layout">
+        <div class="renders-grid" id="renders-grid"></div>
+
+        <div class="panel sticky-win">
+          <div class="panel-head">
+            <span>Windows 11 Taskbar &amp; Titlebar Test</span>
+            <span id="win-active-name" style="color:#fff;">Render 05</span>
+          </div>
+
+          <div class="win11-sim">
+            <div class="win11-desk-row">
+              <div class="shortcut">
+                <div id="win-shortcut-slot" class="squircle-frame" style="width:48px;height:48px;"></div>
+                <span class="shortcut-lbl">ShotLab</span>
+              </div>
+              <div class="shortcut" style="opacity:0.65;">
+                <div class="tb-peer" style="width:48px;height:48px;border-radius:11px;background:#14532d;font-size:12px;">GSPro</div>
+                <span class="shortcut-lbl">GSPro</span>
+              </div>
+              <div class="shortcut" style="opacity:0.65;">
+                <div class="tb-peer" style="width:48px;height:48px;border-radius:11px;background:#1e293b;font-size:11px;">OBS</div>
+                <span class="shortcut-lbl">OBS Studio</span>
+              </div>
+            </div>
+
+            <div class="win-titlebar">
+              <div class="win-tb-bar">
+                <div class="win-tb-left">
+                  <div id="win-title-slot" class="squircle-frame" style="width:16px;height:16px;border-radius:4px;"></div>
+                  <span>ShotLab — 7 Iron · 6,840 RPM · +2.8° Path</span>
+                </div>
+                <div class="win-tb-btns">
+                  <span>—</span><span>□</span><span>✕</span>
+                </div>
+              </div>
+              <div class="win-tb-body">
+                <span>Taskbar: 24×24 · Titlebar: 16×16</span>
+                <span style="color:var(--crimson-hi);">Live preview</span>
+              </div>
+            </div>
+
+            <div class="win11-taskbar">
+              <div class="tb-slot dot"><div class="tb-peer" style="background:#166534;">GS</div></div>
+              <div class="tb-slot dot"><div class="tb-peer" style="background:#0f172a;border:1px solid #334155;">BLP</div></div>
+              <div class="tb-slot active" title="ShotLab">
+                <div id="win-taskbar-slot" class="squircle-frame" style="width:24px;height:24px;border-radius:5px;"></div>
+              </div>
+              <div class="tb-slot dot"><div class="tb-peer" style="background:#18181b;border:1px solid #3f3f46;">OBS</div></div>
+              <div class="tb-slot"><div class="tb-peer" style="background:#7c2d12;">KV</div></div>
+            </div>
+          </div>
+
+          <div class="source-switcher">
+            <button class="btn" data-win-src="render-1">01</button>
+            <button class="btn" data-win-src="render-2">02</button>
+            <button class="btn" data-win-src="render-3">03</button>
+            <button class="btn" data-win-src="render-4">04</button>
+            <button class="btn" data-win-src="render-5">05</button>
+            <button class="btn active" data-win-src="render-6">06</button>
+            <button class="btn" data-win-src="render-7">07</button>
+            <button class="btn" data-win-src="render-8">08</button>
+            <button class="btn" data-win-src="render-9">09</button>
+            <button class="btn" data-win-src="render-10">10</button>
+            <button class="btn" data-win-src="render-11">11</button>
+            <button class="btn" data-win-src="live-3d">Live 3D Canvas</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 2: REAL-TIME 3D SPINNING BALL + CLUB WHOOSH + MATRIX WORKBENCH -->
+    <section>
+      <div class="sec-head">
+        <div>
+          <div class="sec-kicker">02 // Interactive 3D Golf Ball, Club Whoosh &amp; Matrix Workbench</div>
+          <h2 class="sec-title">Dial In the Live 3D Ball, Incoming Club Whoosh &amp; Background Numbers</h2>
+          <p class="sec-sub">
+            Now features a real-time <strong>Club-Path Whoosh</strong> slipstream sweeping into the red impact zone plus animated <strong>Matrix-style floating launch monitor metrics</strong> occluded behind the spinning sphere. Click the ball to move the red hit zone, or export a 512×512 PNG.
+          </p>
+        </div>
+      </div>
+
+      <div class="workbench">
+        <div class="canvas-stage">
+          <canvas id="ball-canvas" width="280" height="280" title="Click anywhere on the ball to place the red impact zone"></canvas>
+          <div style="display:flex;gap:8px;width:100%;justify-content:center;flex-wrap:wrap;">
+            <button class="btn" id="btn-freeze">Pause Spin</button>
+            <button class="btn" id="btn-use-live-tb">Preview in Windows Taskbar</button>
+            <button class="btn btn-crimson" id="btn-export-png">Export 512px PNG</button>
+          </div>
+          <div class="mini-ladder">
+            <div class="mini-item"><canvas id="scale-64" width="64" height="64"></canvas><span>64px</span></div>
+            <div class="mini-item"><canvas id="scale-48" width="48" height="48"></canvas><span>48px</span></div>
+            <div class="mini-item"><canvas id="scale-32" width="32" height="32"></canvas><span>32px</span></div>
+            <div class="mini-item"><canvas id="scale-24" width="24" height="24"></canvas><span>24px</span></div>
+            <div class="mini-item"><canvas id="scale-16" width="16" height="16"></canvas><span>16px</span></div>
+          </div>
+        </div>
+
+        <div class="panel controls-panel">
+          <div class="panel-head">
+            <span>Workbench Presets</span>
+            <span class="mono" id="wb-telemetry">WHOOSH 215° · MATRIX DUAL</span>
+          </div>
+
+          <div class="preset-row">
+            <button class="btn active" data-preset="iron_contact">Iron Face Contact (Occluded Red)</button>
+            <button class="btn" data-preset="fusion">Full Fusion (Whoosh + Matrix)</button>
+            <button class="btn" data-preset="whoosh_only">Club Whoosh + Compression</button>
+            <button class="btn" data-preset="matrix_only">Matrix Green + Red Strike</button>
+            <button class="btn" data-preset="stealth_fusion">Stealth Carbon Matrix</button>
+            <button class="btn" data-preset="compression">Pure Compression</button>
+            <button class="btn" data-preset="strobe">Strobe + Axis Ring</button>
+            <button class="btn" data-preset="toe">Toe Miss-Hit</button>
+          </div>
+
+          <div class="sliders-grid">
+            <div class="ctrl-field">
+              <div class="ctrl-top"><span>Impact Lon (Left / Right)</span><strong id="val-lon">-26°</strong></div>
+              <input id="sl-lon" type="range" min="-65" max="65" value="-26" />
+            </div>
+            <div class="ctrl-field">
+              <div class="ctrl-top"><span>Impact Lat (Low / High)</span><strong id="val-lat">-22°</strong></div>
+              <input id="sl-lat" type="range" min="-65" max="65" value="-22" />
+            </div>
+            <div class="ctrl-field">
+              <div class="ctrl-top"><span>Red Zone Radius</span><strong id="val-rad">34°</strong></div>
+              <input id="sl-rad" type="range" min="14" max="54" value="34" />
+            </div>
+            <div class="ctrl-field">
+              <div class="ctrl-top"><span>Red Zone Intensity</span><strong id="val-int">1.05</strong></div>
+              <input id="sl-int" type="range" min="30" max="150" value="105" />
+            </div>
+            <div class="ctrl-field">
+              <div class="ctrl-top"><span>Club Whoosh Angle (Incoming)</span><strong id="val-whoosh-ang">218°</strong></div>
+              <input id="sl-whoosh-ang" type="range" min="110" max="320" value="218" />
+            </div>
+            <div class="ctrl-field">
+              <div class="ctrl-top"><span>Club Whoosh Strength</span><strong id="val-whoosh-str">0.95</strong></div>
+              <input id="sl-whoosh-str" type="range" min="0" max="150" value="95" />
+            </div>
+            <div class="ctrl-field">
+              <div class="ctrl-top"><span>Spin Speed &amp; Motion Blur</span><strong id="val-rpm">6,800 RPM</strong></div>
+              <input id="sl-rpm" type="range" min="0" max="12000" step="200" value="6800" />
+            </div>
+            <div class="ctrl-field">
+              <div class="ctrl-top"><span>Spin Axis Tilt</span><strong id="val-axis">-8°</strong></div>
+              <input id="sl-axis" type="range" min="-35" max="35" value="-8" />
+            </div>
+          </div>
+
+          <div class="toggles-row">
+            <label class="chk-pill">
+              <span>Matrix Numbers:</span>
+              <select id="sel-matrix">
+                <option value="dual" selected>Dual Green + Crimson</option>
+                <option value="green">Matrix Phosphor Green</option>
+                <option value="crimson">Strobe Crimson / Amber</option>
+                <option value="off">Off</option>
+              </select>
+            </label>
+            <label class="chk-pill"><input type="checkbox" id="chk-iron" /> Iron Clubface Occluder (Covers Hit Origin)</label>
+            <label class="chk-pill"><input type="checkbox" id="chk-whoosh" checked /> Club Whoosh Trail</label>
+            <label class="chk-pill"><input type="checkbox" id="chk-stealth" /> Stealth Carbon Ball</label>
+            <label class="chk-pill"><input type="checkbox" id="chk-ring" /> Spin-Axis Ring</label>
+            <label class="chk-pill"><input type="checkbox" id="chk-reticle" checked /> Strike Reticle</label>
+            <label class="chk-pill"><input type="checkbox" id="chk-lock-impact" checked /> Lock Red Zone to Strike</label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SECTION 3: LIVE COCKPIT TELEMETRY WIDGET -->
+    <section>
+      <div class="sec-head">
+        <div>
+          <div class="sec-kicker">03 // Cohesive ShotLab Look &amp; Feel</div>
+          <h2 class="sec-title">Live Cockpit Widget: Ball Spin + Incoming Club Whoosh + Matrix Backdrop</h2>
+          <p class="sec-sub">
+            Clicking different shot archetypes updates the ball's real spin axis, strike hotspot, incoming club-path whoosh angle (in-to-out draw vs. out-to-in cut), and background telemetry digits.
+          </p>
+        </div>
+      </div>
+
+      <div class="look-grid">
+        <div class="cockpit-preview">
+          <div class="cp-head">
+            <div>
+              <div class="cp-k">LIVE IMPACT &amp; SPIN TELEMETRY</div>
+              <div id="cp-shot-label" style="font-size:15.5px;font-weight:800;color:#fff;margin-top:2px;">7 Iron — Pure Compression (In-to-Out Draw)</div>
+            </div>
+            <div class="preset-row">
+              <button class="btn active" data-shot="flush">Flush 7I</button>
+              <button class="btn" data-shot="toe_hook">Toe Hook</button>
+              <button class="btn" data-shot="heel_cut">Thin Heel Cut</button>
+              <button class="btn" data-shot="driver">Driver Draw</button>
+            </div>
+          </div>
+
+          <div class="cp-body">
+            <canvas id="cockpit-ball" width="184" height="184"></canvas>
+            <div class="cp-metrics">
+              <div class="cp-tile green">
+                <div class="cp-k">Backspin</div>
+                <div class="cp-v" id="cp-spin">6,840</div>
+                <div class="cp-s">RPM (BLP Measured)</div>
+              </div>
+              <div class="cp-tile">
+                <div class="cp-k">Club Path / Axis</div>
+                <div class="cp-v" id="cp-axis">+2.8° / -6.4°</div>
+                <div class="cp-s" id="cp-path-sub">In-to-Out Draw Whoosh</div>
+              </div>
+              <div class="cp-tile red">
+                <div class="cp-k">Strike Zone</div>
+                <div class="cp-v" id="cp-strike" style="color:#ff808e;">Center</div>
+                <div class="cp-s" id="cp-strike-sub">Smash 1.39 · 0y lost</div>
+              </div>
+              <div class="cp-tile">
+                <div class="cp-k">Carry / Curve</div>
+                <div class="cp-v" id="cp-carry">168y</div>
+                <div class="cp-s" id="cp-curve">4y Draw</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <div class="panel-head">
+            <span>Photometry Hardware Palette</span>
+            <span>ShotLab v2.1</span>
+          </div>
+          <div class="palette-list">
+            <div class="swatch-row">
+              <div class="swatch-box" style="background:#07080b;"></div>
+              <div>
+                <div style="font-weight:700;color:#fff;">Obsidian Housing <span class="mono" style="color:var(--text-muted);font-weight:500;">#07080B</span></div>
+                <div style="font-size:11.5px;color:var(--text-dim);">Projector-bay dark base — zero washout on impact screens.</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch-box" style="background:#f3f5f8;"></div>
+              <div>
+                <div style="font-weight:700;color:#fff;">Tour Urethane White <span class="mono" style="color:var(--text-muted);font-weight:500;">#F3F5F8</span></div>
+                <div style="font-size:11.5px;color:var(--text-dim);">Primary tabular numbers &amp; 10-foot Mat Glance legibility.</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch-box" style="background:#ef233c;box-shadow:0 0 12px rgba(239,35,60,0.45);"></div>
+              <div>
+                <div style="font-weight:700;color:#fff;">Strobe Impact Crimson <span class="mono" style="color:var(--text-muted);font-weight:500;">#EF233C</span></div>
+                <div style="font-size:11.5px;color:var(--text-dim);">Impact compression hotspot, incoming club whoosh energy &amp; spin-axis ring.</div>
+              </div>
+            </div>
+            <div class="swatch-row">
+              <div class="swatch-box" style="background:#10b981;box-shadow:0 0 12px rgba(16,185,129,0.35);"></div>
+              <div>
+                <div style="font-weight:700;color:#fff;">Matrix Phosphor Emerald <span class="mono" style="color:var(--text-muted);font-weight:500;">#10B981</span></div>
+                <div style="font-size:11.5px;color:var(--text-dim);">Floating depth-of-field telemetry digits &amp; R/Y/G window passes.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      'use strict';
+
+      // =========================================================================
+      // 1. ALL 8 HIGH-DEF ICON RENDERS + WINDOWS 11 PREVIEW SWITCHER
+      // =========================================================================
+      const RENDERS = [
+        {
+          id: 'render-1',
+          group: 'orig',
+          isNew: false,
+          tag: 'Render 01',
+          name: 'Thermal Compression Spin',
+          src: 'assets/prototypes/icon_concept_1_compression.png',
+          tight: false,
+          desc: 'Original: White urethane dimpled ball spinning fast with rotational motion blur and glowing crimson-orange impact compression patch on carbon weave.'
+        },
+        {
+          id: 'render-2',
+          group: 'orig',
+          isNew: false,
+          tag: 'Render 02',
+          name: 'Strobe Spin + Laser Axis Ring',
+          src: 'assets/prototypes/icon_concept_2_strobe_spin.png',
+          tight: true,
+          desc: 'Original: High-speed strobe capture with crisp white dimples, tilted glowing red spin-axis ring, and optical tracking reticle over the strike zone.'
+        },
+        {
+          id: 'render-3',
+          group: 'orig',
+          isIron: true,
+          isNew: false,
+          tag: 'Render 03',
+          name: 'Clubface Groove Impact',
+          src: 'assets/prototypes/icon_concept_3_face_impact.png',
+          tight: false,
+          desc: 'Original: Macro brushed-titanium iron grooves compressing into the urethane dimples at impact with a crimson contact-patch hotspot.'
+        },
+        {
+          id: 'render-4',
+          group: 'orig',
+          isNew: false,
+          tag: 'Render 04',
+          name: 'Stealth Carbon + Strike Reticle',
+          src: 'assets/prototypes/icon_concept_4_dark_urethane.png',
+          tight: true,
+          desc: 'Original: Matte dark-graphite dimpled sphere with spin swirl, crimson strike hotspot, and precision crosshair.'
+        },
+        {
+          id: 'render-5',
+          group: 'new',
+          isNew: true,
+          tag: 'Render 05',
+          name: 'Club-Path Whoosh + Compression',
+          src: 'assets/prototypes/icon_concept_5_club_whoosh.png',
+          tight: false,
+          desc: 'New: Sleek metallic silver & crimson aerodynamic slipstream streaks curving in from the bottom-left directly into the glowing red impact patch.'
+        },
+        {
+          id: 'render-6',
+          group: 'new',
+          isNew: false,
+          isChosen: true,
+          tag: 'Render 06',
+          name: 'Matrix Telemetry + Impact Spin',
+          src: 'assets/prototypes/icon_concept_6_matrix_telemetry.png',
+          tight: false,
+          desc: 'Selected App Icon: Depth-of-field glowing phosphor emerald Matrix digits (6840, +2.8, 1.49, 168, 14.2) and vertical streams behind the spinning urethane ball.'
+        },
+        {
+          id: 'render-7',
+          group: 'new',
+          isNew: true,
+          tag: 'Render 07',
+          name: 'Whoosh + Matrix Telemetry',
+          src: 'assets/prototypes/icon_concept_7_whoosh_plus_matrix.png',
+          tight: true,
+          desc: 'New: Combines glowing emerald & crimson floating launch-monitor numbers, white dimpled ball, red impact zone, and sweeping club-path whoosh.'
+        },
+        {
+          id: 'render-8',
+          group: 'new',
+          isNew: true,
+          tag: 'Render 08',
+          name: 'Stealth Carbon + Matrix + Whoosh',
+          src: 'assets/prototypes/icon_concept_8_stealth_matrix_whoosh.png',
+          tight: false,
+          desc: 'Dark-graphite dimpled sphere with laser crosshair over the red hit zone, incoming crimson shockwave whoosh, and glowing Matrix telemetry.'
+        },
+        {
+          id: 'render-9',
+          group: 'new',
+          isIron: true,
+          isNew: true,
+          tag: 'Render 09',
+          name: 'Iron Contact — Occluded Red Crescent',
+          src: 'assets/prototypes/icon_concept_9_iron_occluded_red.png',
+          tight: false,
+          desc: 'Refined Render 03: Solid brushed-titanium iron covers the impact center so only the partial crimson crescent peeking from behind the contact edge is visible.'
+        },
+        {
+          id: 'render-10',
+          group: 'new',
+          isIron: true,
+          isNew: true,
+          tag: 'Render 10',
+          name: 'Angled Iron — Clean Dimple Crescent',
+          src: 'assets/prototypes/icon_concept_10_iron_head_crescent.png',
+          tight: false,
+          desc: 'Angled brushed-steel iron face overlapping the strike point on crisp white urethane dimples — clean partial red glow along the contact seam.'
+        },
+        {
+          id: 'render-11',
+          group: 'new',
+          isIron: true,
+          isNew: true,
+          tag: 'Render 11',
+          name: 'Iron Contact + Matrix + Speed Trail',
+          src: 'assets/prototypes/icon_concept_11_iron_matrix_whoosh.png',
+          tight: false,
+          desc: 'Occluded iron-contact red crescent paired with kinetic crimson speed streaks behind the iron head and Matrix telemetry digits (6840 · 1.39).'
+        }
+      ];
+
+      let activeWinSource = 'render-6';
+      let activeFilter = 'all';
+
+      function renderGallery() {
+        const grid = document.getElementById('renders-grid');
+        const list = RENDERS.filter((r) => {
+          if (activeFilter === 'all') return true;
+          if (activeFilter === 'iron') return Boolean(r.isIron);
+          return r.group === activeFilter;
+        });
+        grid.innerHTML = list.map((r) => `
+          <article class="render-card ${activeWinSource === r.id ? 'selected' : ''}" data-id="${r.id}">
+            <div class="render-card-top">
+              <span class="render-id">
+                <span>${r.tag}</span>
+                ${r.isChosen ? '<span class="new-badge" style="background:rgba(16,185,129,0.22);border-color:#10b981;color:#a7f3d0;">SELECTED APP ICON</span>' : r.isNew ? '<span class="new-badge">NEW</span>' : ''}
+              </span>
+              <span class="sel-tag">Active in Preview</span>
+            </div>
+            <div class="render-stage">
+              <div class="squircle-frame ${r.tight ? 'crop-tight' : ''}" style="width:146px;height:146px;">
+                <img src="${r.src}" alt="${r.name}" />
+              </div>
+              <div class="scale-pair">
+                <div class="scale-chip">
+                  <div class="squircle-frame ${r.tight ? 'crop-tight' : ''}" style="width:48px;height:48px;">
+                    <img src="${r.src}" alt="" />
+                  </div>
+                  <span>48px</span>
+                </div>
+                <div class="scale-chip">
+                  <div class="squircle-frame ${r.tight ? 'crop-tight' : ''}" style="width:24px;height:24px;border-radius:5px;">
+                    <img src="${r.src}" alt="" />
+                  </div>
+                  <span>24px</span>
+                </div>
+              </div>
+            </div>
+            <h3 class="render-name">${r.name}</h3>
+            <p class="render-desc">${r.desc}</p>
+          </article>
+        `).join('');
+
+        grid.querySelectorAll('.render-card').forEach((el) => {
+          el.addEventListener('click', () => setWinSource(el.dataset.id));
+        });
+      }
+
+      function setWinSource(srcId) {
+        activeWinSource = srcId;
+        document.querySelectorAll('[data-win-src]').forEach((b) => {
+          b.classList.toggle('active', b.dataset.winSrc === srcId);
+        });
+        renderGallery();
+
+        const labelEl = document.getElementById('win-active-name');
+        const shortcutSlot = document.getElementById('win-shortcut-slot');
+        const titleSlot = document.getElementById('win-title-slot');
+        const tbSlot = document.getElementById('win-taskbar-slot');
+
+        if (srcId === 'live-3d') {
+          labelEl.textContent = 'Live 3D Canvas';
+          shortcutSlot.className = 'squircle-frame';
+          titleSlot.className = 'squircle-frame';
+          tbSlot.className = 'squircle-frame';
+          shortcutSlot.innerHTML = '<canvas id="win-c-48" width="48" height="48"></canvas>';
+          titleSlot.innerHTML = '<canvas id="win-c-16" width="16" height="16"></canvas>';
+          tbSlot.innerHTML = '<canvas id="win-c-24" width="24" height="24"></canvas>';
+        } else {
+          const item = RENDERS.find((r) => r.id === srcId) || RENDERS[0];
+          labelEl.textContent = `${item.tag} · ${item.name}`;
+          const tightCls = item.tight ? 'squircle-frame crop-tight' : 'squircle-frame';
+          shortcutSlot.className = tightCls;
+          titleSlot.className = tightCls;
+          tbSlot.className = tightCls;
+          shortcutSlot.innerHTML = `<img src="${item.src}" alt="" />`;
+          titleSlot.innerHTML = `<img src="${item.src}" alt="" />`;
+          tbSlot.innerHTML = `<img src="${item.src}" alt="" />`;
+        }
+      }
+
+      document.querySelectorAll('[data-win-src]').forEach((btn) => {
+        btn.addEventListener('click', () => setWinSource(btn.dataset.winSrc));
+      });
+      document.querySelectorAll('[data-filter]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          activeFilter = btn.dataset.filter;
+          document.querySelectorAll('[data-filter]').forEach((b) => b.classList.toggle('active', b === btn));
+          renderGallery();
+        });
+      });
+
+      // =========================================================================
+      // 2. FAST 3D FIBONACCI DIMPLE CUBE-MAP + BALL SHADER + MATRIX + WHOOSH
+      // =========================================================================
+      const NUM_DIMPLES = 332;
+      const GOLDEN_ANGLE = Math.PI * (3 - Math.sqrt(5));
+      const dimples = new Float32Array(NUM_DIMPLES * 3);
+      for (let i = 0; i < NUM_DIMPLES; i++) {
+        const y = 1 - (i / (NUM_DIMPLES - 1)) * 2;
+        const r = Math.sqrt(Math.max(0, 1 - y * y));
+        const theta = GOLDEN_ANGLE * i;
+        dimples[i * 3] = Math.cos(theta) * r;
+        dimples[i * 3 + 1] = y;
+        dimples[i * 3 + 2] = Math.sin(theta) * r;
+      }
+
+      const CM_RES = 128;
+      const CM_STRIDE = 4;
+      const cubeFaces = Array.from({ length: 6 }, () => new Float32Array(CM_RES * CM_RES * CM_STRIDE));
+      const DIMPLE_RAD = 0.145;
+
+      function faceUVToVec(face, u, v) {
+        let x = 0, y = 0, z = 0;
+        if (face === 0) { x = 1; y = -v; z = -u; }
+        else if (face === 1) { x = -1; y = -v; z = u; }
+        else if (face === 2) { x = u; y = 1; z = v; }
+        else if (face === 3) { x = u; y = -1; z = -v; }
+        else if (face === 4) { x = u; y = -v; z = 1; }
+        else { x = -u; y = -v; z = -1; }
+        const inv = 1 / Math.hypot(x, y, z);
+        return [x * inv, y * inv, z * inv];
+      }
+
+      (function bakeCubeMap() {
+        for (let f = 0; f < 6; f++) {
+          const buf = cubeFaces[f];
+          for (let py = 0; py < CM_RES; py++) {
+            const v = ((py + 0.5) / CM_RES) * 2 - 1;
+            for (let px = 0; px < CM_RES; px++) {
+              const u = ((px + 0.5) / CM_RES) * 2 - 1;
+              const [vx, vy, vz] = faceUVToVec(f, u, v);
+
+              let bestDot = -1;
+              let bestIdx = 0;
+              for (let i = 0; i < NUM_DIMPLES; i++) {
+                const d = vx * dimples[i * 3] + vy * dimples[i * 3 + 1] + vz * dimples[i * 3 + 2];
+                if (d > bestDot) {
+                  bestDot = d;
+                  bestIdx = i;
+                }
+              }
+
+              const cx = dimples[bestIdx * 3];
+              const cy = dimples[bestIdx * 3 + 1];
+              const cz = dimples[bestIdx * 3 + 2];
+              const ang = Math.acos(Math.min(1, bestDot));
+              const q = ang / DIMPLE_RAD;
+
+              let nx = vx, ny = vy, nz = vz, depth = 0;
+              if (q < 1.0) {
+                const bowl = (1 - q * q);
+                depth = bowl * bowl;
+                const tx = vx - bestDot * cx;
+                const ty = vy - bestDot * cy;
+                const tz = vz - bestDot * cz;
+                const tLen = Math.hypot(tx, ty, tz);
+                if (tLen > 1e-5) {
+                  const slope = 0.72 * q * (1 - q * q * 0.68);
+                  const k = slope / tLen;
+                  nx = vx - tx * k;
+                  ny = vy - ty * k;
+                  nz = vz - tz * k;
+                  const nInv = 1 / Math.hypot(nx, ny, nz);
+                  nx *= nInv; ny *= nInv; nz *= nInv;
+                }
+              }
+              const idx = (py * CM_RES + px) * CM_STRIDE;
+              buf[idx] = nx;
+              buf[idx + 1] = ny;
+              buf[idx + 2] = nz;
+              buf[idx + 3] = depth;
+            }
+          }
+        }
+      })();
+
+      function sampleCubeMap(x, y, z) {
+        const ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z);
+        let face = 0, u = 0, v = 0;
+        if (ax >= ay && ax >= az) {
+          if (x > 0) { face = 0; u = -z / ax; v = -y / ax; }
+          else { face = 1; u = z / ax; v = -y / ax; }
+        } else if (ay >= ax && ay >= az) {
+          if (y > 0) { face = 2; u = x / ay; v = z / ay; }
+          else { face = 3; u = x / ay; v = -z / ay; }
+        } else {
+          if (z > 0) { face = 4; u = x / az; v = -y / az; }
+          else { face = 5; u = -x / az; v = -y / az; }
+        }
+        const px = Math.max(0, Math.min(CM_RES - 1, ((u + 1) * 0.5 * CM_RES) | 0));
+        const py = Math.max(0, Math.min(CM_RES - 1, ((v + 1) * 0.5 * CM_RES) | 0));
+        const idx = (py * CM_RES + px) * CM_STRIDE;
+        const buf = cubeFaces[face];
+        return [buf[idx], buf[idx + 1], buf[idx + 2], buf[idx + 3]];
+      }
+
+      function makeSpinBasis(axisRad, angle) {
+        const ux = Math.cos(axisRad);
+        const uy = Math.sin(axisRad);
+        const uz = 0;
+        const c = Math.cos(angle);
+        const s = Math.sin(angle);
+        const t = 1 - c;
+        return [
+          t * ux * ux + c,        t * ux * uy - uz * s,   t * ux * uz + uy * s,
+          t * ux * uy + uz * s,   t * uy * uy + c,        t * uy * uz - ux * s,
+          t * ux * uz - uy * s,   t * uy * uz + ux * s,   t * uz * uz + c
+        ];
+      }
+
+      // Floating Matrix telemetry particles (static layout + slow vertical drift)
+      const MATRIX_ITEMS = [
+        { x: 0.14, y: 0.22, text: '6840', size: 0.085, color: 'green', speed: 0.025, alpha: 0.85 },
+        { x: 0.80, y: 0.24, text: '1.49', size: 0.082, color: 'green', speed: 0.018, alpha: 0.85 },
+        { x: 0.16, y: 0.44, text: '+2.8°', size: 0.068, color: 'crimson', speed: 0.032, alpha: 0.72 },
+        { x: 0.84, y: 0.48, text: '168y', size: 0.072, color: 'green', speed: 0.022, alpha: 0.78 },
+        { x: 0.82, y: 0.78, text: '14.2°', size: 0.074, color: 'green', speed: 0.028, alpha: 0.78 },
+        { x: 0.20, y: 0.76, text: '-1.4°', size: 0.064, color: 'crimson', speed: 0.020, alpha: 0.65 },
+        { x: 0.50, y: 0.14, text: '94ft', size: 0.056, color: 'green', speed: 0.015, alpha: 0.55 },
+        { x: 0.52, y: 0.88, text: '+0.42', size: 0.060, color: 'green', speed: 0.024, alpha: 0.65 },
+      ];
+      const MATRIX_STREAMS = [
+        { x: 0.11, phase: 0.1, speed: 0.14, digits: '684014928' },
+        { x: 0.28, phase: 0.6, speed: 0.11, digits: '168414294' },
+        { x: 0.72, phase: 0.3, speed: 0.13, digits: '281396840' },
+        { x: 0.89, phase: 0.8, speed: 0.10, digits: '042149168' },
+      ];
+
+      function drawMatrixBackdrop(ctx, size, mode, timeSec) {
+        if (mode === 'off') return;
+        ctx.save();
+
+        const pickColor = (kind, alpha) => {
+          if (mode === 'green') return `rgba(16, 185, 129, ${alpha})`;
+          if (mode === 'crimson') return kind === 'green' ? `rgba(239, 35, 60, ${alpha})` : `rgba(245, 158, 11, ${alpha})`;
+          // dual
+          return kind === 'crimson' ? `rgba(255, 77, 94, ${alpha})` : `rgba(16, 185, 129, ${alpha})`;
+        };
+
+        // Vertical matrix digit streams (soft, subtle)
+        const streamFont = Math.max(7, Math.round(size * 0.036));
+        ctx.font = `700 ${streamFont}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+        ctx.textAlign = 'center';
+        for (const st of MATRIX_STREAMS) {
+          const baseX = st.x * size;
+          const scroll = (timeSec * st.speed + st.phase) % 1;
+          for (let i = 0; i < st.digits.length; i++) {
+            const yy = ((scroll + i / st.digits.length) % 1) * size;
+            const fade = Math.sin((yy / size) * Math.PI) * 0.34;
+            ctx.fillStyle = pickColor('green', fade.toFixed(2));
+            ctx.fillText(st.digits[i], baseX, yy);
+          }
+        }
+
+        // Larger floating telemetry readouts
+        if (size >= 48) {
+          for (const item of MATRIX_ITEMS) {
+            const px = item.x * size;
+            const drift = Math.sin(timeSec * 0.7 + item.x * 10) * size * 0.015;
+            const py = item.y * size + drift;
+            const fSize = Math.max(8, Math.round(size * item.size));
+            ctx.font = `800 ${fSize}px ui-monospace, SFMono-Regular, Menlo, monospace`;
+            const col = pickColor(item.color, item.alpha);
+            ctx.shadowColor = col;
+            ctx.shadowBlur = size * 0.035;
+            ctx.fillStyle = col;
+            ctx.fillText(item.text, px, py);
+          }
+        }
+        ctx.restore();
+      }
+
+      function drawClubWhoosh(ctx, size, ballR, impX, impY, params, timeSec) {
+        if (!params.whooshEnabled || params.whooshStrength <= 0.02) return;
+        const cx = size * 0.5;
+        const cy = size * 0.5;
+        const hitX = cx + impX * ballR;
+        const hitY = cy + impY * ballR;
+
+        // Incoming direction angle (degrees: 218° = coming from bottom-left, 320° = bottom-right/cut)
+        const rad = (params.whooshAngleDeg * Math.PI) / 180;
+        const dirX = Math.cos(rad);
+        const dirY = Math.sin(rad);
+        // Perpendicular vector for multi-ribbon fan
+        const perpX = -dirY;
+        const perpY = dirX;
+
+        const str = params.whooshStrength;
+        const reach = size * (0.46 + 0.14 * Math.min(1.4, str));
+        const pulse = 0.92 + 0.08 * Math.sin(timeSec * 6.5);
+
+        ctx.save();
+        // Multi-ribbon tapered aerodynamic slipstream sweeping into the impact zone
+        const ribbons = [
+          { off: -0.14, curve: -0.18, w: 0.040, col: 'rgba(226, 232, 240, 0.72)' },
+          { off: -0.05, curve: -0.09, w: 0.055, col: 'rgba(255, 77, 94, 0.88)' },
+          { off: 0.03,  curve: 0.02,  w: 0.062, col: 'rgba(255, 130, 75, 0.86)' },
+          { off: 0.12,  curve: 0.12,  w: 0.036, col: 'rgba(241, 245, 249, 0.65)' },
+        ];
+
+        for (const rb of ribbons) {
+          const sx = hitX + dirX * reach + perpX * (ballR * rb.off * 2.2);
+          const sy = hitY + dirY * reach + perpY * (ballR * rb.off * 2.2);
+          const ctrlX = hitX + dirX * (reach * 0.45) + perpX * (ballR * (rb.off + rb.curve) * 1.8);
+          const ctrlY = hitY + dirY * (reach * 0.45) + perpY * (ballR * (rb.off + rb.curve) * 1.8);
+
+          const grad = ctx.createLinearGradient(sx, sy, hitX, hitY);
+          grad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+          grad.addColorStop(0.55, rb.col);
+          grad.addColorStop(1, 'rgba(255, 70, 70, 0.95)');
+
+          ctx.beginPath();
+          ctx.moveTo(sx, sy);
+          ctx.quadraticCurveTo(ctrlX, ctrlY, hitX, hitY);
+          ctx.strokeStyle = grad;
+          ctx.lineWidth = Math.max(1.2, size * rb.w * str * pulse);
+          ctx.lineCap = 'round';
+          ctx.shadowColor = 'rgba(239, 35, 60, 0.75)';
+          ctx.shadowBlur = size * 0.03;
+          ctx.stroke();
+        }
+
+        // Sharp silver leading-edge shockwave curve hugging the strike entry
+        const arcR = ballR * 0.36;
+        const baseA = Math.atan2(dirY, dirX);
+        ctx.beginPath();
+        ctx.arc(hitX, hitY, arcR, baseA - 0.85, baseA + 0.85);
+        ctx.strokeStyle = `rgba(255, 235, 235, ${Math.min(0.85, 0.55 * str)})`;
+        ctx.lineWidth = Math.max(1.1, size * 0.012);
+        ctx.stroke();
+
+        ctx.restore();
+      }
+
+      function drawIronClubfaceOccluder(ctx, size, ballR, cx, cy) {
+        // Iron leading contact plane overlaps the left edge of the golf ball so it physically
+        // hides the center/left side of the red impact zone, leaving only the partial red crescent.
+        const seamX = cx - ballR * 0.52;
+        const tilt = -0.14;
+
+        ctx.save();
+        ctx.translate(seamX, cy);
+        ctx.rotate(tilt);
+
+        // Blade polygon covering left side up to seamX
+        const topY = -size * 0.44;
+        const botY = size * 0.42;
+        const leftX = -size * 0.48;
+
+        ctx.beginPath();
+        ctx.moveTo(leftX, topY + size * 0.08);
+        ctx.quadraticCurveTo(-size * 0.14, topY, 0, topY + size * 0.14);
+        ctx.lineTo(0, botY - size * 0.06);
+        ctx.quadraticCurveTo(-size * 0.14, botY + size * 0.04, leftX, botY - size * 0.05);
+        ctx.closePath();
+
+        // Dark brushed-titanium face gradient
+        const faceGrad = ctx.createLinearGradient(leftX, 0, 0, 0);
+        faceGrad.addColorStop(0, '#0d1016');
+        faceGrad.addColorStop(0.32, '#2d3442');
+        faceGrad.addColorStop(0.75, '#495264');
+        faceGrad.addColorStop(0.95, '#2b313d');
+        faceGrad.addColorStop(1, '#12151c');
+        ctx.fillStyle = faceGrad;
+        ctx.fill();
+
+        // Clip inside blade to draw brushed horizontal grooves & subtle metallic grain
+        ctx.save();
+        ctx.clip();
+
+        // Subtle brushed titanium sheen lines
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.045)';
+        ctx.lineWidth = Math.max(0.7, size * 0.004);
+        for (let gy = topY; gy < botY; gy += size * 0.018) {
+          ctx.beginPath();
+          ctx.moveTo(leftX, gy);
+          ctx.lineTo(2, gy);
+          ctx.stroke();
+        }
+
+        // Crisp milled iron scorelines / grooves
+        const grooveGap = size * 0.058;
+        for (let gy = -size * 0.25; gy <= size * 0.27; gy += grooveGap) {
+          ctx.fillStyle = 'rgba(5, 7, 10, 0.88)';
+          ctx.fillRect(-size * 0.34, gy, size * 0.31, Math.max(1.5, size * 0.011));
+          ctx.fillStyle = 'rgba(226, 232, 240, 0.22)';
+          ctx.fillRect(-size * 0.34, gy + Math.max(1.5, size * 0.011), size * 0.31, Math.max(0.8, size * 0.004));
+        }
+
+        // Contact-edge bevel highlight + tiny warm bounce right at the edge
+        const edgeGrad = ctx.createLinearGradient(-size * 0.04, 0, 0, 0);
+        edgeGrad.addColorStop(0, 'rgba(255,255,255,0)');
+        edgeGrad.addColorStop(1, 'rgba(255,255,255,0.16)');
+        ctx.fillStyle = edgeGrad;
+        ctx.fillRect(-size * 0.04, topY, size * 0.04, botY - topY);
+
+        ctx.restore();
+
+        // Blade outer rim bevel
+        ctx.strokeStyle = 'rgba(203, 213, 225, 0.28)';
+        ctx.lineWidth = Math.max(1, size * 0.008);
+        ctx.stroke();
+
+        // Contact shadow cast onto the ball just right of the iron edge
+        const shGrad = ctx.createLinearGradient(0, 0, size * 0.045, 0);
+        shGrad.addColorStop(0, 'rgba(0, 0, 0, 0.55)');
+        shGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+        ctx.fillStyle = shGrad;
+        ctx.fillRect(0, topY + size * 0.14, size * 0.045, (botY - topY) - size * 0.2);
+
+        ctx.restore();
+      }
+
+      // Reusable offscreen buffer for pixel-shaded transparent-bg ball
+      const offBuffers = new Map();
+      function getBallBuffer(size) {
+        let entry = offBuffers.get(size);
+        if (!entry) {
+          const c = document.createElement('canvas');
+          c.width = size;
+          c.height = size;
+          const ctx = c.getContext('2d');
+          entry = { c, ctx, img: ctx.createImageData(size, size) };
+          offBuffers.set(size, entry);
+        }
+        return entry;
+      }
+
+      function renderCompositeBall(targetCtx, size, params, spinAngle, timeSec, withSquircleFrame = true) {
+        const half = size * 0.5;
+        const cornerR = size * 0.22;
+        const cx = half;
+        const cy = half;
+        const ballR = size * (withSquircleFrame ? 0.375 : 0.425);
+
+        const axisRad = (params.axisDeg * Math.PI) / 180;
+        const lonRad = (params.lonDeg * Math.PI) / 180;
+        const latRad = (params.latDeg * Math.PI) / 180;
+
+        const impX = Math.cos(latRad) * Math.sin(lonRad);
+        const impY = -Math.sin(latRad);
+        const impZ = Math.cos(latRad) * Math.cos(lonRad);
+
+        const radRad = (params.impactRadDeg * Math.PI) / 180;
+        const radCos = Math.cos(radRad);
+        const intensity = params.intensity;
+        const stealth = Boolean(params.stealth);
+        const blurTaps = params.rpm > 800 && !params.frozen ? 3 : 1;
+        const blurSpread = (params.rpm / 12000) * 0.24;
+
+        const kLx = 0.48, kLy = -0.58, kLz = 0.66;
+        const rLx = -0.82, rLy = -0.35, rLz = 0.45;
+
+        const mats = [];
+        for (let t = 0; t < blurTaps; t++) {
+          const offset = blurTaps === 1 ? 0 : (t - (blurTaps - 1) * 0.5) * blurSpread;
+          mats.push(makeSpinBasis(axisRad, spinAngle + offset));
+        }
+        const m0 = mats[0];
+
+        let effImpX = impX, effImpY = impY, effImpZ = impZ;
+        if (!params.lockImpact) {
+          effImpX = m0[0] * impX + m0[1] * impY + m0[2] * impZ;
+          effImpY = m0[3] * impX + m0[4] * impY + m0[5] * impZ;
+          effImpZ = m0[6] * impX + m0[7] * impY + m0[8] * impZ;
+        }
+
+        // 1. Render transparent-bg 3D ball + outer crimson halo into offscreen buffer
+        const buf = getBallBuffer(size);
+        const data = buf.img.data;
+
+        for (let py = 0; py < size; py++) {
+          const dy = (py + 0.5 - cy) / ballR;
+          for (let px = 0; px < size; px++) {
+            const outIdx = (py * size + px) * 4;
+            const dx = (px + 0.5 - cx) / ballR;
+            const r2 = dx * dx + dy * dy;
+
+            if (r2 >= 1.0) {
+              const distOut = Math.sqrt(r2) - 1.0;
+              if (distOut < 0.22) {
+                const halo = Math.exp(-distOut * 16);
+                const dotH = Math.max(0, (dx * effImpX + dy * effImpY) * 0.9);
+                const a = Math.min(255, halo * (28 + dotH * 150 * intensity));
+                data[outIdx] = 255;
+                data[outIdx + 1] = 42;
+                data[outIdx + 2] = 60;
+                data[outIdx + 3] = a;
+              } else {
+                data[outIdx] = 0; data[outIdx + 1] = 0; data[outIdx + 2] = 0; data[outIdx + 3] = 0;
+              }
+              continue;
+            }
+
+            const dz = Math.sqrt(1.0 - r2);
+            const edgeAA = Math.min(1.0, (1.0 - Math.sqrt(r2)) * ballR * 0.9);
+
+            let avgNx = 0, avgNy = 0, avgNz = 0, avgDepth = 0;
+            for (let t = 0; t < blurTaps; t++) {
+              const m = mats[t];
+              const ox = m[0] * dx + m[3] * dy + m[6] * dz;
+              const oy = m[1] * dx + m[4] * dy + m[7] * dz;
+              const oz = m[2] * dx + m[5] * dy + m[8] * dz;
+              const [dnx, dny, dnz, dDepth] = sampleCubeMap(ox, oy, oz);
+              avgNx += m[0] * dnx + m[1] * dny + m[2] * dnz;
+              avgNy += m[3] * dnx + m[4] * dny + m[5] * dnz;
+              avgNz += m[6] * dnx + m[7] * dny + m[8] * dnz;
+              avgDepth += dDepth;
+            }
+            const invT = 1 / blurTaps;
+            avgNx *= invT; avgNy *= invT; avgNz *= invT; avgDepth *= invT;
+            const nInv = 1 / Math.hypot(avgNx, avgNy, avgNz);
+            const nx = avgNx * nInv, ny = avgNy * nInv, nz = avgNz * nInv;
+
+            const diffKey = Math.max(0, nx * kLx + ny * kLy + nz * kLz);
+            const diffRim = Math.max(0, nx * rLx + ny * rLy + nz * rLz);
+            const fresnel = Math.pow(1.0 - Math.max(0, nz), 3.2);
+
+            const hx = kLx, hy = kLy, hz = kLz + 1;
+            const hInv = 1 / Math.hypot(hx, hy, hz);
+            const spec = Math.pow(Math.max(0, nx * hx * hInv + ny * hy * hInv + nz * hz * hInv), stealth ? 44 : 34);
+            const ao = 1.0 - avgDepth * (stealth ? 0.48 : 0.34);
+
+            const baseR = stealth ? 44 : 238;
+            const baseG = stealth ? 49 : 242;
+            const baseB = stealth ? 58 : 247;
+
+            let r = baseR * (0.14 + 0.78 * diffKey + 0.22 * diffRim) * ao + spec * (stealth ? 130 : 195) + fresnel * 42;
+            let g = baseG * (0.15 + 0.78 * diffKey + 0.24 * diffRim) * ao + spec * (stealth ? 135 : 198) + fresnel * 48;
+            let b = baseB * (0.18 + 0.78 * diffKey + 0.28 * diffRim) * ao + spec * (stealth ? 145 : 205) + fresnel * 62;
+
+            // Subtle emerald Matrix rim bounce when matrix active
+            if (params.matrixMode === 'green' || params.matrixMode === 'dual') {
+              r += fresnel * 6;
+              g += fresnel * 42;
+              b += fresnel * 24;
+            }
+
+            const impDot = dx * effImpX + dy * effImpY + dz * effImpZ;
+            if (impDot > radCos * 0.85) {
+              const normDist = Math.max(0, Math.min(1, (1.0 - impDot) / Math.max(0.001, 1.0 - radCos)));
+              const heat = Math.pow(1.0 - normDist, 1.85) * intensity;
+              const core = Math.pow(Math.max(0, 1.0 - normDist * 1.45), 2.5) * intensity;
+              const dimpleGlow = 1.0 + avgDepth * 0.45;
+              r = r * Math.max(0.15, 1.0 - heat * 0.82) + (255 * heat * 0.95 + 255 * core * 0.4) * dimpleGlow;
+              g = g * Math.max(0.06, 1.0 - heat * 0.92) + (30 * heat + 135 * core) * dimpleGlow;
+              b = b * Math.max(0.06, 1.0 - heat * 0.92) + (48 * heat + 40 * core);
+            }
+
+            data[outIdx] = Math.max(0, Math.min(255, r));
+            data[outIdx + 1] = Math.max(0, Math.min(255, g));
+            data[outIdx + 2] = Math.max(0, Math.min(255, b));
+            data[outIdx + 3] = Math.round(edgeAA * 255);
+          }
+        }
+        buf.ctx.putImageData(buf.img, 0, 0);
+
+        // 2. Composite all layers onto targetCtx
+        targetCtx.clearRect(0, 0, size, size);
+        targetCtx.save();
+
+        if (withSquircleFrame) {
+          targetCtx.beginPath();
+          targetCtx.roundRect(0, 0, size, size, cornerR);
+          targetCtx.clip();
+        }
+
+        // Carbon background gradient
+        const bgGrad = targetCtx.createRadialGradient(half, half * 0.65, size * 0.05, half, half, size * 0.72);
+        bgGrad.addColorStop(0, '#121826');
+        bgGrad.addColorStop(1, '#06070a');
+        targetCtx.fillStyle = bgGrad;
+        targetCtx.fillRect(0, 0, size, size);
+
+        // Layer A: Matrix Telemetry Numbers behind ball
+        drawMatrixBackdrop(targetCtx, size, params.matrixMode, timeSec);
+
+        // Layer B: Raycasted 3D Golf Ball
+        targetCtx.drawImage(buf.c, 0, 0);
+
+        // Layer C: Aerodynamic Club Whoosh sweeping into red impact zone
+        drawClubWhoosh(targetCtx, size, ballR, effImpX, effImpY, params, timeSec);
+
+        // Layer C2: Brushed-Titanium Iron Clubface Occluder covering the hit origin
+        if (params.showIron) {
+          drawIronClubfaceOccluder(targetCtx, size, ballR, cx, cy);
+        }
+
+        // Layer D: Spin-Axis Ring & Strike Reticle
+        if (params.showRing) {
+          targetCtx.save();
+          targetCtx.translate(cx, cy);
+          targetCtx.rotate(axisRad);
+          targetCtx.beginPath();
+          targetCtx.ellipse(0, 0, ballR * 1.06, ballR * 0.25, Math.PI * 0.5, -Math.PI * 0.5, Math.PI * 0.5);
+          targetCtx.strokeStyle = 'rgba(239, 35, 60, 0.92)';
+          targetCtx.lineWidth = Math.max(1.4, size * 0.013);
+          targetCtx.shadowColor = 'rgba(255, 45, 70, 0.9)';
+          targetCtx.shadowBlur = size * 0.04;
+          targetCtx.stroke();
+          targetCtx.restore();
+        }
+
+        if (params.showReticle && effImpZ > 0.15 && size >= 48) {
+          const rx = cx + effImpX * ballR;
+          const ry = cy + effImpY * ballR;
+          const rr = size * 0.082;
+          targetCtx.save();
+          targetCtx.strokeStyle = 'rgba(255, 210, 215, 0.88)';
+          targetCtx.lineWidth = Math.max(1.1, size * 0.0055);
+          targetCtx.beginPath();
+          targetCtx.arc(rx, ry, rr, 0, Math.PI * 2);
+          targetCtx.stroke();
+          const arm = rr * 1.55;
+          const gap = rr * 0.42;
+          targetCtx.beginPath();
+          targetCtx.moveTo(rx - arm, ry); targetCtx.lineTo(rx - gap, ry);
+          targetCtx.moveTo(rx + gap, ry); targetCtx.lineTo(rx + arm, ry);
+          targetCtx.moveTo(rx, ry - arm); targetCtx.lineTo(rx, ry - gap);
+          targetCtx.moveTo(rx, ry + gap); targetCtx.lineTo(rx, ry + arm);
+          targetCtx.stroke();
+          targetCtx.restore();
+        }
+
+        // Metallic squircle bevel border
+        if (withSquircleFrame) {
+          targetCtx.beginPath();
+          targetCtx.roundRect(1.5, 1.5, size - 3, size - 3, cornerR - 1);
+          targetCtx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+          targetCtx.lineWidth = Math.max(1.2, size * 0.012);
+          targetCtx.stroke();
+        }
+
+        targetCtx.restore();
+      }
+
+      // =========================================================================
+      // 3. WORKBENCH & COCKPIT INTERACTION STATE
+      // =========================================================================
+      const wb = {
+        lonDeg: -42,
+        latDeg: -8,
+        impactRadDeg: 32,
+        intensity: 1.18,
+        rpm: 6800,
+        axisDeg: -8,
+        stealth: false,
+        showIron: true,
+        showRing: false,
+        showReticle: false,
+        lockImpact: true,
+        frozen: false,
+        whooshEnabled: false,
+        whooshAngleDeg: 218,
+        whooshStrength: 0.95,
+        matrixMode: 'off',
+      };
+
+      const cockpitShot = {
+        lonDeg: -14,
+        latDeg: -18,
+        impactRadDeg: 30,
+        intensity: 1.08,
+        rpm: 6840,
+        axisDeg: -6.4,
+        stealth: false,
+        showRing: false,
+        showReticle: true,
+        lockImpact: true,
+        frozen: false,
+        whooshEnabled: true,
+        whooshAngleDeg: 214,
+        whooshStrength: 1.0,
+        matrixMode: 'dual',
+      };
+
+      const WB_PRESETS = {
+        iron_contact: { lonDeg: -42, latDeg: -8, impactRadDeg: 32, intensity: 1.18, rpm: 6800, axisDeg: -8, stealth: false, showIron: true, showRing: false, showReticle: false, lockImpact: true, whooshEnabled: false, whooshAngleDeg: 218, whooshStrength: 0.95, matrixMode: 'off' },
+        fusion: { lonDeg: -26, latDeg: -22, impactRadDeg: 34, intensity: 1.05, rpm: 6800, axisDeg: -8, stealth: false, showIron: false, showRing: false, showReticle: true, lockImpact: true, whooshEnabled: true, whooshAngleDeg: 218, whooshStrength: 0.95, matrixMode: 'dual' },
+        whoosh_only: { lonDeg: -26, latDeg: -22, impactRadDeg: 34, intensity: 1.1, rpm: 7400, axisDeg: -6, stealth: false, showIron: false, showRing: false, showReticle: false, lockImpact: true, whooshEnabled: true, whooshAngleDeg: 216, whooshStrength: 1.15, matrixMode: 'off' },
+        matrix_only: { lonDeg: -24, latDeg: -20, impactRadDeg: 32, intensity: 1.05, rpm: 6400, axisDeg: -8, stealth: false, showIron: false, showRing: false, showReticle: true, lockImpact: true, whooshEnabled: false, whooshAngleDeg: 218, whooshStrength: 0, matrixMode: 'green' },
+        stealth_fusion: { lonDeg: -26, latDeg: -22, impactRadDeg: 34, intensity: 1.25, rpm: 7200, axisDeg: -6, stealth: true, showIron: false, showRing: false, showReticle: true, lockImpact: true, whooshEnabled: true, whooshAngleDeg: 218, whooshStrength: 1.05, matrixMode: 'green' },
+        compression: { lonDeg: -26, latDeg: -22, impactRadDeg: 34, intensity: 1.05, rpm: 6800, axisDeg: -8, stealth: false, showIron: false, showRing: false, showReticle: false, lockImpact: true, whooshEnabled: false, whooshAngleDeg: 218, whooshStrength: 0, matrixMode: 'off' },
+        strobe: { lonDeg: 22, latDeg: 18, impactRadDeg: 30, intensity: 1.15, rpm: 4800, axisDeg: -18, stealth: false, showIron: false, showRing: true, showReticle: true, lockImpact: true, whooshEnabled: false, whooshAngleDeg: 218, whooshStrength: 0, matrixMode: 'off' },
+        toe: { lonDeg: 38, latDeg: -8, impactRadDeg: 32, intensity: 1.15, rpm: 5200, axisDeg: -22, stealth: false, showIron: false, showRing: true, showReticle: true, lockImpact: true, whooshEnabled: true, whooshAngleDeg: 235, whooshStrength: 0.85, matrixMode: 'crimson' },
+      };
+
+      const COCKPIT_SHOTS = {
+        flush: {
+          title: '7 Iron — Pure Compression (In-to-Out Draw)',
+          spin: '6,840', axis: '+2.8° / -6.4°', pathSub: 'In-to-Out Draw Whoosh', strike: 'Center', strikeSub: 'Smash 1.39 · 0y lost', carry: '168y', curve: '4y Draw',
+          params: { lonDeg: -14, latDeg: -18, impactRadDeg: 30, intensity: 1.08, rpm: 6840, axisDeg: -6.4, whooshAngleDeg: 214, whooshStrength: 1.0 }
+        },
+        toe_hook: {
+          title: '6 Iron — Toe Strike Gear-Effect Hook',
+          spin: '4,920', axis: '+5.1° / -24.5°', pathSub: 'Strong In-to-Out Whoosh', strike: 'Toe (+14mm)', strikeSub: 'Smash 1.31 · -9y lost', carry: '169y', curve: '19y Hook',
+          params: { lonDeg: 36, latDeg: -8, impactRadDeg: 34, intensity: 1.25, rpm: 4920, axisDeg: -24.5, whooshAngleDeg: 230, whooshStrength: 1.1 }
+        },
+        heel_cut: {
+          title: '8 Iron — Thin Heel Out-to-In Cut',
+          spin: '8,150', axis: '-4.2° / +18.2°', pathSub: 'Out-to-In Cut Whoosh', strike: 'Heel / Thin', strikeSub: 'Smash 1.26 · -13y lost', carry: '136y', curve: '14y Fade',
+          params: { lonDeg: -36, latDeg: -28, impactRadDeg: 32, intensity: 1.2, rpm: 8150, axisDeg: 18.2, whooshAngleDeg: 145, whooshStrength: 1.05 }
+        },
+        driver: {
+          title: 'Driver — High-Launch Tour Push Draw',
+          spin: '2,340', axis: '+3.4° / -8.0°', pathSub: 'Upward +3.2° AoA Whoosh', strike: 'Center-High', strikeSub: 'Smash 1.49 · +4y roll', carry: '274y', curve: '6y Draw',
+          params: { lonDeg: -8, latDeg: 14, impactRadDeg: 30, intensity: 1.05, rpm: 2340, axisDeg: -8.0, whooshAngleDeg: 204, whooshStrength: 1.15 }
+        }
+      };
+
+      function syncControlsUI() {
+        document.getElementById('sl-lon').value = wb.lonDeg;
+        document.getElementById('sl-lat').value = wb.latDeg;
+        document.getElementById('sl-rad').value = wb.impactRadDeg;
+        document.getElementById('sl-int').value = Math.round(wb.intensity * 100);
+        document.getElementById('sl-whoosh-ang').value = wb.whooshAngleDeg;
+        document.getElementById('sl-whoosh-str').value = Math.round(wb.whooshStrength * 100);
+        document.getElementById('sl-rpm').value = wb.rpm;
+        document.getElementById('sl-axis').value = wb.axisDeg;
+
+        document.getElementById('val-lon').textContent = `${wb.lonDeg}°`;
+        document.getElementById('val-lat').textContent = `${wb.latDeg}°`;
+        document.getElementById('val-rad').textContent = `${wb.impactRadDeg}°`;
+        document.getElementById('val-int').textContent = wb.intensity.toFixed(2);
+        document.getElementById('val-whoosh-ang').textContent = `${wb.whooshAngleDeg}°`;
+        document.getElementById('val-whoosh-str').textContent = wb.whooshStrength.toFixed(2);
+        document.getElementById('val-rpm').textContent = `${wb.rpm.toLocaleString()} RPM`;
+        document.getElementById('val-axis').textContent = `${wb.axisDeg}°`;
+
+        document.getElementById('sel-matrix').value = wb.matrixMode;
+        document.getElementById('chk-iron').checked = wb.showIron;
+        document.getElementById('chk-whoosh').checked = wb.whooshEnabled;
+        document.getElementById('chk-stealth').checked = wb.stealth;
+        document.getElementById('chk-ring').checked = wb.showRing;
+        document.getElementById('chk-reticle').checked = wb.showReticle;
+        document.getElementById('chk-lock-impact').checked = wb.lockImpact;
+
+        document.getElementById('wb-telemetry').textContent =
+          `${wb.showIron ? 'IRON OCCLUDER · ' : ''}WHOOSH ${wb.whooshEnabled ? wb.whooshAngleDeg + '°' : 'OFF'} · MATRIX ${wb.matrixMode.toUpperCase()}`;
+      }
+
+      const ballCanvas = document.getElementById('ball-canvas');
+      ballCanvas.addEventListener('pointerdown', (e) => {
+        const rect = ballCanvas.getBoundingClientRect();
+        const nx = ((e.clientX - rect.left) / rect.width - 0.5) / 0.375;
+        const ny = ((e.clientY - rect.top) / rect.height - 0.5) / 0.375;
+        if (nx * nx + ny * ny <= 0.95) {
+          wb.latDeg = Math.round(-Math.asin(Math.max(-0.9, Math.min(0.9, ny))) * (180 / Math.PI));
+          wb.lonDeg = Math.round(Math.atan2(nx, Math.sqrt(Math.max(0.05, 1 - nx * nx - ny * ny))) * (180 / Math.PI));
+          syncControlsUI();
+        }
+      });
+
+      document.querySelectorAll('[data-preset]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          Object.assign(wb, WB_PRESETS[btn.dataset.preset]);
+          document.querySelectorAll('[data-preset]').forEach((b) => b.classList.toggle('active', b === btn));
+          syncControlsUI();
+        });
+      });
+
+      document.querySelectorAll('[data-shot]').forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const s = COCKPIT_SHOTS[btn.dataset.shot];
+          document.querySelectorAll('[data-shot]').forEach((b) => b.classList.toggle('active', b === btn));
+          document.getElementById('cp-shot-label').textContent = s.title;
+          document.getElementById('cp-spin').textContent = s.spin;
+          document.getElementById('cp-axis').textContent = s.axis;
+          document.getElementById('cp-path-sub').textContent = s.pathSub;
+          document.getElementById('cp-strike').textContent = s.strike;
+          document.getElementById('cp-strike-sub').textContent = s.strikeSub;
+          document.getElementById('cp-carry').textContent = s.carry;
+          document.getElementById('cp-curve').textContent = s.curve;
+          Object.assign(cockpitShot, s.params);
+        });
+      });
+
+      const bindRange = (id, fn) => {
+        document.getElementById(id).addEventListener('input', (e) => {
+          fn(Number(e.target.value));
+          syncControlsUI();
+        });
+      };
+      bindRange('sl-lon', (v) => { wb.lonDeg = v; });
+      bindRange('sl-lat', (v) => { wb.latDeg = v; });
+      bindRange('sl-rad', (v) => { wb.impactRadDeg = v; });
+      bindRange('sl-int', (v) => { wb.intensity = v / 100; });
+      bindRange('sl-whoosh-ang', (v) => { wb.whooshAngleDeg = v; });
+      bindRange('sl-whoosh-str', (v) => { wb.whooshStrength = v / 100; });
+      bindRange('sl-rpm', (v) => { wb.rpm = v; });
+      bindRange('sl-axis', (v) => { wb.axisDeg = v; });
+
+      document.getElementById('sel-matrix').addEventListener('change', (e) => { wb.matrixMode = e.target.value; syncControlsUI(); });
+      document.getElementById('chk-iron').addEventListener('change', (e) => { wb.showIron = e.target.checked; syncControlsUI(); });
+      document.getElementById('chk-whoosh').addEventListener('change', (e) => { wb.whooshEnabled = e.target.checked; syncControlsUI(); });
+      document.getElementById('chk-stealth').addEventListener('change', (e) => { wb.stealth = e.target.checked; });
+      document.getElementById('chk-ring').addEventListener('change', (e) => { wb.showRing = e.target.checked; });
+      document.getElementById('chk-reticle').addEventListener('change', (e) => { wb.showReticle = e.target.checked; });
+      document.getElementById('chk-lock-impact').addEventListener('change', (e) => { wb.lockImpact = e.target.checked; });
+
+      document.getElementById('btn-freeze').addEventListener('click', (e) => {
+        wb.frozen = !wb.frozen;
+        e.target.textContent = wb.frozen ? 'Resume Spin' : 'Pause Spin';
+      });
+      document.getElementById('btn-use-live-tb').addEventListener('click', () => {
+        setWinSource('live-3d');
+      });
+      document.getElementById('btn-export-png').addEventListener('click', () => {
+        const exp = document.createElement('canvas');
+        exp.width = 512;
+        exp.height = 512;
+        renderCompositeBall(exp.getContext('2d'), 512, wb, spinAngleWb, performance.now() / 1000, true);
+        const link = document.createElement('a');
+        link.download = `shotlab-ball-${wb.stealth ? 'stealth' : 'white'}.png`;
+        link.href = exp.toDataURL('image/png');
+        link.click();
+      });
+
+      const mainCtx = ballCanvas.getContext('2d');
+      const cockpitCanvas = document.getElementById('cockpit-ball');
+      const cockpitCtx = cockpitCanvas.getContext('2d');
+      const topbarCanvas = document.getElementById('topbar-live-icon');
+      const topbarCtx = topbarCanvas.getContext('2d');
+
+      const scaleCanvases = [64, 48, 32, 24, 16].map((sz) => ({
+        sz,
+        ctx: document.getElementById(`scale-${sz}`).getContext('2d'),
+      }));
+
+      let spinAngleWb = 0;
+      let spinAngleCp = 0;
+      let lastTs = performance.now();
+
+      function tick(now) {
+        const dt = Math.min(0.05, (now - lastTs) / 1000);
+        lastTs = now;
+        const timeSec = now / 1000;
+
+        if (!wb.frozen) {
+          spinAngleWb += dt * (0.6 + (wb.rpm / 12000) * 5.2);
+        }
+        spinAngleCp += dt * (0.6 + (cockpitShot.rpm / 12000) * 5.2);
+
+        renderCompositeBall(mainCtx, 280, wb, spinAngleWb, timeSec, true);
+        renderCompositeBall(cockpitCtx, 184, cockpitShot, spinAngleCp, timeSec, false);
+
+        topbarCtx.clearRect(0, 0, 30, 30);
+        topbarCtx.drawImage(ballCanvas, 0, 0, 30, 30);
+
+        for (const item of scaleCanvases) {
+          item.ctx.clearRect(0, 0, item.sz, item.sz);
+          item.ctx.drawImage(ballCanvas, 0, 0, item.sz, item.sz);
+        }
+
+        if (activeWinSource === 'live-3d') {
+          const c48 = document.getElementById('win-c-48');
+          const c24 = document.getElementById('win-c-24');
+          const c16 = document.getElementById('win-c-16');
+          if (c48) c48.getContext('2d').drawImage(ballCanvas, 0, 0, 48, 48);
+          if (c24) c24.getContext('2d').drawImage(ballCanvas, 0, 0, 24, 24);
+          if (c16) c16.getContext('2d').drawImage(ballCanvas, 0, 0, 16, 16);
+        }
+
+        requestAnimationFrame(tick);
+      }
+
+      renderGallery();
+      setWinSource('render-6');
+      syncControlsUI();
+      requestAnimationFrame(tick);
+    })();
+  </script>
+</body>
+</html>

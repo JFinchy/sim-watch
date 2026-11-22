@@ -1,0 +1,3852 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ShotLab v4 Studio — Broadcast Golf Performance OS</title>
+<style>
+  :root {
+    --bg: #04060a;
+    --bg-stage: #070b12;
+    --bg-rail: rgba(11, 16, 26, 0.84);
+    --bg-rail-solid: #0b101a;
+    --bg-well: rgba(5, 8, 14, 0.72);
+    --hairline: rgba(255, 255, 255, 0.08);
+    --hairline-hi: rgba(0, 229, 255, 0.36);
+    --spec: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    --white: #f8fafc;
+    --text: #e2e8f0;
+    --slate: #8b9bb4;
+    --dim: #5c6d87;
+    --cyan: #00e5ff;
+    --cyan-soft: rgba(0, 229, 255, 0.14);
+    --emerald: #10f296;
+    --emerald-soft: rgba(16, 242, 150, 0.14);
+    --amber: #ffb800;
+    --amber-soft: rgba(255, 184, 0, 0.14);
+    --crimson: #ff3b5c;
+    --crimson-soft: rgba(255, 59, 92, 0.14);
+    --sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    background:
+      radial-gradient(ellipse 90% 45% at 50% -8%, rgba(0, 229, 255, 0.07), transparent 70%),
+      radial-gradient(ellipse 60% 40% at 85% 18%, rgba(16, 242, 150, 0.03), transparent 65%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+  }
+  button, select, input { font-family: inherit; color: inherit; }
+  .num, .tnum { font-variant-numeric: tabular-nums; }
+  .mono { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+  .muted { color: var(--slate); }
+  .dim { color: var(--dim); }
+
+  /* Persistent Tension Vignette for Pressure Ball #5 */
+  .tension-vignette {
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 30;
+    opacity: 0;
+    background: radial-gradient(circle at 50% 50%, transparent 52%, rgba(255, 59, 92, 0.24) 100%);
+    transition: opacity 0.35s ease;
+  }
+  .tension-vignette.active {
+    opacity: 1;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .tension-vignette.active {
+      animation: tensionBreath 1.6s ease-in-out infinite;
+    }
+    @keyframes tensionBreath {
+      0%, 100% { opacity: 0.48; }
+      50% { opacity: 0.92; }
+    }
+  }
+
+  /* Broadcast Topbar */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    background: rgba(4, 6, 10, 0.9);
+    backdrop-filter: blur(18px);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .topbar-inner {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .brand-mark {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: linear-gradient(135deg, rgba(0, 229, 255, 0.22), rgba(0, 229, 255, 0.04));
+    border: 1px solid var(--hairline-hi);
+    display: grid;
+    place-items: center;
+    box-shadow: 0 0 18px rgba(0, 229, 255, 0.16);
+  }
+  .brand-mark span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--cyan);
+    box-shadow: 0 0 10px var(--cyan);
+  }
+  .brand-name {
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    font-size: 13.5px;
+    color: var(--white);
+  }
+  .brand-tag {
+    font-family: var(--mono);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--cyan);
+    padding: 2px 7px;
+    border-radius: 4px;
+    border: 1px solid rgba(0, 229, 255, 0.3);
+    background: rgba(0, 229, 255, 0.08);
+  }
+
+  /* 4-Mode Segmented Lifecycle Bar */
+  .lifecycle-nav {
+    display: inline-flex;
+    background: rgba(11, 16, 26, 0.9);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    padding: 3px;
+    gap: 3px;
+    box-shadow: var(--spec);
+  }
+  .mode-btn {
+    border: 1px solid transparent;
+    background: transparent;
+    color: var(--slate);
+    padding: 7px 15px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    transition: color 0.16s, background-color 0.16s, border-color 0.16s;
+  }
+  .mode-btn:hover { color: var(--white); background: rgba(255, 255, 255, 0.04); }
+  .mode-btn.active {
+    color: var(--white);
+    background: rgba(0, 229, 255, 0.14);
+    border-color: rgba(0, 229, 255, 0.36);
+    box-shadow: 0 0 18px rgba(0, 229, 255, 0.12);
+  }
+  .mode-idx {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--dim);
+  }
+  .mode-btn.active .mode-idx { color: var(--cyan); }
+
+  .top-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  /* Firewall Banner */
+  .foam-banner {
+    display: none;
+    background: linear-gradient(90deg, rgba(0, 229, 255, 0.12), rgba(11, 16, 26, 0.96), rgba(0, 229, 255, 0.12));
+    border-top: 1px solid rgba(0, 229, 255, 0.25);
+    padding: 6px 20px;
+    font-size: 11.5px;
+    color: var(--white);
+  }
+  .foam-banner.open { display: block; }
+  .foam-banner-inner {
+    max-width: 1480px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  /* Main Container & Mode Panels */
+  .shell {
+    max-width: 1480px;
+    margin: 0 auto;
+    padding: 18px 20px 36px;
+  }
+  .mode-panel { display: none; }
+  .mode-panel.active { display: block; }
+  @media (prefers-reduced-motion: no-preference) {
+    .mode-panel.active {
+      animation: panelEnter 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    @keyframes panelEnter {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: none; }
+    }
+  }
+
+  /* Smoked-Glass Telemetry Rails & Borderless Hero Stage */
+  .rail {
+    background: var(--bg-rail);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    padding: 16px 18px;
+    box-shadow: var(--spec), 0 14px 38px rgba(0, 0, 0, 0.42);
+  }
+  .stage-hero {
+    position: relative;
+    background: radial-gradient(circle at 50% 0%, rgba(0, 229, 255, 0.06), rgba(7, 11, 18, 0.96) 65%);
+    border: 1px solid var(--hairline);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: var(--spec), 0 22px 54px rgba(0, 0, 0, 0.56);
+  }
+  .sub-well {
+    background: var(--bg-well);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    padding: 12px 14px;
+  }
+
+  .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+  .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+  .grid-dna { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+  .grid-bag { display: grid; grid-template-columns: 340px 1fr; gap: 14px; align-items: start; }
+  @media (max-width: 1040px) {
+    .grid-2, .grid-3, .grid-4, .grid-dna, .grid-bag { grid-template-columns: 1fr; }
+  }
+
+  .head-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 12px;
+  }
+  .kicker {
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.11em;
+    text-transform: uppercase;
+    color: var(--dim);
+  }
+  h1, h2, h3 { margin: 0; color: var(--white); letter-spacing: -0.01em; }
+  h2 { font-size: 17px; font-weight: 750; margin-top: 2px; }
+  h3 { font-size: 14px; font-weight: 700; }
+
+  .flex-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .mt-8 { margin-top: 8px; }
+  .mt-12 { margin-top: 12px; }
+  .mt-16 { margin-top: 16px; }
+
+  /* Crisp Instrumentation Controls */
+  .btn {
+    border: 1px solid var(--hairline);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--white);
+    padding: 7px 13px;
+    border-radius: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: background-color 0.14s, border-color 0.14s, color 0.14s;
+  }
+  .btn:hover { background: rgba(255, 255, 255, 0.09); border-color: rgba(255, 255, 255, 0.18); }
+  .btn-sm { padding: 4px 10px; font-size: 11px; border-radius: 6px; }
+  .btn-cyan {
+    background: rgba(0, 229, 255, 0.14);
+    border-color: rgba(0, 229, 255, 0.45);
+    color: var(--cyan);
+  }
+  .btn-cyan:hover { background: rgba(0, 229, 255, 0.24); color: var(--white); }
+  .btn-emerald {
+    background: var(--emerald-soft);
+    border-color: rgba(16, 242, 150, 0.45);
+    color: var(--emerald);
+  }
+  .btn-emerald:hover { background: rgba(16, 242, 150, 0.24); }
+  .btn-crimson {
+    background: var(--crimson-soft);
+    border-color: rgba(255, 59, 92, 0.45);
+    color: var(--crimson);
+  }
+  .btn-crimson:hover { background: rgba(255, 59, 92, 0.24); }
+  .btn-amber {
+    background: var(--amber-soft);
+    border-color: rgba(255, 184, 0, 0.45);
+    color: var(--amber);
+  }
+  .btn.is-on {
+    background: rgba(0, 229, 255, 0.2);
+    border-color: var(--cyan);
+    color: var(--white);
+    box-shadow: 0 0 14px rgba(0, 229, 255, 0.22);
+  }
+  .btn.is-cold {
+    background: rgba(255, 184, 0, 0.16);
+    border-color: rgba(255, 184, 0, 0.5);
+    color: var(--amber);
+  }
+
+  .seg {
+    display: inline-flex;
+    background: rgba(4, 6, 10, 0.8);
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+  }
+  .seg button {
+    border: none;
+    background: transparent;
+    color: var(--slate);
+    padding: 5px 11px;
+    border-radius: 6px;
+    font-size: 11.5px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background-color 0.14s, color 0.14s;
+  }
+  .seg button:hover { color: var(--white); }
+  .seg button.active {
+    background: rgba(0, 229, 255, 0.16);
+    color: var(--cyan);
+  }
+
+  select {
+    background: #0b111c;
+    border: 1px solid var(--hairline);
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 12px;
+    color: var(--white);
+  }
+  input[type="range"] { accent-color: var(--cyan); cursor: pointer; }
+
+  /* Semantic Status Badges (Reserved strictly for grades/faults/status) */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 3px 8px;
+    border-radius: 5px;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    border: 1px solid var(--hairline);
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--slate);
+  }
+  .badge-cyan { color: var(--cyan); border-color: rgba(0, 229, 255, 0.35); background: rgba(0, 229, 255, 0.1); }
+  .badge-green { color: var(--emerald); border-color: rgba(16, 242, 150, 0.35); background: var(--emerald-soft); }
+  .badge-yellow { color: var(--amber); border-color: rgba(255, 184, 0, 0.38); background: var(--amber-soft); }
+  .badge-red { color: var(--crimson); border-color: rgba(255, 59, 92, 0.4); background: var(--crimson-soft); }
+
+  /* Mode 1: Plan */
+  .rx-blocks {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+  }
+  @media (max-width: 920px) { .rx-blocks { grid-template-columns: 1fr; } }
+  .rx-block {
+    background: rgba(5, 8, 14, 0.78);
+    border: 1px solid var(--hairline);
+    border-top: 2px solid var(--cyan);
+    border-radius: 10px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .rx-block.prio-warn { border-top-color: var(--crimson); }
+  .rx-block.prio-clutch { border-top-color: var(--emerald); }
+
+  .proof-tile {
+    background: var(--bg-well);
+    border: 1px solid var(--hairline);
+    border-radius: 10px;
+    padding: 13px 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .proof-val {
+    font-family: var(--mono);
+    font-size: 20px;
+    font-weight: 800;
+    color: var(--white);
+    margin-top: 3px;
+  }
+
+  /* Mode 2: Practice Hero & Choreography */
+  .mission-strip {
+    display: none;
+    background: linear-gradient(90deg, rgba(0, 229, 255, 0.14), rgba(11, 16, 26, 0.94));
+    border: 1px solid rgba(0, 229, 255, 0.35);
+    border-radius: 10px;
+    padding: 9px 14px;
+    margin-bottom: 12px;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .mission-strip.active { display: flex; }
+
+  .triage-rail {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  @media (max-width: 860px) { .triage-rail { grid-template-columns: repeat(2, 1fr); } }
+  .triage-node {
+    padding: 9px 12px;
+    border-radius: 8px;
+    background: rgba(5, 8, 14, 0.72);
+    border: 1px solid var(--hairline);
+    opacity: 0.42;
+    transition: opacity 0.2s, border-color 0.2s, background-color 0.2s;
+  }
+  .triage-node.passed { opacity: 0.85; border-color: rgba(16, 242, 150, 0.26); }
+  .triage-node.lock-red {
+    opacity: 1;
+    border-color: rgba(255, 59, 92, 0.65);
+    background: rgba(255, 59, 92, 0.1);
+    box-shadow: 0 0 24px rgba(255, 59, 92, 0.12);
+  }
+  .triage-node.lock-yellow {
+    opacity: 1;
+    border-color: rgba(255, 184, 0, 0.65);
+    background: rgba(255, 184, 0, 0.1);
+  }
+  .triage-node.lock-green {
+    opacity: 1;
+    border-color: rgba(16, 242, 150, 0.6);
+    background: rgba(16, 242, 150, 0.08);
+  }
+
+  /* Broadcast Stage Layout (Tracer + Hero Telemetry) */
+  .broadcast-grid {
+    display: grid;
+    grid-template-columns: 1.25fr 1fr;
+    gap: 0;
+  }
+  @media (max-width: 980px) { .broadcast-grid { grid-template-columns: 1fr; } }
+  .tracer-pane {
+    position: relative;
+    min-height: 290px;
+    background: radial-gradient(ellipse at 50% 85%, rgba(0, 229, 255, 0.08), #04070d 70%);
+    border-right: 1px solid var(--hairline);
+  }
+  @media (max-width: 980px) {
+    .tracer-pane { border-right: none; border-bottom: 1px solid var(--hairline); }
+  }
+  .tracer-pane canvas { display: block; width: 100%; height: 100%; min-height: 290px; }
+
+  .telemetry-pane {
+    padding: 18px 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 14px;
+    background: linear-gradient(180deg, rgba(11, 16, 26, 0.65), rgba(4, 6, 10, 0.92));
+  }
+  .hero-readout {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+  }
+  .hero-carry {
+    font-family: var(--mono);
+    font-size: clamp(3.25rem, 5vw, 4.75rem);
+    font-weight: 800;
+    line-height: 0.95;
+    letter-spacing: -0.04em;
+    color: var(--white);
+  }
+  .hero-carry .unit {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--slate);
+    margin-left: 4px;
+  }
+  .kpi-trio {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .kpi-box {
+    background: rgba(4, 6, 10, 0.7);
+    border: 1px solid var(--hairline);
+    border-left: 3px solid var(--dim);
+    border-radius: 8px;
+    padding: 10px 12px;
+  }
+  .kpi-box.green { border-left-color: var(--emerald); }
+  .kpi-box.yellow { border-left-color: var(--amber); }
+  .kpi-box.red { border-left-color: var(--crimson); }
+  .kpi-val {
+    font-family: var(--mono);
+    font-size: 22px;
+    font-weight: 800;
+    color: var(--white);
+    margin-top: 2px;
+  }
+
+  /* F1-Style Lower-Third Verdict Chyron */
+  .chyron {
+    border-top: 1px solid var(--hairline);
+    background: linear-gradient(90deg, rgba(0, 229, 255, 0.1), rgba(7, 11, 18, 0.98) 55%);
+    padding: 12px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    flex-wrap: wrap;
+  }
+  .chyron.sev-red { background: linear-gradient(90deg, rgba(255, 59, 92, 0.16), rgba(7, 11, 18, 0.98) 55%); border-top-color: rgba(255, 59, 92, 0.4); }
+  .chyron.sev-yellow { background: linear-gradient(90deg, rgba(255, 184, 0, 0.14), rgba(7, 11, 18, 0.98) 55%); border-top-color: rgba(255, 184, 0, 0.38); }
+  .chyron.sev-green { background: linear-gradient(90deg, rgba(16, 242, 150, 0.14), rgba(7, 11, 18, 0.98) 55%); border-top-color: rgba(16, 242, 150, 0.38); }
+  @media (prefers-reduced-motion: no-preference) {
+    .chyron.animate-in {
+      animation: chyronSlide 0.34s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    @keyframes chyronSlide {
+      from { opacity: 0; transform: translateX(-18px); }
+      to { opacity: 1; transform: none; }
+    }
+  }
+
+  /* Whoop-Style Target-Band Meters & Lab Grid */
+  .band-row { margin-bottom: 10px; }
+  .band-head {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11.5px;
+    margin-bottom: 4px;
+  }
+  .band-track {
+    position: relative;
+    height: 10px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid var(--hairline);
+  }
+  .band-target {
+    position: absolute;
+    top: 1px;
+    bottom: 1px;
+    background: rgba(16, 242, 150, 0.24);
+    border-radius: 999px;
+  }
+  .band-marker {
+    position: absolute;
+    top: -3px;
+    width: 6px;
+    height: 14px;
+    border-radius: 3px;
+    transform: translateX(-50%);
+    box-shadow: 0 0 8px currentColor;
+  }
+
+  .lab-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(165px, 1fr));
+    gap: 9px;
+  }
+  .lab-cell {
+    background: var(--bg-well);
+    border: 1px solid var(--hairline);
+    border-left: 3px solid var(--dim);
+    border-radius: 8px;
+    padding: 9px 11px;
+  }
+  .lab-cell.green { border-left-color: var(--emerald); }
+  .lab-cell.yellow { border-left-color: var(--amber); }
+  .lab-cell.red { border-left-color: var(--crimson); }
+  .lab-tag {
+    font-family: var(--mono);
+    font-size: 9px;
+    padding: 1px 5px;
+    border-radius: 3px;
+    border: 1px solid var(--hairline);
+    color: var(--dim);
+  }
+  .lab-tag.est { color: var(--amber); border-color: rgba(255, 184, 0, 0.35); }
+  .lab-tag.meas { color: var(--cyan); border-color: rgba(0, 229, 255, 0.3); }
+
+  /* Pressure Gate Pips */
+  .pips {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin: 14px 0;
+  }
+  .pip {
+    width: 46px;
+    height: 46px;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.16);
+    background: rgba(4, 6, 10, 0.8);
+    display: grid;
+    place-items: center;
+    font-family: var(--mono);
+    font-weight: 800;
+    font-size: 15px;
+    color: var(--dim);
+    transition: all 0.2s;
+  }
+  .pip.made {
+    border-color: var(--emerald);
+    background: var(--emerald-soft);
+    color: var(--emerald);
+    box-shadow: 0 0 18px rgba(16, 242, 150, 0.35);
+  }
+  .pip.next-pressure {
+    border-color: var(--crimson);
+    color: var(--crimson);
+    box-shadow: 0 0 22px rgba(255, 59, 92, 0.35);
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .pip.next-pressure {
+      animation: pipPulse 1.2s ease-in-out infinite;
+    }
+    @keyframes pipPulse {
+      0%, 100% { transform: scale(1); }
+      50% { transform: scale(1.07); }
+    }
+  }
+
+  /* Tables & Bars */
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th, td { padding: 7px 9px; border-bottom: 1px solid var(--hairline); text-align: left; }
+  th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--dim); }
+  td.num, th.num { text-align: right; font-family: var(--mono); }
+
+  .bar-row { margin-bottom: 11px; }
+  .bar-top { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; gap: 8px; }
+  .bar-track { height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.07); overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 999px; transition: width 0.22s ease; }
+
+  /* Mode 3: Review Ghost Canvas & Timeline */
+  .canvas-stage {
+    position: relative;
+    background: #04070d;
+    border: 1px solid var(--hairline);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .canvas-stage canvas {
+    display: block;
+    width: 100%;
+    height: 410px;
+    cursor: ew-resize;
+    touch-action: none;
+  }
+  .nle-ticks {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4px;
+    gap: 6px;
+  }
+  .nle-tick {
+    border: 1px solid var(--hairline);
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--slate);
+    border-radius: 5px;
+    padding: 3px 9px;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .nle-tick:hover, .nle-tick.active {
+    border-color: var(--cyan);
+    color: var(--cyan);
+    background: rgba(0, 229, 255, 0.12);
+  }
+
+  /* Mode 4: My Bag & Wedge Clock Matrix */
+  .wedge-matrix { display: grid; grid-template-columns: 74px repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .wm-head {
+    text-align: center; font-size: 10.5px; font-weight: 700; color: var(--slate);
+    padding: 6px; background: var(--bg-well); border-radius: 6px; border: 1px solid var(--hairline);
+  }
+  .wm-club {
+    display: grid; place-items: center; font-family: var(--mono); font-weight: 800; color: var(--cyan);
+    background: rgba(0, 229, 255, 0.07); border: 1px solid rgba(0, 229, 255, 0.24); border-radius: 8px;
+  }
+  .wm-cell {
+    padding: 10px 8px; border-radius: 8px; text-align: center; cursor: pointer;
+    background: var(--bg-well); border: 1px solid var(--hairline); transition: border-color 0.14s, background-color 0.14s;
+  }
+  .wm-cell:hover { border-color: rgba(0, 229, 255, 0.5); }
+  .wm-cell.selected { border-color: var(--cyan); background: rgba(0, 229, 255, 0.14); }
+  .wm-yds { font-family: var(--mono); font-size: 18px; font-weight: 800; color: var(--white); }
+
+  /* Calibration Heatmap & Virtual Pedals */
+  .cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+  @media (max-width: 720px) { .cal-grid { grid-template-columns: repeat(4, 1fr); } }
+  .cal-tile {
+    padding: 9px 6px; border-radius: 8px; text-align: center; cursor: pointer;
+    background: var(--bg-well); border: 1px solid var(--hairline);
+  }
+  .cal-tile.locked { border-color: rgba(16, 242, 150, 0.45); background: rgba(16, 242, 150, 0.08); }
+  .cal-tile.learning { border-color: rgba(255, 184, 0, 0.45); background: rgba(255, 184, 0, 0.08); }
+  .cal-tile.selected { outline: 2px solid var(--cyan); }
+
+  .pedal-deck { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .pedal {
+    padding: 12px 10px; border-radius: 9px; text-align: center; cursor: pointer;
+    background: linear-gradient(180deg, #131c2e, #0a0f1a);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    transition: border-color 0.12s, transform 0.08s;
+  }
+  .pedal:hover { border-color: var(--cyan); }
+  .pedal:active { transform: translateY(2px); }
+
+  /* OBS Backdrop */
+  .obs-stage {
+    position: relative;
+    min-height: 290px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--hairline);
+    background:
+      radial-gradient(ellipse at 50% 25%, rgba(0, 229, 255, 0.16), transparent 55%),
+      linear-gradient(180deg, #0b1b2d 0%, #103229 58%, #071912 100%);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .obs-glass {
+    background: rgba(4, 6, 10, 0.86);
+    border: 1px solid rgba(0, 229, 255, 0.35);
+    border-radius: 10px;
+    padding: 10px 14px;
+    box-shadow: 0 12px 30px rgba(0, 0, 0, 0.5);
+  }
+
+  /* Native Top-Layer <dialog> Modals (Modern Web Guidance) */
+  dialog {
+    padding: 0;
+    border: 1px solid var(--hairline-hi);
+    border-radius: 14px;
+    background: #0a0f19;
+    color: var(--text);
+    max-width: 720px;
+    width: calc(100vw - 32px);
+    max-height: 88vh;
+    overflow: auto;
+    box-shadow: var(--spec), 0 28px 70px rgba(0, 0, 0, 0.72);
+    opacity: 0;
+    transform: translateY(8px) scale(0.985);
+    transition:
+      opacity 0.2s ease-out,
+      transform 0.2s ease-out,
+      display,
+      overlay;
+    transition-duration: 0.2s;
+    transition-behavior: allow-discrete;
+  }
+  dialog[open] {
+    display: block;
+    opacity: 1;
+    transform: none;
+  }
+  @starting-style {
+    dialog[open] {
+      opacity: 0;
+      transform: translateY(10px) scale(0.98);
+    }
+  }
+  dialog:modal {
+    overscroll-behavior: contain;
+  }
+  dialog::backdrop {
+    overflow: hidden;
+    overscroll-behavior: contain;
+    background: rgba(2, 4, 9, 0.78);
+    backdrop-filter: blur(8px);
+  }
+  .dlg-inner { padding: 18px 20px; }
+
+  /* Toast */
+  .toast {
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    z-index: 90;
+    background: rgba(11, 16, 26, 0.96);
+    border: 1px solid var(--cyan);
+    color: var(--white);
+    padding: 10px 15px;
+    border-radius: 9px;
+    font-weight: 600;
+    font-size: 12px;
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.55);
+    opacity: 0;
+    transform: translateY(10px);
+    pointer-events: none;
+    transition: opacity 0.18s, transform 0.18s;
+  }
+  .toast.show { opacity: 1; transform: none; }
+
+  /* Dedicated Print View for DECADE 3x5 Pocket Wedge Card */
+  @media print {
+    body * { visibility: hidden !important; }
+    #dlg-wedge, #dlg-wedge * { visibility: visible !important; }
+    #dlg-wedge {
+      position: fixed !important;
+      inset: 0 !important;
+      margin: 0 !important;
+      max-width: 100% !important;
+      width: 100% !important;
+      max-height: none !important;
+      background: #ffffff !important;
+      color: #000000 !important;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    #dlg-wedge .no-print { display: none !important; }
+    #dlg-wedge h2, #dlg-wedge th, #dlg-wedge td, #dlg-wedge strong { color: #000000 !important; }
+    #dlg-wedge table { border: 2px solid #000000 !important; }
+    #dlg-wedge th, #dlg-wedge td { border: 1px solid #444444 !important; padding: 6px 8px !important; }
+    #dlg-wedge .kicker { color: #333333 !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="tension-vignette" id="tension-vignette" aria-hidden="true"></div>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark"><span></span></div>
+      <span class="brand-name">SHOTLAB</span>
+      <span class="brand-tag">v4 STUDIO</span>
+    </div>
+
+    <nav class="lifecycle-nav" id="lifecycle-nav" aria-label="Session lifecycle modes">
+      <button type="button" class="mode-btn active" data-mode="plan"><span class="mode-idx">01</span> Plan</button>
+      <button type="button" class="mode-btn" data-mode="practice"><span class="mode-idx">02</span> Practice</button>
+      <button type="button" class="mode-btn" data-mode="review"><span class="mode-idx">03</span> Review</button>
+      <button type="button" class="mode-btn" data-mode="bag"><span class="mode-idx">04</span> My Bag</button>
+    </nav>
+
+    <div class="top-actions">
+      <button type="button" class="btn btn-sm" id="glob-btn-foam" title="Toggle Kids-Asleep Foam Ball Firewall">&#127769; Kids Asleep: OFF</button>
+      <button type="button" class="btn btn-sm" id="glob-btn-cold" title="Switch between Mature DB (1,428) and Cold Start (n=11)">DB: Mature (1,428)</button>
+      <button type="button" class="btn btn-sm" id="glob-btn-obs">&#128225; OBS</button>
+      <button type="button" class="btn btn-sm" id="glob-btn-settings">&#9881; Rig &amp; Mat</button>
+    </div>
+  </div>
+  <div class="foam-banner" id="glob-foam-banner">
+    <div class="foam-banner-inner">
+      <span><strong>&#127769; KIDS-ASLEEP FIREWALL ACTIVE:</strong> Audio auto-muted &middot; Swings excluded from Swing DNA, Wedge Clock, Calibration &amp; Mat-Fat &middot; Optical Ball-ROI Sync active.</span>
+      <span class="badge badge-cyan" id="glob-foam-reason">Manual Toggle</span>
+    </div>
+  </div>
+</header>
+
+<main class="shell">
+
+  <!-- ==================== 01 PLAN (BEFORE SESSION) ==================== -->
+  <section class="mode-panel active" id="mode-plan">
+    <div class="stage-hero" style="padding:20px 22px;">
+      <div class="head-row">
+        <div>
+          <span class="kicker" id="plan-kicker">SQLite Auto-Prescription &middot; 20-Minute High-Transfer Session</span>
+          <h2 id="plan-title">Today&rsquo;s 20-Minute Smart Prescription</h2>
+        </div>
+        <div class="flex-row">
+          <button type="button" class="btn" id="plan-btn-checkin">&#9971; 60-Sec Post-Round Check-In</button>
+          <button type="button" class="btn btn-cyan" id="plan-btn-start">&#9654; Start Prescribed Session</button>
+        </div>
+      </div>
+      <div id="plan-checkin-banner" class="sub-well" style="display:none;margin-bottom:12px;border-color:rgba(255,184,0,0.4);"></div>
+      <div class="rx-blocks" id="plan-rx-blocks"></div>
+    </div>
+
+    <div class="rail mt-16">
+      <div class="head-row">
+        <div>
+          <span class="kicker">Undeniable Outcome Evidence</span>
+          <h2>30-Day Progress Proof</h2>
+        </div>
+        <span class="badge badge-green" id="plan-proof-badge">Verified vs. 30 Days Prior</span>
+      </div>
+      <div class="grid-4" id="plan-proof-grid"></div>
+    </div>
+
+    <div class="rail mt-16">
+      <div class="head-row">
+        <div>
+          <span class="kicker">Linked Tee-to-Green Course Simulation</span>
+          <h2>Saturday Course Prep (3 Linked Holes)</h2>
+        </div>
+        <button type="button" class="btn btn-emerald" id="plan-btn-course">&#9654; Launch Linked 3-Hole Sim</button>
+      </div>
+      <div class="grid-3" id="plan-course-preview"></div>
+    </div>
+  </section>
+
+  <!-- ==================== 02 PRACTICE (DURING SESSION) ==================== -->
+  <section class="mode-panel" id="mode-practice">
+    <div class="mission-strip" id="prac-mission-strip">
+      <div class="flex-row">
+        <span class="badge badge-cyan" id="prac-mission-badge">ACTIVE MISSION</span>
+        <strong id="prac-mission-text" style="color:var(--white);"></strong>
+      </div>
+      <div class="flex-row">
+        <span class="mono muted" id="prac-mission-progress">Block 1/3</span>
+        <button type="button" class="btn btn-sm" id="prac-mission-clear">End Mission</button>
+      </div>
+    </div>
+
+    <div class="head-row">
+      <div class="seg" id="prac-sub-seg">
+        <button type="button" class="active" data-sub="range">Live Range</button>
+        <button type="button" data-sub="combine">18-Ball Combine</button>
+        <button type="button" data-sub="pressure">Pressure Gate (5/5)</button>
+        <button type="button" data-sub="course">Course Prep (3 Holes)</button>
+      </div>
+      <div class="flex-row">
+        <div class="seg" id="prac-density-seg">
+          <button type="button" class="active" data-d="mat">10-Ft Mat</button>
+          <button type="button" data-d="coach">Coach</button>
+          <button type="button" data-d="lab">Lab</button>
+        </div>
+        <select id="prac-shot-select" aria-label="Select simulated shot"></select>
+        <button type="button" class="btn btn-cyan" id="prac-sim-next">&#9889; Strike Ball</button>
+      </div>
+    </div>
+
+    <!-- 4-Layer Skill-Hierarchy Triage + Rolling Coach Memory -->
+    <div class="triage-rail" id="prac-triage-rail"></div>
+
+    <!-- Broadcast Hero Stage (Full-Bleed 3D Fairway Tracer + Telemetry + Chyron) -->
+    <div class="stage-hero">
+      <div class="broadcast-grid">
+        <div class="tracer-pane">
+          <canvas id="prac-tracer-canvas" aria-label="3D perspective ball flight tracer"></canvas>
+        </div>
+        <div class="telemetry-pane" id="prac-telemetry-pane"></div>
+      </div>
+      <div class="chyron" id="prac-chyron"></div>
+    </div>
+
+    <!-- Density Secondary Pane (Coach Visuals or Lab Table) -->
+    <div id="prac-density-extra" class="mt-16"></div>
+
+    <!-- Integrated Challenge Modules (Shown cleanly when Combine / Pressure / Course Prep active) -->
+    <div id="prac-sub-combine" class="rail mt-16" style="display:none;"></div>
+    <div id="prac-sub-pressure" class="rail mt-16" style="display:none;"></div>
+    <div id="prac-sub-course" class="rail mt-16" style="display:none;"></div>
+  </section>
+
+  <!-- ==================== 03 REVIEW (AFTER SESSION) ==================== -->
+  <section class="mode-panel" id="mode-review">
+    <div class="head-row">
+      <div class="seg" id="rev-sub-seg">
+        <button type="button" class="active" data-sub="dna">Swing DNA &amp; Discovery</button>
+        <button type="button" data-sub="ghost">Ghost &amp; Pose Lab</button>
+        <button type="button" data-sub="highlights">&#9733; Highlights</button>
+      </div>
+      <div class="flex-row">
+        <button type="button" class="btn btn-cyan" id="rev-export-packet">&#11015; Export Coach Packet (.html)</button>
+      </div>
+    </div>
+
+    <!-- Sub-view A: Swing DNA & Discovery -->
+    <div id="rev-view-dna">
+      <div class="head-row">
+        <div>
+          <span class="kicker">Automated SQLite Causal &amp; Cruise Speed Discovery</span>
+          <h2>Personal Swing DNA</h2>
+        </div>
+        <div class="seg" id="rev-club-seg">
+          <button type="button" class="active" data-club="DR">Driver (n=184)</button>
+          <button type="button" data-club="7I">7-Iron (n=246)</button>
+          <button type="button" data-club="PW">PW (n=119)</button>
+        </div>
+      </div>
+
+      <div id="rev-cold-gate" class="sub-well" style="display:none;margin-bottom:14px;border-color:rgba(255,184,0,0.45);"></div>
+
+      <div class="grid-dna">
+        <div class="rail">
+          <div class="head-row">
+            <div>
+              <span class="kicker">Hover / Scrub Laser Crosshair Across Real Scatter Cloud</span>
+              <h3 id="rev-pareto-title">Driver: Club Speed vs. Strokes Gained</h3>
+            </div>
+            <span class="badge badge-green" id="rev-pareto-pill">Cruise Gear: 96.5&ndash;99.5 mph</span>
+          </div>
+          <div id="rev-pareto-svg"></div>
+          <div class="mt-12">
+            <div class="flex-row" style="justify-content:space-between;margin-bottom:4px;">
+              <span class="muted">Test Cruise Gear: <strong class="mono" id="rev-speed-val" style="color:var(--white);">98.0 mph</strong></span>
+              <span class="mono" id="rev-speed-zone" style="font-weight:700;">Optimal Cruise Gear</span>
+            </div>
+            <input type="range" id="rev-speed-slider" min="90" max="106" step="0.5" value="98" style="width:100%;" aria-label="Test club speed on Pareto curve" />
+          </div>
+          <div class="grid-4 mt-12" id="rev-speed-kpis"></div>
+        </div>
+
+        <div class="rail">
+          <div class="head-row">
+            <div>
+              <span class="kicker">Non-Linear Shapley |F2P| Variance Share</span>
+              <h3>Root-Cause Stroke-Leak Attribution</h3>
+            </div>
+            <button type="button" class="btn btn-cyan btn-sm" id="rev-train-btn">&#127919; Train This Now &rarr;</button>
+          </div>
+          <p class="muted" id="rev-attr-summary" style="margin:0 0 12px;"></p>
+          <div id="rev-attr-bars"></div>
+          <div class="mt-12">
+            <div class="head-row" style="margin-bottom:6px;">
+              <span class="kicker">80% Dispersion Corridor</span>
+              <span class="badge" id="rev-miss-pill"></span>
+            </div>
+            <div id="rev-corridor-svg"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rail mt-16">
+        <div class="head-row">
+          <div>
+            <span class="kicker">Acquisition vs. 3-Session Un-Cued Retention Audit</span>
+            <h3>&ldquo;Did That Feel Actually Stick?&rdquo;</h3>
+          </div>
+          <span class="badge badge-cyan">Retention Proof</span>
+        </div>
+        <div class="grid-2">
+          <div id="rev-retention-svg"></div>
+          <div id="rev-retention-cards"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sub-view B: Kinematic Ghost & Pose Lab -->
+    <div id="rev-view-ghost" style="display:none;">
+      <div class="rail">
+        <div class="head-row">
+          <div>
+            <span class="kicker">Zero-Sensor Kinovea Fusion &middot; Auto-Impact Locked</span>
+            <h3>Kinematic Velocity-Trail Ghost Lab</h3>
+          </div>
+          <div class="flex-row">
+            <div class="seg" id="rev-cam-seg">
+              <button type="button" class="active" data-cam="dtl">DTL</button>
+              <button type="button" data-cam="fo">Face-On</button>
+            </div>
+            <div class="seg" id="rev-ghost-seg">
+              <button type="button" class="active" data-g="goto">My-Go-To (7I)</button>
+              <button type="button" data-g="pro">Tour Pro</button>
+            </div>
+            <div class="seg" id="rev-hand-seg">
+              <button type="button" class="active" data-h="RH">RH</button>
+              <button type="button" data-h="LH">LH</button>
+            </div>
+            <label class="badge" style="cursor:pointer;"><input type="checkbox" id="rev-silent-cam" /> Silent 240fps Cam</label>
+            <span class="badge badge-cyan" id="rev-sync-badge">Audio + Optical Sync</span>
+          </div>
+        </div>
+
+        <div class="canvas-stage">
+          <canvas id="rev-ghost-canvas" aria-label="Kinematic velocity trail and ghost comparison"></canvas>
+        </div>
+
+        <div class="sub-well mt-12">
+          <div class="flex-row" style="justify-content:space-between;">
+            <div class="flex-row">
+              <button type="button" class="btn btn-cyan btn-sm" id="rev-g-play">&#9654; Play</button>
+              <div class="seg" id="rev-g-speed-seg">
+                <button type="button" data-s="0.1">0.1x</button>
+                <button type="button" class="active" data-s="0.25">0.25x</button>
+                <button type="button" data-s="0.5">0.5x</button>
+                <button type="button" data-s="1">1.0x</button>
+              </div>
+              <span class="badge badge-yellow" id="rev-g-time">T = +0.00s (P7 Impact)</span>
+            </div>
+            <div class="flex-row">
+              <span class="muted" style="font-size:11px;">Ghost Opacity: <strong class="mono" id="rev-g-op-lbl">55%</strong></span>
+              <input type="range" id="rev-g-opacity" min="15" max="90" value="55" style="width:92px;" aria-label="Ghost overlay opacity" />
+              <span class="muted" style="font-size:11px;">Split Wipe (Drag Canvas): <strong class="mono" id="rev-g-wipe-lbl">54%</strong></span>
+              <input type="range" id="rev-g-wipe" min="10" max="100" value="54" style="width:92px;" aria-label="Split wipe curtain position" />
+            </div>
+          </div>
+          <input type="range" id="rev-g-scrub" min="0" max="100" value="84" style="width:100%;margin-top:10px;" aria-label="Swing timeline scrubber" />
+          <div class="nle-ticks" id="rev-g-ticks">
+            <button type="button" class="nle-tick" data-p="0">P1 Address</button>
+            <button type="button" class="nle-tick" data-p="45">P4 Top</button>
+            <button type="button" class="nle-tick" data-p="74">P6 Delivery</button>
+            <button type="button" class="nle-tick active" data-p="84">P7 Impact (0.00s)</button>
+            <button type="button" class="nle-tick" data-p="100">P9 Finish</button>
+          </div>
+        </div>
+
+        <div class="grid-2 mt-12">
+          <div class="grid-4" id="rev-bio-metrics"></div>
+          <div class="sub-well" id="rev-pose-corr"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sub-view C: Highlights -->
+    <div id="rev-view-highlights" style="display:none;">
+      <div class="rail">
+        <div class="head-row">
+          <div>
+            <span class="kicker">Auto-Rendered via ffmpeg &rarr; Swings/Highlights/</span>
+            <h3>&#9733; Session &amp; Career Highlights</h3>
+          </div>
+          <span class="badge badge-yellow">Auto-Triggers: 90+ Score / Carry PR / 5-Streak</span>
+        </div>
+        <div class="grid-3" id="rev-highlights-grid"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ==================== 04 MY BAG (REFERENCE) ==================== -->
+  <section class="mode-panel" id="mode-bag">
+    <div class="head-row">
+      <div>
+        <span class="kicker">14-Club Gapping &amp; Real-World Aerodynamic Warping</span>
+        <h2>My Bag &amp; Conditions Simulator</h2>
+      </div>
+      <div class="flex-row">
+        <span class="badge badge-cyan" id="bag-summary-pill">Stock Conditions</span>
+        <button type="button" class="btn btn-emerald" id="bag-cal-btn">Bag Cal: 8/14 Locked (87% Auto-Switch)</button>
+      </div>
+    </div>
+
+    <div class="grid-bag">
+      <!-- Docked Conditions Warp Panel -->
+      <div class="rail">
+        <div class="head-row">
+          <div>
+            <span class="kicker">RK4 Per-Club Aerodynamic Model</span>
+            <h3>Course Conditions Warp</h3>
+          </div>
+          <div id="bag-compass-svg" aria-hidden="true"></div>
+        </div>
+
+        <div class="flex-row" id="bag-presets" style="margin-bottom:12px;">
+          <button type="button" class="btn btn-sm" data-preset="calm">Stock Sim</button>
+          <button type="button" class="btn btn-sm" data-preset="links">Windy Links</button>
+          <button type="button" class="btn btn-sm" data-preset="denver">Denver 5,280ft</button>
+          <button type="button" class="btn btn-sm" data-preset="soft">Wet / Soft</button>
+          <button type="button" class="btn btn-sm" data-preset="rough">2&Prime; Dry Rough</button>
+        </div>
+
+        <div class="mt-8">
+          <div class="flex-row" style="justify-content:space-between;"><span class="muted">Head / Tailwind</span><strong class="mono" id="bag-wind-val">Calm (0 mph)</strong></div>
+          <input type="range" id="bag-wind" min="-25" max="25" value="0" style="width:100%;" aria-label="Headwind or tailwind" />
+        </div>
+        <div class="mt-8">
+          <div class="flex-row" style="justify-content:space-between;"><span class="muted">Crosswind</span><strong class="mono" id="bag-xwind-val">None</strong></div>
+          <input type="range" id="bag-xwind" min="-20" max="20" value="0" style="width:100%;" aria-label="Crosswind" />
+        </div>
+        <div class="mt-8">
+          <div class="flex-row" style="justify-content:space-between;"><span class="muted">Temperature</span><strong class="mono" id="bag-temp-val">70&deg;F</strong></div>
+          <input type="range" id="bag-temp" min="38" max="98" value="70" style="width:100%;" aria-label="Temperature" />
+        </div>
+        <div class="mt-8">
+          <div class="flex-row" style="justify-content:space-between;"><span class="muted">Altitude</span><strong class="mono" id="bag-alt-val">0 ft</strong></div>
+          <input type="range" id="bag-alt" min="0" max="7000" step="250" value="0" style="width:100%;" aria-label="Altitude" />
+        </div>
+        <div class="grid-2 mt-12">
+          <div>
+            <span class="kicker" style="margin-bottom:4px;">Turf / Lie</span>
+            <select id="bag-lie" style="width:100%;" aria-label="Turf or lie">
+              <option value="mat">Sim Mat (Control)</option>
+              <option value="firm">Firm Fairway (+Roll)</option>
+              <option value="soft">Soft / Wet Fairway</option>
+              <option value="rough">2&Prime; Dry Rough</option>
+            </select>
+          </div>
+          <div>
+            <span class="kicker" style="margin-bottom:4px;">Stock Shape</span>
+            <select id="bag-shape" style="width:100%;" aria-label="Stock shot shape">
+              <option value="draw">Stock Draw</option>
+              <option value="straight">Neutral Straight</option>
+              <option value="fade">Stock Fade</option>
+            </select>
+          </div>
+        </div>
+        <p class="dim" style="font-size:11px;margin:10px 0 0;">Models high-spin wedge ballooning (~1.6%/mph), 3W&ndash;5I rough drag, short-iron fliers, DR Tee-only guard, and spin-asymmetric crosswind drift.</p>
+      </div>
+
+      <!-- Stacked Carry + Roll Bars -->
+      <div class="rail">
+        <div class="head-row">
+          <div>
+            <span class="kicker">Solid = Carry &middot; Hatched = Rollout &middot; Tick = Stock Carry</span>
+            <h3>13-Club Gapping &amp; Aim Chart</h3>
+          </div>
+          <span class="muted" style="font-size:11px;">Crosswind aim adjusts per club hang-time</span>
+        </div>
+        <div id="bag-bars"></div>
+      </div>
+    </div>
+
+    <!-- Wedge Clock Matrix -->
+    <div class="rail mt-16">
+      <div class="head-row">
+        <div>
+          <span class="kicker">Bucketed by % Full Club Speed (62% / 74% / 86% / 98%) &middot; Mishits Filtered (Smash &ge; 1.15)</span>
+          <h3>Wedge Clock Matrix &amp; Yardage Card</h3>
+        </div>
+        <button type="button" class="btn btn-cyan" id="bag-open-card">&#128424; Printable Pocket Card</button>
+      </div>
+      <div class="grid-dna">
+        <div class="wedge-matrix" id="bag-wedge-matrix"></div>
+        <div class="sub-well" id="bag-wedge-detail"></div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ==================== NATIVE <dialog> MODALS ==================== -->
+<dialog id="dlg-obs" closedby="any" aria-labelledby="dlg-obs-title">
+  <div class="dlg-inner">
+    <div class="head-row">
+      <div>
+        <span class="kicker">Transparent OBS Browser Source Preview</span>
+        <h2 id="dlg-obs-title">OBS Studio Challenge &amp; Verdict Widgets</h2>
+      </div>
+      <button type="button" class="btn btn-sm" id="dlg-obs-close">Close</button>
+    </div>
+    <div class="flex-row" style="margin-bottom:12px;">
+      <label class="badge" style="cursor:pointer;"><input type="checkbox" id="obs-tog-chal" checked /> ?widget=challenge</label>
+      <label class="badge" style="cursor:pointer;"><input type="checkbox" id="obs-tog-verdict" checked /> ?widget=verdict</label>
+      <button type="button" class="btn btn-emerald btn-sm" id="obs-sim-make">+ Make Pip</button>
+      <button type="button" class="btn btn-crimson btn-sm" id="obs-sim-miss">Miss (Reset)</button>
+    </div>
+    <div class="obs-stage">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">
+        <span class="badge">GSPro + Kinovea Backdrop</span>
+        <div class="obs-glass" id="obs-challenge-widget" style="min-width:270px;"></div>
+      </div>
+      <div class="obs-glass" id="obs-verdict-widget" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;"></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlg-cal" closedby="any" aria-labelledby="dlg-cal-title">
+  <div class="dlg-inner">
+    <div class="head-row">
+      <div>
+        <span class="kicker">Bayesian Club-ID Posterior Builder &middot; swings.sqlite</span>
+        <h2 id="dlg-cal-title">10-Minute Bag Calibration Wizard</h2>
+      </div>
+      <div class="flex-row">
+        <span class="badge badge-cyan" id="cal-readiness-pill">87% (8/14 Locked)</span>
+        <button type="button" class="btn btn-sm" id="dlg-cal-close">Close</button>
+      </div>
+    </div>
+    <div id="cal-foam-warn" class="sub-well" style="display:none;margin-bottom:10px;border-color:rgba(0,229,255,0.45);color:var(--cyan);">
+      Kids-Asleep Firewall is ON &mdash; calibration updates are paused so foam balls cannot corrupt club priors.
+    </div>
+    <div class="cal-grid" id="cal-heatmap"></div>
+    <div class="sub-well mt-12">
+      <div class="head-row" style="margin-bottom:6px;">
+        <div>
+          <h3 id="cal-wiz-title">4H &mdash; Hit 4 more full balls to lock</h3>
+          <p class="muted" id="cal-wiz-desc" style="margin:3px 0 0;font-size:11.5px;"></p>
+        </div>
+        <button type="button" class="btn btn-emerald" id="cal-sim-shot">&#9889; Simulate Confirmed Shot</button>
+      </div>
+      <div class="flex-row" id="cal-wiz-dots"></div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlg-settings" closedby="any" aria-labelledby="dlg-settings-title">
+  <div class="dlg-inner">
+    <div class="head-row">
+      <div>
+        <span class="kicker">Sim Bay Hardware, Mat Physics &amp; Hands-Free Control</span>
+        <h2 id="dlg-settings-title">Rig, Mat &amp; Hands-Free Settings</h2>
+      </div>
+      <button type="button" class="btn btn-sm" id="dlg-settings-close">Close</button>
+    </div>
+    <div class="grid-3">
+      <div>
+        <span class="kicker" style="margin-bottom:4px;">Hitting Mat Type (Tunes Mat-Fat)</span>
+        <select id="set-mat-type" style="width:100%;" aria-label="Hitting mat type">
+          <option value="fiberbuilt">Fiberbuilt Grass (Moderate Bounce)</option>
+          <option value="divot">Divot Action Strip (Forgiving)</option>
+          <option value="cce">CCE / Tight Turf (Punishing)</option>
+        </select>
+      </div>
+      <div>
+        <span class="kicker" style="margin-bottom:4px;">Golfer Handedness</span>
+        <select id="set-hand" style="width:100%;" aria-label="Golfer handedness">
+          <option value="RH">Right-Handed (RH)</option>
+          <option value="LH">Left-Handed (LH)</option>
+        </select>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;justify-content:center;">
+        <label class="badge" style="cursor:pointer;"><input type="checkbox" id="set-audio-en" checked /> Enveloped Impact &amp; Heartbeat Audio</label>
+        <label class="badge" style="cursor:pointer;"><input type="checkbox" id="set-silent-cam" /> Silent 240fps Camera (Optical Sync)</label>
+      </div>
+    </div>
+
+    <div class="sub-well mt-12">
+      <span class="kicker" style="margin-bottom:8px;">Hands-Free Bluetooth 3-Pedal Deck &amp; Voice Commands</span>
+      <div class="pedal-deck" id="set-pedals">
+        <button type="button" class="pedal" data-cmd="Pedal F13: Confirmed active club &rarr; Calibration +1">
+          <span class="kicker">Left Pedal (F13)</span>
+          <strong style="display:block;margin-top:3px;">&#10003; Confirm Club</strong>
+        </button>
+        <button type="button" class="pedal" data-cmd="Pedal F14: Opened Ghost Compare at 0.25x P7 Sync">
+          <span class="kicker">Center Pedal (F14)</span>
+          <strong style="display:block;margin-top:3px;">&#9654; Compare Ghost</strong>
+        </button>
+        <button type="button" class="pedal" data-cmd="Pedal F15: Promoted clip to Swings/My-Go-To/">
+          <span class="kicker">Right Pedal (F15)</span>
+          <strong style="display:block;margin-top:3px;">&#9733; Promote Go-To</strong>
+        </button>
+      </div>
+      <div class="flex-row mt-8" id="set-voice">
+        <button type="button" class="btn btn-sm" data-cmd="Voice: Confirmed 6-Iron &amp; sent GSPro key">&ldquo;Confirm 6 Iron&rdquo;</button>
+        <button type="button" class="btn btn-sm" data-cmd="Voice: Active Feel tagged Lead Wrist Flat">&ldquo;Tag Feel Lead Wrist&rdquo;</button>
+        <button type="button" class="btn btn-sm" data-cmd="Voice: Kids-Asleep Firewall toggled" data-action="toggle-foam">&ldquo;Kids Asleep Mode&rdquo;</button>
+        <button type="button" class="btn btn-sm" data-cmd="Voice: Advanced Combine to next target">&ldquo;Next Target&rdquo;</button>
+      </div>
+      <div class="sub-well mt-8" style="padding:8px 10px;min-height:68px;">
+        <span class="kicker">Bounded Action Log (Max 4 Entries)</span>
+        <div id="set-log" class="mono" style="font-size:11px;color:var(--cyan);margin-top:4px;">Ready &mdash; listening for Bluetooth pedal or voice trigger...</div>
+      </div>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlg-wedge" closedby="any" aria-labelledby="dlg-wedge-title">
+  <div class="dlg-inner">
+    <div class="head-row">
+      <div>
+        <span class="kicker">DECADE 3&Prime;&times;5&Prime; Pocket Yardage Card &middot; swings.sqlite</span>
+        <h2 id="dlg-wedge-title">Personal Wedge Clock Matrix</h2>
+      </div>
+      <div class="flex-row no-print">
+        <button type="button" class="btn btn-cyan btn-sm" id="wedge-print-btn">&#128424; Print / Save PDF</button>
+        <button type="button" class="btn btn-sm" id="dlg-wedge-close">Close</button>
+      </div>
+    </div>
+    <div id="wedge-print-body"></div>
+  </div>
+</dialog>
+
+<dialog id="dlg-checkin" closedby="any" aria-labelledby="dlg-checkin-title">
+  <div class="dlg-inner">
+    <div class="head-row">
+      <div>
+        <span class="kicker">Close the Outdoor &harr; Sim Loop</span>
+        <h2 id="dlg-checkin-title">60-Sec Post-Round Check-In</h2>
+      </div>
+      <button type="button" class="btn btn-sm" id="dlg-checkin-close">Close</button>
+    </div>
+    <p class="muted" style="margin:0 0 12px;">Tell ShotLab what cost you strokes on the actual course so Today&rsquo;s 20-Min Prescription adapts immediately:</p>
+    <div class="flex-row" style="margin-bottom:10px;">
+      <label class="muted">Round Score / Par Diff: <input type="number" id="checkin-score" value="79" min="62" max="125" style="width:68px;background:#05080e;border:1px solid var(--hairline);border-radius:6px;padding:4px 8px;color:var(--white);" /></label>
+    </div>
+    <div class="grid-2" id="checkin-checks">
+      <label class="sub-well" style="cursor:pointer;display:flex;align-items:center;gap:8px;"><input type="checkbox" value="driver_ob" checked /> Driver Two-Way Miss / Left OB</label>
+      <label class="sub-well" style="cursor:pointer;display:flex;align-items:center;gap:8px;"><input type="checkbox" value="fat_irons" /> Fat Approach Shots on Real Grass</label>
+      <label class="sub-well" style="cursor:pointer;display:flex;align-items:center;gap:8px;"><input type="checkbox" value="wedge_dist" /> Wedge Distance Control (60&ndash;115y)</label>
+      <label class="sub-well" style="cursor:pointer;display:flex;align-items:center;gap:8px;"><input type="checkbox" value="pressure_close" checked /> Tightened Up on Closing 3 Holes</label>
+    </div>
+    <div class="flex-row mt-12" style="justify-content:flex-end;">
+      <button type="button" class="btn btn-cyan" id="checkin-apply">Update Today&rsquo;s 20-Min Prescription</button>
+    </div>
+  </div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function () {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const prefersReducedMotion = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  let toastTimer = null;
+  function showToast(msg) {
+    const el = $('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 2700);
+  }
+
+  // ==================== GLOBAL STATE STORE ====================
+  const state = {
+    mode: 'plan',
+    kidsAsleep: false,
+    foamReason: 'Manual Toggle',
+    foamTripwireCount: 0,
+    coldStart: false,
+    handedness: 'RH',
+    matType: 'fiberbuilt',
+    audioEnabled: true,
+    silentCam: false,
+    checkin: {
+      score: 79,
+      struggles: ['driver_ob', 'pressure_close'],
+    },
+    practice: {
+      sub: 'range',
+      density: 'mat',
+      shotIdx: 0,
+      history: [],
+      mission: null,
+      choreoRaf: 0,
+      choreoPct: 1,
+    },
+    combine: {
+      results: [],
+    },
+    pressure: {
+      gate: 'hla',
+      streak: 0,
+      best: 2,
+      clears: 1,
+      locked: false,
+      mutedVignette: false,
+      lastChoke: null,
+    },
+    course: {
+      holeIdx: 0,
+      stage: 'tee', // 'tee' | 'approach' | 'done'
+      holes: [
+        { num: 1, par: 4, yds: 412, wind: -8, xwind: 14, roughYds: 162, teeResult: null, appYds: null, appLie: 'firm', score: null },
+        { num: 2, par: 3, yds: 164, wind: -12, xwind: -6, roughYds: null, teeResult: null, appYds: 164, appLie: 'firm', score: null },
+        { num: 3, par: 4, yds: 388, wind: 6, xwind: 10, roughYds: 138, teeResult: null, appYds: null, appLie: 'firm', score: null },
+      ],
+    },
+    review: {
+      sub: 'dna',
+      club: 'DR',
+      speed: 98.0,
+      hoverSpeed: null,
+      cam: 'dtl',
+      ghost: 'goto',
+      pct: 84,
+      opacity: 0.55,
+      wipe: 0.54,
+      playSpeed: 0.25,
+      playing: false,
+      rafId: 0,
+      lastTs: 0,
+      draggingWipe: false,
+    },
+    bag: {
+      wind: 0,
+      xwind: 0,
+      temp: 70,
+      alt: 0,
+      lie: 'mat',
+      shape: 'draw',
+      selWedge: { r: 2, c: 1 },
+    },
+    cal: {
+      selIdx: 3,
+      clubs: [
+        { club: 'DR', n: 18 }, { club: '3W', n: 6 }, { club: '5W', n: 3 }, { club: '4H', n: 1 },
+        { club: '4I', n: 0 }, { club: '5I', n: 2 }, { club: '6I', n: 4 }, { club: '7I', n: 15 },
+        { club: '8I', n: 7 }, { club: '9I', n: 6 }, { club: 'PW', n: 11 }, { club: 'GW', n: 5 },
+        { club: 'SW', n: 8 }, { club: 'LW', n: 2 },
+      ],
+    },
+    highlights: [
+      { title: 'Personal Carry PR — Driver 278y (+0.38 SG)', file: 'Swings/Highlights/2026-11-21_DR_278y_PR.mp4', badge: 'CARRY PR', sev: 'green', meta: 'DTL 240fps + 3D Tracer + Telemetry Lower-Third' },
+      { title: '94-Score Pure 7-Iron Push Draw (168y)', file: 'Swings/Highlights/2026-11-21_7I_168y_Score94.mp4', badge: '90+ SCORE', sev: 'cyan', meta: 'Smash 1.38 · +6.2° Shaft Lean · 98 mph Cruise Rhythm' },
+      { title: '5/5 Start-Line Gate Cleared Under Pressure', file: 'Swings/Highlights/2026-11-21_Gate5of5_Clutch.mp4', badge: 'CLUTCH 5/5', sev: 'yellow', meta: '5 consecutive balls inside ±1.5° HLA with OBS HUD' },
+    ],
+    logLines: ['Ready — listening for Bluetooth pedal (F13–F15) or voice trigger...'],
+  };
+
+  // ==================== ENVELOPED WEB AUDIO ENGINE ====================
+  const AudioFX = (() => {
+    let ctx = null;
+    function getCtx() {
+      if (!state.audioEnabled || state.kidsAsleep) return null;
+      try {
+        ctx = ctx || new (window.AudioContext || window.webkitAudioContext)();
+        if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+        return ctx;
+      } catch {
+        return null;
+      }
+    }
+    function impact(sev) {
+      const c = getCtx();
+      if (!c) return;
+      const now = c.currentTime;
+      // Low crisp thump
+      const osc = c.createOscillator();
+      const gain = c.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(sev === 'green' ? 155 : 122, now);
+      osc.frequency.exponentialRampToValueAtTime(48, now + 0.09);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(0.16, now + 0.006);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+      osc.connect(gain); gain.connect(c.destination);
+      osc.start(now); osc.stop(now + 0.12);
+    }
+    function chime(freq, delay = 0, vol = 0.07) {
+      const c = getCtx();
+      if (!c) return;
+      const now = c.currentTime + delay;
+      const osc = c.createOscillator();
+      const gain = c.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now);
+      gain.gain.setValueAtTime(0.001, now);
+      gain.gain.linearRampToValueAtTime(vol, now + 0.015);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+      osc.connect(gain); gain.connect(c.destination);
+      osc.start(now); osc.stop(now + 0.24);
+    }
+    function heartbeat() {
+      if (state.pressure.mutedVignette) return;
+      const c = getCtx();
+      if (!c) return;
+      [[0, 58, 0.14], [0.18, 44, 0.10]].forEach(([dt, hz, amp]) => {
+        const now = c.currentTime + dt;
+        const osc = c.createOscillator();
+        const gain = c.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(hz, now);
+        osc.frequency.exponentialRampToValueAtTime(30, now + 0.11);
+        gain.gain.setValueAtTime(0.001, now);
+        gain.gain.linearRampToValueAtTime(amp, now + 0.012);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+        osc.connect(gain); gain.connect(c.destination);
+        osc.start(now); osc.stop(now + 0.14);
+      });
+    }
+    return { impact, chime, heartbeat };
+  })();
+
+  // ==================== SEEDED DATA & SHOTS ====================
+  const SHOTS = [
+    {
+      id: 'heel_fat', label: '7I — Heel Pull-Fade + Mat-Fat Risk',
+      club: '7I', clubLabel: '7 Iron', shape: 'Pull Fade', sev: 'red', score: 54,
+      lockedLayer: 0, ballOnly: false, partial: false, foam: false, matFat: true,
+      verdict: 'Heel strike + 3.8° out-to-in path cost 14 yds and 0.28 strokes — and the mat masked a fat strike.',
+      cue: 'Priority #1 (Contact): Keep sternum ahead of ball; ignore spin tweaks until smash ≥ 1.33.',
+      carry: 151, total: 158, ballSpeed: 111.2, clubSpeed: 86.1, smash: 1.29,
+      vla: 18.2, hla: -2.6, spin: 7420, spinAxis: 9.4, aoa: -6.8, path: -3.8, face: -2.3, f2p: 1.5, lean: 4.1, sg: -0.28,
+      curve: 11, offline: 6, apex: 86, potLoss: 14, strikeLoc: { x: -0.44, y: -0.22, label: 'Low Heel' },
+    },
+    {
+      id: 'overspeed_hook', label: 'DR — Over-Speed Snap Hook (103.4 mph)',
+      club: 'DR', clubLabel: 'Driver', shape: 'Snap Hook', sev: 'red', score: 42,
+      lockedLayer: 1, ballOnly: false, partial: false, foam: false, matFat: false,
+      verdict: 'Swinging 4.4 mph above your 99 mph Cruise Gear shut the face (−4.1°) and triggered a −36y Snap Hook.',
+      cue: 'Priority #2 (Face Control): Dial Driver back to your 98 mph Cruise Gear (+0.55 SG advantage).',
+      carry: 229, total: 246, ballSpeed: 146.8, clubSpeed: 103.4, smash: 1.42,
+      vla: 9.4, hla: -3.2, spin: 1890, spinAxis: -21.5, aoa: 1.8, path: 2.1, face: -4.1, f2p: -6.2, lean: 2.6, sg: -0.46,
+      curve: -29, offline: -36, apex: 61, potLoss: 23, strikeLoc: { x: 0.34, y: 0.14, label: 'High Toe (Gear Hook)' },
+    },
+    {
+      id: 'pure_draw', label: '7I — Pure Tour Push-Draw (+0.29 SG)',
+      club: '7I', clubLabel: '7 Iron', shape: 'Tour Push Draw', sev: 'green', score: 94,
+      lockedLayer: 3, ballOnly: false, partial: false, foam: false, matFat: false,
+      verdict: 'Tour-grade center compression (1.38 smash, +6.2° shaft lean) inside your 87 mph Cruise Window (+0.29 SG).',
+      cue: 'All 3 foundation layers GREEN — lock in "Lead Wrist Flat" and repeat.',
+      carry: 168, total: 175, ballSpeed: 120.6, clubSpeed: 87.4, smash: 1.38,
+      vla: 16.4, hla: 1.8, spin: 6420, spinAxis: -4.2, aoa: -4.4, path: 2.4, face: 1.6, f2p: -0.8, lean: 6.2, sg: +0.29,
+      curve: -6, offline: 1, apex: 94, potLoss: 2, strikeLoc: { x: 0.02, y: 0.04, label: 'Sweet Spot' },
+    },
+    {
+      id: 'flip_floater', label: 'DR — Flipping Floater (High Spin, −19y)',
+      club: 'DR', clubLabel: 'Driver', shape: 'Weak Fade', sev: 'yellow', score: 63,
+      lockedLayer: 2, ballOnly: false, partial: false, foam: false, matFat: false,
+      verdict: 'Hands flipped through impact (+3.4° added loft, 3,840 rpm spin), ballooning carry by 19 yds (−0.19 SG).',
+      cue: 'Priority #3 (Path / Delivery): Lead wrist flat through impact — match P7 Ghost shaft lean.',
+      carry: 231, total: 237, ballSpeed: 141.5, clubSpeed: 98.2, smash: 1.44,
+      vla: 16.1, hla: 0.9, spin: 3840, spinAxis: 7.5, aoa: -1.6, path: -2.4, face: 1.2, f2p: 3.6, lean: -2.4, sg: -0.19,
+      curve: 14, offline: 17, apex: 118, potLoss: 19, strikeLoc: { x: -0.18, y: -0.15, label: 'Low Heel' },
+    },
+    {
+      id: 'knockdown_pw', label: 'PW — Flighted 3/4 Knockdown (118y)',
+      club: 'PW', clubLabel: 'Pitching Wedge', shape: 'Controlled Draw', sev: 'green', score: 91,
+      lockedLayer: 3, ballOnly: false, partial: true, foam: false, matFat: false,
+      verdict: 'Intentional 82% knockdown recognized — partial-swing guard & Mat-Fat pause active (+0.22 SG).',
+      cue: 'Club-aware smash (1.26) graded GREEN for PW; maintain 18/9 wedge tempo.',
+      carry: 118, total: 120, ballSpeed: 92.4, clubSpeed: 73.1, smash: 1.26,
+      vla: 22.8, hla: 0.6, spin: 8450, spinAxis: -2.1, aoa: -5.2, path: 1.1, face: 0.5, f2p: -0.6, lean: 7.4, sg: +0.22,
+      curve: -2, offline: -1, apex: 72, potLoss: 0, strikeLoc: { x: 0.04, y: 0.02, label: 'Center Flush' },
+    },
+    {
+      id: 'ball_only', label: '7I — Ball-Only Read (Missed Sticker)',
+      club: '7I', clubLabel: '7 Iron', shape: 'Straight Draw', sev: 'green', score: 83,
+      lockedLayer: 1, ballOnly: true, partial: false, foam: false, matFat: false,
+      verdict: 'BLP missed club sticker — grading honest ball flight only (118.4 mph ball speed, +1.2° HLA, 164y carry).',
+      cue: 'Face Control & Start Line confirmed solid (+0.11 SG). Re-check 1-dot sticker before next swing.',
+      carry: 164, total: 171, ballSpeed: 118.4, clubSpeed: null, smash: null,
+      vla: 16.9, hla: 1.2, spin: 6280, spinAxis: -3.1, aoa: null, path: null, face: null, f2p: null, lean: null, sg: +0.11,
+      curve: -4, offline: -2, apex: 91, potLoss: 3, strikeLoc: { x: 0.0, y: 0.0, label: 'Unmeasured (No Sticker)' },
+    },
+    {
+      id: 'foam_ball', label: '7I — Foam Ball Tripwire (CS 84 · Smash 0.88)',
+      club: '7I', clubLabel: '7 Iron', shape: 'Foam Ball', sev: 'yellow', score: 78,
+      lockedLayer: 1, ballOnly: false, partial: false, foam: true, matFat: false,
+      verdict: 'High club speed (84.2 mph) with 0.88 smash detected — quarantined as Foam / Kids-Asleep shot.',
+      cue: 'Hit twice in a row to trigger automatic Kids-Asleep Firewall (protects SQLite & mutes audio).',
+      carry: 58, total: 62, ballSpeed: 74.1, clubSpeed: 84.2, smash: 0.88,
+      vla: 17.5, hla: 0.8, spin: 3100, spinAxis: -1.8, aoa: -4.1, path: 1.4, face: 0.9, f2p: -0.5, lean: 5.5, sg: 0.0,
+      curve: -1, offline: 1, apex: 38, potLoss: 0, strikeLoc: { x: 0.0, y: 0.0, label: 'Foam Excluded' },
+    },
+  ];
+
+  // Deterministic PRNG for realistic scatter clouds (zero randomness flicker on re-render)
+  function mulberry32(seed) {
+    let a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      let t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function makeScatter(club, minS, maxS, curveFn, count, seed) {
+    const rng = mulberry32(seed);
+    const pts = [];
+    for (let i = 0; i < count; i += 1) {
+      const u = (rng() + rng()) / 2; // centered distribution
+      const sp = +(minS + u * (maxS - minS)).toFixed(1);
+      const noise = (rng() - 0.5) * 0.36 + (rng() - 0.5) * 0.22;
+      const sg = +(curveFn(sp) + noise).toFixed(2);
+      pts.push({ sp, sg });
+    }
+    return pts;
+  }
+
+  const DNA_DATA = {
+    DR: {
+      label: 'Driver', n: 184, minS: 90, maxS: 106, sweetLo: 96.5, sweetHi: 99.5, cliff: 101.5, defaultS: 98.0, baseCarry: 252,
+      curveFn: (sp) => sp <= 98.5 ? -0.05 + (sp - 90) * 0.025 : sp <= 101 ? 0.16 - (sp - 98.5) * 0.10 : -0.09 - Math.pow(sp - 101, 1.45) * 0.14,
+      summary: 'Shapley non-linear |F2P| attribution across 184 drives: Face-to-Path spikes above 101 mph explain 48% of lost strokes, with 12% residual wind/lie noise.',
+      attrs: [
+        { name: '|Face-to-Path| Variance (Over-Speed Hook)', pct: 48, color: '#ff3b5c', tag: 'PRIMARY LEAK', fixFeel: '98 mph Cruise Rhythm', fixGate: 'driver' },
+        { name: 'Strike Location (Heel/Toe Smash)', pct: 23, color: '#ffb800', tag: 'SECONDARY' },
+        { name: 'Angle of Attack Window', pct: 11, color: '#00e5ff', tag: 'MONITOR' },
+        { name: 'Raw Club Speed Variance', pct: 6, color: '#5c6d87', tag: 'LOW IMPACT' },
+        { name: 'Unexplained / Ball & Wind Noise', pct: 12, color: '#334155', tag: 'RESIDUAL' },
+      ],
+      missType: 'two-way', missLabel: 'Two-Way Miss Alert (−34y L to +28y R)', missMin: -34, missMax: 28,
+      retentions: [
+        { name: '98 mph Smooth Transition', base: -0.22, active: 0.16, later: 0.14, verdict: 'STUCK (+0.36 SG retained)', sev: 'green' },
+        { name: 'Stronger Trail Hand Grip', base: -0.22, active: 0.05, later: -0.19, verdict: 'DECAYED (Range-only)', sev: 'red' },
+        { name: 'Tee Higher + Upward Sweep', base: -0.22, active: 0.09, later: 0.03, verdict: 'PARTIAL RETENTION', sev: 'yellow' },
+      ],
+    },
+    '7I': {
+      label: '7-Iron', n: 246, minS: 80, maxS: 93, sweetLo: 85.5, sweetHi: 88.0, cliff: 90.0, defaultS: 87.0, baseCarry: 166,
+      curveFn: (sp) => sp <= 87.2 ? -0.04 + (sp - 80) * 0.032 : sp <= 89.5 ? 0.19 - (sp - 87.2) * 0.07 : 0.03 - Math.pow(sp - 89.5, 1.4) * 0.12,
+      summary: 'Non-linear |F2P| variance explains 54% of 7-Iron strokes lost while AoA accounts for just 8% (13% residual). Dispersion stays safely one-way left.',
+      attrs: [
+        { name: '|Face-to-Path| Control', pct: 54, color: '#ff3b5c', tag: 'PRIMARY LEAK', fixFeel: 'Lead Wrist Flat Through Impact', fixGate: 'hla' },
+        { name: 'Center Strike (Smash ≥ 1.35)', pct: 20, color: '#ffb800', tag: 'SECONDARY' },
+        { name: 'Angle of Attack Window', pct: 8, color: '#00e5ff', tag: 'IGNORE' },
+        { name: 'Club Speed Variance', pct: 5, color: '#5c6d87', tag: 'IGNORE' },
+        { name: 'Unexplained / Lie Variance', pct: 13, color: '#334155', tag: 'RESIDUAL' },
+      ],
+      missType: 'one-way', missLabel: 'Playable One-Way Draw (−16y L to +4y R)', missMin: -16, missMax: 4,
+      retentions: [
+        { name: 'Lead Wrist Flat Through Impact', base: -0.11, active: 0.21, later: 0.18, verdict: 'STUCK (+0.29 SG retained)', sev: 'green' },
+        { name: 'Pause at Top (27/9 Tempo)', base: -0.11, active: 0.12, later: 0.06, verdict: 'HOLDING STEADY', sev: 'yellow' },
+        { name: 'Exaggerated In-to-Out Path', base: -0.11, active: 0.02, later: -0.15, verdict: 'CAUSED HOOKS', sev: 'red' },
+      ],
+    },
+    PW: {
+      label: 'Pitching Wedge', n: 119, minS: 72, maxS: 84, sweetLo: 76.0, sweetHi: 79.0, cliff: 81.5, defaultS: 77.5, baseCarry: 126,
+      curveFn: (sp) => sp <= 78 ? 0.02 + (sp - 72) * 0.035 : 0.23 - Math.pow(sp - 78, 1.35) * 0.085,
+      summary: 'Across 119 PW swings, % Club Speed Variance explains 45% of strokes lost — cruising at 77 mph yields 13.4 ft proximity.',
+      attrs: [
+        { name: 'Speed / Carry Distance Variance', pct: 45, color: '#ff3b5c', tag: 'PRIMARY LEAK', fixFeel: '18/9 Clock Wedge Tempo', fixGate: 'approach' },
+        { name: 'Start Line (HLA ±1.5°)', pct: 26, color: '#ffb800', tag: 'SECONDARY' },
+        { name: 'Spin / Shaft Lean Window', pct: 12, color: '#00e5ff', tag: 'SOLID' },
+        { name: 'Path Curvature', pct: 6, color: '#5c6d87', tag: 'IGNORE' },
+        { name: 'Unexplained / Spin Noise', pct: 11, color: '#334155', tag: 'RESIDUAL' },
+      ],
+      missType: 'one-way', missLabel: 'Tight Wedge Window (−8y L to +6y R)', missMin: -8, missMax: 6,
+      retentions: [
+        { name: '18/9 Short-Game Tempo', base: 0.01, active: 0.24, later: 0.21, verdict: 'STUCK (+0.20 SG retained)', sev: 'green' },
+        { name: 'Chest Rotates Through', base: 0.01, active: 0.15, later: 0.11, verdict: 'STUCK', sev: 'green' },
+        { name: 'Hit Hard 100% Full PW', base: 0.01, active: -0.09, later: -0.12, verdict: 'AVOID (Fliers)', sev: 'red' },
+      ],
+    },
+  };
+  DNA_DATA.DR.scatter = makeScatter('DR', 90, 106, DNA_DATA.DR.curveFn, 164, 4101);
+  DNA_DATA['7I'].scatter = makeScatter('7I', 80, 93, DNA_DATA['7I'].curveFn, 168, 7207);
+  DNA_DATA.PW.scatter = makeScatter('PW', 72, 84, DNA_DATA.PW.curveFn, 119, 9303);
+
+  // ==================== AERODYNAMIC PER-CLUB PHYSICS ====================
+  const BAG_CLUBS = [
+    { club: 'DR', carry: 252, roll: 18, spin: 2350, hang: 5.9, cat: 'driver' },
+    { club: '3W', carry: 228, roll: 13, spin: 3350, hang: 5.4, cat: 'wood' },
+    { club: '5W', carry: 212, roll: 9, spin: 4100, hang: 5.2, cat: 'wood' },
+    { club: '4H', carry: 196, roll: 8, spin: 4550, hang: 5.1, cat: 'hybrid' },
+    { club: '5I', carry: 185, roll: 7, spin: 5100, hang: 5.0, cat: 'long_iron' },
+    { club: '6I', carry: 175, roll: 6, spin: 5750, hang: 4.9, cat: 'mid_iron' },
+    { club: '7I', carry: 165, roll: 5, spin: 6450, hang: 4.9, cat: 'mid_iron' },
+    { club: '8I', carry: 153, roll: 4, spin: 7400, hang: 4.8, cat: 'short_iron' },
+    { club: '9I', carry: 141, roll: 3, spin: 8350, hang: 4.7, cat: 'short_iron' },
+    { club: 'PW', carry: 127, roll: 2, spin: 9350, hang: 4.6, cat: 'wedge' },
+    { club: 'GW', carry: 114, roll: 1, spin: 9900, hang: 4.4, cat: 'wedge' },
+    { club: 'SW', carry: 100, roll: 0, spin: 10300, hang: 4.2, cat: 'wedge' },
+    { club: 'LW', carry: 84, roll: -1, spin: 10700, hang: 3.9, cat: 'wedge' },
+  ];
+
+  function computeClubConditions(c, cond) {
+    const isDriverRough = cond.lie === 'rough' && c.club === 'DR';
+    if (isDriverRough) {
+      return {
+        club: c.club, teeOnly: true, flier: false,
+        carry: c.carry, roll: c.roll, total: c.carry + c.roll,
+        diffCarry: 0, aimOff: 0,
+      };
+    }
+
+    // Per-club aerodynamic headwind/tailwind scaling (wedges balloon into headwind; driver rides tailwind)
+    const spinNorm = clamp((c.spin - 2300) / 8400, 0, 1); // 0 for DR, 1 for LW
+    const headRate = 0.0088 + spinNorm * 0.0074; // 0.88%/mph DR -> 1.62%/mph LW
+    const tailRate = 0.0062 - spinNorm * 0.0024; // 0.62%/mph DR -> 0.38%/mph LW
+    const windMult = cond.wind < 0 ? 1 + cond.wind * headRate : 1 + cond.wind * tailRate;
+
+    const airMult = 1 + (cond.alt / 1000) * 0.0125 + (cond.temp - 70) * 0.0017;
+
+    let roughCarryMult = 1.0;
+    let roughRollAdd = 0;
+    let flier = false;
+    if (cond.lie === 'rough') {
+      if (c.cat === 'wood' || c.cat === 'hybrid') roughCarryMult = 0.86;
+      else if (c.cat === 'long_iron') roughCarryMult = 0.91;
+      else if (c.cat === 'mid_iron') roughCarryMult = 0.97;
+      else if (c.club === '8I' || c.club === '9I' || c.club === 'PW') {
+        roughCarryMult = c.club === '8I' ? 1.04 : c.club === '9I' ? 1.06 : 1.05;
+        roughRollAdd = 6;
+        flier = true;
+      } else {
+        roughCarryMult = 0.96;
+        roughRollAdd = 3;
+      }
+    }
+
+    const adjCarry = Math.max(15, Math.round(c.carry * windMult * airMult * roughCarryMult));
+
+    // Rollout scales with turf firmness (fairway firmness changes roll, NOT airborne carry)
+    let rollMult = 1.0;
+    if (cond.lie === 'firm') rollMult = 1.55;
+    else if (cond.lie === 'soft') rollMult = 0.35;
+    let adjRoll = Math.round(c.roll * rollMult + roughRollAdd);
+    if (cond.lie === 'firm' && c.roll < 0) adjRoll = 1; // firm greens prevent big spin-back
+    if (cond.lie === 'soft' && c.cat === 'wedge') adjRoll = Math.min(0, c.roll - 1);
+
+    // Crosswind drift scales with hang time, air density, and draw/fade spin asymmetry
+    const densityRatio = clamp(1 - (cond.alt / 1000) * 0.025, 0.78, 1.06);
+    let shapeBias = 1.0;
+    if (cond.shape === 'draw') shapeBias = cond.xwind > 0 ? 0.90 : 1.12;
+    else if (cond.shape === 'fade') shapeBias = cond.xwind > 0 ? 1.12 : 0.90;
+    const aimOff = Math.round(cond.xwind * (c.hang / 4.8) * (c.carry / 185) * 0.95 * densityRatio * shapeBias);
+
+    return {
+      club: c.club, teeOnly: false, flier,
+      carry: adjCarry, roll: adjRoll, total: adjCarry + adjRoll,
+      diffCarry: adjCarry - c.carry, aimOff,
+    };
+  }
+
+  // ==================== CLUB-AWARE SMASH & MAT-FAT HELPERS ====================
+  function gradeSmash(shot) {
+    if (shot.ballOnly || shot.smash === null) return { grade: 'dim', label: 'No Sticker', target: '—' };
+    if (shot.foam) return { grade: 'yellow', label: 'Foam Ball', target: '< 1.02' };
+    const thresholds = {
+      DR: [1.45, 1.40, '1.48'],
+      '7I': [1.35, 1.30, '1.38'],
+      PW: [1.24, 1.19, '1.27'],
+    };
+    const [gHi, gMid, ideal] = thresholds[shot.club] || [1.34, 1.29, '1.36'];
+    const grade = shot.smash >= gHi ? 'green' : shot.smash >= gMid ? 'yellow' : 'red';
+    return { grade, label: shot.partial ? 'Partial Guard' : `Ideal ${ideal}`, target: ideal };
+  }
+
+  function computeTurfRange(shot) {
+    if (!shot.matFat || shot.partial || shot.foam || state.kidsAsleep) return null;
+    const matScale = state.matType === 'divot' ? 0.72 : state.matType === 'fiberbuilt' ? 0.78 : 0.86;
+    const mid = Math.round(shot.carry * matScale);
+    return { lo: mid - 10, hi: mid + 10, mid };
+  }
+
+  // ==================== NAVIGATION & NATIVE <dialog> HELPERS ====================
+  function openModal(id) {
+    const dlg = $(id);
+    if (!dlg) return;
+    if (id === 'dlg-obs') renderObsModal();
+    if (id === 'dlg-cal') renderCalModal();
+    if (id === 'dlg-settings') renderSettingsModal();
+    if (id === 'dlg-wedge') renderWedgePrintModal();
+    if (typeof dlg.showModal === 'function') dlg.showModal();
+    else dlg.setAttribute('open', '');
+  }
+
+  function closeModal(id) {
+    const dlg = $(id);
+    if (!dlg) return;
+    if (typeof dlg.close === 'function') dlg.close();
+    else dlg.removeAttribute('open');
+  }
+
+  // Safari fallback for <dialog closedby="any">
+  if (!('closedBy' in HTMLDialogElement.prototype)) {
+    const outside = (e, d) => {
+      const r = d.getBoundingClientRect();
+      return e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom;
+    };
+    document.querySelectorAll('dialog[closedby="any"]').forEach((dlg) => {
+      let pressedOut = false;
+      dlg.addEventListener('pointerdown', (e) => { pressedOut = outside(e, dlg); });
+      dlg.addEventListener('pointerup', (e) => { if (pressedOut && outside(e, dlg)) dlg.close(); });
+    });
+  }
+
+  function switchMode(targetMode) {
+    state.mode = targetMode;
+    document.querySelectorAll('#lifecycle-nav .mode-btn').forEach((b) => {
+      b.classList.toggle('active', b.dataset.mode === targetMode);
+    });
+    document.querySelectorAll('.mode-panel').forEach((p) => {
+      p.classList.toggle('active', p.id === `mode-${targetMode}`);
+    });
+    if (targetMode !== 'review' || state.review.sub !== 'ghost') stopGhostRaf();
+    if (targetMode === 'practice') {
+      drawTracerCanvas(SHOTS[state.practice.shotIdx], state.practice.choreoPct);
+    } else if (targetMode === 'review' && state.review.sub === 'ghost') {
+      drawGhostCanvas();
+    }
+  }
+
+  document.querySelectorAll('#lifecycle-nav .mode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => switchMode(btn.dataset.mode));
+  });
+
+  function syncGlobalChrome() {
+    const fBtn = $('glob-btn-foam');
+    fBtn.textContent = state.kidsAsleep ? '🌙 Kids Asleep: ON' : '🌙 Kids Asleep: OFF';
+    fBtn.classList.toggle('is-on', state.kidsAsleep);
+    $('glob-foam-banner').classList.toggle('open', state.kidsAsleep);
+    $('glob-foam-reason').textContent = state.foamReason;
+
+    const cBtn = $('glob-btn-cold');
+    cBtn.textContent = state.coldStart ? 'DB: Cold Start (n=11)' : 'DB: Mature (1,428)';
+    cBtn.classList.toggle('is-cold', state.coldStart);
+
+    updateTensionVignette();
+  }
+
+  function toggleKidsAsleep(reason = 'Manual Toggle') {
+    state.kidsAsleep = !state.kidsAsleep;
+    state.foamReason = reason;
+    syncGlobalChrome();
+    renderPlan();
+    renderPractice();
+    renderReview();
+    renderCalModal();
+    showToast(state.kidsAsleep
+      ? '🌙 Kids-Asleep Firewall ON — Audio muted & DB protected'
+      : 'Kids-Asleep Firewall OFF — Full real-ball telemetry resumed');
+  }
+
+  $('glob-btn-foam').addEventListener('click', () => toggleKidsAsleep('Manual Toggle'));
+  $('glob-btn-cold').addEventListener('click', () => {
+    state.coldStart = !state.coldStart;
+    syncGlobalChrome();
+    renderPlan();
+    renderReview();
+    showToast(state.coldStart
+      ? 'Switched to Cold Start (n=11) — honest sample-size gates active'
+      : 'Switched to Mature DB (1,428 swings)');
+  });
+  $('glob-btn-obs').addEventListener('click', () => openModal('dlg-obs'));
+  $('glob-btn-settings').addEventListener('click', () => openModal('dlg-settings'));
+  $('dlg-obs-close').addEventListener('click', () => closeModal('dlg-obs'));
+  $('dlg-cal-close').addEventListener('click', () => closeModal('dlg-cal'));
+  $('dlg-settings-close').addEventListener('click', () => closeModal('dlg-settings'));
+  $('dlg-wedge-close').addEventListener('click', () => closeModal('dlg-wedge'));
+  $('dlg-checkin-close').addEventListener('click', () => closeModal('dlg-checkin'));
+
+  // ==================== MODE 1: PLAN RENDERER ====================
+  function buildPrescription() {
+    if (state.coldStart) {
+      return [
+        { num: 'BLOCK 01 · 6 MIN · 8 BALLS', title: 'Bag Baseline Calibration (7I + PW)', prio: 'cyan', badge: 'COLD START', desc: 'Hit 5+ confirmed shots with 7I and PW so Welford club priors lock above 85% auto-switch confidence.', sub: 'range', shotIdx: 2, feel: 'Stock Smooth Tempo' },
+        { num: 'BLOCK 02 · 8 MIN · 10 BALLS', title: 'Discover Your Driver Cruise Window', prio: 'warn', badge: 'DISCOVERY', desc: 'Alternate 95 mph vs 101 mph drives — unlock your Speed-vs-SG curve once Driver hits n ≥ 25.', sub: 'range', shotIdx: 1, feel: 'Smooth Transition' },
+        { num: 'BLOCK 03 · 6 MIN · 5 BALLS', title: 'Start-Line Transfer Gate (±1.5° HLA)', prio: 'clutch', badge: 'TRANSFER', desc: 'Establish your first Pressure Gate benchmark before adding full-bag Combine testing.', sub: 'pressure', gate: 'hla', shotIdx: 2, feel: 'Commit to Target' },
+      ];
+    }
+    const st = new Set(state.checkin.struggles);
+    const blocks = [];
+    if (st.has('fat_irons')) {
+      blocks.push({ num: 'BLOCK 01 · 6 MIN · 8 BALLS', title: 'Turf-First Contact Guard (7-Iron)', prio: 'warn', badge: 'OUTDOOR PRIORITY', desc: 'Re-weighted from your check-in: monitor Mat-Fat warnings and keep Smash ≥ 1.35 with sternum ahead.', sub: 'range', shotIdx: 0, feel: 'Sternum Ahead of Ball' });
+    } else {
+      blocks.push({ num: 'BLOCK 01 · 5 MIN · 8 BALLS', title: 'Cold Retention Check: Lead Wrist Flat', prio: 'cyan', badge: 'RETENTION +0.18 SG', desc: 'Hit 8 un-cued 7-Irons to verify your #1 retained feel still holds before fixing Driver.', sub: 'range', shotIdx: 2, feel: 'Lead Wrist Flat' });
+    }
+    if (st.has('driver_ob') || !st.has('wedge_dist')) {
+      blocks.push({ num: 'BLOCK 02 · 8 MIN · 12 BALLS', title: 'Driver 97–99 mph Cruise Speed Cap', prio: 'warn', badge: '#1 LEAK · −0.41 SG', desc: 'Above 101 mph your snap-hook rate quadruples. Cap swing speed ≤ 99.5 mph to save 2.4 strokes/round.', sub: 'range', shotIdx: 1, feel: '98 mph Cruise Rhythm' });
+    } else {
+      blocks.push({ num: 'BLOCK 02 · 8 MIN · 12 BALLS', title: 'Wedge Clock Distance Calibration', prio: 'warn', badge: 'CHECK-IN PRIORITY', desc: 'Re-weighted for wedge scoring: dial 9:00 SW (70y) and 10:30 GW (99y) inside ±3 yards.', sub: 'combine', shotIdx: 4, feel: '18/9 Clock Tempo' });
+    }
+    blocks.push({
+      num: 'BLOCK 03 · 7 MIN · PRESSURE',
+      title: st.has('pressure_close') ? 'Closing-Hole Pressure Gate (5/5)' : '18-Ball Random Transfer Combine',
+      prio: 'clutch',
+      badge: 'TRANSFER GATE',
+      desc: st.has('pressure_close')
+        ? 'Re-weighted from closing-hole tension: clear 5 straight shots inside ±1.5° HLA with live reset pressure.'
+        : 'Random club + yardage switching to break block-practice illusions.',
+      sub: st.has('pressure_close') ? 'pressure' : 'combine',
+      gate: 'hla',
+      shotIdx: 2,
+      feel: 'Full Pre-Shot Routine',
+    });
+    return blocks;
+  }
+
+  function renderPlan() {
+    const blocks = buildPrescription();
+    $('plan-kicker').textContent = state.coldStart
+      ? 'Cold Start Mode (11 Swings) · Baseline Calibration & Discovery'
+      : 'SQLite Auto-Prescription · 20-Minute High-Transfer Session';
+
+    const ci = state.checkin;
+    if (ci.struggles.length && !state.coldStart) {
+      $('plan-checkin-banner').style.display = 'block';
+      $('plan-checkin-banner').innerHTML = `<strong style="color:var(--amber);">Outdoor Check-In Active (Score ${ci.score}):</strong> Prescription re-weighted for <em>${esc(ci.struggles.join(', ').replace(/_/g, ' '))}</em>.`;
+    } else {
+      $('plan-checkin-banner').style.display = 'none';
+    }
+
+    $('plan-rx-blocks').innerHTML = blocks.map((b, idx) => `
+      <div class="rx-block ${b.prio === 'warn' ? 'prio-warn' : b.prio === 'clutch' ? 'prio-clutch' : ''}">
+        <div>
+          <div class="flex-row" style="justify-content:space-between;margin-bottom:6px;">
+            <span class="kicker" style="color:var(--cyan);">${esc(b.num)}</span>
+            <span class="badge ${b.prio === 'warn' ? 'badge-red' : b.prio === 'clutch' ? 'badge-green' : 'badge-cyan'}">${esc(b.badge)}</span>
+          </div>
+          <h3>${esc(b.title)}</h3>
+          <p class="muted" style="margin:6px 0 0;font-size:12px;">${esc(b.desc)}</p>
+        </div>
+        <div class="flex-row" style="justify-content:space-between;">
+          <span class="mono dim" style="font-size:11px;">Cue: ${esc(b.feel)}</span>
+          <button type="button" class="btn btn-sm btn-cyan" data-rx-idx="${idx}">Run Block &rarr;</button>
+        </div>
+      </div>`).join('');
+
+    $('plan-rx-blocks').querySelectorAll('[data-rx-idx]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const b = blocks[Number(btn.dataset.rxIdx)];
+        launchMission(b.title, b.feel, b.sub, b.shotIdx, b.gate || 'hla', `Block ${Number(btn.dataset.rxIdx) + 1}/3`);
+      });
+    });
+
+    // 30-Day Progress Proof
+    $('plan-proof-badge').textContent = state.coldStart ? '11 / 25 Swings to Unlock' : 'Verified vs. 30 Days Prior';
+    $('plan-proof-badge').className = `badge ${state.coldStart ? 'badge-yellow' : 'badge-green'}`;
+    const proofs = state.coldStart
+      ? [
+          { k: 'Swings Logged', v: '11 / 25', delta: 'Building baseline', pts: [2, 5, 8, 11], col: '#ffb800' },
+          { k: 'Auto-Switch Ready', v: '3 / 14 clubs', delta: 'Hit Calibration Wizard', pts: [1, 2, 2, 3], col: '#00e5ff' },
+          { k: 'Cruise Cliff Status', v: 'Locked', delta: 'Needs n ≥ 25/club', pts: [1, 1, 1, 1], col: '#5c6d87' },
+          { k: 'Est. ShotLab HCP', v: 'Pending', delta: 'Run 18-Ball Combine', pts: [0, 0, 0, 0], col: '#5c6d87' },
+        ]
+      : [
+          { k: 'Driver Big-Miss Rate', v: '22% → 9%', delta: '−13% OB reduction', pts: [24, 19, 14, 11, 9], col: '#10f296' },
+          { k: '7I Center Strike', v: '54% → 71%', delta: '+17% sweet spot', pts: [52, 58, 63, 68, 71], col: '#10f296' },
+          { k: 'Est. ShotLab HCP', v: '7.8 → 5.9', delta: '−1.9 strokes', pts: [7.9, 7.4, 6.9, 6.3, 5.9], col: '#00e5ff' },
+          { k: 'Top Retained Feel', v: '+0.18 SG', delta: 'Lead Wrist Flat (3 sess.)', pts: [-0.11, 0.08, 0.21, 0.19, 0.18], col: '#10f296' },
+        ];
+    $('plan-proof-grid').innerHTML = proofs.map((p) => {
+      const min = Math.min(...p.pts), max = Math.max(...p.pts), span = Math.max(0.01, max - min);
+      const poly = p.pts.map((y, i) => `${(i / Math.max(1, p.pts.length - 1)) * 66 + 3},${24 - ((y - min) / span) * 18}`).join(' ');
+      return `
+        <div class="proof-tile">
+          <div>
+            <span class="kicker">${esc(p.k)}</span>
+            <div class="proof-val">${esc(p.v)}</div>
+            <div class="mono" style="font-size:11px;color:${p.col};margin-top:2px;">${esc(p.delta)}</div>
+          </div>
+          <svg width="72" height="28" viewBox="0 0 72 28" aria-hidden="true">
+            <polyline fill="none" stroke="${p.col}" stroke-width="2.2" stroke-linecap="round" points="${poly}" />
+          </svg>
+        </div>`;
+    }).join('');
+
+    $('plan-course-preview').innerHTML = state.course.holes.map((h) => `
+      <div class="sub-well">
+        <div class="flex-row" style="justify-content:space-between;">
+          <strong>Hole ${h.num} &middot; Par ${h.par}</strong>
+          <span class="mono badge badge-cyan">${h.yds} yds</span>
+        </div>
+        <div class="muted" style="font-size:11.5px;margin-top:5px;">
+          Wind: ${h.wind < 0 ? Math.abs(h.wind) + ' mph Hurting' : h.wind + ' mph Helping'} &middot; Cross: ${h.xwind === 0 ? 'Calm' : Math.abs(h.xwind) + ' mph ' + (h.xwind > 0 ? 'L→R' : 'R→L')}
+        </div>
+      </div>`).join('');
+  }
+
+  function launchMission(title, feel, sub, shotIdx, gate = 'hla', progress = 'Active Mission') {
+    state.practice.mission = { title, feel, progress };
+    state.practice.sub = sub || 'range';
+    if (typeof shotIdx === 'number') state.practice.shotIdx = shotIdx;
+    if (gate) state.pressure.gate = gate;
+    switchMode('practice');
+    renderPractice();
+    showToast(`Mission Loaded: ${title}`);
+  }
+
+  $('plan-btn-start').addEventListener('click', () => {
+    const first = buildPrescription()[0];
+    launchMission(first.title, first.feel, first.sub, first.shotIdx, first.gate || 'hla', 'Block 1/3');
+  });
+  $('plan-btn-course').addEventListener('click', () => {
+    state.practice.sub = 'course';
+    switchMode('practice');
+    renderPractice();
+  });
+  $('plan-btn-checkin').addEventListener('click', () => openModal('dlg-checkin'));
+  $('checkin-apply').addEventListener('click', () => {
+    state.checkin.score = Number($('checkin-score').value) || 79;
+    state.checkin.struggles = [...$('checkin-checks').querySelectorAll('input:checked')].map((i) => i.value);
+    closeModal('dlg-checkin');
+    renderPlan();
+    showToast('20-Min Prescription re-weighted from your round check-in!');
+  });
+
+  // ==================== MODE 2: PRACTICE RENDERER ====================
+  const pracSel = $('prac-shot-select');
+  SHOTS.forEach((s, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = s.label;
+    pracSel.appendChild(opt);
+  });
+
+  function strikeShot(idx, pushHistory = true) {
+    state.practice.shotIdx = idx;
+    pracSel.value = String(idx);
+    const s = SHOTS[idx];
+
+    if (pushHistory) {
+      state.practice.history.unshift({ id: s.id, club: s.club, sev: s.sev, lockedLayer: s.lockedLayer, score: s.score });
+      state.practice.history = state.practice.history.slice(0, 6);
+
+      // P0 Automatic Kids-Asleep Foam Ball Tripwire
+      if (s.clubSpeed !== null && s.clubSpeed >= 65 && s.smash !== null && s.smash < 1.02) {
+        state.foamTripwireCount += 1;
+        if (state.foamTripwireCount >= 2 && !state.kidsAsleep) {
+          state.foamTripwireCount = 0;
+          toggleKidsAsleep('Auto-Tripwire: 2× CS ≥ 65 & Smash < 1.02');
+        }
+      } else {
+        state.foamTripwireCount = 0;
+      }
+
+      if (s.score >= 90 && !s.foam && !state.kidsAsleep && state.highlights.length < 8) {
+        if (!state.highlights.some((h) => h.title.includes(`Score ${s.score}`))) {
+          state.highlights.unshift({
+            title: `${s.clubLabel} ${s.carry}y Pure Strike (Score ${s.score})`,
+            file: `Swings/Highlights/Live_${s.club}_${s.carry}y_${s.score}.mp4`,
+            badge: '90+ SCORE',
+            sev: 'green',
+            meta: `${s.shape} · Smash ${s.smash ? s.smash.toFixed(2) : '—'} · Auto-Clipped`,
+          });
+        }
+      }
+    }
+
+    AudioFX.impact(s.sev);
+    if (s.sev === 'green') AudioFX.chime(660, 0.14, 0.05);
+
+    triggerChoreography(s);
+    renderPractice();
+    renderObsModal();
+  }
+
+  pracSel.addEventListener('change', () => strikeShot(Number(pracSel.value), true));
+  $('prac-sim-next').addEventListener('click', () => strikeShot((state.practice.shotIdx + 1) % SHOTS.length, true));
+
+  document.querySelectorAll('#prac-sub-seg button').forEach((b) => {
+    b.addEventListener('click', () => {
+      state.practice.sub = b.dataset.sub;
+      renderPractice();
+    });
+  });
+  document.querySelectorAll('#prac-density-seg button').forEach((b) => {
+    b.addEventListener('click', () => {
+      state.practice.density = b.dataset.d;
+      renderPractice();
+    });
+  });
+  $('prac-mission-clear').addEventListener('click', () => {
+    state.practice.mission = null;
+    renderPractice();
+  });
+
+  function triggerChoreography(shot) {
+    cancelAnimationFrame(state.practice.choreoRaf);
+    if (prefersReducedMotion()) {
+      state.practice.choreoPct = 1;
+      drawTracerCanvas(shot, 1);
+      return;
+    }
+    const start = performance.now();
+    const dur = 650;
+    state.practice.choreoPct = 0;
+
+    function step(now) {
+      const t = clamp((now - start) / dur, 0, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      state.practice.choreoPct = eased;
+      if (state.mode === 'practice') {
+        drawTracerCanvas(shot, eased);
+        const carryEl = $('prac-hero-carry-num');
+        if (carryEl) carryEl.textContent = String(Math.round(shot.carry * eased));
+      }
+      if (t < 1) {
+        state.practice.choreoRaf = requestAnimationFrame(step);
+      }
+    }
+    state.practice.choreoRaf = requestAnimationFrame(step);
+  }
+
+  function drawTracerCanvas(shot, prog = 1) {
+    const canvas = $('prac-tracer-canvas');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const cssW = Math.max(320, rect.width || 640);
+    const cssH = Math.max(290, rect.height || 310);
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== Math.round(cssW * dpr) || canvas.height !== Math.round(cssH * dpr)) {
+      canvas.width = Math.round(cssW * dpr);
+      canvas.height = Math.round(cssH * dpr);
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, cssW, cssH);
+
+    // Horizon & Perspective Fairway
+    const horizonY = cssH * 0.24;
+    const groundY = cssH * 0.90;
+    const cx = cssW * 0.5;
+
+    const skyGrad = ctx.createLinearGradient(0, 0, 0, horizonY);
+    skyGrad.addColorStop(0, '#04060a');
+    skyGrad.addColorStop(1, '#091322');
+    ctx.fillStyle = skyGrad;
+    ctx.fillRect(0, 0, cssW, horizonY);
+
+    const turfGrad = ctx.createLinearGradient(0, horizonY, 0, cssH);
+    turfGrad.addColorStop(0, '#071411');
+    turfGrad.addColorStop(1, '#04080c');
+    ctx.fillStyle = turfGrad;
+    ctx.fillRect(0, horizonY, cssW, cssH - horizonY);
+
+    // Mowed fairway perspective trapezoid + stripes
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(cx - cssW * 0.09, horizonY);
+    ctx.lineTo(cx + cssW * 0.09, horizonY);
+    ctx.lineTo(cx + cssW * 0.42, cssH);
+    ctx.lineTo(cx - cssW * 0.42, cssH);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(16, 242, 150, 0.045)';
+    ctx.fill();
+
+    // Yardage horizon arcs
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.font = '10px monospace';
+    ctx.fillStyle = 'rgba(139, 155, 180, 0.55)';
+    [0.25, 0.5, 0.75, 0.92].forEach((d, idx) => {
+      const y = lerp(groundY, horizonY + 12, d);
+      const halfW = lerp(cssW * 0.44, cssW * 0.1, d);
+      ctx.beginPath();
+      ctx.ellipse(cx, y, halfW, lerp(14, 4, d), 0, Math.PI, Math.PI * 2);
+      ctx.stroke();
+      const ydsLabel = [50, 125, 200, 275][idx];
+      ctx.fillText(`${ydsLabel}y`, cx + halfW - 26, y + 3);
+    });
+
+    // Center target laser
+    ctx.setLineDash([4, 6]);
+    ctx.strokeStyle = 'rgba(0, 229, 255, 0.25)';
+    ctx.beginPath();
+    ctx.moveTo(cx, groundY);
+    ctx.lineTo(cx, horizonY);
+    ctx.stroke();
+    ctx.restore();
+
+    // Compute 3D perspective trajectory points
+    const maxDist = Math.max(260, shot.carry + 30);
+    const depthScale = clamp(shot.carry / maxDist, 0.18, 0.92);
+    const endGroundY = lerp(groundY, horizonY + 18, depthScale);
+    const dir = state.handedness === 'LH' ? -1 : 1;
+    const endX = clamp(cx + shot.offline * dir * 3.1, 44, cssW - 44);
+    const startX = cx;
+    const startY = groundY;
+
+    const steps = 40;
+    const airPts = [];
+    const shadowPts = [];
+    const peakLift = clamp(shot.apex * 1.48, 42, cssH * 0.62);
+
+    for (let i = 0; i <= steps; i += 1) {
+      const t = i / steps;
+      const sx = lerp(startX, endX, t) + Math.sin(t * Math.PI) * (shot.curve * dir * -0.8);
+      const syGround = lerp(startY, endGroundY, Math.pow(t, 0.85));
+      const arc = 4 * t * (1 - t) * peakLift;
+      airPts.push({ x: sx, y: Math.max(18, syGround - arc) });
+      shadowPts.push({ x: sx, y: syGround });
+    }
+
+    const col = shot.sev === 'green' ? '#10f296' : shot.sev === 'yellow' ? '#ffb800' : '#ff3b5c';
+    const maxIdx = Math.max(1, Math.floor(steps * prog));
+
+    // Ground shadow
+    ctx.save();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.52)';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(shadowPts[0].x, shadowPts[0].y);
+    for (let i = 1; i <= maxIdx; i += 1) ctx.lineTo(shadowPts[i].x, shadowPts[i].y);
+    ctx.stroke();
+    ctx.restore();
+
+    // Ghosted crimson short-landing arc when Mat-Fat triggers
+    const turf = computeTurfRange(shot);
+    if (turf) {
+      const turfRatio = turf.mid / Math.max(1, shot.carry);
+      ctx.save();
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = 'rgba(255, 59, 92, 0.78)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i <= steps; i += 1) {
+        const t = i / steps;
+        const tx = lerp(startX, lerp(startX, endX, turfRatio), t);
+        const ty = lerp(startY, lerp(startY, endGroundY, turfRatio), Math.pow(t, 0.85)) - 4 * t * (1 - t) * (peakLift * 0.56);
+        if (i === 0) ctx.moveTo(tx, ty); else ctx.lineTo(tx, ty);
+      }
+      ctx.stroke();
+      const txEnd = lerp(startX, endX, turfRatio);
+      const tyEnd = lerp(startY, endGroundY, turfRatio);
+      ctx.fillStyle = '#ff3b5c';
+      ctx.font = 'bold 10.5px monospace';
+      ctx.fillText(`TURF CHUNK: ${turf.lo}–${turf.hi}y`, clamp(txEnd - 54, 12, cssW - 140), tyEnd + 16);
+      ctx.restore();
+    }
+
+    // 3-Pass Volumetric Tracer Comet
+    const drawCurve = (w, alpha, stroke) => {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.strokeStyle = stroke;
+      ctx.lineWidth = w;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
+      ctx.moveTo(airPts[0].x, airPts[0].y);
+      for (let i = 1; i <= maxIdx; i += 1) ctx.lineTo(airPts[i].x, airPts[i].y);
+      ctx.stroke();
+      ctx.restore();
+    };
+    drawCurve(11, 0.16, col);
+    drawCurve(5, 0.44, col);
+    drawCurve(2.2, 0.98, '#f8fafc');
+
+    // Origin flash & current ball dot
+    if (prog < 0.28) {
+      ctx.save();
+      ctx.fillStyle = `rgba(0, 229, 255, ${(0.28 - prog) * 1.4})`;
+      ctx.beginPath(); ctx.arc(startX, startY, 22 * (1 + prog * 3), 0, Math.PI * 2); ctx.fill();
+      ctx.restore();
+    }
+    const tip = airPts[maxIdx];
+    ctx.fillStyle = '#ffffff';
+    ctx.shadowColor = col;
+    ctx.shadowBlur = 14;
+    ctx.beginPath(); ctx.arc(tip.x, tip.y, 4.5, 0, Math.PI * 2); ctx.fill();
+    ctx.shadowBlur = 0;
+
+    if (prog > 0.92) {
+      // Landing ripple + Apex pill
+      ctx.strokeStyle = col;
+      ctx.lineWidth = 1.6;
+      ctx.beginPath(); ctx.ellipse(endX, endGroundY, 14, 5, 0, 0, Math.PI * 2); ctx.stroke();
+
+      const midPt = airPts[Math.floor(steps / 2)];
+      ctx.fillStyle = 'rgba(4, 6, 10, 0.85)';
+      ctx.strokeStyle = 'rgba(255, 255, 255, 0.16)';
+      const badgeX = clamp(midPt.x - 40, 12, cssW - 96);
+      const badgeY = clamp(midPt.y - 26, 8, cssH - 40);
+      ctx.beginPath(); ctx.roundRect(badgeX, badgeY, 82, 20, 5); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#f8fafc';
+      ctx.font = 'bold 10px monospace';
+      ctx.fillText(`APEX ${shot.apex}ft`, badgeX + 10, badgeY + 13);
+    }
+
+    // Top HUD corner labels (always inside safe padding)
+    ctx.fillStyle = 'rgba(4, 6, 10, 0.8)';
+    ctx.beginPath(); ctx.roundRect(12, 12, 208, 24, 6); ctx.fill();
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 11px monospace';
+    const offStr = shot.offline === 0 ? '0y' : `${Math.abs(shot.offline)}y ${shot.offline > 0 ? 'R' : 'L'}`;
+    ctx.fillText(`${shot.club} · ${shot.shape} · ${offStr}`, 20, 28);
+  }
+
+  function radialScoreRingSvg(score, sev) {
+    const col = sev === 'green' ? '#10f296' : sev === 'yellow' ? '#ffb800' : '#ff3b5c';
+    const r = 42, circ = 2 * Math.PI * r;
+    const dash = ((clamp(score, 0, 100) / 100) * circ).toFixed(1);
+    return `
+      <svg width="108" height="108" viewBox="0 0 108 108" aria-label="Shot score ${score} out of 100">
+        <circle cx="54" cy="54" r="${r}" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="8" />
+        <circle cx="54" cy="54" r="${r}" fill="none" stroke="${col}" stroke-width="8" stroke-linecap="round"
+          stroke-dasharray="${dash} ${circ.toFixed(1)}" transform="rotate(-90 54 54)" />
+        <text x="54" y="52" text-anchor="middle" fill="#f8fafc" font-size="24" font-weight="800" font-family="monospace">${score}</text>
+        <text x="54" y="69" text-anchor="middle" fill="#8b9bb4" font-size="9.5" font-weight="700" letter-spacing="1">SCORE</text>
+      </svg>`;
+  }
+
+  function clubfaceHeatmapSvg(shot) {
+    const cx = 110 + (shot.strikeLoc.x || 0) * (state.handedness === 'LH' ? -52 : 52);
+    const cy = 58 - (shot.strikeLoc.y || 0) * 32;
+    const col = shot.sev === 'green' ? '#10f296' : shot.sev === 'yellow' ? '#ffb800' : '#ff3b5c';
+    return `
+      <svg viewBox="0 0 220 116" width="100%" style="background:#05080e;border-radius:8px;border:1px solid var(--hairline);">
+        <path d="M 38 30 Q 112 18 184 26 L 178 88 Q 112 96 42 84 Z" fill="rgba(255,255,255,0.04)" stroke="rgba(255,255,255,0.22)" stroke-width="1.5" />
+        ${[42, 52, 62, 72].map((y) => `<line x1="65" y1="${y}" x2="155" y2="${y}" stroke="rgba(255,255,255,0.12)" stroke-width="1" />`).join('')}
+        <circle cx="110" cy="58" r="10" fill="none" stroke="rgba(16,242,150,0.35)" stroke-dasharray="3 2" />
+        ${shot.ballOnly ? '' : `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="16" fill="${col}" opacity="0.22" /><circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6" fill="${col}" stroke="#f8fafc" stroke-width="1.5" />`}
+        <text x="12" y="16" fill="#8b9bb4" font-size="9.5" font-family="monospace">${state.handedness === 'LH' ? 'TOE' : 'HEEL'}</text>
+        <text x="182" y="16" fill="#8b9bb4" font-size="9.5" font-family="monospace">${state.handedness === 'LH' ? 'HEEL' : 'TOE'}</text>
+        <text x="110" y="108" text-anchor="middle" fill="${col}" font-size="10" font-weight="700" font-family="monospace">${esc(shot.strikeLoc.label)}</text>
+      </svg>`;
+  }
+
+  function dplaneCompassSvg(shot) {
+    const mirror = state.handedness === 'LH' ? -1 : 1;
+    const cx = 110, cy = 92;
+    const vec = (deg, len) => {
+      const rad = ((deg || 0) * mirror * Math.PI) / 180;
+      return { x: cx + Math.sin(rad) * len, y: cy - Math.cos(rad) * len };
+    };
+    const pathP = vec((shot.path || 0) * 4, 62);
+    const faceP = vec((shot.face || 0) * 4, 58);
+    const hlaP = vec((shot.hla || 0) * 4, 66);
+    return `
+      <svg viewBox="0 0 220 116" width="100%" style="background:#05080e;border-radius:8px;border:1px solid var(--hairline);">
+        <line x1="${cx}" y1="12" x2="${cx}" y2="104" stroke="rgba(255,255,255,0.16)" stroke-dasharray="3 3" />
+        ${shot.path !== null ? `<line x1="${cx}" y1="${cy}" x2="${pathP.x.toFixed(1)}" y2="${pathP.y.toFixed(1)}" stroke="#00e5ff" stroke-width="2.5" stroke-linecap="round" />` : ''}
+        ${shot.face !== null ? `<line x1="${cx}" y1="${cy}" x2="${faceP.x.toFixed(1)}" y2="${faceP.y.toFixed(1)}" stroke="#ffb800" stroke-width="2.5" stroke-linecap="round" />` : ''}
+        <line x1="${cx}" y1="${cy}" x2="${hlaP.x.toFixed(1)}" y2="${hlaP.y.toFixed(1)}" stroke="#10f296" stroke-width="2" stroke-dasharray="2 2" />
+        <circle cx="${cx}" cy="${cy}" r="4.5" fill="#f8fafc" />
+        <text x="10" y="16" fill="#00e5ff" font-size="9.5" font-family="monospace">Path: ${shot.path !== null ? (shot.path > 0 ? '+' : '') + shot.path + '°' : '—'}</text>
+        <text x="10" y="30" fill="#ffb800" font-size="9.5" font-family="monospace">~Face: ${shot.face !== null ? (shot.face > 0 ? '+' : '') + shot.face + '°' : '—'}</text>
+        <text x="148" y="16" fill="#10f296" font-size="9.5" font-family="monospace">HLA: ${shot.hla > 0 ? '+' : ''}${shot.hla}°</text>
+      </svg>`;
+  }
+
+  function matFatCutawaySvg(shot) {
+    const turf = computeTurfRange(shot);
+    const col = turf ? '#ff3b5c' : '#10f296';
+    const matName = state.matType === 'divot' ? 'Divot Action Strip' : state.matType === 'cce' ? 'CCE Tight Turf' : 'Fiberbuilt Grass';
+    return `
+      <svg viewBox="0 0 300 94" width="100%" style="background:#05080e;border-radius:8px;border:1px solid var(--hairline);">
+        <rect x="12" y="56" width="130" height="20" rx="3" fill="rgba(0,229,255,0.12)" stroke="rgba(0,229,255,0.35)" />
+        <rect x="158" y="56" width="130" height="20" rx="3" fill="rgba(16,242,150,0.1)" stroke="rgba(16,242,150,0.3)" />
+        <circle cx="96" cy="51" r="5" fill="#f8fafc" />
+        <circle cx="242" cy="51" r="5" fill="#f8fafc" />
+        <path d="M 30 22 Q 72 64 118 34" fill="none" stroke="#00e5ff" stroke-width="2" />
+        <path d="M 176 22 Q ${turf ? '210 74' : '242 62'} 272 34" fill="none" stroke="${col}" stroke-width="2" />
+        ${turf ? '<path d="M 196 56 L 234 56 L 222 68 L 200 68 Z" fill="rgba(255,59,92,0.4)" />' : ''}
+        <text x="18" y="15" fill="#00e5ff" font-size="9" font-family="monospace">MAT BOUNCE (${esc(matName)}): ${shot.carry}y</text>
+        <text x="164" y="15" fill="${col}" font-size="9" font-family="monospace">${turf ? `REAL GRASS: ${turf.lo}–${turf.hi}y` : `REAL GRASS: ${shot.carry}y`}</text>
+      </svg>`;
+  }
+
+  function renderBandMeter(label, val, min, max, optLo, optHi, unit, est = false) {
+    if (val === null || val === undefined) {
+      return `<div class="band-row"><div class="band-head"><span class="muted">${esc(label)}</span><span class="mono dim">N/A (Missed Sticker)</span></div><div class="band-track"></div></div>`;
+    }
+    const pct = clamp(((val - min) / (max - min)) * 100, 2, 98);
+    const loPct = clamp(((optLo - min) / (max - min)) * 100, 0, 100);
+    const hiPct = clamp(((optHi - min) / (max - min)) * 100, 0, 100);
+    const inBand = val >= optLo && val <= optHi;
+    const col = inBand ? '#10f296' : Math.abs(val - (optLo + optHi) / 2) <= (optHi - optLo) ? '#ffb800' : '#ff3b5c';
+    return `
+      <div class="band-row">
+        <div class="band-head">
+          <span>${esc(label)} ${est ? '<span class="lab-tag est">~EST</span>' : ''}</span>
+          <strong class="mono" style="color:${col};">${val > 0 && unit === '°' ? '+' : ''}${val}${esc(unit)}</strong>
+        </div>
+        <div class="band-track">
+          <div class="band-target" style="left:${loPct}%;width:${Math.max(4, hiPct - loPct)}%;"></div>
+          <div class="band-marker" style="left:${pct}%;background:${col};color:${col};"></div>
+        </div>
+      </div>`;
+  }
+
+  function computeCoachMemory() {
+    const h = state.practice.history;
+    if (h.length < 2) return null;
+    const cur = h[0];
+    const prevPureCount = h.slice(1, 5).filter((x) => x.sev === 'green').length;
+    if (cur.sev !== 'green' && prevPureCount >= 3) {
+      return { tone: 'cyan', text: `Coach Memory: Isolated miss after ${prevPureCount} straight pure swings — stay calm, don't overhaul mechanics.` };
+    }
+    const sameLayerStreak = h.slice(0, 3).filter((x) => x.sev !== 'green' && x.lockedLayer === cur.lockedLayer).length;
+    if (cur.sev !== 'green' && sameLayerStreak >= 2) {
+      return { tone: 'red', text: `Coach Memory: ${sameLayerStreak} consecutive Layer ${cur.lockedLayer + 1} misses — stay locked here before chasing speed.` };
+    }
+    return null;
+  }
+
+  function renderPractice() {
+    document.querySelectorAll('#prac-sub-seg button').forEach((b) => b.classList.toggle('active', b.dataset.sub === state.practice.sub));
+    document.querySelectorAll('#prac-density-seg button').forEach((b) => b.classList.toggle('active', b.dataset.d === state.practice.density));
+
+    const m = state.practice.mission;
+    $('prac-mission-strip').classList.toggle('active', Boolean(m));
+    if (m) {
+      $('prac-mission-text').textContent = `${m.title} — Feel: "${m.feel}"`;
+      $('prac-mission-progress').textContent = m.progress;
+    }
+
+    const s = SHOTS[state.practice.shotIdx];
+    const sgStr = s.foam ? 'EXCLUDED' : `${s.sg >= 0 ? '+' : ''}${s.sg.toFixed(2)}`;
+    const smashInfo = gradeSmash(s);
+    const turf = computeTurfRange(s);
+
+    // 4-Layer Skill Hierarchy Triage
+    const activeLayer = state.kidsAsleep ? 1 : s.lockedLayer;
+    const layers = [
+      { n: '1. Contact & Low Point', sub: s.ballOnly ? 'Sticker unmeasured' : `Smash ${s.smash.toFixed(2)} (${smashInfo.label})` },
+      { n: '2. Face Control', sub: `Start HLA ${s.hla > 0 ? '+' : ''}${s.hla}° · ${s.face !== null ? '~Face ' + (s.face > 0 ? '+' : '') + s.face + '°' : 'Ball-only'}` },
+      { n: '3. Path & Curvature', sub: s.path !== null ? `Path ${s.path > 0 ? '+' : ''}${s.path}° · F2P ${s.f2p > 0 ? '+' : ''}${s.f2p}°` : 'Path unmeasured' },
+      { n: '4. Launch & Speed Opt.', sub: `VLA ${s.vla}° · ${s.spin} rpm` },
+    ];
+    $('prac-triage-rail').innerHTML = layers.map((l, idx) => {
+      let cls = 'triage-node';
+      let badge = 'DIMMED';
+      if (idx < activeLayer) { cls += ' passed'; badge = 'PASSED'; }
+      else if (idx === activeLayer) {
+        cls += s.sev === 'green' ? ' lock-green' : s.sev === 'yellow' ? ' lock-yellow' : ' lock-red';
+        badge = s.sev === 'green' ? 'OPTIMIZE' : 'LOCKED FOCUS';
+      }
+      return `
+        <div class="${cls}">
+          <div class="flex-row" style="justify-content:space-between;">
+            <span class="kicker">Layer ${idx + 1}</span>
+            <span class="mono" style="font-size:9.5px;color:${idx === activeLayer ? 'var(--cyan)' : 'var(--dim)'};">${badge}</span>
+          </div>
+          <div style="font-weight:700;color:var(--white);margin-top:2px;">${esc(l.n)}</div>
+          <div class="muted" style="font-size:11px;margin-top:2px;">${esc(l.sub)}</div>
+        </div>`;
+    }).join('');
+
+    // Hero Telemetry Pane
+    const f2pVal = s.f2p === null ? '—' : `${s.f2p > 0 ? '+' : ''}${s.f2p}°`;
+    const f2pGrade = s.f2p === null ? 'dim' : Math.abs(s.f2p) <= 2 ? 'green' : Math.abs(s.f2p) <= 4 ? 'yellow' : 'red';
+    const sgGrade = s.foam ? 'yellow' : s.sg >= 0.05 ? 'green' : s.sg >= -0.15 ? 'yellow' : 'red';
+
+    $('prac-telemetry-pane').innerHTML = `
+      <div class="hero-readout">
+        <div>
+          <span class="kicker">${esc(s.clubLabel)} &middot; ${s.ballOnly ? 'Ball-Only Read' : s.foam ? 'Foam Quarantined' : 'Carry Distance'}</span>
+          <div class="hero-carry"><span id="prac-hero-carry-num">${s.carry}</span><span class="unit">yds</span></div>
+          <div class="mono muted" style="margin-top:4px;font-size:12px;">Total ${s.total}y &middot; Ball ${s.ballSpeed} mph &middot; Apex ${s.apex} ft</div>
+        </div>
+        ${radialScoreRingSvg(s.score, s.sev)}
+      </div>
+      <div class="kpi-trio">
+        <div class="kpi-box ${smashInfo.grade}">
+          <span class="kicker">Smash (${esc(s.club)})</span>
+          <div class="kpi-val">${s.smash !== null ? s.smash.toFixed(2) : '—'}</div>
+          <div class="muted" style="font-size:10.5px;">${esc(smashInfo.label)}</div>
+        </div>
+        <div class="kpi-box ${f2pGrade}">
+          <span class="kicker">${s.ballOnly ? 'Start Line HLA' : '~Face-to-Path'}</span>
+          <div class="kpi-val">${s.ballOnly ? (s.hla > 0 ? '+' : '') + s.hla + '°' : f2pVal}</div>
+          <div class="muted" style="font-size:10.5px;">${s.ballOnly ? 'Measured BLP' : 'Curvature driver'}</div>
+        </div>
+        <div class="kpi-box ${sgGrade}">
+          <span class="kicker">Strokes Gained</span>
+          <div class="kpi-val">${esc(sgStr)}</div>
+          <div class="muted" style="font-size:10.5px;">${s.potLoss >= 5 ? '−' + s.potLoss + 'y left on table' : 'Tour baseline'}</div>
+        </div>
+      </div>`;
+
+    // Lower-Third F1 Chyron
+    const mem = computeCoachMemory();
+    const chyron = $('prac-chyron');
+    chyron.className = `chyron sev-${s.sev} animate-in`;
+    chyron.innerHTML = `
+      <div style="flex:1;min-width:260px;">
+        <div style="font-weight:750;font-size:13.5px;color:var(--white);">${esc(s.verdict)}</div>
+        <div class="mono" style="font-size:11.5px;color:var(--cyan);margin-top:3px;">&#127919; ${esc(s.cue)}</div>
+        ${mem ? `<div class="mono" style="font-size:11px;color:${mem.tone === 'red' ? 'var(--crimson)' : 'var(--emerald)'};margin-top:3px;">&#9670; ${esc(mem.text)}</div>` : ''}
+      </div>
+      <div class="flex-row">
+        ${s.ballOnly ? '<span class="badge badge-yellow">Missed Club Sticker · Ball Only</span>' : ''}
+        ${s.partial ? '<span class="badge badge-cyan">Partial-Swing Guard</span>' : ''}
+        ${turf ? `<span class="badge badge-red">&#9888; Mat-Fat: Grass ${turf.lo}–${turf.hi}y</span>` : ''}
+      </div>`;
+
+    // Density Extra Views (10-Ft Mat hides secondary clutter)
+    if (state.practice.density === 'mat') {
+      $('prac-density-extra').innerHTML = '';
+    } else if (state.practice.density === 'coach') {
+      $('prac-density-extra').innerHTML = `
+        <div class="grid-3">
+          <div class="rail">
+            <span class="kicker">Inferred Strike Location</span>
+            <h3 style="margin:2px 0 8px;">Clubface Impact Heatmap</h3>
+            ${clubfaceHeatmapSvg(s)}
+          </div>
+          <div class="rail">
+            <span class="kicker">Target vs. Path vs. ~Face</span>
+            <h3 style="margin:2px 0 8px;">Overhead D-Plane Compass</h3>
+            ${dplaneCompassSvg(s)}
+            <div class="mt-8">
+              ${renderBandMeter('Smash Factor', s.smash, 1.15, 1.52, s.club === 'DR' ? 1.45 : s.club === 'PW' ? 1.24 : 1.35, 1.50, '')}
+              ${renderBandMeter('Start Line (HLA)', s.hla, -5, 5, -1.5, 1.5, '°')}
+              ${renderBandMeter('~Face-to-Path', s.f2p, -7, 7, -2.0, 2.0, '°', true)}
+            </div>
+          </div>
+          <div class="rail">
+            <span class="kicker">Mat Bounce vs. Real Grass Turf</span>
+            <h3 style="margin:2px 0 8px;">Mat-Fat Reality Cutaway</h3>
+            ${matFatCutawaySvg(s)}
+            <p class="muted" style="font-size:11.5px;margin:8px 0 0;">
+              ${turf
+                ? `Steep AoA (${s.aoa}°) + smash dip bounced off ${esc(state.matType)}. Expect <strong>${turf.lo}–${turf.hi} yds</strong> on real fairway grass.`
+                : s.partial ? 'Mat-Fat guard paused on intentional partial swings.'
+                : 'Clean ball-first compression — indoor carry translates directly outdoors.'}
+            </p>
+          </div>
+        </div>`;
+    } else {
+      const cells = [
+        ['Carry', `${s.carry} yds`, 'RK4 / Sim', 'meas', s.sev],
+        ['Ball Speed', `${s.ballSpeed} mph`, 'BLP Optical', 'meas', s.sev],
+        ['Club Speed', s.clubSpeed !== null ? `${s.clubSpeed} mph` : 'N/A', s.ballOnly ? 'Missed Sticker' : '1-Dot Sticker', 'meas', s.ballOnly ? 'dim' : 'green'],
+        ['Smash', s.smash !== null ? s.smash.toFixed(2) : 'N/A', smashInfo.label, 'meas', smashInfo.grade],
+        ['Launch (VLA)', `${s.vla}°`, 'BLP Optical', 'meas', 'green'],
+        ['Start (HLA)', `${s.hla > 0 ? '+' : ''}${s.hla}°`, 'BLP Optical', 'meas', Math.abs(s.hla) <= 1.8 ? 'green' : 'red'],
+        ['Backspin', `${s.spin} rpm`, `Axis ${s.spinAxis}°`, 'meas', Math.abs(s.spinAxis) < 7 ? 'green' : 'yellow'],
+        ['AoA', s.aoa !== null ? `${s.aoa > 0 ? '+' : ''}${s.aoa}°` : 'N/A', s.ballOnly ? 'Missed Sticker' : '1-Dot Sticker', 'meas', 'yellow'],
+        ['Club Path', s.path !== null ? `${s.path > 0 ? '+' : ''}${s.path}°` : 'N/A', s.path !== null ? (s.path > 0 ? 'In-to-Out' : 'Out-to-In') : 'No Sticker', 'meas', 'yellow'],
+        ['Est. Face Angle', s.face !== null ? `${s.face > 0 ? '+' : ''}${s.face}°` : 'N/A', s.club === 'DR' ? 'D-Plane (Gear Effect Caveat)' : 'D-Plane Inferred', 'est', s.face !== null && Math.abs(s.face) <= 2 ? 'green' : 'red'],
+        ['~Face-to-Path', s.f2p !== null ? `${s.f2p > 0 ? '+' : ''}${s.f2p}°` : 'N/A', 'D-Plane Inferred', 'est', f2pGrade],
+        ['~Shaft Lean', s.lean !== null ? `${s.lean > 0 ? '+' : ''}${s.lean}°` : 'N/A', 'VLA − Dynamic Loft', 'est', s.lean !== null && s.lean >= 3 ? 'green' : 'red'],
+        ['Turf Carry', turf ? `${turf.lo}–${turf.hi} yds` : `${s.carry} yds`, turf ? `Mat ${state.matType} masked` : 'Clean grass transfer', 'est', turf ? 'red' : 'green'],
+      ];
+      $('prac-density-extra').innerHTML = `
+        <div class="rail">
+          <div class="head-row">
+            <div><span class="kicker">BLP 1-Dot Honesty &middot; Measured vs. D-Plane Inferred</span><h3>Lab Telemetry Matrix</h3></div>
+            <span class="badge badge-yellow">~EST = Inferred (1-Dot Sticker cannot directly measure face/loft)</span>
+          </div>
+          <div class="lab-grid">
+            ${cells.map(([k, v, sub, tag, g]) => `
+              <div class="lab-cell ${g}">
+                <div class="flex-row" style="justify-content:space-between;">
+                  <span class="kicker">${esc(k)}</span>
+                  <span class="lab-tag ${tag}">${tag === 'est' ? '~EST' : 'MEAS'}</span>
+                </div>
+                <div class="mono" style="font-size:17px;font-weight:800;color:var(--white);margin-top:3px;">${esc(v)}</div>
+                <div class="muted" style="font-size:10.5px;">${esc(sub)}</div>
+              </div>`).join('')}
+          </div>
+        </div>`;
+    }
+
+    // Sub-Mode Challenge Views
+    $('prac-sub-combine').style.display = state.practice.sub === 'combine' ? 'block' : 'none';
+    $('prac-sub-pressure').style.display = state.practice.sub === 'pressure' ? 'block' : 'none';
+    $('prac-sub-course').style.display = state.practice.sub === 'course' ? 'block' : 'none';
+    if (state.practice.sub === 'combine') renderCombine();
+    if (state.practice.sub === 'pressure') renderPressure();
+    if (state.practice.sub === 'course') renderCoursePrep();
+
+    drawTracerCanvas(s, state.practice.choreoPct);
+  }
+
+  // ==================== 2A: 18-BALL COMBINE + 80% ELLIPSE ====================
+  const COMBINE_TARGETS = [
+    { yds: 75, shape: 'Flighted', club: 'SW' }, { yds: 112, shape: 'Straight', club: 'GW' },
+    { yds: 158, shape: 'Draw', club: '7I' }, { yds: 255, shape: 'Fairway', club: 'DR' },
+    { yds: 136, shape: 'Fade', club: '9I' }, { yds: 92, shape: 'Low Spinner', club: 'SW' },
+    { yds: 174, shape: 'Draw', club: '6I' }, { yds: 255, shape: 'Fairway', club: 'DR' },
+    { yds: 124, shape: 'Straight', club: 'PW' }, { yds: 192, shape: 'Stock', club: '4H' },
+    { yds: 62, shape: 'Soft Pitch', club: 'LW' }, { yds: 148, shape: 'Fade', club: '8I' },
+    { yds: 255, shape: 'Fairway', club: 'DR' }, { yds: 104, shape: 'Knockdown', club: 'GW' },
+    { yds: 165, shape: 'Draw', club: '7I' }, { yds: 84, shape: 'High Soft', club: 'LW' },
+    { yds: 182, shape: 'Fade', club: '5I' }, { yds: 255, shape: 'Clutch Tee', club: 'DR' },
+  ];
+
+  function computeEllipse80(pts) {
+    if (pts.length < 3) return null;
+    const mx = pts.reduce((a, p) => a + p.dx, 0) / pts.length;
+    const my = pts.reduce((a, p) => a + p.dy, 0) / pts.length;
+    let xx = 0, yy = 0, xy = 0;
+    for (const p of pts) {
+      const dx = p.dx - mx, dy = p.dy - my;
+      xx += dx * dx; yy += dy * dy; xy += dx * dy;
+    }
+    const n = pts.length - 1;
+    xx /= n; yy /= n; xy /= n;
+    const tr = xx + yy;
+    const disc = Math.sqrt(Math.max(0, (xx - yy) * (xx - yy) + 4 * xy * xy));
+    const l1 = Math.max(80, (tr + disc) / 2);
+    const l2 = Math.max(60, (tr - disc) / 2);
+    const k = 1.794; // sqrt(chi^2_2(0.80))
+    const rx = k * Math.sqrt(l1), ry = k * Math.sqrt(l2);
+    const deg = Math.atan2(2 * xy, xx - yy) * 90 / Math.PI;
+    return { cx: mx, cy: my, rx, ry, deg };
+  }
+
+  function hitCombine(quality) {
+    if (state.combine.results.length >= COMBINE_TARGETS.length) {
+      showToast('Combine complete (18/18)! Click Reset to start a fresh run.');
+      return;
+    }
+    const t = COMBINE_TARGETS[state.combine.results.length];
+    let proxFt, sg, pts, dx, dy;
+    if (quality === 'pure') {
+      proxFt = Math.round(5 + Math.random() * 11);
+      sg = +(0.18 + Math.random() * 0.24).toFixed(2);
+      pts = Math.round(87 + Math.random() * 12);
+      dx = (Math.random() - 0.5) * 26; dy = (Math.random() - 0.5) * 24;
+    } else if (quality === 'avg') {
+      proxFt = Math.round(18 + Math.random() * 16);
+      sg = +(-0.06 + Math.random() * 0.14).toFixed(2);
+      pts = Math.round(64 + Math.random() * 18);
+      dx = (Math.random() - 0.5) * 58; dy = (Math.random() - 0.5) * 54;
+    } else {
+      proxFt = Math.round(44 + Math.random() * 34);
+      sg = +(-0.42 + Math.random() * 0.18).toFixed(2);
+      pts = Math.round(22 + Math.random() * 24);
+      dx = (Math.random() < 0.5 ? -1 : 1) * (46 + Math.random() * 34);
+      dy = (Math.random() - 0.5) * 66;
+    }
+    state.combine.results.push({ num: state.combine.results.length + 1, target: t, proxFt, sg, pts, dx, dy, quality });
+    AudioFX.impact(quality === 'pure' ? 'green' : quality === 'avg' ? 'yellow' : 'red');
+    renderCombine();
+    renderObsModal();
+  }
+
+  function renderCombine() {
+    const res = state.combine.results;
+    const idx = Math.min(res.length, COMBINE_TARGETS.length - 1);
+    const cur = COMBINE_TARGETS[idx];
+    const done = res.length >= COMBINE_TARGETS.length;
+    const isDriver = !done && cur.club === 'DR';
+
+    const W = 480, H = 220, cx = W / 2, cy = H / 2;
+    const relevantPts = res.filter((r) => isDriver ? r.target.club === 'DR' : r.target.club !== 'DR');
+    const ell = computeEllipse80(relevantPts);
+
+    const radarSvg = isDriver
+      ? `<svg viewBox="0 0 ${W} ${H}" width="100%" style="background:#050b12;border-radius:10px;border:1px solid var(--hairline);">
+          <rect x="${cx - 72}" y="12" width="144" height="${H - 24}" rx="12" fill="rgba(16,242,150,0.08)" stroke="rgba(16,242,150,0.35)" />
+          <line x1="${cx}" y1="12" x2="${cx}" y2="${H - 12}" stroke="rgba(0,229,255,0.3)" stroke-dasharray="4 4" />
+          ${ell ? `<ellipse cx="${(cx + ell.cx).toFixed(1)}" cy="${(cy + ell.cy).toFixed(1)}" rx="${ell.rx.toFixed(1)}" ry="${ell.ry.toFixed(1)}" transform="rotate(${ell.deg.toFixed(1)} ${(cx + ell.cx).toFixed(1)} ${(cy + ell.cy).toFixed(1)})" fill="rgba(0,229,255,0.09)" stroke="#00e5ff" stroke-dasharray="4 3" />` : ''}
+          ${relevantPts.map((r) => `<circle cx="${(cx + r.dx).toFixed(1)}" cy="${(cy + r.dy).toFixed(1)}" r="5" fill="${r.quality === 'pure' ? '#10f296' : r.quality === 'avg' ? '#ffb800' : '#ff3b5c'}" stroke="#04060a" stroke-width="1.5" />`).join('')}
+          <text x="12" y="18" fill="#8b9bb4" font-size="10" font-family="monospace">DRIVER FAIRWAY CORRIDOR (±22 yds) · 80% ELLIPSE</text>
+        </svg>`
+      : `<svg viewBox="0 0 ${W} ${H}" width="100%" style="background:#050b12;border-radius:10px;border:1px solid var(--hairline);">
+          <circle cx="${cx}" cy="${cy}" r="90" fill="rgba(16,242,150,0.05)" stroke="rgba(255,255,255,0.12)" />
+          <circle cx="${cx}" cy="${cy}" r="54" fill="rgba(16,242,150,0.08)" stroke="rgba(16,242,150,0.22)" stroke-dasharray="4 4" />
+          <circle cx="${cx}" cy="${cy}" r="22" fill="rgba(16,242,150,0.16)" stroke="#10f296" />
+          ${ell ? `<ellipse cx="${(cx + ell.cx).toFixed(1)}" cy="${(cy + ell.cy).toFixed(1)}" rx="${ell.rx.toFixed(1)}" ry="${ell.ry.toFixed(1)}" transform="rotate(${ell.deg.toFixed(1)} ${(cx + ell.cx).toFixed(1)} ${(cy + ell.cy).toFixed(1)})" fill="rgba(0,229,255,0.09)" stroke="#00e5ff" stroke-dasharray="4 3" />` : ''}
+          <line x1="${cx}" y1="${cy}" x2="${cx}" y2="${cy - 26}" stroke="#f8fafc" stroke-width="2" />
+          <polygon points="${cx},${cy - 26} ${cx + 14},${cy - 21} ${cx},${cy - 16}" fill="#ff3b5c" />
+          ${relevantPts.map((r) => `<circle cx="${(cx + r.dx).toFixed(1)}" cy="${(cy + r.dy).toFixed(1)}" r="5" fill="${r.quality === 'pure' ? '#10f296' : r.quality === 'avg' ? '#ffb800' : '#ff3b5c'}" stroke="#04060a" stroke-width="1.5" />`).join('')}
+          <text x="12" y="18" fill="#8b9bb4" font-size="10" font-family="monospace">PIN-SEEKER RADAR (15 / 35 / 60 ft) · 80% ELLIPSE</text>
+        </svg>`;
+
+    const avgPts = res.length ? Math.round(res.reduce((a, r) => a + r.pts, 0) / res.length) : 0;
+    const totSg = res.reduce((a, r) => a + r.sg, 0);
+    const estHcp = res.length ? Math.max(-2, +(16 - avgPts * 0.17).toFixed(1)) : null;
+
+    $('prac-sub-combine').innerHTML = `
+      <div class="head-row">
+        <div>
+          <span class="kicker">${done ? 'COMBINE COMPLETE (18/18)' : `TARGET ${res.length + 1} OF 18`}</span>
+          <h3>${done ? 'All 18 Balls Recorded' : `${cur.yds} yds · ${esc(cur.shape)} · ${esc(cur.club)}`}</h3>
+        </div>
+        <div class="flex-row">
+          <span class="badge badge-cyan">${estHcp === null ? 'ShotLab HCP: —' : 'ShotLab HCP: ' + (estHcp <= 0 ? '+' + Math.abs(estHcp) : estHcp)}</span>
+          <button type="button" class="btn btn-emerald btn-sm" id="comb-pure">Hit Pure</button>
+          <button type="button" class="btn btn-amber btn-sm" id="comb-avg">Hit Average</button>
+          <button type="button" class="btn btn-crimson btn-sm" id="comb-miss">Hit Miss</button>
+          <button type="button" class="btn btn-sm" id="comb-reset">Reset</button>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div>${radarSvg}</div>
+        <div>
+          <div class="grid-3">
+            <div class="sub-well"><span class="kicker">Combine Score</span><strong class="mono" style="font-size:20px;color:var(--white);">${avgPts || '—'}</strong></div>
+            <div class="sub-well"><span class="kicker">Cumulative SG</span><strong class="mono" style="font-size:20px;color:${totSg >= 0 ? 'var(--emerald)' : 'var(--crimson)'};">${res.length ? (totSg >= 0 ? '+' : '') + totSg.toFixed(2) : '—'}</strong></div>
+            <div class="sub-well"><span class="kicker">Completed</span><strong class="mono" style="font-size:20px;color:var(--white);">${res.length}/18</strong></div>
+          </div>
+          <div style="max-height:145px;overflow-y:auto;margin-top:10px;">
+            <table><thead><tr><th>#</th><th>Target</th><th class="num">Prox</th><th class="num">SG</th><th class="num">Pts</th></tr></thead>
+            <tbody>${res.length ? [...res].reverse().map((r) => `<tr><td class="mono">${r.num}</td><td>${r.target.yds}y ${esc(r.target.club)}</td><td class="num">${r.proxFt} ft</td><td class="num" style="color:${r.sg >= 0 ? 'var(--emerald)' : 'var(--crimson)'}">${r.sg >= 0 ? '+' : ''}${r.sg.toFixed(2)}</td><td class="num"><strong>${r.pts}</strong></td></tr>`).join('') : '<tr><td colspan="5" class="muted">Strike Pure / Average / Miss to populate the 18-ball Combine.</td></tr>'}</tbody></table>
+          </div>
+        </div>
+      </div>`;
+
+    $('comb-pure').addEventListener('click', () => hitCombine('pure'));
+    $('comb-avg').addEventListener('click', () => hitCombine('avg'));
+    $('comb-miss').addEventListener('click', () => hitCombine('miss'));
+    $('comb-reset').addEventListener('click', () => { state.combine.results = []; renderCombine(); renderObsModal(); });
+  }
+
+  // ==================== 2B: PRESSURE GATE (5 IN A ROW + CHOKE AUTOPSY) ====================
+  const GATE_LABELS = {
+    hla: 'Start Line Gate (±1.5° HLA)',
+    driver: 'Driver Cruise Fairway (97–99.5 mph & ±15y)',
+    approach: '7-Iron Approach (Inside 20 ft)',
+  };
+
+  function updateTensionVignette() {
+    const active = state.pressure.streak === 4 && !state.pressure.mutedVignette;
+    $('tension-vignette').classList.toggle('active', active);
+  }
+
+  function handlePressureAction(made) {
+    const pr = state.pressure;
+    if (pr.locked) return; // Race guard against 6/5 overflow!
+    if (made) {
+      pr.streak = Math.min(5, pr.streak + 1);
+      pr.best = Math.max(pr.best, pr.streak);
+      pr.lastChoke = null;
+      if (pr.streak === 5) {
+        pr.locked = true;
+        pr.clears += 1;
+        AudioFX.chime(880, 0, 0.08);
+        AudioFX.chime(1174, 0.14, 0.09);
+        state.highlights.unshift({
+          title: `5/5 Cleared: ${GATE_LABELS[pr.gate]}`,
+          file: `Swings/Highlights/Gate_5of5_${Date.now()}.mp4`,
+          badge: 'CLUTCH 5/5',
+          sev: 'yellow',
+          meta: 'Cleared Ball #5 under heartbeat pressure',
+        });
+        showToast('🏆 GATE CLEARED! 5 in a row added to ★ Highlights!');
+        renderPressure();
+        renderObsModal();
+        updateTensionVignette();
+        setTimeout(() => {
+          pr.streak = 0;
+          pr.locked = false;
+          renderPressure();
+          renderObsModal();
+          updateTensionVignette();
+        }, 1800);
+        return;
+      }
+      AudioFX.chime(pr.streak === 4 ? 740 : 560, 0, 0.07);
+      if (pr.streak === 4) setTimeout(() => AudioFX.heartbeat(), 170);
+    } else {
+      if (pr.streak >= 3) {
+        pr.lastChoke = pr.streak === 4
+          ? 'Choke Autopsy (Missed Ball #5): Club speed spiked +3.2 mph above Cruise Gear and transition quickened (21/8 vs 27/9), pulling start line −2.4° left.'
+          : 'Choke Autopsy (Missed Ball #4): Face closed 1.8° relative to path as grip tension rose on the streak.';
+        showToast(`💔 Choke at ${pr.streak}/5 — reset to 0! Review Autopsy.`);
+      }
+      pr.streak = 0;
+      AudioFX.chime(180, 0, 0.08);
+    }
+    updateTensionVignette();
+    renderPressure();
+    renderObsModal();
+  }
+
+  function renderPressure() {
+    const pr = state.pressure;
+    $('prac-sub-pressure').innerHTML = `
+      <div class="head-row">
+        <div>
+          <span class="kicker">Consequence Practice &middot; Miss Resets Streak to Zero</span>
+          <h3>Make 5 in a Row: ${esc(GATE_LABELS[pr.gate])}</h3>
+        </div>
+        <div class="flex-row">
+          <select id="pres-gate-sel" aria-label="Choose pressure gate">
+            <option value="hla" ${pr.gate === 'hla' ? 'selected' : ''}>Start Line (±1.5° HLA)</option>
+            <option value="driver" ${pr.gate === 'driver' ? 'selected' : ''}>Driver Cruise Fairway</option>
+            <option value="approach" ${pr.gate === 'approach' ? 'selected' : ''}>7I Inside 20 ft</option>
+          </select>
+          <button type="button" class="btn btn-sm ${pr.mutedVignette ? 'btn-amber' : ''}" id="pres-pause-tension">${pr.mutedVignette ? 'Resume Tension FX' : 'Pause Tension FX'}</button>
+        </div>
+      </div>
+      <div class="pips">
+        ${[1, 2, 3, 4, 5].map((n) => `<div class="pip ${n <= pr.streak ? 'made' : (n === pr.streak + 1 && pr.streak >= 3 ? 'next-pressure' : '')}">${n <= pr.streak ? '&#10003;' : n}</div>`).join('')}
+      </div>
+      <div style="text-align:center;font-weight:700;color:${pr.streak === 5 ? 'var(--emerald)' : pr.streak === 4 ? 'var(--crimson)' : 'var(--white)'};">
+        ${pr.streak === 5 ? '🏆 5/5 CLEARED! Highlight saved.' : pr.streak === 4 ? '🔥 BALL #5 — ONE SWING TO CLEAR! Heartbeat Tension Active...' : `${pr.streak} of 5 made — stay inside your pre-shot routine.`}
+      </div>
+      <div class="flex-row mt-12" style="justify-content:center;">
+        <button type="button" class="btn btn-emerald" id="pres-make" ${pr.locked ? 'disabled' : ''}>&#10003; Make Ball</button>
+        <button type="button" class="btn btn-crimson" id="pres-miss" ${pr.locked ? 'disabled' : ''}>&#10007; Miss (Reset 0)</button>
+        <span class="badge">Session Best: ${pr.best}/5</span>
+        <span class="badge badge-green">Gates Cleared: ${pr.clears}</span>
+      </div>
+      ${pr.lastChoke ? `<div class="sub-well mt-12" style="border-color:rgba(255,59,92,0.45);color:var(--white);">${esc(pr.lastChoke)}</div>` : ''}`;
+
+    $('pres-gate-sel').addEventListener('change', (e) => { pr.gate = e.target.value; pr.streak = 0; pr.lastChoke = null; updateTensionVignette(); renderPressure(); renderObsModal(); });
+    $('pres-pause-tension').addEventListener('click', () => { pr.mutedVignette = !pr.mutedVignette; updateTensionVignette(); renderPressure(); });
+    $('pres-make').addEventListener('click', () => handlePressureAction(true));
+    $('pres-miss').addEventListener('click', () => handlePressureAction(false));
+  }
+
+  // ==================== 2C: LINKED 3-HOLE COURSE PREP ====================
+  function renderCoursePrep() {
+    const cr = state.course;
+    const h = cr.holes[cr.holeIdx];
+    const done = cr.holes.every((x) => x.score !== null);
+    const totalRel = cr.holes.reduce((acc, x) => acc + (x.score !== null ? x.score - x.par : 0), 0);
+
+    $('prac-sub-course').innerHTML = `
+      <div class="head-row">
+        <div>
+          <span class="kicker">Saturday Course Simulation &middot; Tee Shot Sets Next Lie &amp; Yardage</span>
+          <h3>Hole ${h.num} &middot; Par ${h.par} &middot; ${h.yds} yds</h3>
+        </div>
+        <div class="flex-row">
+          <span class="badge badge-cyan">Score vs Par: ${totalRel === 0 ? 'E' : (totalRel > 0 ? '+' : '') + totalRel}</span>
+          <button type="button" class="btn btn-sm" id="cr-reset">Reset 3-Hole Loop</button>
+        </div>
+      </div>
+      <div class="grid-3" style="margin-bottom:12px;">
+        ${cr.holes.map((x, i) => `
+          <div class="sub-well" style="border-color:${i === cr.holeIdx ? 'var(--cyan)' : 'var(--hairline)'};">
+            <div class="flex-row" style="justify-content:space-between;">
+              <strong>Hole ${x.num} (Par ${x.par})</strong>
+              <span class="badge ${x.score === null ? '' : x.score < x.par ? 'badge-green' : x.score === x.par ? 'badge-cyan' : 'badge-red'}">${x.score === null ? (i === cr.holeIdx ? 'ON TEE' : 'WAITING') : `Score ${x.score}`}</span>
+            </div>
+            <div class="muted" style="font-size:11px;margin-top:4px;">${x.teeResult ? esc(x.teeResult) : `${x.yds}y · Wind ${x.wind} mph`}</div>
+          </div>`).join('')}
+      </div>
+      ${done ? `<div class="sub-well" style="text-align:center;"><strong style="color:var(--emerald);">3-Hole Prep Complete!</strong> Total: ${totalRel === 0 ? 'Even Par' : (totalRel > 0 ? '+' : '') + totalRel}. Click Reset to replay.</div>`
+        : cr.stage === 'tee' && h.par === 4
+          ? `<div class="sub-well">
+              <div style="margin-bottom:8px;"><strong>Shot 1 (Tee):</strong> Choose Driver outcome to set your actual approach yardage &amp; lie:</div>
+              <div class="flex-row">
+                <button type="button" class="btn btn-emerald btn-sm" id="cr-tee-fw">98 mph Cruise Fairway (${h.yds - 256}y left, Firm)</button>
+                <button type="button" class="btn btn-amber btn-sm" id="cr-tee-rough">Pulled Into 2&Prime; Rough (${h.roughYds}y left, Flier Lie)</button>
+                <button type="button" class="btn btn-crimson btn-sm" id="cr-tee-ob">103 mph Over-Speed Hook (Punch Out → Bogey)</button>
+              </div>
+            </div>`
+          : `<div class="sub-well">
+              <div style="margin-bottom:8px;"><strong>Approach Shot:</strong> ${h.appYds} yds from <strong>${h.appLie === 'rough' ? '2" Dry Rough (Flier Risk)' : 'Firm Fairway'}</strong> &middot; Wind ${h.wind} mph</div>
+              <div class="flex-row">
+                <button type="button" class="btn btn-emerald btn-sm" id="cr-app-pin">Stiff Inside 12 ft (Birdie)</button>
+                <button type="button" class="btn btn-cyan btn-sm" id="cr-app-gir">Center Green 2-Putt (Par)</button>
+                <button type="button" class="btn btn-crimson btn-sm" id="cr-app-miss">Missed Green / Short (Bogey)</button>
+              </div>
+            </div>`}`;
+
+    $('cr-reset').addEventListener('click', () => {
+      cr.holeIdx = 0; cr.stage = 'tee';
+      cr.holes.forEach((x) => { x.teeResult = null; x.score = null; x.appYds = x.par === 3 ? x.yds : null; });
+      renderCoursePrep();
+    });
+    if ($('cr-tee-fw')) $('cr-tee-fw').addEventListener('click', () => {
+      h.teeResult = `256y Fairway (${h.yds - 256}y in)`; h.appYds = h.yds - 256; h.appLie = 'firm'; cr.stage = 'approach';
+      strikeShot(2, false); renderCoursePrep();
+    });
+    if ($('cr-tee-rough')) $('cr-tee-rough').addEventListener('click', () => {
+      h.teeResult = `230y 2" Rough (${h.roughYds}y flier lie)`; h.appYds = h.roughYds; h.appLie = 'rough'; cr.stage = 'approach';
+      strikeShot(3, false); renderCoursePrep();
+    });
+    if ($('cr-tee-ob')) $('cr-tee-ob').addEventListener('click', () => {
+      h.teeResult = 'Snap Hook OB → Scramble Bogey'; h.score = h.par + 1;
+      if (cr.holeIdx < cr.holes.length - 1) { cr.holeIdx += 1; cr.stage = cr.holes[cr.holeIdx].par === 3 ? 'approach' : 'tee'; }
+      strikeShot(1, false); renderCoursePrep();
+    });
+    const finishHole = (delta) => {
+      h.score = h.par + delta;
+      if (cr.holeIdx < cr.holes.length - 1) {
+        cr.holeIdx += 1;
+        cr.stage = cr.holes[cr.holeIdx].par === 3 ? 'approach' : 'tee';
+      }
+      renderCoursePrep();
+    };
+    if ($('cr-app-pin')) $('cr-app-pin').addEventListener('click', () => finishHole(-1));
+    if ($('cr-app-gir')) $('cr-app-gir').addEventListener('click', () => finishHole(0));
+    if ($('cr-app-miss')) $('cr-app-miss').addEventListener('click', () => finishHole(1));
+  }
+
+  // ==================== MODE 3: REVIEW RENDERER ====================
+  document.querySelectorAll('#rev-sub-seg button').forEach((b) => {
+    b.addEventListener('click', () => {
+      state.review.sub = b.dataset.sub;
+      renderReview();
+    });
+  });
+
+  document.querySelectorAll('#rev-club-seg button').forEach((b) => {
+    b.addEventListener('click', () => {
+      state.review.club = b.dataset.club;
+      const d = DNA_DATA[state.review.club];
+      state.review.speed = d.defaultS;
+      state.review.hoverSpeed = null;
+      const sl = $('rev-speed-slider');
+      sl.min = d.minS;
+      sl.max = d.maxS;
+      sl.value = d.defaultS;
+      renderDNA();
+    });
+  });
+
+  $('rev-speed-slider').addEventListener('input', (e) => {
+    state.review.speed = Number(e.target.value);
+    state.review.hoverSpeed = null;
+    renderDNA();
+  });
+
+  $('rev-train-btn').addEventListener('click', () => {
+    const d = DNA_DATA[state.review.club];
+    const top = d.attrs[0];
+    const shotIdx = state.review.club === 'DR' ? 1 : state.review.club === 'PW' ? 4 : 2;
+    launchMission(`Fix #1 Leak: ${d.label} (${top.name})`, top.fixFeel || 'Cruise Rhythm', 'pressure', shotIdx, top.fixGate || 'hla', 'DNA Fix Mission');
+  });
+
+  function renderDNA() {
+    document.querySelectorAll('#rev-club-seg button').forEach((b) => b.classList.toggle('active', b.dataset.club === state.review.club));
+    const d = DNA_DATA[state.review.club];
+    const activeSpeed = state.review.hoverSpeed !== null ? state.review.hoverSpeed : state.review.speed;
+    $('rev-pareto-title').textContent = `${d.label}: Club Speed vs. Strokes Gained`;
+    $('rev-pareto-pill').textContent = state.coldStart ? `Cold Start (n=11 · Needs n≥25)` : `Cruise Gear: ${d.sweetLo}–${d.sweetHi} mph`;
+    $('rev-pareto-pill').className = `badge ${state.coldStart ? 'badge-yellow' : 'badge-green'}`;
+    $('rev-speed-val').textContent = `${activeSpeed.toFixed(1)} mph`;
+
+    const sgNow = d.curveFn(activeSpeed);
+    const inSweet = activeSpeed >= d.sweetLo && activeSpeed <= d.sweetHi;
+    const overCliff = activeSpeed >= d.cliff;
+    $('rev-speed-zone').textContent = state.coldStart ? 'Low Confidence (n=11)' : inSweet ? 'Optimal Cruise Gear' : overCliff ? '⚠ Over-Swing Cliff!' : 'Controlled / Sub-Max';
+    $('rev-speed-zone').style.color = state.coldStart ? 'var(--amber)' : inSweet ? 'var(--emerald)' : overCliff ? 'var(--crimson)' : 'var(--amber)';
+
+    // Cold-Start Gate Banner
+    if (state.coldStart) {
+      $('rev-cold-gate').style.display = 'block';
+      $('rev-cold-gate').innerHTML = `<strong style="color:var(--amber);">Cold-Start Statistical Honesty (n=11 swings):</strong> Cruise Cliff and Shapley attribution are locked behind a wide 95% confidence ribbon until you log <strong>25 swings</strong> for ${esc(d.label)}.`;
+    } else {
+      $('rev-cold-gate').style.display = 'none';
+    }
+
+    // Dynamic Y-Axis Bounds (Zero Cliff Clipping!)
+    const visiblePts = state.coldStart ? d.scatter.slice(0, 11) : d.scatter;
+    const allSg = visiblePts.map((p) => p.sg);
+    for (let sp = d.minS; sp <= d.maxS + 0.01; sp += 0.5) allSg.push(d.curveFn(sp));
+    const yMin = Math.min(-0.55, Math.floor((Math.min(...allSg) - 0.08) * 10) / 10);
+    const yMax = Math.max(0.42, Math.ceil((Math.max(...allSg) + 0.08) * 10) / 10);
+
+    const W = 560, H = 225, padL = 46, padR = 16, padT = 22, padB = 30;
+    const xOf = (sp) => padL + ((sp - d.minS) / (d.maxS - d.minS)) * (W - padL - padR);
+    const yOf = (sg) => padT + ((yMax - sg) / Math.max(0.2, yMax - yMin)) * (H - padT - padB);
+
+    const curvePts = [];
+    const bandHi = [], bandLo = [];
+    for (let sp = d.minS; sp <= d.maxS + 0.01; sp += 0.5) {
+      const val = d.curveFn(sp);
+      curvePts.push(`${xOf(sp).toFixed(1)},${yOf(val).toFixed(1)}`);
+      bandHi.push(`${xOf(sp).toFixed(1)},${yOf(val + (state.coldStart ? 0.24 : 0.06)).toFixed(1)}`);
+      bandLo.unshift(`${xOf(sp).toFixed(1)},${yOf(val - (state.coldStart ? 0.24 : 0.06)).toFixed(1)}`);
+    }
+    const cx = xOf(activeSpeed), cy = yOf(sgNow);
+    const dotCol = inSweet ? '#10f296' : overCliff ? '#ff3b5c' : '#ffb800';
+
+    $('rev-pareto-svg').innerHTML = `
+      <svg id="rev-pareto-interactive" viewBox="0 0 ${W} ${H}" width="100%" style="background:#05080e;border-radius:10px;border:1px solid var(--hairline);cursor:crosshair;touch-action:none;">
+        <defs>
+          <pattern id="hazard-hatch" width="8" height="8" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="8" stroke="rgba(255,59,92,0.28)" stroke-width="3" />
+          </pattern>
+        </defs>
+        ${state.coldStart ? '' : `
+          <rect x="${xOf(d.sweetLo).toFixed(1)}" y="${padT}" width="${(xOf(d.sweetHi) - xOf(d.sweetLo)).toFixed(1)}" height="${H - padT - padB}" fill="rgba(16,242,150,0.12)" />
+          <rect x="${xOf(d.cliff).toFixed(1)}" y="${padT}" width="${(xOf(d.maxS) - xOf(d.cliff)).toFixed(1)}" height="${H - padT - padB}" fill="url(#hazard-hatch)" />`}
+        <line x1="${padL}" y1="${yOf(0).toFixed(1)}" x2="${W - padR}" y2="${yOf(0).toFixed(1)}" stroke="rgba(255,255,255,0.2)" stroke-dasharray="4 4" />
+        <polygon points="${bandHi.join(' ')} ${bandLo.join(' ')}" fill="${state.coldStart ? 'rgba(255,184,0,0.16)' : 'rgba(0,229,255,0.1)'}" />
+        ${visiblePts.map((p) => `<circle cx="${xOf(p.sp).toFixed(1)}" cy="${yOf(p.sg).toFixed(1)}" r="${state.coldStart ? 3.8 : 2.3}" fill="${p.sp >= d.cliff ? 'rgba(255,59,92,0.45)' : 'rgba(0,229,255,0.34)'}" />`).join('')}
+        <polyline fill="none" stroke="${state.coldStart ? '#ffb800' : '#00e5ff'}" stroke-width="2.8" ${state.coldStart ? 'stroke-dasharray="6 4"' : ''} points="${curvePts.join(' ')}" />
+        <line x1="${cx.toFixed(1)}" y1="${padT}" x2="${cx.toFixed(1)}" y2="${H - padB}" stroke="${dotCol}" stroke-dasharray="3 3" />
+        <circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6" fill="${dotCol}" stroke="#04060a" stroke-width="2" />
+        ${state.coldStart ? '' : `
+          <text x="${(xOf(d.sweetLo) + 4).toFixed(1)}" y="${padT + 13}" fill="#10f296" font-size="9" font-weight="700">CRUISE ZONE</text>
+          <text x="${(xOf(d.cliff) + 4).toFixed(1)}" y="${padT + 13}" fill="#ff3b5c" font-size="9" font-weight="700">CLIFF</text>`}
+        <text x="6" y="${(yOf(0) + 3).toFixed(1)}" fill="#8b9bb4" font-size="9.5" font-family="monospace">0.00</text>
+        <text x="6" y="${(yOf(yMax - 0.05) + 3).toFixed(1)}" fill="#10f296" font-size="9.5" font-family="monospace">+${(yMax - 0.05).toFixed(2)}</text>
+        <text x="6" y="${(yOf(yMin + 0.05) + 3).toFixed(1)}" fill="#ff3b5c" font-size="9.5" font-family="monospace">${(yMin + 0.05).toFixed(2)}</text>
+        <text x="${padL}" y="${H - 8}" fill="#5c6d87" font-size="10" font-family="monospace">${d.minS} mph</text>
+        <text x="${W - padR - 46}" y="${H - 8}" fill="#5c6d87" font-size="10" font-family="monospace">${d.maxS} mph</text>
+      </svg>`;
+
+    const pSvg = $('rev-pareto-interactive');
+    pSvg.addEventListener('pointermove', (ev) => {
+      const r = pSvg.getBoundingClientRect();
+      const ux = clamp(((ev.clientX - r.left) / r.width) * W, padL, W - padR);
+      const sp = d.minS + ((ux - padL) / (W - padL - padR)) * (d.maxS - d.minS);
+      state.review.hoverSpeed = Math.round(sp * 2) / 2;
+      renderDNA();
+    });
+    pSvg.addEventListener('pointerleave', () => {
+      if (state.review.hoverSpeed !== null) {
+        state.review.hoverSpeed = null;
+        renderDNA();
+      }
+    });
+
+    const carryProj = Math.round(d.baseCarry + (activeSpeed - d.defaultS) * (state.review.club === 'DR' ? 2.4 : 1.7) - (overCliff ? (activeSpeed - d.cliff) * 2.2 : 0));
+    const fwPct = clamp(Math.round(74 - Math.max(0, activeSpeed - d.sweetHi) * 7.5 - Math.max(0, d.sweetLo - activeSpeed) * 1.2), 18, 88);
+    const bigMiss = clamp(Math.round(8 + Math.max(0, activeSpeed - d.sweetHi) * 6.8), 4, 58);
+    $('rev-speed-kpis').innerHTML = `
+      <div class="sub-well"><span class="kicker">Proj. SG</span><strong class="mono" style="font-size:16px;color:${dotCol};">${sgNow >= 0 ? '+' : ''}${sgNow.toFixed(2)}</strong></div>
+      <div class="sub-well"><span class="kicker">Proj. Carry</span><strong class="mono" style="font-size:16px;color:var(--white);">${carryProj}y</strong></div>
+      <div class="sub-well"><span class="kicker">Target Hit %</span><strong class="mono" style="font-size:16px;color:var(--white);">${fwPct}%</strong></div>
+      <div class="sub-well"><span class="kicker">Big Miss %</span><strong class="mono" style="font-size:16px;color:${bigMiss > 22 ? 'var(--crimson)' : 'var(--emerald)'};">${bigMiss}%</strong></div>`;
+
+    $('rev-attr-summary').textContent = state.coldStart
+      ? `Preliminary n=11 snapshot — Shapley attribution stabilizes once ${d.label} passes 25 confirmed swings.`
+      : d.summary;
+
+    $('rev-attr-bars').innerHTML = d.attrs.map((a) => `
+      <div class="bar-row" style="opacity:${state.coldStart ? 0.55 : 1};">
+        <div class="bar-top">
+          <span><strong>${esc(a.name)}</strong></span>
+          <span class="mono">${a.pct}% &middot; <span style="color:${a.color};font-size:10px;font-weight:700;">${esc(a.tag)}</span></span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width:${a.pct}%;background:${a.color};"></div></div>
+      </div>`).join('');
+
+    const mp = $('rev-miss-pill');
+    mp.textContent = d.missType === 'two-way' ? '⚠ Two-Way Miss' : '✓ One-Way Playable';
+    mp.className = `badge ${d.missType === 'two-way' ? 'badge-red' : 'badge-green'}`;
+    const cw = 360, ch = 54, mid = cw / 2;
+    const lx = mid + d.missMin * 3.5, rx = mid + d.missMax * 3.5;
+    $('rev-corridor-svg').innerHTML = `
+      <svg viewBox="0 0 ${cw} ${ch}" width="100%" style="background:#05080e;border-radius:8px;border:1px solid var(--hairline);">
+        <line x1="${mid}" y1="6" x2="${mid}" y2="${ch - 6}" stroke="rgba(255,255,255,0.35)" stroke-dasharray="3 3" />
+        <rect x="${lx}" y="16" width="${Math.max(10, rx - lx)}" height="20" rx="10" fill="${d.missType === 'two-way' ? 'rgba(255,59,92,0.28)' : 'rgba(16,242,150,0.26)'}" stroke="${d.missType === 'two-way' ? '#ff3b5c' : '#10f296'}" stroke-width="2" />
+        <text x="10" y="12" fill="#8b9bb4" font-size="9.5">${esc(d.missLabel)}</text>
+        <text x="${mid + 4}" y="${ch - 5}" fill="#5c6d87" font-size="9">0y Target</text>
+      </svg>`;
+
+    // Feel Retention Curve
+    const rW = 540, rH = 185, rPadL = 44, rPadR = 24, rPadT = 20, rPadB = 28;
+    const rxOf = (i) => rPadL + (i / 2) * (rW - rPadL - rPadR);
+    const ryOf = (v) => rPadT + ((0.3 - v) / 0.6) * (rH - rPadT - rPadB);
+    $('rev-retention-svg').innerHTML = `
+      <svg viewBox="0 0 ${rW} ${rH}" width="100%" style="background:#05080e;border-radius:10px;border:1px solid var(--hairline);">
+        <line x1="${rPadL}" y1="${ryOf(0)}" x2="${rW - rPadR}" y2="${ryOf(0)}" stroke="rgba(255,255,255,0.2)" stroke-dasharray="4 4" />
+        ${d.retentions.map((r) => {
+          const col = r.sev === 'green' ? '#10f296' : r.sev === 'yellow' ? '#ffb800' : '#ff3b5c';
+          const vals = [r.base, r.active, r.later];
+          return `<polyline fill="none" stroke="${col}" stroke-width="2.6" points="${vals.map((v, i) => `${rxOf(i)},${ryOf(v)}`).join(' ')}" />
+            ${vals.map((v, i) => `<circle cx="${rxOf(i)}" cy="${ryOf(v)}" r="4.5" fill="${col}" />`).join('')}`;
+        }).join('')}
+        <text x="${rxOf(0) - 22}" y="${rH - 9}" fill="#8b9bb4" font-size="10">Baseline</text>
+        <text x="${rxOf(1) - 34}" y="${rH - 9}" fill="#00e5ff" font-size="10">Active Feel</text>
+        <text x="${rxOf(2) - 62}" y="${rH - 9}" fill="#10f296" font-size="10">3 Sessions Later</text>
+        <text x="6" y="${ryOf(0.2) + 3}" fill="#10f296" font-size="9.5" font-family="monospace">+0.20</text>
+        <text x="6" y="${ryOf(0) + 3}" fill="#8b9bb4" font-size="9.5" font-family="monospace"> 0.00</text>
+        <text x="6" y="${ryOf(-0.2) + 3}" fill="#ff3b5c" font-size="9.5" font-family="monospace">-0.20</text>
+      </svg>`;
+
+    $('rev-retention-cards').innerHTML = d.retentions.map((r) => `
+      <div class="sub-well" style="margin-bottom:8px;">
+        <div class="flex-row" style="justify-content:space-between;">
+          <strong>${esc(r.name)}</strong>
+          <span class="badge badge-${r.sev}">${esc(r.verdict)}</span>
+        </div>
+        <div class="mono muted" style="font-size:11px;margin-top:4px;">
+          Base ${r.base >= 0 ? '+' : ''}${r.base.toFixed(2)} &rarr; Active ${r.active >= 0 ? '+' : ''}${r.active.toFixed(2)} &rarr; Retention ${r.later >= 0 ? '+' : ''}${r.later.toFixed(2)} SG
+        </div>
+      </div>`).join('');
+  }
+
+  // ==================== 3B: HiDPI KINEMATIC VELOCITY-TRAIL GHOST CANVAS ====================
+  function samplePose(pct, mode) {
+    // Continuous unwrapped clubA through P1 -> P4 -> P6 -> P7 -> P9 (fixes P2 backward wrap!)
+    const isGhost = mode !== 'current';
+    const isPro = mode === 'pro';
+    const camFO = state.review.cam === 'fo';
+
+    const keys = camFO
+      ? [
+          { p: 0,   hipX: 360, hipY: 228, shX: 360, shY: 146, hdX: 362, hdY: 108, hndX: 366, hndY: 240, clubA: 1.54, kneeVis: 0.94 },
+          { p: 45,  hipX: 374, hipY: 224, shX: 382, shY: 144, hdX: 368, hdY: 108, hndX: 432, hndY: 106, clubA: 0.15, kneeVis: 0.88 },
+          { p: 74,  hipX: isGhost ? 336 : 362, hipY: 222, shX: isGhost ? 356 : 368, shY: 146, hdX: 366, hdY: 112, hndX: isGhost ? 350 : 396, hndY: isGhost ? 210 : 186, clubA: -1.18, kneeVis: 0.82 },
+          { p: 84,  hipX: isGhost ? 330 : 356, hipY: 218, shX: isGhost ? 366 : 364, shY: 144, hdX: 370, hdY: 110, hndX: isGhost ? 344 : 374, hndY: isGhost ? 236 : 226, clubA: -4.62, kneeVis: 0.68 },
+          { p: 100, hipX: 322, hipY: 204, shX: 334, shY: 128, hdX: 344, hdY: 94,  hndX: 312, hndY: 116, clubA: -7.45, kneeVis: 0.64 },
+        ]
+      : [
+          { p: 0,   hipX: 332, hipY: 226, shX: 374, shY: 148, hdX: 392, hdY: 112, hndX: 404, hndY: 242, clubA: 1.04, kneeVis: 0.95 },
+          { p: 45,  hipX: 326, hipY: 222, shX: 358, shY: 140, hdX: 388, hdY: 110, hndX: 320, hndY: 96,  clubA: -2.45, kneeVis: 0.86 },
+          { p: 74,  hipX: isGhost ? 328 : 354, hipY: isGhost ? 228 : 214, shX: isGhost ? 368 : 364, shY: isGhost ? 152 : 140, hdX: isGhost ? 390 : 386, hdY: isGhost ? 118 : 106, hndX: isGhost ? (isPro ? 378 : 384) : 414, hndY: isGhost ? 210 : 186, clubA: -4.92, kneeVis: 0.79 },
+          { p: 84,  hipX: isGhost ? 330 : 358, hipY: isGhost ? 226 : 211, shX: isGhost ? 374 : 366, shY: isGhost ? 150 : 138, hdX: isGhost ? 393 : 385, hdY: isGhost ? 116 : 104, hndX: isGhost ? 406 : 422, hndY: isGhost ? 238 : 220, clubA: -5.32, kneeVis: 0.71 },
+          { p: 100, hipX: 344, hipY: 204, shX: 356, shY: 126, hdX: 368, hdY: 94,  hndX: 344, hndY: 108, clubA: -8.35, kneeVis: 0.63 },
+        ];
+
+    let k0 = keys[0], k1 = keys[keys.length - 1];
+    for (let i = 0; i < keys.length - 1; i += 1) {
+      if (pct >= keys[i].p && pct <= keys[i + 1].p) { k0 = keys[i]; k1 = keys[i + 1]; break; }
+    }
+    const u = k1.p === k0.p ? 0 : (pct - k0.p) / (k1.p - k0.p);
+    const out = {};
+    for (const k of ['hipX', 'hipY', 'shX', 'shY', 'hdX', 'hdY', 'hndX', 'hndY', 'clubA', 'kneeVis']) {
+      out[k] = lerp(k0[k], k1[k], u);
+    }
+    return out;
+  }
+
+  function clubTip(pose) {
+    const clubLen = 112;
+    return {
+      x: pose.hndX + Math.cos(pose.clubA) * clubLen,
+      y: pose.hndY + Math.sin(pose.clubA) * clubLen,
+    };
+  }
+
+  function drawTaperedLimb(ctx, x1, y1, x2, y2, w1, w2) {
+    const dx = x2 - x1, dy = y2 - y1;
+    const len = Math.hypot(dx, dy) || 1;
+    const nx = -dy / len, ny = dx / len;
+    ctx.beginPath();
+    ctx.moveTo(x1 + nx * w1, y1 + ny * w1);
+    ctx.lineTo(x2 + nx * w2, y2 + ny * w2);
+    ctx.lineTo(x2 - nx * w2, y2 - ny * w2);
+    ctx.lineTo(x1 - nx * w1, y1 - ny * w1);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawKinematicGolfer(ctx, pct, mode, color, alpha) {
+    const pose = samplePose(pct, mode);
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.strokeStyle = color;
+
+    // Velocity Ribbon Trail during downswing (P4=45 -> current pct)
+    if (pct > 46) {
+      const startP = 45;
+      const endP = Math.min(pct, 92);
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 6;
+      ctx.globalAlpha = alpha * 0.24;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      for (let p = startP; p <= endP; p += 2) {
+        const pt = clubTip(samplePose(p, mode));
+        if (p === startP) ctx.moveTo(pt.x, pt.y); else ctx.lineTo(pt.x, pt.y);
+      }
+      ctx.stroke();
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = alpha * 0.65;
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    const footX = state.review.cam === 'fo' ? 330 : 352;
+    const footY = 346;
+    const kneeX = (footX + pose.hipX) / 2 + (state.review.cam === 'fo' ? -8 : 14);
+    const kneeY = (footY + pose.hipY) / 2 + 4;
+
+    // Visibility-gated legs (dims < 0.75 knee landmark!)
+    ctx.save();
+    if (pose.kneeVis < 0.75) {
+      ctx.globalAlpha = alpha * 0.45;
+      ctx.setLineDash([4, 4]);
+      ctx.lineWidth = 4;
+      ctx.beginPath(); ctx.moveTo(footX, footY); ctx.lineTo(kneeX, kneeY); ctx.lineTo(pose.hipX, pose.hipY); ctx.stroke();
+    } else {
+      drawTaperedLimb(ctx, pose.hipX, pose.hipY, kneeX, kneeY, 9, 6);
+      drawTaperedLimb(ctx, kneeX, kneeY, footX, footY, 6, 4);
+    }
+    ctx.restore();
+
+    // Tapered Torso & Arms
+    drawTaperedLimb(ctx, pose.shX, pose.shY, pose.hipX, pose.hipY, 12, 8);
+    drawTaperedLimb(ctx, pose.shX, pose.shY, pose.hndX, pose.hndY, 6, 3.5);
+
+    // Head
+    ctx.beginPath();
+    ctx.arc(pose.hdX, pose.hdY, 14, 0, Math.PI * 2);
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+
+    // Shaft + Clubhead
+    const tip = clubTip(pose);
+    ctx.lineWidth = 2.6;
+    ctx.beginPath(); ctx.moveTo(pose.hndX, pose.hndY); ctx.lineTo(tip.x, tip.y); ctx.stroke();
+    ctx.beginPath(); ctx.arc(tip.x, tip.y, 4.5, 0, Math.PI * 2); ctx.fill();
+
+    // Crisp Joint Nodes
+    [[pose.hipX, pose.hipY], [pose.shX, pose.shY], [pose.hndX, pose.hndY]].forEach(([x, y]) => {
+      ctx.beginPath(); ctx.arc(x, y, 4.2, 0, Math.PI * 2); ctx.fill();
+    });
+    ctx.restore();
+    return pose;
+  }
+
+  function drawGhostCanvas() {
+    const canvas = $('rev-ghost-canvas');
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const W = Math.max(360, rect.width || 780);
+    const H = 410;
+    const dpr = window.devicePixelRatio || 1;
+    if (canvas.width !== Math.round(W * dpr) || canvas.height !== Math.round(H * dpr)) {
+      canvas.width = Math.round(W * dpr);
+      canvas.height = Math.round(H * dpr);
+    }
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    ctx.fillStyle = '#04070d';
+    ctx.fillRect(0, 0, W, H);
+
+    // Subtle studio grid
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    for (let x = 0; x < W; x += 48) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+    for (let y = 0; y < H; y += 48) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+
+    // Center & Mirror for LH inside normalized 760px coordinate stage
+    const scaleX = W / 760;
+    const offsetX = 0;
+    ctx.save();
+    if (state.handedness === 'LH') {
+      ctx.translate(W, 0);
+      ctx.scale(-scaleX, 1);
+    } else {
+      ctx.scale(scaleX, 1);
+    }
+
+    // Ground, Ball, Swing-Plane Cone & P1 Torso-Normalized Butt Line
+    ctx.strokeStyle = 'rgba(255,255,255,0.24)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(60, 348); ctx.lineTo(700, 348); ctx.stroke();
+
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(state.review.cam === 'fo' ? 378 : 464, 342, 6, 0, Math.PI * 2); ctx.fill();
+
+    if (state.review.cam === 'dtl') {
+      // Translucent Swing Plane Cone
+      ctx.fillStyle = 'rgba(16, 242, 150, 0.06)';
+      ctx.beginPath();
+      ctx.moveTo(464, 342);
+      ctx.lineTo(260, 102);
+      ctx.lineTo(310, 82);
+      ctx.closePath();
+      ctx.fill();
+
+      // P1 Butt Line
+      ctx.save();
+      ctx.setLineDash([5, 5]);
+      ctx.strokeStyle = 'rgba(255, 59, 92, 0.52)';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.moveTo(328, 118); ctx.lineTo(328, 348); ctx.stroke();
+      ctx.restore();
+    }
+
+    const r = state.review;
+    const wipeX760 = r.wipe * 760;
+    const ghColor = r.ghost === 'pro' ? '#f8fafc' : '#10f296';
+
+    // Ghost layer (Right of wipe when wipe < 0.99)
+    ctx.save();
+    if (r.wipe < 0.99) { ctx.beginPath(); ctx.rect(wipeX760, 0, 760 - wipeX760, H); ctx.clip(); }
+    const ghPose = drawKinematicGolfer(ctx, r.pct, r.ghost, ghColor, r.wipe < 0.99 ? 0.92 : r.opacity);
+    ctx.restore();
+
+    // Current layer (Left of wipe when wipe < 0.99)
+    ctx.save();
+    if (r.wipe < 0.99) { ctx.beginPath(); ctx.rect(0, 0, wipeX760, H); ctx.clip(); }
+    const curPose = drawKinematicGolfer(ctx, r.pct, 'current', '#00e5ff', 0.96);
+    ctx.restore();
+
+    // Impact Shockwave Ring at P7
+    if (Math.abs(r.pct - 84) <= 2) {
+      const bx = state.review.cam === 'fo' ? 378 : 464;
+      ctx.strokeStyle = 'rgba(255, 184, 0, 0.75)';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(bx, 342, 16, 0, Math.PI * 2); ctx.stroke();
+    }
+
+    // On-Canvas Pelvis Drift Caliper Arrow (at P6/P7)
+    if (r.pct >= 68 && r.pct <= 90) {
+      ctx.strokeStyle = '#ff3b5c';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(ghPose.hipX, curPose.hipY); ctx.lineTo(curPose.hipX, curPose.hipY); ctx.stroke();
+    }
+    ctx.restore();
+
+    // Unclipped Top HUD Legends & Draggable Split-Wipe Laser Handle (fixes P2 clipping!)
+    const wipePx = r.wipe * W;
+    if (r.wipe < 0.99) {
+      ctx.strokeStyle = '#ffb800';
+      ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(wipePx, 0); ctx.lineTo(wipePx, H); ctx.stroke();
+      ctx.fillStyle = '#ffb800';
+      ctx.beginPath(); ctx.roundRect(clamp(wipePx - 14, 4, W - 32), H / 2 - 14, 28, 28, 14); ctx.fill();
+      ctx.fillStyle = '#04060a';
+      ctx.font = 'bold 11px sans-serif';
+      ctx.fillText('◀▶', clamp(wipePx - 9, 9, W - 27), H / 2 + 4);
+    }
+
+    // Always-visible corner legends
+    ctx.fillStyle = 'rgba(4, 6, 10, 0.85)';
+    ctx.beginPath(); ctx.roundRect(12, 12, 238, 42, 7); ctx.fill();
+    ctx.fillStyle = '#00e5ff'; ctx.font = 'bold 10.5px monospace';
+    ctx.fillText(`CURRENT: 7I (${state.handedness} · ${r.cam.toUpperCase()})`, 22, 28);
+    ctx.fillStyle = ghColor;
+    ctx.fillText(r.ghost === 'pro' ? 'GHOST: TOUR PRO (RORY)' : 'GHOST: MY-GO-TO BEST', 22, 44);
+
+    ctx.fillStyle = 'rgba(4, 6, 10, 0.85)';
+    ctx.beginPath(); ctx.roundRect(W - 234, 12, 222, 26, 7); ctx.fill();
+    ctx.fillStyle = '#10f296'; ctx.font = 'bold 10px monospace';
+    ctx.fillText('P1 TORSO NORMALIZED · DRIFT-IMMUNE', W - 224, 29);
+
+    // Update Telemetry Readout Cards + Timeline
+    const sec = ((r.pct - 84) / 84 * 0.95).toFixed(2);
+    const pName = r.pct < 15 ? 'P1 Address' : r.pct < 58 ? 'P4 Top' : r.pct < 80 ? 'P6 Delivery' : r.pct <= 88 ? 'P7 Impact' : 'P9 Finish';
+    $('rev-g-time').textContent = `T = ${Number(sec) >= 0 ? '+' : ''}${sec}s (${pName})`;
+    document.querySelectorAll('#rev-g-ticks .nle-tick').forEach((t) => {
+      t.classList.toggle('active', Math.abs(Number(t.dataset.p) - r.pct) <= 4);
+    });
+
+    const eeIn = +((curPose.hipX - ghPose.hipX) * 0.085).toFixed(1);
+    const handHigh = +((ghPose.hndY - curPose.hndY) * 0.13).toFixed(1);
+    const spineDeg = +(Math.abs(curPose.hipX - ghPose.hipX) * 0.34).toFixed(1);
+    const kneeLow = curPose.kneeVis < 0.75;
+
+    $('rev-bio-metrics').innerHTML = `
+      <div class="sub-well"><span class="kicker">Pelvis Drift (EE)</span><strong class="mono" style="font-size:16px;color:${eeIn > 1.2 ? 'var(--crimson)' : 'var(--emerald)'};">${eeIn >= 0 ? '+' : ''}${eeIn}&Prime;</strong><div class="dim" style="font-size:10px;">P1 Normalized</div></div>
+      <div class="sub-well"><span class="kicker">Hand Height &Delta;</span><strong class="mono" style="font-size:16px;color:${Math.abs(handHigh) > 1.5 ? 'var(--crimson)' : 'var(--emerald)'};">${handHigh >= 0 ? '+' : ''}${handHigh}&Prime;</strong><div class="dim" style="font-size:10px;">vs Ghost Plane</div></div>
+      <div class="sub-well"><span class="kicker">Spine Tilt Loss</span><strong class="mono" style="font-size:16px;color:${spineDeg > 4 ? 'var(--amber)' : 'var(--emerald)'};">${spineDeg}&deg;</strong><div class="dim" style="font-size:10px;">Posture Hold</div></div>
+      <div class="sub-well"><span class="kicker">Lower Landmark</span><strong class="mono" style="font-size:14px;color:${kneeLow ? 'var(--amber)' : 'var(--emerald)'};">${Math.round(curPose.kneeVis * 100)}% Vis</strong><div class="dim" style="font-size:10px;">${kneeLow ? 'Dimmed (<75%)' : 'High Conf'}</div></div>`;
+
+    $('rev-pose-corr').innerHTML = state.coldStart
+      ? `<span class="kicker">Pose &times; BLP Correlation (Cold Start)</span><strong style="color:var(--amber);">Locked until n &ge; 25 synced clips (11 / 25 collected)</strong><p class="muted" style="margin:4px 0 0;font-size:11.5px;">Ghost visual comparison and P1-normalized pelvis measurements remain active immediately.</p>`
+      : `<span class="kicker">Local Pose &times; BLP Discovery (n=246 7I)</span><strong style="color:var(--white);">Pelvis Drift &gt; 1.8&Prime; at P6 &rarr; Flipping Floater (r = 0.78)</strong><p class="muted" style="margin:4px 0 0;font-size:11.5px;">When your trail hip moves toward the ball by P6, AoA shallows +2.2° and shaft lean drops −3.1°.</p>`;
+
+    const useOptical = state.kidsAsleep || state.silentCam;
+    $('rev-sync-badge').textContent = useOptical ? 'Optical Ball-ROI Departure Sync (Silent)' : 'Audio + Optical Impact Sync';
+    $('rev-sync-badge').className = `badge ${useOptical ? 'badge-yellow' : 'badge-cyan'}`;
+  }
+
+  function stopGhostRaf() {
+    state.review.playing = false;
+    cancelAnimationFrame(state.review.rafId);
+    if ($('rev-g-play')) $('rev-g-play').innerHTML = '&#9654; Play';
+  }
+
+  function tickGhost(ts) {
+    if (!state.review.playing || state.mode !== 'review' || state.review.sub !== 'ghost') {
+      stopGhostRaf();
+      return;
+    }
+    if (!state.review.lastTs) state.review.lastTs = ts;
+    const dt = (ts - state.review.lastTs) / 1000;
+    state.review.lastTs = ts;
+    state.review.pct = (state.review.pct + dt * 42 * state.review.playSpeed) % 100;
+    $('rev-g-scrub').value = String(Math.round(state.review.pct));
+    drawGhostCanvas();
+    state.review.rafId = requestAnimationFrame(tickGhost);
+  }
+
+  // Draggable On-Canvas Split Wipe Handle
+  const gCanvas = $('rev-ghost-canvas');
+  function updateWipeFromPointer(ev) {
+    const r = gCanvas.getBoundingClientRect();
+    const frac = clamp((ev.clientX - r.left) / r.width, 0.08, 1.0);
+    state.review.wipe = frac;
+    $('rev-g-wipe').value = String(Math.round(frac * 100));
+    $('rev-g-wipe-lbl').textContent = frac >= 0.99 ? 'Full Blend' : `${Math.round(frac * 100)}%`;
+    drawGhostCanvas();
+  }
+  gCanvas.addEventListener('pointerdown', (ev) => {
+    state.review.draggingWipe = true;
+    gCanvas.setPointerCapture(ev.pointerId);
+    updateWipeFromPointer(ev);
+  });
+  gCanvas.addEventListener('pointermove', (ev) => { if (state.review.draggingWipe) updateWipeFromPointer(ev); });
+  gCanvas.addEventListener('pointerup', () => { state.review.draggingWipe = false; });
+
+  $('rev-g-play').addEventListener('click', () => {
+    if (state.review.playing) stopGhostRaf();
+    else {
+      state.review.playing = true;
+      state.review.lastTs = 0;
+      $('rev-g-play').innerHTML = '&#10074;&#10074; Pause';
+      state.review.rafId = requestAnimationFrame(tickGhost);
+    }
+  });
+  $('rev-g-scrub').addEventListener('input', (e) => { state.review.pct = Number(e.target.value); drawGhostCanvas(); });
+  $('rev-g-opacity').addEventListener('input', (e) => {
+    state.review.opacity = Number(e.target.value) / 100;
+    $('rev-g-op-lbl').textContent = `${e.target.value}%`;
+    drawGhostCanvas();
+  });
+  $('rev-g-wipe').addEventListener('input', (e) => {
+    state.review.wipe = Number(e.target.value) / 100;
+    $('rev-g-wipe-lbl').textContent = state.review.wipe >= 0.99 ? 'Full Blend' : `${e.target.value}%`;
+    drawGhostCanvas();
+  });
+  document.querySelectorAll('#rev-cam-seg button').forEach((b) => b.addEventListener('click', () => {
+    state.review.cam = b.dataset.cam;
+    document.querySelectorAll('#rev-cam-seg button').forEach((x) => x.classList.toggle('active', x.dataset.cam === state.review.cam));
+    drawGhostCanvas();
+  }));
+  document.querySelectorAll('#rev-ghost-seg button').forEach((b) => b.addEventListener('click', () => {
+    state.review.ghost = b.dataset.g;
+    document.querySelectorAll('#rev-ghost-seg button').forEach((x) => x.classList.toggle('active', x.dataset.g === state.review.ghost));
+    drawGhostCanvas();
+  }));
+  document.querySelectorAll('#rev-hand-seg button').forEach((b) => b.addEventListener('click', () => {
+    state.handedness = b.dataset.h;
+    $('set-hand').value = state.handedness;
+    renderReview();
+    renderPractice();
+  }));
+  document.querySelectorAll('#rev-g-speed-seg button').forEach((b) => b.addEventListener('click', () => {
+    state.review.playSpeed = Number(b.dataset.s);
+    document.querySelectorAll('#rev-g-speed-seg button').forEach((x) => x.classList.toggle('active', Number(x.dataset.s) === state.review.playSpeed));
+  }));
+  document.querySelectorAll('#rev-g-ticks .nle-tick').forEach((b) => b.addEventListener('click', () => {
+    stopGhostRaf();
+    state.review.pct = Number(b.dataset.p);
+    $('rev-g-scrub').value = String(state.review.pct);
+    drawGhostCanvas();
+  }));
+  $('rev-silent-cam').addEventListener('change', (e) => {
+    state.silentCam = e.target.checked;
+    $('set-silent-cam').checked = state.silentCam;
+    drawGhostCanvas();
+  });
+
+  function renderHighlights() {
+    $('rev-highlights-grid').innerHTML = state.highlights.map((h) => `
+      <div class="sub-well">
+        <div class="flex-row" style="justify-content:space-between;">
+          <span class="badge badge-${h.sev}">${esc(h.badge)}</span>
+          <span class="mono dim" style="font-size:10px;">1080p MP4</span>
+        </div>
+        <h3 style="margin:8px 0 4px;">${esc(h.title)}</h3>
+        <div class="mono muted" style="font-size:10.5px;">${esc(h.file)}</div>
+        <p class="muted" style="font-size:11.5px;margin:6px 0 0;">${esc(h.meta)}</p>
+      </div>`).join('');
+  }
+
+  function renderReview() {
+    document.querySelectorAll('#rev-sub-seg button').forEach((b) => b.classList.toggle('active', b.dataset.sub === state.review.sub));
+    document.querySelectorAll('#rev-hand-seg button').forEach((b) => b.classList.toggle('active', b.dataset.h === state.handedness));
+    $('rev-silent-cam').checked = state.silentCam;
+
+    $('rev-view-dna').style.display = state.review.sub === 'dna' ? 'block' : 'none';
+    $('rev-view-ghost').style.display = state.review.sub === 'ghost' ? 'block' : 'none';
+    $('rev-view-highlights').style.display = state.review.sub === 'highlights' ? 'block' : 'none';
+    if (state.review.sub !== 'ghost') stopGhostRaf();
+    if (state.review.sub === 'dna') renderDNA();
+    if (state.review.sub === 'ghost') drawGhostCanvas();
+    if (state.review.sub === 'highlights') renderHighlights();
+  }
+
+  // Self-Contained Coach Packet Export (with inline SVG Pareto Chart!)
+  $('rev-export-packet').addEventListener('click', () => {
+    const svgClone = $('rev-pareto-svg').innerHTML;
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><title>ShotLab Coach Handoff Packet</title>
+<style>body{font-family:-apple-system,sans-serif;background:#04060a;color:#e2e8f0;max-width:880px;margin:28px auto;padding:0 18px;line-height:1.5}
+.box{background:#0b101a;border:1px solid rgba(255,255,255,0.1);border-radius:12px;padding:16px;margin:14px 0}h1,h2{color:#f8fafc}
+table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid rgba(255,255,255,0.1);text-align:left}</style></head><body>
+<h1>ShotLab Coach Handoff Packet (30-Day Review &middot; 1,428 Swings)</h1>
+<div class="box"><h2>30-Day Outcome Proof</h2><p>Driver Big-Miss: <strong>22% &rarr; 9%</strong> &middot; 7I Center Strike: <strong>54% &rarr; 71%</strong> &middot; Est. Index: <strong>7.8 &rarr; 5.9</strong></p></div>
+<div class="box"><h2>Cruise Speed Discovery (${esc(DNA_DATA[state.review.club].label)})</h2>${svgClone}</div>
+<div class="box"><h2>Biomechanics &times; BLP Discovery</h2><p>Early Extension (Pelvis Drift &gt; 1.8&Prime; at P6) correlates with Flipping Floater (<strong>r = 0.78</strong>, +2.2&deg; AoA shallowing).</p></div>
+<div class="box"><h2>Feel Retention Audit</h2><table><tr><th>Feel</th><th>Baseline</th><th>Active</th><th>3-Session Retention</th></tr>
+<tr><td>Lead Wrist Flat Through Impact</td><td>&minus;0.11 SG</td><td>+0.21 SG</td><td><strong>+0.18 SG (Stuck)</strong></td></tr>
+<tr><td>98 mph Smooth Transition</td><td>&minus;0.22 SG</td><td>+0.16 SG</td><td><strong>+0.14 SG (Stuck)</strong></td></tr></table></div></body></html>`;
+    const blob = new Blob([html], { type: 'text/html' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'ShotLab_v4_Coach_Packet.html';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    showToast('Downloaded ShotLab_v4_Coach_Packet.html!');
+  });
+
+  // ==================== MODE 4: MY BAG & WEDGE CLOCK MATRIX ====================
+  const CLOCKS = [
+    { arm: '7:30', pct: '62% CS' },
+    { arm: '9:00', pct: '74% CS' },
+    { arm: '10:30', pct: '86% CS' },
+    { arm: 'Full', pct: '98% CS' },
+  ];
+  const WEDGE_MATRIX = [
+    { club: 'PW (46°)', cells: [
+      { carry: 72, roll: 5, spin: 6900, desc: 44, w80: 9, n: 14 },
+      { carry: 94, roll: 4, spin: 8100, desc: 47, w80: 11, n: 22 },
+      { carry: 112, roll: 3, spin: 8900, desc: 49, w80: 12, n: 19 },
+      { carry: 127, roll: 2, spin: 9450, desc: 50, w80: 15, n: 41 },
+    ]},
+    { club: 'GW (50°)', cells: [
+      { carry: 62, roll: 4, spin: 7300, desc: 45, w80: 8, n: 16 },
+      { carry: 82, roll: 3, spin: 8600, desc: 48, w80: 9, n: 28 },
+      { carry: 99, roll: 2, spin: 9400, desc: 50, w80: 11, n: 21 },
+      { carry: 114, roll: 1, spin: 9900, desc: 51, w80: 13, n: 35 },
+    ]},
+    { club: 'SW (54°)', cells: [
+      { carry: 51, roll: 3, spin: 7600, desc: 46, w80: 7, n: 19 },
+      { carry: 70, roll: 2, spin: 9050, desc: 49, w80: 8, n: 33 },
+      { carry: 86, roll: 1, spin: 9850, desc: 52, w80: 10, n: 24 },
+      { carry: 100, roll: 0, spin: 10300, desc: 53, w80: 12, n: 29 },
+    ]},
+    { club: 'LW (58°)', cells: [
+      { carry: 38, roll: 2, spin: 7400, desc: 47, w80: 6, n: 21 },
+      { carry: 56, roll: 1, spin: 9200, desc: 51, w80: 7, n: 29 },
+      { carry: 72, roll: 0, spin: 10150, desc: 54, w80: 9, n: 18 },
+      { carry: 84, roll: -1, spin: 10700, desc: 55, w80: 11, n: 25 },
+    ]},
+  ];
+
+  function renderBag() {
+    const b = state.bag;
+    $('bag-wind').value = b.wind;
+    $('bag-xwind').value = b.xwind;
+    $('bag-temp').value = b.temp;
+    $('bag-alt').value = b.alt;
+    $('bag-lie').value = b.lie;
+    $('bag-shape').value = b.shape;
+
+    $('bag-wind-val').textContent = b.wind === 0 ? 'Calm (0 mph)' : b.wind < 0 ? `${Math.abs(b.wind)} mph Hurting` : `${b.wind} mph Helping`;
+    $('bag-xwind-val').textContent = b.xwind === 0 ? 'None' : b.xwind > 0 ? `${b.xwind} mph L→R` : `${Math.abs(b.xwind)} mph R→L`;
+    $('bag-temp-val').textContent = `${b.temp}°F`;
+    $('bag-alt-val').textContent = `${b.alt.toLocaleString()} ft`;
+
+    // Wind Vector Compass SVG
+    const wx = b.xwind, wy = -b.wind; // up = helping
+    const wMag = Math.hypot(wx, wy);
+    const wAngle = wMag > 0.5 ? Math.atan2(wx, -wy) * 180 / Math.PI : 0;
+    const len = clamp(wMag * 0.85, 0, 22);
+    $('bag-compass-svg').innerHTML = `
+      <svg width="62" height="62" viewBox="0 0 62 62">
+        <circle cx="31" cy="31" r="27" fill="#05080e" stroke="rgba(255,255,255,0.16)" />
+        <text x="31" y="11" text-anchor="middle" fill="#5c6d87" font-size="7" font-family="monospace">TGT</text>
+        ${wMag > 0.5
+          ? `<g transform="rotate(${wAngle.toFixed(1)} 31 31)">
+              <line x1="31" y1="${31 + len * 0.5}" x2="31" y2="${31 - len * 0.8}" stroke="#00e5ff" stroke-width="2.4" stroke-linecap="round" />
+              <polygon points="31,${31 - len * 0.8 - 5} 27,${31 - len * 0.8 + 2} 35,${31 - len * 0.8 + 2}" fill="#00e5ff" />
+            </g>`
+          : '<circle cx="31" cy="31" r="3.5" fill="#10f296" />'}
+      </svg>`;
+
+    const results = BAG_CLUBS.map((c) => ({ base: c, adj: computeClubConditions(c, b) }));
+    const iron7 = results.find((r) => r.base.club === '7I').adj;
+    $('bag-summary-pill').textContent = b.wind === 0 && b.xwind === 0 && b.alt === 0 && b.temp === 70 && b.lie === 'mat'
+      ? 'Stock Sim Conditions'
+      : `7I: ${iron7.carry}y Carry / ${iron7.total}y Total (${iron7.diffCarry >= 0 ? '+' : ''}${iron7.diffCarry}y)`;
+
+    $('bag-bars').innerHTML = results.map(({ base, adj }) => {
+      if (adj.teeOnly) {
+        return `
+          <div style="display:grid;grid-template-columns:46px 1fr 145px 90px;gap:10px;align-items:center;margin-bottom:8px;opacity:0.55;">
+            <strong class="mono">DR</strong>
+            <div style="height:14px;background:rgba(255,255,255,0.05);border-radius:4px;display:flex;align-items:center;padding-left:8px;font-size:10.5px;">Tee Only (N/A from 2&Prime; Rough)</div>
+            <div class="mono" style="text-align:right;">252y / 270y</div>
+            <div class="mono dim" style="text-align:right;">Tee Only</div>
+          </div>`;
+      }
+      const maxBar = 305;
+      const carryPct = clamp((adj.carry / maxBar) * 100, 2, 98);
+      const rollPct = clamp((Math.max(0, adj.roll) / maxBar) * 100, 0, 100 - carryPct);
+      const stockMarkPct = clamp((base.carry / maxBar) * 100, 2, 98);
+      const col = adj.flier ? '#ffb800' : adj.diffCarry > 2 ? '#10f296' : adj.diffCarry < -2 ? '#ff3b5c' : '#00e5ff';
+
+      return `
+        <div style="display:grid;grid-template-columns:46px 1fr 145px 90px;gap:10px;align-items:center;margin-bottom:8px;">
+          <strong class="mono" style="color:var(--cyan);">${esc(base.club)}</strong>
+          <div style="position:relative;height:14px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden;">
+            <div style="position:absolute;top:2px;bottom:2px;left:0;width:${carryPct.toFixed(1)}%;background:${col};border-radius:3px 0 0 3px;"></div>
+            <div style="position:absolute;top:2px;bottom:2px;left:${carryPct.toFixed(1)}%;width:${rollPct.toFixed(1)}%;background:repeating-linear-gradient(45deg,${col}66,${col}66 3px,transparent 3px,transparent 6px);border-radius:0 3px 3px 0;"></div>
+            <div title="Stock carry ${base.carry}y" style="position:absolute;top:0;bottom:0;left:${stockMarkPct.toFixed(1)}%;width:2px;background:#f8fafc;opacity:0.75;"></div>
+          </div>
+          <div class="mono" style="font-size:11.5px;text-align:right;">
+            <strong>${adj.carry}y</strong><span class="dim">/${adj.total}y</span>
+            ${adj.flier ? '<span class="badge badge-yellow" style="padding:1px 4px;font-size:9px;margin-left:3px;">FLIER</span>' : `<span style="color:${col};font-size:10.5px;">(${adj.diffCarry >= 0 ? '+' : ''}${adj.diffCarry})</span>`}
+          </div>
+          <div class="mono muted" style="font-size:10.5px;text-align:right;">
+            ${adj.aimOff === 0 ? 'Aim 0y' : `Aim ${Math.abs(adj.aimOff)}y ${adj.aimOff > 0 ? 'L' : 'R'}`}
+          </div>
+        </div>`;
+    }).join('');
+
+    // Wedge Clock Matrix
+    let wHtml = `<div class="wm-head">Wedge</div>` + CLOCKS.map((c) => `<div class="wm-head">${c.arm}<div class="dim" style="font-size:9px;">${c.pct}</div></div>`).join('');
+    WEDGE_MATRIX.forEach((row, r) => {
+      wHtml += `<div class="wm-club">${esc(row.club.split(' ')[0])}</div>`;
+      row.cells.forEach((cell, c) => {
+        const active = b.selWedge.r === r && b.selWedge.c === c ? 'selected' : '';
+        wHtml += `<div class="wm-cell ${active}" data-r="${r}" data-c="${c}">
+          <div class="wm-yds">${cell.carry}<span style="font-size:11px;color:var(--slate);">y</span></div>
+          <div class="dim" style="font-size:10px;">${(cell.spin / 1000).toFixed(1)}k &middot; n=${cell.n}</div>
+        </div>`;
+      });
+    });
+    $('bag-wedge-matrix').innerHTML = wHtml;
+    $('bag-wedge-matrix').querySelectorAll('.wm-cell').forEach((el) => {
+      el.addEventListener('click', () => {
+        state.bag.selWedge = { r: Number(el.dataset.r), c: Number(el.dataset.c) };
+        renderBag();
+      });
+    });
+
+    const wRow = WEDGE_MATRIX[b.selWedge.r], wCell = wRow.cells[b.selWedge.c], wClk = CLOCKS[b.selWedge.c];
+    $('bag-wedge-detail').innerHTML = `
+      <span class="kicker">Bucketed by ${wClk.pct} &middot; Smash &ge; 1.15 Filtered</span>
+      <h3 style="margin:3px 0 10px;">${esc(wRow.club)} &middot; ${wClk.arm} Arm</h3>
+      <div class="grid-2">
+        <div class="sub-well"><span class="kicker">Avg Carry</span><strong class="mono" style="font-size:18px;color:var(--emerald);">${wCell.carry} yds</strong></div>
+        <div class="sub-well"><span class="kicker">Roll / Spin-Back</span><strong class="mono" style="font-size:18px;color:var(--white);">${wCell.roll >= 0 ? '+' + wCell.roll : wCell.roll} yds</strong></div>
+        <div class="sub-well"><span class="kicker">Backspin</span><strong class="mono" style="font-size:16px;color:var(--white);">${wCell.spin.toLocaleString()} rpm</strong></div>
+        <div class="sub-well"><span class="kicker">Descent / 80% Width</span><strong class="mono" style="font-size:16px;color:var(--white);">${wCell.desc}&deg; / &plusmn;${wCell.w80}y</strong></div>
+      </div>`;
+
+    const lockedCount = state.cal.clubs.filter((c) => c.n >= 5).length;
+    const conf = Math.min(97, Math.round(74 + (lockedCount / state.cal.clubs.length) * 23));
+    $('bag-cal-btn').textContent = `Bag Cal: ${lockedCount}/14 Locked (${conf}% Auto-Switch)`;
+  }
+
+  ['bag-wind', 'bag-xwind', 'bag-temp', 'bag-alt', 'bag-lie', 'bag-shape'].forEach((id) => {
+    $(id).addEventListener('input', () => {
+      state.bag.wind = Number($('bag-wind').value);
+      state.bag.xwind = Number($('bag-xwind').value);
+      state.bag.temp = Number($('bag-temp').value);
+      state.bag.alt = Number($('bag-alt').value);
+      state.bag.lie = $('bag-lie').value;
+      state.bag.shape = $('bag-shape').value;
+      renderBag();
+    });
+  });
+
+  document.querySelectorAll('#bag-presets button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const p = btn.dataset.preset;
+      if (p === 'calm') Object.assign(state.bag, { wind: 0, xwind: 0, temp: 70, alt: 0, lie: 'mat' });
+      if (p === 'links') Object.assign(state.bag, { wind: -18, xwind: 14, temp: 52, alt: 0, lie: 'firm' });
+      if (p === 'denver') Object.assign(state.bag, { wind: 4, xwind: 0, temp: 84, alt: 5250, lie: 'firm' });
+      if (p === 'soft') Object.assign(state.bag, { wind: -5, xwind: 6, temp: 62, alt: 0, lie: 'soft' });
+      if (p === 'rough') Object.assign(state.bag, { wind: -6, xwind: 0, temp: 68, alt: 0, lie: 'rough' });
+      renderBag();
+    });
+  });
+
+  $('bag-cal-btn').addEventListener('click', () => openModal('dlg-cal'));
+  $('bag-open-card').addEventListener('click', () => openModal('dlg-wedge'));
+
+  // ==================== MODALS (OBS, CAL, SETTINGS, WEDGE PRINT) ====================
+  function renderObsModal() {
+    $('obs-challenge-widget').style.display = $('obs-tog-chal').checked ? 'block' : 'none';
+    $('obs-verdict-widget').style.display = $('obs-tog-verdict').checked ? 'flex' : 'none';
+
+    const pr = state.pressure;
+    const res = state.combine.results;
+    const avgPts = res.length ? Math.round(res.reduce((a, r) => a + r.pts, 0) / res.length) : 84;
+    const pips = [1, 2, 3, 4, 5].map((n) =>
+      `<span style="width:18px;height:18px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;border:2px solid ${n <= pr.streak ? '#10f296' : 'rgba(255,255,255,0.28)'};background:${n <= pr.streak ? 'rgba(16,242,150,0.24)' : 'transparent'};color:${n <= pr.streak ? '#10f296' : '#8b9bb4'};">${n <= pr.streak ? '✓' : n}</span>`
+    ).join('');
+    $('obs-challenge-widget').innerHTML = `
+      <div class="flex-row" style="justify-content:space-between;margin-bottom:6px;">
+        <span class="kicker" style="color:var(--cyan);">SHOTLAB CHALLENGE &middot; LIVE</span>
+        <span class="mono" style="font-size:11px;color:var(--amber);">COMBINE ${avgPts}</span>
+      </div>
+      <div class="flex-row" style="justify-content:space-between;">
+        <strong>MAKE 5 IN A ROW (${pr.streak}/5)</strong>
+        <div class="flex-row" style="gap:4px;">${pips}</div>
+      </div>`;
+
+    const s = SHOTS[state.practice.shotIdx];
+    $('obs-verdict-widget').innerHTML = `
+      <div>
+        <div style="font-weight:800;font-size:14px;color:var(--white);">${esc(s.club)} &middot; ${esc(s.shape)} &middot; <span style="color:var(--emerald);">${s.carry}y</span> &middot; ${s.sg >= 0 ? '+' : ''}${s.sg.toFixed(2)} SG</div>
+        <div class="muted" style="font-size:11px;">${esc(s.verdict)}</div>
+      </div>
+      <span class="badge badge-${s.sev}">Score ${s.score}</span>`;
+  }
+  $('obs-tog-chal').addEventListener('change', renderObsModal);
+  $('obs-tog-verdict').addEventListener('change', renderObsModal);
+  $('obs-sim-make').addEventListener('click', () => handlePressureAction(true));
+  $('obs-sim-miss').addEventListener('click', () => handlePressureAction(false));
+
+  function renderCalModal() {
+    const lockedCount = state.cal.clubs.filter((c) => c.n >= 5).length;
+    const conf = Math.min(97, Math.round(74 + (lockedCount / state.cal.clubs.length) * 23));
+    $('cal-readiness-pill').textContent = `${conf}% (${lockedCount}/14 Locked)`;
+    $('cal-foam-warn').style.display = state.kidsAsleep ? 'block' : 'none';
+    $('cal-sim-shot').disabled = state.kidsAsleep;
+
+    $('cal-heatmap').innerHTML = state.cal.clubs.map((c, i) => `
+      <button type="button" class="cal-tile ${c.n >= 5 ? 'locked' : c.n > 0 ? 'learning' : ''} ${i === state.cal.selIdx ? 'selected' : ''}" data-ci="${i}">
+        <div class="mono" style="font-weight:800;color:var(--white);">${c.club}</div>
+        <div class="muted" style="font-size:11px;">${c.n}/5 ${c.n >= 5 ? '&#10003;' : ''}</div>
+      </button>`).join('');
+
+    $('cal-heatmap').querySelectorAll('[data-ci]').forEach((el) => {
+      el.addEventListener('click', () => { state.cal.selIdx = Number(el.dataset.ci); renderCalModal(); });
+    });
+
+    const cur = state.cal.clubs[state.cal.selIdx];
+    const rem = Math.max(0, 5 - cur.n);
+    $('cal-wiz-title').textContent = `${cur.club} — ${rem === 0 ? 'Calibrated & Locked!' : `Hit ${rem} more confirmed ball${rem > 1 ? 's' : ''}`}`;
+    $('cal-wiz-desc').textContent = rem === 0
+      ? `Posterior Gaussian locked (${cur.n} shots). Select another club above.`
+      : 'Updates Welford club distribution in swings.sqlite for 95%+ GSPro auto-switching.';
+    $('cal-wiz-dots').innerHTML = [1, 2, 3, 4, 5].map((k) =>
+      `<span style="width:12px;height:12px;border-radius:50%;display:inline-block;background:${k <= cur.n ? '#10f296' : 'rgba(255,255,255,0.16)'};"></span>`
+    ).join('');
+  }
+
+  $('cal-sim-shot').addEventListener('click', () => {
+    if (state.kidsAsleep) return;
+    const cur = state.cal.clubs[state.cal.selIdx];
+    cur.n += 1;
+    if (cur.n === 5) {
+      showToast(`✓ ${cur.club} locked into personal bag calibration!`);
+      const next = state.cal.clubs.findIndex((c) => c.n < 5);
+      if (next >= 0) state.cal.selIdx = next;
+    }
+    renderCalModal();
+    renderBag();
+  });
+
+  function renderSettingsModal() {
+    $('set-mat-type').value = state.matType;
+    $('set-hand').value = state.handedness;
+    $('set-audio-en').checked = state.audioEnabled;
+    $('set-silent-cam').checked = state.silentCam;
+    $('set-log').innerHTML = state.logLines.map((l) => `<div>${esc(l)}</div>`).join('');
+  }
+
+  $('set-mat-type').addEventListener('change', (e) => { state.matType = e.target.value; renderPractice(); });
+  $('set-hand').addEventListener('change', (e) => { state.handedness = e.target.value; renderPractice(); renderReview(); });
+  $('set-audio-en').addEventListener('change', (e) => { state.audioEnabled = e.target.checked; });
+  $('set-silent-cam').addEventListener('change', (e) => { state.silentCam = e.target.checked; renderReview(); });
+
+  document.querySelectorAll('#dlg-settings [data-cmd]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      if (btn.dataset.action === 'toggle-foam') toggleKidsAsleep('Voice Trigger');
+      const ts = new Date().toLocaleTimeString();
+      state.logLines.unshift(`[${ts}] ${btn.dataset.cmd}`);
+      state.logLines = state.logLines.slice(0, 4); // Bounded array log!
+      renderSettingsModal();
+      showToast(btn.dataset.cmd);
+    });
+  });
+
+  function renderWedgePrintModal() {
+    $('wedge-print-body').innerHTML = `
+      <table>
+        <thead><tr><th>Wedge</th>${CLOCKS.map((c) => `<th class="num">${c.arm} (${c.pct})</th>`).join('')}</tr></thead>
+        <tbody>
+          ${WEDGE_MATRIX.map((row) => `<tr><td><strong>${esc(row.club)}</strong></td>${row.cells.map((c) => `<td class="num"><strong>${c.carry}y</strong> <span class="muted">(${c.roll >= 0 ? '+' + c.roll : c.roll}y)</span></td>`).join('')}</tr>`).join('')}
+        </tbody>
+      </table>
+      <p class="muted mt-12" style="font-size:11.5px;">Filtered by % Full Club Speed &amp; Smash &ge; 1.15. Print size fits a 3&Prime;&times;5&Prime; laminated pocket card.</p>`;
+  }
+  $('wedge-print-btn').addEventListener('click', () => window.print());
+
+  // ==================== INITIALIZATION ====================
+  syncGlobalChrome();
+  renderPlan();
+  renderPractice();
+  renderReview();
+  renderBag();
+  renderObsModal();
+})();
+</script>
+</body>
+</html>
