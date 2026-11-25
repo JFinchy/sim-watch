@@ -785,16 +785,34 @@ test('Kids-Asleep mode grades only club delivery + Start Line Gate (±1.5°), ma
 // 5. Drills Hub Bridge (drillsBridge.js)
 // ============================================================================
 
-test('Drills Hub Bridge loads repo drills (53) + profile safely via vm and handles missing dirs', () => {
+test('Drills Hub Bridge loads repo drills (64 adult + 8 kids) + profile safely via vm and handles missing dirs', () => {
   const repoRoot = path.resolve(__dirname, '..', '..');
   const hub = loadDrillsHubData(repoRoot);
 
   assert.equal(hub.loaded, true);
-  assert.equal(hub.drills.length, 53, 'Expected all 53 drills from drills/drills_data.js');
+  assert.equal(hub.drills.length, 72, 'Expected all 72 drills (64 adult + 8 kids) from drills/drills_data.js');
+  const adultDrills = hub.drills.filter((d) => !d.isKidsZone);
+  const kidsDrills = hub.drills.filter((d) => d.isKidsZone);
+  assert.equal(adultDrills.length, 64);
+  assert.equal(kidsDrills.length, 8);
   assert.deepEqual(Array.from(hub.modes, (m) => m.id), ['real', 'almost', 'sore']);
   assert.ok(Array.isArray(hub.feels) && hub.feels.length >= 1, 'Should load feels from player_data or player_data.example');
+  const mindDrills = hub.drills.filter((d) => d.section === 'Mind & Sensory Warmup');
+  assert.equal(mindDrills.length, 7, 'Expected all 7 Mind & Sensory Warmup drills forwarded');
+  const sgDrills = hub.drills.filter((d) => d.section === 'Scoring Wedges & Start Line');
+  assert.equal(sgDrills.length, 15, 'Expected 15 Scoring Wedges & Start Line drills (11 existing + 4 new)');
+  for (const id of ['chip-towel-behind-ball-gate', 'chip-release-1-2-3-ladder', 'wedge-clock-matrix-calibration', 'putt-startline-speed-ladder']) {
+    assert.ok(sgDrills.some((d) => d.id === id), `Expected ${id} in Scoring Wedges & Start Line`);
+  }
   for (const d of hub.drills) {
     assert.ok(d.id && d.title && Array.isArray(d.modes));
+    assert.ok(typeof d.section === 'string' && typeof d.swingPhase === 'string' && Array.isArray(d.instructions));
+  }
+
+  // Adult fault recommendations must never return Kids Zone drills
+  for (const faultKey of Object.keys(FAULT_TO_DRILL_IDS)) {
+    const recs = recommendDrillsForFault(faultKey, hub.drills, { practiceMode: 'almost' });
+    assert.equal(recs.some((r) => r.isKidsZone), false, `Fault ${faultKey} should never recommend a kids drill`);
   }
 
   // Fallback when drills folder does not exist

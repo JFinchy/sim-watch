@@ -39,6 +39,13 @@ const { computeShotStrokesGained, computeDispersionStats } = require('./strokesG
 const { SwingDatabase, deriveSiblingClips } = require('./swingDb');
 const { loadDrillsHubData, recommendDrillsForFault, detectFaultStreak } = require('./drillsBridge');
 const { referenceFlights, REFERENCE_LINES } = require('./benchmarks');
+const {
+  isKidsZoneRawShot,
+  analyzeKidsShot,
+  sanitizeAdultDrillId,
+  shouldPushKidsContextOnStatus,
+} = require('./kids');
+const shortGame = require('./shortGame');
 
 function toNum(v) {
   if (v === null || v === undefined || v === '' || typeof v === 'boolean') return null;
@@ -762,4 +769,9 @@ module.exports = {
   detectFaultStreak,
   referenceFlights,
   REFERENCE_LINES,
+  isKidsZoneRawShot,
+  analyzeKidsShot,
+  sanitizeAdultDrillId,
+  shouldPushKidsContextOnStatus,
+  ...shortGame,
 };

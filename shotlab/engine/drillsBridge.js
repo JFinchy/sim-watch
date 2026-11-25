@@ -96,6 +96,19 @@ function loadDrillsHubData(repoRoot) {
     ? drillsData.drills.map((d) => ({
         id: d.id,
         title: d.title,
+        section: d.section || '',
+        audience: d.audience || 'adult',
+        isKidsZone: Boolean(
+          d.audience === 'kids' ||
+          String(d.id || '').startsWith('kids-') ||
+          String(d.section || '').toLowerCase().includes('kids zone')
+        ),
+        swingPhase: d.swingPhase || '',
+        duration: d.duration || '',
+        reps: d.reps || '',
+        pacing: d.pacing || 'either',
+        days: Array.isArray(d.days) ? d.days : [],
+        modePlans: d.modePlans || null,
         focus: d.focus || '',
         keyFeel: d.keyFeel || '',
         faultTags: Array.isArray(d.faultTags) ? d.faultTags : [],
@@ -104,7 +117,7 @@ function loadDrillsHubData(repoRoot) {
         clubs: d.clubs || 'all',
         video: d.video || null,
         why: d.why || '',
-        instructions: Array.isArray(d.instructions) ? d.instructions.slice(0, 4) : [],
+        instructions: Array.isArray(d.instructions) ? d.instructions : [],
       }))
     : [];
 
@@ -194,7 +207,7 @@ function recommendDrillsForFault(faultKey, drills = [], { practiceMode = 'real',
   const preferredIds = (typeof faultKey === 'string' && Object.hasOwn(FAULT_TO_DRILL_IDS, faultKey))
     ? FAULT_TO_DRILL_IDS[faultKey]
     : [];
-  const byId = new Map(drills.map((d) => [d.id, d]));
+  const byId = new Map(drills.filter((d) => d && !d.isKidsZone).map((d) => [d.id, d]));
 
   let picked = [];
   for (const id of preferredIds) {
