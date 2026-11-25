@@ -431,6 +431,71 @@
     }).join('');
   }
 
+  function computeFlowCorrelation(flowLogs = []) {
+    const logs = Array.isArray(flowLogs) ? flowLogs.filter((x) => x && typeof x === 'object') : [];
+    const summarize = (arr) => {
+      const scored = arr.filter((x) => typeof x.avgScore === 'number' && Number.isFinite(x.avgScore));
+      const sged = arr.filter((x) => typeof x.avgSg === 'number' && Number.isFinite(x.avgSg));
+      const flows = arr.filter((x) => typeof x.flowRating === 'number' && Number.isFinite(x.flowRating));
+      const procs = arr.filter((x) => typeof x.processRating === 'number' && Number.isFinite(x.processRating));
+      const mean = (list, key, digits = 1) => {
+        if (!list.length) return null;
+        const avg = list.reduce((a, b) => a + b[key], 0) / list.length;
+        return digits === 0 ? Math.round(avg) : Math.round(avg * (10 ** digits)) / (10 ** digits);
+      };
+      return {
+        n: arr.length,
+        avgScore: mean(scored, 'avgScore', 0),
+        avgSg: mean(sged, 'avgSg', 2),
+        avgFlow: mean(flows, 'flowRating', 1),
+        avgProcess: mean(procs, 'processRating', 1),
+      };
+    };
+
+    const warmedUp = summarize(logs.filter((x) => x.warmupDone === true));
+    const cold = summarize(logs.filter((x) => x.warmupDone !== true));
+    const highFlow = summarize(logs.filter((x) => typeof x.flowRating === 'number' && Number.isFinite(x.flowRating) && x.flowRating >= 4));
+    const lowFlow = summarize(logs.filter((x) => typeof x.flowRating === 'number' && Number.isFinite(x.flowRating) && x.flowRating >= 1 && x.flowRating <= 3));
+    return { total: logs.length, warmedUp, cold, highFlow, lowFlow };
+  }
+
+  function renderFlowCorrelationHtml(flowLogs = []) {
+    const logs = Array.isArray(flowLogs) ? flowLogs.filter((x) => x && typeof x === 'object') : [];
+    const c = computeFlowCorrelation(logs);
+    if (!c.total) {
+      return `
+        <div class="sub-well muted" style="font-size:12px;">
+          No Flow / Mind-State check-ins logged yet. Click <strong>🧠 Log Flow State</strong> (or open 60s Check-In in 01 Plan) to track how your warmup &amp; flow state move Score and Strokes Gained.
+        </div>`;
+    }
+    const fmtNum = (v, suffix = '', digits = 1) => (typeof v === 'number' && Number.isFinite(v) ? `${digits === 0 ? Math.round(v) : v.toFixed(digits)}${suffix}` : '—');
+    const fmtSgVal = (v) => (typeof v === 'number' && Number.isFinite(v) ? `${v >= 0 ? '+' : ''}${v.toFixed(2)}` : '—');
+    const sgCol = (v) => (typeof v !== 'number' ? 'var(--text-dim)' : v >= 0.04 ? 'var(--green)' : v <= -0.1 ? 'var(--red-hi)' : 'var(--yellow)');
+    const card = (title, stat, accent) => `
+      <div class="sub-well" style="border-left:3px solid ${accent};">
+        <span class="kicker">${esc(title)}</span>
+        <div class="flex-row" style="justify-content:space-between;margin-top:4px;">
+          <strong class="mono" style="font-size:18px;color:#fff;">Sc ${esc(fmtNum(stat.avgScore, '', 0))}</strong>
+          <span class="mono" style="font-weight:800;color:${sgCol(stat.avgSg)};">${esc(fmtSgVal(stat.avgSg))} SG</span>
+        </div>
+        <div class="muted mono" style="font-size:10.5px;margin-top:4px;">
+          ${esc(stat.n)} session${stat.n === 1 ? '' : 's'} &middot; Flow ${esc(fmtNum(stat.avgFlow, '/5'))} &middot; Process ${esc(fmtNum(stat.avgProcess, '/5'))}
+        </div>
+      </div>`;
+    const recent = logs.slice(0, 6).map((l) => `
+      <span class="badge ${l.flowRating >= 4 ? 'badge-green' : l.warmupDone ? 'badge-cyan' : ''}">
+        ${esc(l.date)} &middot; ${l.warmupDone ? 'Primed' : 'Cold'} &middot; Flow ${esc(l.flowRating)}/5${l.avgScore != null ? ` &middot; Sc ${esc(l.avgScore)}` : ''}
+      </span>`).join('');
+    return `
+      <div class="grid-4" style="gap:10px;">
+        ${card('Mind Warmed Up', c.warmedUp, 'var(--green)')}
+        ${card('Cold / No Warmup', c.cold, 'var(--yellow)')}
+        ${card('High Flow (4–5/5)', c.highFlow, 'var(--cyan)')}
+        ${card('Busy Mind (1–3/5)', c.lowFlow, 'var(--red)')}
+      </div>
+      ${recent ? `<div class="flex-row mt-8">${recent}</div>` : ''}`;
+  }
+
   const api = {
     METRIC_HELP,
     smoothSplinePath,
@@ -441,6 +506,8 @@
     renderDeliveryFaultsByCost,
     renderCoupledSignalsGrid,
     renderHeatmap91,
+    computeFlowCorrelation,
+    renderFlowCorrelationHtml,
   };
 
   if (typeof module !== 'undefined' && module.exports) {

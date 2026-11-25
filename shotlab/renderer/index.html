@@ -43,6 +43,7 @@
         <button type="button" class="btn btn-sm" id="btn-csv">FSX CSV</button>
         <button type="button" class="btn btn-sm" id="btn-settings">Settings</button>
         <button type="button" class="btn btn-sm btn-cyan" id="btn-drills">Drills [D]</button>
+        <button type="button" class="btn btn-sm btn-kids" id="btn-kids-zone">★ Kids Zone [K]</button>
       </div>
     </div>
 
@@ -89,8 +90,8 @@
     <section class="mode-panel" id="mode-plan">
       <div class="grid-3">
         <div class="rail">
-          <span class="kicker">Pre-Session Readiness · Drills Hub Sync</span>
-          <h3 style="margin:2px 0 8px;">Body State Check</h3>
+          <span class="kicker">Pre-Session Readiness · Mind &amp; Body Sync</span>
+          <h3 style="margin:2px 0 8px;">Mind &amp; Body Readiness</h3>
           <div class="grid-3">
             <div>
               <span class="kicker">Hamstrings</span>
@@ -116,6 +117,27 @@
                 <option value="4" selected>4 · Ready</option>
                 <option value="3">3 · Flat</option>
                 <option value="2">2 · Low</option>
+              </select>
+            </div>
+          </div>
+          <div class="grid-2 mt-8">
+            <div>
+              <span class="kicker">Mental State</span>
+              <select id="plan-mind-state" style="width:100%;" aria-label="Mental readiness state">
+                <option value="locked" selected>Locked In · Coherent 5-5</option>
+                <option value="wired">Wired / Stressed · Sigh</option>
+                <option value="scattered">Scattered · Box 4-4-4-4</option>
+                <option value="flat">Flat / Tired · Energize</option>
+              </select>
+            </div>
+            <div>
+              <span class="kicker">Mental Noise (1–5)</span>
+              <select id="plan-mind-noise" style="width:100%;" aria-label="Mental noise level">
+                <option value="1">1 · Quiet</option>
+                <option value="2" selected>2 · Clear</option>
+                <option value="3">3 · Busy</option>
+                <option value="4">4 · Cluttered</option>
+                <option value="5">5 · Racing</option>
               </select>
             </div>
           </div>
@@ -210,7 +232,8 @@
           <div class="flex-row">
             <div class="seg" id="prac-sub-seg">
               <button type="button" class="active" data-psub="range">Live Telemetry</button>
-              <button type="button" data-psub="challenge">Challenge Arena (7 Modes)</button>
+              <button type="button" data-psub="challenge">Challenge Arena (8 Modes)</button>
+              <button type="button" data-psub="shortgame">Short Game (≤100y)</button>
             </div>
             <label class="muted" style="font-size:11px;display:inline-flex;align-items:center;gap:5px;">Shape Goal:
               <select id="prac-intent-shape" aria-label="Intended shot shape">
@@ -227,10 +250,14 @@
             <div class="seg" id="prac-lab-seg">
               <button type="button" class="active" data-lmode="coupled">Coupled Matrix + Full</button>
               <button type="button" data-lmode="raw">Scorecard Grid Only</button>
+              <button type="button" data-lmode="flow">Flow / Play Box</button>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- FLOW / PLAY-BOX STAGE (SHOWN ONLY IN flow LAB MODE) -->
+      <div class="rail flow-stage" id="prac-flow-stage" style="display:none;"></div>
 
       <!-- PRIMARY 5-KPI HERO STRIP WITH +/- GOAL DELTAS -->
       <div class="kpi-strip" id="prac-kpi-strip"></div>
@@ -238,8 +265,11 @@
       <!-- CHALLENGE ARENA PANEL (SHOWN IN CHALLENGE SUB-MODE) -->
       <div class="rail" id="prac-challenge-panel" style="display:none;"></div>
 
+      <!-- SHORT GAME (<=100y), LIVE WEDGE MATRIX & PUTTING GATE PANEL -->
+      <div class="rail" id="prac-shortgame-panel" style="display:none;"></div>
+
       <!-- 4 BROADCAST TELEMETRY BOXES -->
-      <div class="grid-4-live">
+      <div class="grid-4-live" id="prac-live-grid">
         <!-- BOX 1: SHOT SHAPE & TRAJECTORY -->
         <article class="card" id="box-shape">
           <div class="card-head">
@@ -377,7 +407,7 @@
       </div>
 
       <!-- 15-METRIC PRIORITY R/Y/G GRID -->
-      <div class="rail">
+      <div class="rail" id="prac-scorecard-rail">
         <div class="head-row">
           <div class="flex-row">
             <span class="kicker" style="margin:0;">PRIORITY METRICS &amp; TARGET DELTAS</span>
@@ -672,6 +702,14 @@
             <div id="pat-fatigue-bars"></div>
           </div>
         </div>
+
+        <div class="rail mt-12">
+          <div class="head-row">
+            <div><span class="kicker">Pre-Session Priming vs Score &amp; SG</span><h3>Flow &amp; Warmup Correlation</h3></div>
+            <button type="button" class="btn btn-xs btn-cyan" id="rev-btn-log-flow">🧠 Log Flow State</button>
+          </div>
+          <div id="rev-flow-corr"></div>
+        </div>
       </div>
 
       <!-- 3E: HIGHLIGHTS -->
@@ -804,8 +842,12 @@
       <!-- WEDGE CLOCK MATRIX -->
       <div class="rail">
         <div class="head-row">
-          <div><span class="kicker">7:30 / 9:00 / 10:30 / Full Clock Matrix</span><h3>Wedge Yardage Card</h3></div>
-          <button type="button" class="btn btn-sm btn-cyan" id="bag-open-wedge-print">🖨 Print Pocket Card</button>
+          <div><span class="kicker">7:30 / 9:00 / 10:30 / Full Clock Matrix · Live Launch Pro Calibrated &amp; Editable</span><h3>Wedge Yardage Card</h3></div>
+          <div class="flex-row">
+            <button type="button" class="btn btn-xs btn-emerald" id="bag-calibrate-wedges">📐 Live Calibrate →</button>
+            <button type="button" class="btn btn-xs" id="bag-reset-wedges">↺ Defaults</button>
+            <button type="button" class="btn btn-sm btn-cyan" id="bag-open-wedge-print">🖨 Print Pocket Card</button>
+          </div>
         </div>
         <div class="table-wrap" id="bag-wedge-matrix"></div>
       </div>
@@ -820,7 +862,10 @@
         <span id="mg-mode" class="badge badge-green">Real Balls</span>
         <span id="mg-feel" class="badge badge-cyan hidden"></span>
       </div>
-      <button type="button" id="btn-mg-close" class="btn">✕ Close Mat Glance (Esc / M)</button>
+      <div class="flex-row">
+        <button type="button" id="btn-mg-flow" class="btn btn-sm">🧠 Flow View: OFF</button>
+        <button type="button" id="btn-mg-close" class="btn">✕ Close Mat Glance (Esc / M)</button>
+      </div>
     </div>
     <div class="mg-hero">
       <div id="mg-shape-svg"></div>
@@ -838,14 +883,22 @@
     </div>
   </div>
 
+  <!-- FULLSCREEN PROJECTOR-READY KIDS ZONE OVERLAY (Ages 4-5) -->
+  <div id="kids-zone-overlay" class="kids-overlay hidden" role="dialog" aria-modal="true" aria-label="Kids Zone Arcade"></div>
+
   <!-- SLIDE-OVER DRILLS HUB DRAWER -->
   <div class="drawer-backdrop" id="drawer-backdrop"></div>
   <aside class="drawer" id="drawer-drills" aria-label="Drills Hub Library">
     <div class="drawer-head">
-      <div><span class="kicker">REPO DRILLS BRIDGE · 50+ DRILLS</span><h3 style="margin:0;">Drills Hub Coach</h3></div>
+      <div><span class="kicker">REPO DRILLS BRIDGE · 64 ADULT · 8 KIDS</span><h3 style="margin:0;">Drills Hub Coach</h3></div>
       <button type="button" class="btn btn-sm" id="drawer-close">✕ Close</button>
     </div>
     <div class="drawer-body">
+      <div class="flex-row" style="margin-bottom:8px;">
+        <select id="drawer-section-filter" style="width:100%;" aria-label="Filter drills by section">
+          <option value="all">All Sections</option>
+        </select>
+      </div>
       <div class="flex-row" style="margin-bottom:10px;">
         <select id="drawer-fault-filter" style="flex:1;" aria-label="Filter drills by fault">
           <option value="all">All Faults</option>
@@ -897,6 +950,22 @@
         <button type="button" class="btn btn-cyan" id="btn-tempo-toggle">▶ Start / Stop Tempo</button>
         <div class="muted mono" id="tmp-status-txt" style="font-size:11px;">Ready</div>
       </div>
+    </div>
+    <div class="sub-well mt-12">
+      <div class="head-row" style="margin-bottom:6px;">
+        <div><span class="kicker">Visual Default · Optional Chime</span><h4 style="margin:0;color:#fff;">Breath &amp; Quiet-Eye Pacer</h4></div>
+        <label style="font-size:11px;display:inline-flex;align-items:center;gap:5px;cursor:pointer;"><input type="checkbox" id="chk-breath-audio" /> Audio Chimes</label>
+      </div>
+      <div class="grid-2" style="align-items:center;">
+        <select id="select-breath-protocol" aria-label="Breath pacer protocol">
+          <option value="sigh">Physiological Sigh (Wired / Tense)</option>
+          <option value="box">Box 4-4-4-4 (Scattered)</option>
+          <option value="coherent">Coherent Calm 5-5 (Locked In)</option>
+          <option value="energize">Energize Prime (Flat / Tired)</option>
+        </select>
+        <button type="button" class="btn btn-sm btn-emerald" id="btn-dlg-breath-toggle">▶ Start Breath Pacer</button>
+      </div>
+      <div id="dlg-breath-status" class="muted mono mt-8" style="font-size:11.5px;">Ready — soften to panoramic peripheral gaze before starting.</div>
     </div>
   </dialog>
 
@@ -954,12 +1023,46 @@
 
   <dialog class="studio-dlg" id="dlg-checkin" closedby="any">
     <div class="head-row">
-      <div><span class="kicker">Post-Round Scoring Reflection</span><h3>60-Second Round Check-In</h3></div>
+      <div><span class="kicker">Post-Round &amp; Session Mind/Flow Reflection</span><h3>60-Second Check-In</h3></div>
       <button type="button" class="btn btn-sm" data-close-dlg="dlg-checkin">✕</button>
     </div>
     <div class="grid-2">
-      <label class="sub-well">Round Score<input type="number" id="chk-round-score" min="55" max="130" value="79" style="width:100%;margin-top:4px;" /></label>
+      <label class="sub-well">Round Score (optional)<input type="number" id="chk-round-score" min="55" max="130" value="79" style="width:100%;margin-top:4px;" /></label>
       <label class="sub-well">Biggest Stroke Cost<select id="chk-round-struggle" style="width:100%;margin-top:4px;"><option value="driver_ob">Driver Big Miss / Hooks</option><option value="approach_fat">Iron Strike / Fat Shots</option><option value="wedges">Wedge Distance Control</option><option value="pressure_close">Pressure Closing Holes</option></select></label>
+    </div>
+    <div class="sub-well mt-8">
+      <span class="kicker">Mind &amp; Flow Session Log</span>
+      <div class="grid-3 mt-8">
+        <label style="font-size:11px;">Flow Rating (1–5)
+          <select id="chk-flow-rating" style="width:100%;margin-top:4px;">
+            <option value="5">5 · Deep Flow</option>
+            <option value="4" selected>4 · Smooth / Absorbed</option>
+            <option value="3">3 · Mixed Focus</option>
+            <option value="2">2 · Analytical / Tense</option>
+            <option value="1">1 · In My Head</option>
+          </select>
+        </label>
+        <label style="font-size:11px;">Process Commitment (1–5)
+          <select id="chk-process-rating" style="width:100%;margin-top:4px;">
+            <option value="5">5 · Full Play Box</option>
+            <option value="4" selected>4 · Solid Routine</option>
+            <option value="3">3 · Drifted Occasionally</option>
+            <option value="2">2 · Mechanical Mid-Swing</option>
+            <option value="1">1 · Ball Raking</option>
+          </select>
+        </label>
+        <label style="font-size:11px;">Mind State
+          <select id="chk-mind-state" style="width:100%;margin-top:4px;">
+            <option value="locked">Locked In</option>
+            <option value="wired">Wired / Stressed</option>
+            <option value="scattered">Scattered</option>
+            <option value="flat">Flat / Tired</option>
+          </select>
+        </label>
+      </div>
+      <label style="font-size:11.5px;display:inline-flex;align-items:center;gap:6px;margin-top:8px;cursor:pointer;">
+        <input type="checkbox" id="chk-mind-warmup" /> Completed "Get the Mind Right" Warmup before session
+      </label>
     </div>
     <div class="flex-row mt-12" style="justify-content:flex-end;">
       <button type="button" class="btn btn-primary" id="btn-save-checkin">Save Check-In</button>
@@ -1006,6 +1109,8 @@
   <script src="charts.js"></script>
   <script src="challenges.js"></script>
   <script src="audio.js"></script>
+  <script src="kids.js"></script>
+  <script src="shortGame.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

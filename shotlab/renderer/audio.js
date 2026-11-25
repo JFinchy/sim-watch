@@ -501,10 +501,218 @@
     return activeTempoPreset;
   }
 
+  // ==================== BREATH & QUIET-EYE PACER ====================
+  const BREATH_PROTOCOLS = {
+    sigh: {
+      id: 'sigh',
+      label: 'Physiological Sigh (Down-Regulate)',
+      forState: 'wired',
+      cycles: 5,
+      steps: [
+        { phase: 'Inhale (Nose)', sec: 2.5, cue: 'Deep nasal inhale', freq: 261.6 },
+        { phase: 'Top-Off Inhale', sec: 1.0, cue: 'Quick second sip of air', freq: 329.6 },
+        { phase: 'Long Slow Exhale', sec: 6.0, cue: 'Slow sigh out through mouth', freq: 196.0 },
+      ],
+    },
+    box: {
+      id: 'box',
+      label: 'Box Breathing 4-4-4-4 (Stabilize)',
+      forState: 'scattered',
+      cycles: 4,
+      steps: [
+        { phase: 'Inhale', sec: 4.0, cue: 'Steady nasal inhale', freq: 261.6 },
+        { phase: 'Hold', sec: 4.0, cue: 'Soft shoulders, hold', freq: 329.6 },
+        { phase: 'Exhale', sec: 4.0, cue: 'Smooth exhale', freq: 220.0 },
+        { phase: 'Hold Empty', sec: 4.0, cue: 'Calm stillness', freq: 196.0 },
+      ],
+    },
+    coherent: {
+      id: 'coherent',
+      label: 'Coherent Calm 5-5 (HRV Lock)',
+      forState: 'locked',
+      cycles: 5,
+      steps: [
+        { phase: 'Inhale', sec: 5.0, cue: 'Slow belly inhale', freq: 261.6 },
+        { phase: 'Exhale', sec: 5.0, cue: 'Unclench jaw & hands', freq: 196.0 },
+      ],
+    },
+    energize: {
+      id: 'energize',
+      label: 'Energize Prime (Up-Regulate)',
+      forState: 'flat',
+      cycles: 8,
+      steps: [
+        { phase: 'Crisp Inhale', sec: 1.5, cue: 'Sharp nasal inhale', freq: 349.2 },
+        { phase: 'Passive Exhale', sec: 1.5, cue: 'Loose athletic release', freq: 261.6 },
+      ],
+    },
+  };
+
+  const MIND_TO_PROTOCOL = {
+    wired: 'sigh',
+    scattered: 'box',
+    locked: 'coherent',
+    flat: 'energize',
+  };
+
+  function protocolForMindState(mindState = 'locked') {
+    const k = String(mindState || '').toLowerCase();
+    const key = Object.hasOwn(MIND_TO_PROTOCOL, k) ? MIND_TO_PROTOCOL[k] : 'coherent';
+    return BREATH_PROTOCOLS[key];
+  }
+
+  let breathRunning = false;
+  let breathTimers = [];
+
+  function clearBreathTimers() {
+    for (const id of breathTimers) clearTimeout(id);
+    breathTimers = [];
+  }
+
+  function stopBreathPacer(onTick = null) {
+    const wasRunning = breathRunning;
+    breathRunning = false;
+    clearBreathTimers();
+    if (wasRunning && typeof onTick === 'function') {
+      try {
+        onTick({ running: false, protocolId: null, cycle: 0, totalCycles: 0, stepIndex: 0, phase: 'Ready', cue: '', sec: 0, progress: 0 });
+      } catch {}
+    }
+  }
+
+  function isBreathPacerRunning() {
+    return breathRunning;
+  }
+
+  function startBreathPacer(protocolId = 'sigh', onTick = null, opts = {}) {
+    stopBreathPacer();
+    const proto = (typeof protocolId === 'string' && Object.hasOwn(BREATH_PROTOCOLS, protocolId))
+      ? BREATH_PROTOCOLS[protocolId]
+      : BREATH_PROTOCOLS.sigh;
+    const cycles = Math.max(1, Number(opts.cycles) || proto.cycles || 4);
+    const useAudio = Boolean(opts.audio); // visual-only by default
+    breathRunning = true;
+
+    let cycle = 1;
+    let stepIndex = 0;
+
+    const runStep = () => {
+      if (!breathRunning) return;
+      clearBreathTimers();
+      if (cycle > cycles) {
+        breathRunning = false;
+        if (useAudio) {
+          const ctx = getAudioContext();
+          if (ctx) scheduleTone(ctx, 523.25, 0, 0.22, { type: 'sine', peakGain: 0.08 });
+        }
+        if (typeof onTick === 'function') {
+          try {
+            onTick({ running: false, completed: true, protocolId: proto.id, cycle: cycles, totalCycles: cycles, stepIndex: 0, phase: 'Primed', cue: 'Mind centered — lock Quiet Eye & go', sec: 0, progress: 1 });
+          } catch {}
+        }
+        return;
+      }
+
+      const step = proto.steps[stepIndex];
+      if (useAudio) {
+        const ctx = getAudioContext();
+        if (ctx) scheduleTone(ctx, step.freq || 261.6, 0, 0.16, { type: 'sine', peakGain: 0.07 });
+      }
+      if (typeof onTick === 'function') {
+        try {
+          onTick({
+            running: true,
+            completed: false,
+            protocolId: proto.id,
+            cycle,
+            totalCycles: cycles,
+            stepIndex,
+            phase: step.phase,
+            cue: step.cue,
+            sec: step.sec,
+            progress: ((cycle - 1) * proto.steps.length + stepIndex) / (cycles * proto.steps.length),
+          });
+        } catch {}
+      }
+
+      breathTimers.push(setTimeout(() => {
+        if (!breathRunning) return;
+        stepIndex += 1;
+        if (stepIndex >= proto.steps.length) {
+          stepIndex = 0;
+          cycle += 1;
+        }
+        runStep();
+      }, Math.max(250, Math.round(step.sec * 1000))));
+    };
+
+    runStep();
+    return proto;
+  }
+
+  // ==================== KIDS ZONE CHEERFUL AUDIO ====================
+  function playKidsStarChime(stars = 1) {
+    const ctx = getAudioContext();
+    if (!ctx) return false;
+    const count = Math.max(1, Math.min(3, Math.round(Number(stars) || 1)));
+    const notes = [523.25, 659.25, 783.99, 1046.5];
+    for (let i = 0; i < count + 1; i += 1) {
+      scheduleTone(ctx, notes[i] || 1046.5, i * 0.085, 0.22, { type: 'triangle', peakGain: 0.16 });
+    }
+    return true;
+  }
+
+  function playKidsFanfare() {
+    const ctx = getAudioContext();
+    if (!ctx) return false;
+    const seq = [
+      { f: 523.25, t: 0, d: 0.14 },
+      { f: 659.25, t: 0.12, d: 0.14 },
+      { f: 783.99, t: 0.24, d: 0.14 },
+      { f: 1046.5, t: 0.36, d: 0.24 },
+      { f: 1318.51, t: 0.56, d: 0.38 },
+    ];
+    for (const s of seq) {
+      scheduleTone(ctx, s.f, s.t, s.d, { type: 'triangle', peakGain: 0.18 });
+    }
+    return true;
+  }
+
+  function playKidsWhoosh() {
+    const ctx = getAudioContext();
+    if (!ctx) return false;
+    scheduleTone(ctx, 220, 0, 0.32, { type: 'sine', peakGain: 0.15, endFreq: 880 });
+    return true;
+  }
+
+  function speakKidsCheer(text) {
+    if (typeof root === 'undefined' || !root.speechSynthesis || typeof root.SpeechSynthesisUtterance !== 'function') {
+      return '';
+    }
+    const clean = String(text || '').trim();
+    if (!clean) return '';
+    try {
+      root.speechSynthesis.cancel();
+      const utt = new root.SpeechSynthesisUtterance(clean);
+      utt.rate = 1.02;
+      utt.pitch = 1.14;
+      utt.volume = 0.95;
+      root.speechSynthesis.speak(utt);
+    } catch {
+      // ignore speech synthesis errors
+    }
+    return clean;
+  }
+
   const api = {
     TEMPO_PRESETS,
     TEMPO_SOUNDS,
     TEMPO_GAPS_SEC,
+    BREATH_PROTOCOLS,
+    protocolForMindState,
+    startBreathPacer,
+    stopBreathPacer,
+    isBreathPacerRunning,
     tempoCycleTimings,
     setTempoOptions,
     getTempoOptions,
@@ -512,6 +720,10 @@
     buildShotSpeechText,
     speakShot,
     stopSpeech,
+    playKidsStarChime,
+    playKidsFanfare,
+    playKidsWhoosh,
+    speakKidsCheer,
     startTempo,
     stopTempo,
     isTempoRunning,

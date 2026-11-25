@@ -36,6 +36,17 @@ contextBridge.exposeInMainWorld('shotlabAPI', {
   syncHistory: () => ipcRenderer.invoke('shotlab:sync-history'),
   exportDebrief: (opts) => ipcRenderer.invoke('shotlab:export-debrief', opts),
 
+  // Kids Zone (Ages 4–5): isolated from Dad's stats & DB
+  setKidsMode: (enabled) => ipcRenderer.invoke('shotlab:set-kids-mode', Boolean(enabled)),
+  getKidsState: () => ipcRenderer.invoke('shotlab:get-kids-state'),
+  updateKidsState: (patch) => ipcRenderer.invoke('shotlab:update-kids-state', patch),
+  fireKidsManualHit: (opts) => ipcRenderer.invoke('shotlab:fire-kids-hit', opts),
+  onKidsShot: (cb) => {
+    const handler = (_e, shot) => cb(shot);
+    ipcRenderer.on('shotlab:kids-shot', handler);
+    return () => ipcRenderer.removeListener('shotlab:kids-shot', handler);
+  },
+
   onState: (cb) => {
     const handler = (_e, snap) => cb(snap);
     ipcRenderer.on('shotlab:state', handler);

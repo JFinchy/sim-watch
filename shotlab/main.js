@@ -23,6 +23,7 @@ const SESSIONS_DIR = path.join(SWINGS_DIR, 'Sessions');
 const GOTO_DIR = path.join(SWINGS_DIR, 'My-Go-To');
 const DATA_DIR = path.join(__dirname, 'data');
 const STATE_PATH = path.join(DATA_DIR, 'state.json');
+const KIDS_STATE_PATH = path.join(DATA_DIR, 'kids_state.json');
 const DB_PATH = path.join(DATA_DIR, 'swings.sqlite');
 
 const VALID_PRACTICE_MODES = new Set(['real', 'almost', 'sore']);
@@ -88,12 +89,32 @@ function defaultStudioState() {
     ],
     parkedIdeas: [],
     bodyCheckin: { hamstrings: 1, ankle: 'ok', energy: 4 },
+    mindCheckin: {
+      state: 'locked',
+      noise: 2,
+      cue: 'Smooth clubhead sweep to target',
+      modeLock: 'flow',
+      warmupDoneDate: null,
+      checklist: { tension: false, waggle: false, quietEye: false },
+    },
+    flowConfig: {
+      batchSize: 5,
+      batchEnabled: false,
+      feelVsReal: false,
+      breathAudio: false,
+      matGlanceFlow: false,
+    },
+    challengeDifficulty: 'standard',
+    flowLogs: [],
     roundCheckin: null,
     wedgeMatrix: defaultWedgeMatrix(),
     challengeBests: {},
   };
 }
 
+const VALID_MIND_STATES = new Set(['wired', 'scattered', 'locked', 'flat']);
+const VALID_MODE_LOCKS = new Set(['lab', 'flow', 'clutch']);
+const VALID_CHALLENGE_DIFFICULTIES = new Set(['standard', 'auto_flow', 'stretch_4', 'tour']);
 const BLOCKED_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 function toFiniteNumOrNull(v) {
@@ -102,11 +123,23 @@ function toFiniteNumOrNull(v) {
   return Number.isFinite(n) ? n : null;
 }
 
+const isPlainObj = (v) => Boolean(v && typeof v === 'object' && !Array.isArray(v));
+
 function sanitizeStudioState(patch = {}, prev = defaultStudioState()) {
   const defaults = defaultStudioState();
-  const base = { ...defaults, ...(prev && typeof prev === 'object' ? prev : {}) };
-  base.bodyCheckin = { ...defaults.bodyCheckin, ...(base.bodyCheckin && typeof base.bodyCheckin === 'object' ? base.bodyCheckin : {}) };
-  const p = patch && typeof patch === 'object' ? patch : {};
+  const base = { ...defaults, ...(isPlainObj(prev) ? prev : {}) };
+  base.bodyCheckin = { ...defaults.bodyCheckin, ...(isPlainObj(base.bodyCheckin) ? base.bodyCheckin : {}) };
+  base.mindCheckin = {
+    ...defaults.mindCheckin,
+    ...(isPlainObj(base.mindCheckin) ? base.mindCheckin : {}),
+    checklist: {
+      ...defaults.mindCheckin.checklist,
+      ...(isPlainObj(base.mindCheckin?.checklist) ? base.mindCheckin.checklist : {}),
+    },
+  };
+  base.flowConfig = { ...defaults.flowConfig, ...(isPlainObj(base.flowConfig) ? base.flowConfig : {}) };
+  if (!Array.isArray(base.flowLogs)) base.flowLogs = [];
+  const p = isPlainObj(patch) ? patch : {};
   const next = { ...base };
   if (typeof p.matType === 'string' && VALID_MAT_TYPES.has(p.matType)) next.matType = p.matType;
   if (typeof p.intendedShape === 'string' && VALID_INTENDED_SHAPES.has(p.intendedShape)) next.intendedShape = p.intendedShape;
@@ -143,6 +176,69 @@ function sanitizeStudioState(patch = {}, prev = defaultStudioState()) {
       energy: Math.max(1, Math.min(5, Math.round(numEnergy ?? prevEnergy ?? 4))),
     };
   }
+  if (p.mindCheckin && typeof p.mindCheckin === 'object' && !Array.isArray(p.mindCheckin)) {
+    const mc = p.mindCheckin;
+    const prevMc = base.mindCheckin;
+    const clPatch = mc.checklist && typeof mc.checklist === 'object' && !Array.isArray(mc.checklist) ? mc.checklist : {};
+    const numNoise = toFiniteNumOrNull(mc.noise);
+    const prevNoise = toFiniteNumOrNull(prevMc.noise);
+    next.mindCheckin = {
+      state: VALID_MIND_STATES.has(mc.state) ? mc.state : (VALID_MIND_STATES.has(prevMc.state) ? prevMc.state : 'locked'),
+      noise: Math.max(1, Math.min(5, Math.round(numNoise ?? prevNoise ?? 2))),
+      cue: typeof mc.cue === 'string' ? mc.cue.trim().slice(0, 120) : prevMc.cue,
+      modeLock: VALID_MODE_LOCKS.has(mc.modeLock) ? mc.modeLock : (VALID_MODE_LOCKS.has(prevMc.modeLock) ? prevMc.modeLock : 'flow'),
+      warmupDoneDate: mc.warmupDoneDate === null
+        ? null
+        : (typeof mc.warmupDoneDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(mc.warmupDoneDate) ? mc.warmupDoneDate : prevMc.warmupDoneDate),
+      checklist: {
+        tension: typeof clPatch.tension === 'boolean' ? clPatch.tension : Boolean(prevMc.checklist?.tension),
+        waggle: typeof clPatch.waggle === 'boolean' ? clPatch.waggle : Boolean(prevMc.checklist?.waggle),
+        quietEye: typeof clPatch.quietEye === 'boolean' ? clPatch.quietEye : Boolean(prevMc.checklist?.quietEye),
+      },
+    };
+  }
+  if (p.flowConfig && typeof p.flowConfig === 'object' && !Array.isArray(p.flowConfig)) {
+    const fc = p.flowConfig;
+    const prevFc = base.flowConfig;
+    const bSize = toFiniteNumOrNull(fc.batchSize);
+    next.flowConfig = {
+      batchSize: Math.max(3, Math.min(10, Math.round(bSize ?? prevFc.batchSize ?? 5))),
+      batchEnabled: typeof fc.batchEnabled === 'boolean' ? fc.batchEnabled : Boolean(prevFc.batchEnabled),
+      feelVsReal: typeof fc.feelVsReal === 'boolean' ? fc.feelVsReal : Boolean(prevFc.feelVsReal),
+      breathAudio: typeof fc.breathAudio === 'boolean' ? fc.breathAudio : Boolean(prevFc.breathAudio),
+      matGlanceFlow: typeof fc.matGlanceFlow === 'boolean' ? fc.matGlanceFlow : Boolean(prevFc.matGlanceFlow),
+    };
+  }
+  if (typeof p.challengeDifficulty === 'string' && VALID_CHALLENGE_DIFFICULTIES.has(p.challengeDifficulty)) {
+    next.challengeDifficulty = p.challengeDifficulty;
+  } else if (!VALID_CHALLENGE_DIFFICULTIES.has(next.challengeDifficulty)) {
+    next.challengeDifficulty = 'standard';
+  }
+  if (Array.isArray(p.flowLogs)) {
+    next.flowLogs = p.flowLogs
+      .filter((x) => x && typeof x === 'object' && !Array.isArray(x))
+      .slice(0, 90)
+      .map((x, idx) => {
+        const sc = toFiniteNumOrNull(x.avgScore);
+        const sg = toFiniteNumOrNull(x.avgSg);
+        const nShots = toFiniteNumOrNull(x.shotsCount);
+        const fr = toFiniteNumOrNull(x.flowRating);
+        const pr = toFiniteNumOrNull(x.processRating);
+        const dt = typeof x.date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(x.date) ? x.date : new Date().toISOString().slice(0, 10);
+        return {
+          id: String(x.id || `fl_${dt}_${idx}`).slice(0, 48),
+          date: dt,
+          ts: String(x.ts || new Date().toISOString()).slice(0, 32),
+          warmupDone: Boolean(x.warmupDone),
+          mindState: VALID_MIND_STATES.has(x.mindState) ? x.mindState : 'locked',
+          flowRating: Math.max(1, Math.min(5, Math.round(fr ?? 3))),
+          processRating: Math.max(1, Math.min(5, Math.round(pr ?? 3))),
+          avgScore: sc !== null ? Math.max(0, Math.min(100, Math.round(sc))) : null,
+          avgSg: sg !== null ? Math.max(-5, Math.min(5, Math.round(sg * 100) / 100)) : null,
+          shotsCount: Math.max(0, Math.min(999, Math.round(nShots ?? 0))),
+        };
+      });
+  }
   if ('roundCheckin' in p) {
     next.roundCheckin = p.roundCheckin && typeof p.roundCheckin === 'object' && !Array.isArray(p.roundCheckin) ? {
       score: Math.max(55, Math.min(140, Math.round(toFiniteNumOrNull(p.roundCheckin.score) ?? 82))),
@@ -160,12 +256,23 @@ function sanitizeStudioState(patch = {}, prev = defaultStudioState()) {
           ? row.cells
               .filter((c) => c && typeof c === 'object')
               .slice(0, 4)
-              .map((c) => ({
-                arm: String(c.arm || '').slice(0, 12),
-                pct: String(c.pct || '').slice(0, 8),
-                carry: Math.max(10, Math.min(200, Math.round(toFiniteNumOrNull(c.carry) ?? 60))),
-                roll: Math.max(-15, Math.min(30, Math.round(toFiniteNumOrNull(c.roll) ?? 0))),
-              }))
+              .map((c) => {
+                const vlaNum = toFiniteNumOrNull(c.vla);
+                const spinNum = toFiniteNumOrNull(c.spin);
+                const sprNum = toFiniteNumOrNull(c.spread);
+                const nNum = toFiniteNumOrNull(c.n);
+                return {
+                  arm: String(c.arm || '').slice(0, 12),
+                  pct: String(c.pct || '').slice(0, 8),
+                  carry: Math.max(5, Math.min(200, Math.round(toFiniteNumOrNull(c.carry) ?? 60))),
+                  roll: Math.max(-15, Math.min(30, Math.round(toFiniteNumOrNull(c.roll) ?? 0))),
+                  vla: vlaNum !== null ? Math.max(5, Math.min(65, Math.round(vlaNum * 10) / 10)) : null,
+                  spin: spinNum !== null ? Math.max(500, Math.min(14000, Math.round(spinNum))) : null,
+                  spread: sprNum !== null ? Math.max(0, Math.min(30, Math.round(sprNum * 10) / 10)) : null,
+                  n: nNum !== null ? Math.max(0, Math.min(999, Math.round(nNum))) : 0,
+                  calibratedAt: (typeof c.calibratedAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(c.calibratedAt)) ? c.calibratedAt : null,
+                };
+              })
           : [],
       }));
     }
@@ -201,6 +308,8 @@ const runtime = {
   obsServerError: null,
   drillsHub: null,
   challengeState: null,
+  kidsMode: false, // Ephemeral: ALWAYS boots false so Dad's mode is default
+  kidsState: null, // Persisted separately in shotlab/data/kids_state.json
   settings: {
     tierId: 'low_hcp',
     handedness: 'RH',
@@ -240,6 +349,137 @@ function sanitizeLocalFeelId(val) {
   if (val === null || val === undefined) return null;
   const s = String(val).trim();
   return s ? s.slice(0, 120) : null;
+}
+
+const VALID_KIDS_GAMES = new Set(['rocket', 'trex', 'monster', 'bowling']);
+
+function defaultKidsState() {
+  return {
+    teamName: 'Team Rocket Dinos',
+    kids: [
+      { id: 'k1', name: 'Player 1', age: 5 },
+      { id: 'k2', name: 'Player 2', age: 4 },
+    ],
+    activeTurnIdx: 0,
+    autoRotate: true,
+    activeGame: 'rocket',
+    stars: 0,
+    trophies: 0,
+    soundOn: true,
+    voiceOn: false,
+    safety: { safeZone: false, parkClub: false, softBalls: false },
+    routineDone: { warmup: false, gameA: false, gameB: false, boss: false },
+    quarantineIds: [],
+  };
+}
+
+function sanitizeKidsState(patch = {}, prev = defaultKidsState()) {
+  const def = defaultKidsState();
+  const base = { ...def, ...(isPlainObj(prev) ? prev : {}) };
+  const p = isPlainObj(patch) ? patch : {};
+  const next = { ...base };
+
+  if (typeof p.teamName === 'string' && p.teamName.trim()) {
+    next.teamName = p.teamName.trim().slice(0, 48);
+  }
+  if (Array.isArray(p.kids) && p.kids.length >= 2) {
+    next.kids = p.kids.slice(0, 4).map((k, idx) => {
+      const fallback = def.kids[idx] || { id: `k${idx + 1}`, name: `Player ${idx + 1}`, age: 5 };
+      const ageNum = toFiniteNumOrNull(k?.age);
+      return {
+        id: String(k?.id || fallback.id).slice(0, 16),
+        name: (typeof k?.name === 'string' && k.name.trim()) ? k.name.trim().slice(0, 28) : fallback.name,
+        age: ageNum !== null ? Math.max(2, Math.min(12, Math.round(ageNum))) : fallback.age,
+      };
+    });
+  }
+  if (p.activeTurnIdx !== undefined) {
+    const idx = toFiniteNumOrNull(p.activeTurnIdx);
+    const len = Math.max(1, (next.kids || def.kids).length);
+    next.activeTurnIdx = idx !== null ? Math.max(0, Math.min(len - 1, Math.round(idx))) : 0;
+  }
+  if (typeof p.autoRotate === 'boolean') next.autoRotate = p.autoRotate;
+  if (typeof p.activeGame === 'string' && VALID_KIDS_GAMES.has(p.activeGame)) next.activeGame = p.activeGame;
+  if (p.stars !== undefined) {
+    const st = toFiniteNumOrNull(p.stars);
+    if (st !== null) next.stars = Math.max(0, Math.min(100000, Math.round(st)));
+  }
+  if (p.trophies !== undefined) {
+    const tr = toFiniteNumOrNull(p.trophies);
+    if (tr !== null) next.trophies = Math.max(0, Math.min(10000, Math.round(tr)));
+  }
+  if (typeof p.soundOn === 'boolean') next.soundOn = p.soundOn;
+  if (typeof p.voiceOn === 'boolean') next.voiceOn = p.voiceOn;
+  if (isPlainObj(p.safety)) {
+    next.safety = {
+      safeZone: typeof p.safety.safeZone === 'boolean' ? p.safety.safeZone : Boolean(base.safety?.safeZone),
+      parkClub: typeof p.safety.parkClub === 'boolean' ? p.safety.parkClub : Boolean(base.safety?.parkClub),
+      softBalls: typeof p.safety.softBalls === 'boolean' ? p.safety.softBalls : Boolean(base.safety?.softBalls),
+    };
+  }
+  if (isPlainObj(p.routineDone)) {
+    next.routineDone = {
+      warmup: typeof p.routineDone.warmup === 'boolean' ? p.routineDone.warmup : Boolean(base.routineDone?.warmup),
+      gameA: typeof p.routineDone.gameA === 'boolean' ? p.routineDone.gameA : Boolean(base.routineDone?.gameA),
+      gameB: typeof p.routineDone.gameB === 'boolean' ? p.routineDone.gameB : Boolean(base.routineDone?.gameB),
+      boss: typeof p.routineDone.boss === 'boolean' ? p.routineDone.boss : Boolean(base.routineDone?.boss),
+    };
+  }
+  if (Array.isArray(p.quarantineIds)) {
+    next.quarantineIds = [...new Set(p.quarantineIds.filter((x) => typeof x === 'string' && x.length > 0))].slice(-500);
+  }
+  return next;
+}
+
+function loadKidsState() {
+  try {
+    if (!fs.existsSync(KIDS_STATE_PATH)) {
+      runtime.kidsState = defaultKidsState();
+      return;
+    }
+    const raw = JSON.parse(fs.readFileSync(KIDS_STATE_PATH, 'utf8'));
+    runtime.kidsState = sanitizeKidsState(raw, defaultKidsState());
+  } catch (err) {
+    console.warn('[ShotLab] Could not load kids_state.json:', err.message);
+    runtime.kidsState = defaultKidsState();
+  }
+}
+
+function saveKidsState() {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    const tmp = `${KIDS_STATE_PATH}.tmp`;
+    fs.writeFileSync(tmp, JSON.stringify(runtime.kidsState || defaultKidsState(), null, 2), 'utf8');
+    fs.renameSync(tmp, KIDS_STATE_PATH);
+  } catch (err) {
+    console.warn('[ShotLab] Could not save kids_state.json:', err.message);
+  }
+}
+
+function isQuarantinedKidsShot(raw) {
+  const qSet = new Set(runtime.kidsState?.quarantineIds || []);
+  return engine.isKidsZoneRawShot(raw, qSet);
+}
+
+function recordKidsQuarantineTs(ts) {
+  if (typeof ts !== 'string' || !ts) return;
+  if (!runtime.kidsState) runtime.kidsState = defaultKidsState();
+  const prev = Array.isArray(runtime.kidsState.quarantineIds) ? runtime.kidsState.quarantineIds : [];
+  if (!prev.includes(ts)) {
+    runtime.kidsState.quarantineIds = [...prev, ts].slice(-500);
+    saveKidsState();
+  }
+}
+
+function handleKidsShot(rawDoc) {
+  if (rawDoc && typeof rawDoc === 'object' && rawDoc.source !== 'manual' && typeof rawDoc.ts === 'string' && rawDoc.ts) {
+    recordKidsQuarantineTs(rawDoc.ts);
+  }
+  const kidShot = engine.analyzeKidsShot(rawDoc);
+  if (kidShot && mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('shotlab:kids-shot', kidShot);
+  }
+  return kidShot;
 }
 
 function isValidLoopbackHost(hostHeader, expectedPort) {
@@ -287,8 +527,9 @@ function resolveFeelLabel(feelId) {
 function syncHistoricalSessions() {
   if (!swingDb) return { filesScanned: 0, shotsImported: 0 };
   try {
-    return swingDb.syncSimWatchSessions(SESSIONS_DIR, (raw) =>
-      engine.analyzeShot(raw, {
+    return swingDb.syncSimWatchSessions(SESSIONS_DIR, (raw) => {
+      if (isQuarantinedKidsShot(raw)) return null;
+      return engine.analyzeShot(raw, {
         calibration: runtime.calibration,
         tierId: runtime.settings.tierId,
         handedness: runtime.settings.handedness,
@@ -298,8 +539,8 @@ function syncHistoricalSessions() {
         drillId: raw.drill_id || null,
         drills: runtime.drillsHub?.drills || [],
         matType: runtime.settings.studio?.matType || 'fiberbuilt',
-      })
-    );
+      });
+    });
   } catch (err) {
     console.warn('[ShotLab] Historical session sync failed:', err.message);
     return { filesScanned: 0, shotsImported: 0, error: err.message };
@@ -422,7 +663,7 @@ function loadPersistedState() {
         runtime.settings.practiceMode = 'real';
       }
       runtime.settings.activeFeelId = sanitizeLocalFeelId(runtime.settings.activeFeelId);
-      runtime.settings.activeDrillId = sanitizeContextId(runtime.settings.activeDrillId);
+      runtime.settings.activeDrillId = engine.sanitizeAdultDrillId(runtime.settings.activeDrillId);
       runtime.settings.audioCaddie = Boolean(runtime.settings.audioCaddie);
       runtime.settings.audioChimes = runtime.settings.audioChimes !== false;
       if (typeof runtime.settings.tempoPreset !== 'string' || !VALID_TEMPO_PRESETS.has(runtime.settings.tempoPreset)) {
@@ -499,8 +740,9 @@ function savePersistedState() {
 function getSnapshot() {
   const current = runtime.shots.find((s) => s.id === runtime.selectedShotId) || runtime.shots[0] || null;
   const rawDrills = runtime.drillsHub?.drills || [];
+  const adultDrills = rawDrills.filter((d) => !d.isKidsZone);
   const sessionShots = runtime.shots.filter((s) => !s.isPreviewSeed);
-  const streak = engine.detectFaultStreak(sessionShots, rawDrills, {
+  const streak = engine.detectFaultStreak(sessionShots, adultDrills, {
     practiceMode: runtime.settings.practiceMode,
     club: current?.activeClub,
     limit: 3,
@@ -510,7 +752,7 @@ function getSnapshot() {
         ...streak,
         drills: Array.isArray(streak.recommendedDrills)
           ? streak.recommendedDrills
-          : engine.recommendDrillsForFault(streak.faultId, rawDrills, {
+          : engine.recommendDrillsForFault(streak.faultId, adultDrills, {
               practiceMode: runtime.settings.practiceMode,
               club: current?.activeClub,
               limit: 3,
@@ -551,6 +793,15 @@ function getSnapshot() {
       drills: rawDrills.map((d) => ({
         id: d.id,
         title: d.title,
+        section: d.section || '',
+        audience: d.audience || 'adult',
+        isKidsZone: Boolean(d.isKidsZone),
+        swingPhase: d.swingPhase || '',
+        duration: d.duration || '',
+        reps: d.reps || '',
+        pacing: d.pacing || 'either',
+        days: d.days || [],
+        modePlans: d.modePlans || null,
         focus: d.focus,
         keyFeel: d.keyFeel,
         faultTags: d.faultTags || [],
@@ -565,6 +816,8 @@ function getSnapshot() {
       driverDial: runtime.drillsHub?.driverDial || null,
       personalChecklist: runtime.drillsHub?.personalChecklist || [],
     },
+    kidsMode: Boolean(runtime.kidsMode),
+    kidsState: runtime.kidsState || defaultKidsState(),
     faultAlert,
     sessionStats: computeSessionStats(runtime.shots),
   };
@@ -665,6 +918,17 @@ function pushContextToSimWatch(patch = {}) {
       const cleanDrill = sanitizeContextId(rawDrill);
       if (cleanDrill) {
         payload.drill_id = cleanDrill;
+      }
+    }
+  }
+  if ('sessionId' in patch) {
+    const rawSess = patch.sessionId;
+    if (rawSess === null || rawSess === undefined || String(rawSess).trim() === '') {
+      payload.session_id = null;
+    } else {
+      const cleanSess = sanitizeContextId(rawSess);
+      if (cleanSess) {
+        payload.session_id = cleanSess;
       }
     }
   }
@@ -787,6 +1051,7 @@ function ingestRawShot(
   { select = true, allowAutoSwitch = true, silent = false, isDemo = false, isPreviewSeed = false } = {}
 ) {
   if (!rawShot || typeof rawShot !== 'object') return null;
+  if (!isDemo && !isPreviewSeed && (runtime.kidsMode || isQuarantinedKidsShot(rawShot))) return null;
   const stableTs = rawShot.ts || rawShot.timestamp || new Date().toISOString();
   const isDemoFlag = Boolean(isDemo || isPreviewSeed || rawShot.source === 'demo');
   const enrichedRaw = {
@@ -995,6 +1260,7 @@ const BRIDGE_IDLE_TIMEOUT_MS = 45000; // 3x SimWatch's 15s SSE heartbeat
 let hasSyncedBridgeContext = false;
 
 function fetchTodaysShotsFromBridge() {
+  if (runtime.kidsMode) return;
   const req = http.get(
     {
       hostname: SIMWATCH_HOST,
@@ -1014,6 +1280,7 @@ function fetchTodaysShotsFromBridge() {
           const doc = JSON.parse(buf);
           const list = Array.isArray(doc.shots) ? doc.shots : [];
           for (const s of list.slice(-40)) {
+            if (isQuarantinedKidsShot(s)) continue;
             ingestRawShot(s, { select: false, allowAutoSwitch: false, silent: true });
           }
           if (runtime.shots.length && !runtime.selectedShotId) {
@@ -1083,6 +1350,7 @@ function handleBridgeDisconnect() {
 
 function syncContextFromBridge(ctx, { allowClear = false } = {}) {
   if (!ctx || typeof ctx !== 'object') return false;
+  if (ctx.session_id === 'kids_zone') return false;
   let changed = false;
   if ('feel_id' in ctx) {
     const nextFeel = sanitizeLocalFeelId(ctx.feel_id);
@@ -1092,7 +1360,7 @@ function syncContextFromBridge(ctx, { allowClear = false } = {}) {
     }
   }
   if ('drill_id' in ctx) {
-    const nextDrill = sanitizeContextId(ctx.drill_id);
+    const nextDrill = engine.sanitizeAdultDrillId(ctx.drill_id);
     if ((nextDrill || allowClear) && nextDrill !== runtime.settings.activeDrillId) {
       runtime.settings.activeDrillId = nextDrill;
       changed = true;
@@ -1176,18 +1444,25 @@ function connectToSimWatchBridge() {
                 ? (engine.normalizeGsproClubCode(doc.current_club) || doc.current_club)
                 : null;
             }
-            if (doc.context && typeof doc.context === 'object') {
+            if (runtime.kidsMode) {
+              if (engine.shouldPushKidsContextOnStatus(true, doc.context)) {
+                pushContextToSimWatch({ sessionId: 'kids_zone', drillId: 'kids-zone', feelId: null });
+              }
+            } else if (doc.context && typeof doc.context === 'object') {
               const allowClear = hasSyncedBridgeContext;
               hasSyncedBridgeContext = true;
               syncContextFromBridge(doc.context, { allowClear });
             }
             notifyAll('state');
           } else if (evt === 'context') {
-            const ctx = (doc && doc.context && typeof doc.context === 'object') ? doc.context : doc;
-            hasSyncedBridgeContext = true;
-            syncContextFromBridge(ctx, { allowClear: true });
+            if (!runtime.kidsMode) {
+              const ctx = (doc && doc.context && typeof doc.context === 'object') ? doc.context : doc;
+              hasSyncedBridgeContext = true;
+              syncContextFromBridge(ctx, { allowClear: true });
+            }
             notifyAll('state');
           } else if (evt === 'clip') {
+            if (runtime.kidsMode || isQuarantinedKidsShot(doc)) return;
             if (doc && doc.ts && doc.clip) {
               if (swingDb) {
                 try {
@@ -1219,7 +1494,11 @@ function connectToSimWatchBridge() {
             if (gsproSwitchLock && runtime.gsproClub === gsproSwitchLock.target) releaseGsproSwitchLock();
             notifyAll('state');
           } else if (evt === 'shot') {
-            ingestRawShot(doc, { select: true, allowAutoSwitch: true });
+            if (runtime.kidsMode || isQuarantinedKidsShot(doc)) {
+              handleKidsShot(doc);
+            } else {
+              ingestRawShot(doc, { select: true, allowAutoSwitch: true });
+            }
           }
         } catch {
           // ignore non-JSON comments/heartbeats
@@ -1625,23 +1904,29 @@ function importFsxCsvFile(filePath, watch = false) {
           if (fresh.length > runtime.lastCsvLineCount) {
             const added = fresh.slice(runtime.lastCsvLineCount);
             for (let i = 0; i < added.length; i += 1) {
-              ingestRawShot(added[i], {
-                select: true,
-                allowAutoSwitch: false,
-                silent: i < added.length - 1,
-              });
+              if (runtime.kidsMode) {
+                handleKidsShot(added[i]);
+              } else {
+                ingestRawShot(added[i], {
+                  select: true,
+                  allowAutoSwitch: false,
+                  silent: i < added.length - 1,
+                });
+              }
             }
           } else if (fresh.length === 1) {
             // FSX 2020 LastShot.csv overwrites with a single row every strike; fingerprint to avoid dupes
             const fp = JSON.stringify(fresh[0]);
             if (fp !== runtime.lastCsvSingleFingerprint) {
               runtime.lastCsvSingleFingerprint = fp;
-              ingestRawShot(fresh[0], { select: true, allowAutoSwitch: false });
+              if (runtime.kidsMode) handleKidsShot(fresh[0]);
+              else ingestRawShot(fresh[0], { select: true, allowAutoSwitch: false });
             }
           } else if (fresh.length < runtime.lastCsvLineCount) {
             // File was truncated / rotated into a new session
             const latest = fresh[fresh.length - 1];
-            ingestRawShot(latest, { select: true, allowAutoSwitch: false });
+            if (runtime.kidsMode) handleKidsShot(latest);
+            else ingestRawShot(latest, { select: true, allowAutoSwitch: false });
           }
           runtime.lastCsvLineCount = fresh.length;
         } catch {
@@ -1831,6 +2116,27 @@ function buildCoachingDebriefMarkdown({ club = 'ALL', days = 30 } = {}) {
   }
   lines.push('');
 
+  const flowLogs = Array.isArray(snap.settings?.studio?.flowLogs) ? snap.settings.studio.flowLogs : [];
+  if (flowLogs.length) {
+    const primed = flowLogs.filter((l) => l.warmupDone);
+    const cold = flowLogs.filter((l) => !l.warmupDone);
+    const avgOf = (arr, k, d = 1, signed = false) => {
+      const vals = arr.map((x) => x[k]).filter((v) => typeof v === 'number' && Number.isFinite(v));
+      if (!vals.length) return '—';
+      const m = vals.reduce((a, b) => a + b, 0) / vals.length;
+      const numStr = d === 0 ? String(Math.round(m)) : m.toFixed(d);
+      return signed && m > 0 ? `+${numStr}` : numStr;
+    };
+    const warmRate = Math.round((primed.length / flowLogs.length) * 100);
+    lines.push('## 6. Mental Readiness & Flow Summary');
+    lines.push('');
+    lines.push(`- **Check-Ins Logged:** ${flowLogs.length} · **Mind Warmup Completion:** ${warmRate}% (${primed.length}/${flowLogs.length}) · **Avg Flow:** ${avgOf(flowLogs, 'flowRating', 1)}/5 · **Avg Process:** ${avgOf(flowLogs, 'processRating', 1)}/5`);
+    if (primed.length && cold.length) {
+      lines.push(`- **Warmed-Up vs. Cold:** Primed Avg Score **${avgOf(primed, 'avgScore', 0)}** (Avg SG ${avgOf(primed, 'avgSg', 2, true)}) vs. Cold Avg Score **${avgOf(cold, 'avgScore', 0)}** (Avg SG ${avgOf(cold, 'avgSg', 2, true)})`);
+    }
+    lines.push('');
+  }
+
   return lines.join('\n');
 }
 
@@ -1995,7 +2301,7 @@ function setupIpc() {
         contextPatch.feelId = runtime.settings.activeFeelId;
       }
       if ('activeDrillId' in patch) {
-        runtime.settings.activeDrillId = sanitizeContextId(patch.activeDrillId);
+        runtime.settings.activeDrillId = engine.sanitizeAdultDrillId(patch.activeDrillId);
         contextPatch.drillId = runtime.settings.activeDrillId;
       }
       if (typeof patch.driverSpeedMph === 'number' && Number.isFinite(patch.driverSpeedMph) && patch.driverSpeedMph >= 60 && patch.driverSpeedMph <= 140) {
@@ -2039,7 +2345,7 @@ function setupIpc() {
         }
       }
       savePersistedState();
-      if (Object.keys(contextPatch).length > 0) {
+      if (!runtime.kidsMode && Object.keys(contextPatch).length > 0) {
         void pushContextToSimWatch(contextPatch);
       }
       if (needsReanalyze) {
@@ -2062,11 +2368,11 @@ function setupIpc() {
       contextPatch.feelId = runtime.settings.activeFeelId;
     }
     if ('activeDrillId' in p) {
-      runtime.settings.activeDrillId = sanitizeContextId(p.activeDrillId);
+      runtime.settings.activeDrillId = engine.sanitizeAdultDrillId(p.activeDrillId);
       contextPatch.drillId = runtime.settings.activeDrillId;
     }
     savePersistedState();
-    if (Object.keys(contextPatch).length > 0) {
+    if (!runtime.kidsMode && Object.keys(contextPatch).length > 0) {
       void pushContextToSimWatch(contextPatch);
     }
     notifyAll('state');
@@ -2596,6 +2902,47 @@ function setupIpc() {
     return true;
   });
 
+  ipcMain.handle('shotlab:set-kids-mode', (_e, enabled) => {
+    const next = Boolean(enabled);
+    runtime.kidsMode = next;
+    if (next) {
+      pushContextToSimWatch({ sessionId: 'kids_zone', drillId: 'kids-zone', feelId: null });
+    } else {
+      pushContextToSimWatch({
+        sessionId: null,
+        drillId: runtime.settings.activeDrillId || null,
+        feelId: runtime.settings.activeFeelId || null,
+      });
+    }
+    notifyAll('state');
+    return {
+      ok: true,
+      kidsMode: runtime.kidsMode,
+      kidsState: runtime.kidsState || defaultKidsState(),
+    };
+  });
+
+  ipcMain.handle('shotlab:get-kids-state', () => runtime.kidsState || defaultKidsState());
+
+  ipcMain.handle('shotlab:update-kids-state', (_e, patch) => {
+    runtime.kidsState = sanitizeKidsState(patch, runtime.kidsState || defaultKidsState());
+    saveKidsState();
+    notifyAll('state');
+    return runtime.kidsState;
+  });
+
+  ipcMain.handle('shotlab:fire-kids-hit', (_e, opts = {}) => {
+    const tier = opts && opts.tier === 'super' ? 'super' : 'hit';
+    const raw = {
+      source: 'manual',
+      tier,
+      session_id: 'kids_zone',
+      drill_id: 'kids-zone',
+      ts: new Date().toISOString(),
+    };
+    return handleKidsShot(raw);
+  });
+
   ipcMain.handle('shotlab:open-external', (_e, url) => {
     if (typeof url !== 'string') return false;
     try {
@@ -2682,6 +3029,7 @@ if (!gotSingleInstanceLock) {
 
   app.whenReady().then(() => {
     loadPersistedState();
+    loadKidsState();
     try {
       swingDb = new engine.SwingDatabase(DB_PATH);
       syncHistoricalSessions();
@@ -2705,7 +3053,25 @@ if (!gotSingleInstanceLock) {
     });
   });
 
-  app.on('before-quit', () => {
+  let quitCleanupDone = false;
+
+  app.on('before-quit', (ev) => {
+    if (runtime.kidsMode && !quitCleanupDone) {
+      quitCleanupDone = true;
+      ev.preventDefault();
+      runtime.kidsMode = false;
+      Promise.race([
+        pushContextToSimWatch({
+          sessionId: null,
+          drillId: runtime.settings.activeDrillId || null,
+          feelId: runtime.settings.activeFeelId || null,
+        }),
+        new Promise((resolve) => setTimeout(resolve, 600)),
+      ]).finally(() => {
+        app.quit();
+      });
+      return;
+    }
     shuttingDown = true;
     stopCsvWatcher();
     if (bridgeRetryTimer) {

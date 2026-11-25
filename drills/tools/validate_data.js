@@ -103,6 +103,7 @@ const sectionsSeen = new Set();
     else c.recommendedDrills.forEach((x) => { if (!drillIds.has(x)) err(`${t}: recommendedDrills -> unknown drill "${x}"`); });
   }
   if (c.rating !== undefined && (!isNum(c.rating) || c.rating < 0 || c.rating > 5)) warn(`${t}: rating ${c.rating} outside 0-5`);
+  if (!["easy", "moderate", "challenging", "brutal"].includes(c.difficulty)) err(`${t}: difficulty "${c.difficulty}" must be easy/moderate/challenging/brutal`);
 });
 
 (D.customPracticeRounds || []).forEach((r) => {

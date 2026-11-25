@@ -20,8 +20,10 @@
     { id: 'driver_fairway', name: 'Driving Fairway Combine', short: 'Fairway Combine', target: '±14y fairway corridor with 225y+ carries' },
     { id: 'pressure5', name: '5/5 Pressure Gate', short: '5/5 Pressure', target: 'Make 5 in a row to unlock clear badge' },
     { id: 'course3', name: '3-Hole Course Prep', short: '3-Hole Prep', target: 'Beat Even Par across 3 windy sim holes' },
+    { id: 'process9', name: 'Process & Quiet-Eye 9', short: 'Process 9', target: '9 shots: commit to routine + hit Play-Box target corridor' },
   ];
 
+  const VALID_DIFFICULTIES = new Set(['standard', 'auto_flow', 'stretch_4', 'tour']);
   const COMBINE_TARGETS = [65, 85, 105, 125, 145, 165, 185, 95, 155, 175, 75, 135, 195, 115, 160, 140, 170, 110];
   const WEDGE_TARGETS = [75, 90, 105, 85, 115, 95];
   const SHAPE_SEQUENCE = ['Draw', 'Fade', 'Straight', 'Draw', 'Fade', 'Straight'];
@@ -29,6 +31,11 @@
   function createChallengeStore(initialBests = {}) {
     const state = {
       activeId: 'combine18',
+      difficulty: 'standard',
+      dispersionRef: { width80Yds: 28, depth80Yds: 16 },
+      stretchMult: 1.0,
+      recentPassStreak: 0,
+      recentMissStreak: 0,
       combineIdx: 0,
       combinePoints: 0,
       combineResults: [],
@@ -41,6 +48,7 @@
       driverHits: 0,
       driverShots: 0,
       pressure: { gate: 'hla', streak: 0, clears: 0, mutedVignette: false, lastNote: '' },
+      process9: { shots: 0, targetHits: 0, committedCount: 0, awaitingProcess: false, log: [] },
       course: {
         holeIdx: 0,
         stage: 'tee', // tee | app | done
@@ -53,7 +61,41 @@
       bests: { ...(initialBests && typeof initialBests === 'object' ? initialBests : {}) },
     };
 
+    function getToleranceScale() {
+      if (state.difficulty === 'standard') return 1.0;
+      if (state.difficulty === 'tour') return 0.72;
+      const w80 = Number(state.dispersionRef?.width80Yds);
+      const baseAuto = Number.isFinite(w80) && w80 > 0
+        ? Math.max(0.65, Math.min(1.55, (w80 * 0.45) / 14))
+        : 1.0;
+      if (state.difficulty === 'auto_flow') return Math.round(baseAuto * 100) / 100;
+      return Math.round(Math.max(0.55, Math.min(1.6, baseAuto * 0.96 * state.stretchMult)) * 100) / 100;
+    }
+
+    function setDispersionRef(dispersionRef = null) {
+      if (dispersionRef && typeof dispersionRef === 'object') {
+        const w = Number(dispersionRef.width80Yds);
+        const d = Number(dispersionRef.depth80Yds);
+        state.dispersionRef = {
+          width80Yds: Number.isFinite(w) && w > 0 ? w : state.dispersionRef.width80Yds,
+          depth80Yds: Number.isFinite(d) && d > 0 ? d : state.dispersionRef.depth80Yds,
+        };
+      }
+    }
+
+    function setDifficulty(mode = 'standard', dispersionRef = null) {
+      const modeChanged = VALID_DIFFICULTIES.has(mode) && mode !== state.difficulty;
+      if (VALID_DIFFICULTIES.has(mode)) state.difficulty = mode;
+      setDispersionRef(dispersionRef);
+      if (modeChanged) {
+        state.stretchMult = 1.0;
+        state.recentPassStreak = 0;
+        state.recentMissStreak = 0;
+      }
+    }
+
     function getCurrentTargetText() {
+      const tolScale = getToleranceScale();
       switch (state.activeId) {
         case 'combine18':
           if (state.combineIdx >= 18) {
@@ -69,12 +111,24 @@
         case 'shape_caller':
           return `Call: Hit a clean ${SHAPE_SEQUENCE[state.shapeIdx % SHAPE_SEQUENCE.length]}`;
         case 'iron_ladder':
-          return `Rung ${state.ladderStage + 1}: Carry ${135 + state.ladderStage * 12}y ±6y`;
-        case 'driver_fairway':
-          return `Corridor ±14y · ≥225y · ${state.driverHits}/${state.driverShots} FW`;
+          return `Rung ${state.ladderStage + 1}: Carry ${135 + state.ladderStage * 12}y ±${Math.max(3, Math.round(6 * tolScale))}y`;
+        case 'driver_fairway': {
+          const fwCorridor = Math.max(8, Math.round(14 * tolScale));
+          return `Corridor ±${fwCorridor}y · ≥225y · ${state.driverHits}/${state.driverShots} FW`;
+        }
         case 'pressure5': {
-          const labels = { hla: 'HLA ±1.5°', path: 'Path ±2.5°', smash: 'Smash ≥1.34' };
+          const hlaGate = (1.5 * tolScale).toFixed(1);
+          const pathGate = (2.5 * tolScale).toFixed(1);
+          const smashGate = Math.max(1.28, Math.min(1.38, 1.34 + (1 - tolScale) * 0.04)).toFixed(2);
+          const labels = { hla: `HLA ±${hlaGate}°`, path: `Path ±${pathGate}°`, smash: `Smash ≥${smashGate}` };
           return `${labels[state.pressure.gate] || 'Gate'} · Streak ${state.pressure.streak}/5`;
+        }
+        case 'process9': {
+          if (state.process9.shots >= 9) {
+            return `Complete (9/9) · ${state.process9.targetHits} Target · ${state.process9.committedCount} Committed`;
+          }
+          const cor = Math.max(8, Math.round(14 * tolScale));
+          return `Ball ${state.process9.shots + 1}/9 · Corridor ±${cor}y · Process ${state.process9.committedCount}/${state.process9.shots}`;
         }
         case 'course3': {
           if (state.course.stage === 'done') {
@@ -89,10 +143,10 @@
       }
     }
 
-    function scoreProximityPts(errYds, maxPts = 100) {
+    function scoreProximityPts(errYds, maxPts = 100, tolScale = 1.0) {
       const raw = Number(errYds);
       if (!Number.isFinite(raw)) return 0;
-      const e = Math.abs(raw);
+      const e = Math.abs(raw) / Math.max(0.5, tolScale);
       if (e <= 3) return maxPts;
       if (e <= 8) return Math.round(maxPts * 0.85);
       if (e <= 15) return Math.round(maxPts * 0.65);
@@ -114,6 +168,7 @@
         return { recorded: false, bestsChanged: false, pass: false, message: 'No ball flight data for this shot', targetText: getCurrentTargetText(), bests: { ...state.bests } };
       }
 
+      const tolScale = getToleranceScale();
       const prevBests = { ...state.bests };
       let message = '';
       let pass = false;
@@ -124,7 +179,7 @@
         }
         const tgt = COMBINE_TARGETS[state.combineIdx % COMBINE_TARGETS.length];
         const prox = Math.hypot(carry - tgt, offline);
-        const pts = scoreProximityPts(prox, 100);
+        const pts = scoreProximityPts(prox, 100, tolScale);
         state.combineResults.push({ shot: state.combineIdx + 1, tgt, carry: Math.round(carry), offline: Math.round(offline), prox: Math.round(prox), pts });
         state.combinePoints += pts;
         state.combineIdx += 1;
@@ -138,7 +193,8 @@
         }
         const tgt = WEDGE_TARGETS[state.wedgeShots % WEDGE_TARGETS.length];
         const prox = Math.hypot(carry - tgt, offline);
-        const pts = prox <= 4 ? 5 : prox <= 8 ? 3 : prox <= 13 ? 1 : -2;
+        const effProx = prox / Math.max(0.5, tolScale);
+        const pts = effProx <= 4 ? 5 : effProx <= 8 ? 3 : effProx <= 13 ? 1 : -2;
         state.wedgeShots += 1;
         state.wedgePoints = Math.min(21, Math.max(0, state.wedgePoints + pts));
         if (state.wedgePoints >= 21) {
@@ -150,16 +206,21 @@
         const want = SHAPE_SEQUENCE[state.shapeIdx % SHAPE_SEQUENCE.length];
         const rawCurve = shot.flight?.curveYds;
         const curve = typeof rawCurve === 'number' && Number.isFinite(rawCurve) ? rawCurve : 0;
-        if (want === 'Draw') pass = /Draw/i.test(shapeName) && Math.abs(offline) <= 18;
-        else if (want === 'Fade') pass = /Fade/i.test(shapeName) && Math.abs(offline) <= 18;
-        else pass = Math.abs(offline) <= 8 && Math.abs(curve) <= 10;
+        const latGate = Math.max(10, Math.round(18 * tolScale));
+        const strLat = Math.max(5, Math.round(8 * tolScale));
+        const strCurve = Math.max(6, Math.round(10 * tolScale));
+        if (want === 'Draw') pass = /Draw/i.test(shapeName) && Math.abs(offline) <= latGate;
+        else if (want === 'Fade') pass = /Fade/i.test(shapeName) && Math.abs(offline) <= latGate;
+        else pass = Math.abs(offline) <= strLat && Math.abs(curve) <= strCurve;
         if (pass) state.shapeHits += 1;
         state.shapeIdx += 1;
         if (state.shapeHits > (state.bests.shape_caller || 0)) state.bests.shape_caller = state.shapeHits;
         message = `Called ${want} -> Got ${shapeName || 'Unknown'} (${pass ? 'PASS' : 'MISS'})`;
       } else if (state.activeId === 'iron_ladder') {
         const tgt = 135 + state.ladderStage * 12;
-        pass = Math.abs(carry - tgt) <= 6 && Math.abs(offline) <= 12;
+        const carryGate = Math.max(3, Math.round(6 * tolScale));
+        const offGate = Math.max(7, Math.round(12 * tolScale));
+        pass = Math.abs(carry - tgt) <= carryGate && Math.abs(offline) <= offGate;
         if (pass) {
           state.ladderStage += 1;
           state.ladderStreak += 1;
@@ -169,12 +230,13 @@
         }
         message = `Ladder Target ${tgt}y -> ${Math.round(carry)}y (${pass ? 'CLIMBED!' : 'HOLD RUNG'})`;
       } else if (state.activeId === 'driver_fairway') {
-        pass = Math.abs(offline) <= 14 && carry >= 225;
+        const fwCorridor = Math.max(8, Math.round(14 * tolScale));
+        pass = Math.abs(offline) <= fwCorridor && carry >= 225;
         state.driverShots += 1;
         if (pass) state.driverHits += 1;
         const pct = Math.round((state.driverHits / state.driverShots) * 100);
         if (state.driverShots >= 5 && pct > (state.bests.driver_fairway || 0)) state.bests.driver_fairway = pct;
-        message = `Fairway check: ${Math.round(carry)}y carry, ${Math.abs(offline).toFixed(1)}y offline -> ${pass ? 'FAIRWAY HIT' : 'MISSED FW'}`;
+        message = `Fairway check (±${fwCorridor}y): ${Math.round(carry)}y carry, ${Math.abs(offline).toFixed(1)}y offline -> ${pass ? 'FAIRWAY HIT' : 'MISSED FW'}`;
       } else if (state.activeId === 'pressure5') {
         const g = state.pressure.gate;
         const gateVal = g === 'hla' ? hla : g === 'path' ? path : smash;
@@ -188,9 +250,12 @@
             bests: { ...state.bests },
           };
         }
-        if (g === 'hla') pass = Math.abs(gateVal) <= 1.5;
-        else if (g === 'path') pass = Math.abs(gateVal) <= 2.5;
-        else pass = gateVal >= 1.34;
+        const hlaGate = 1.5 * tolScale;
+        const pathGate = 2.5 * tolScale;
+        const smashGate = Math.max(1.28, Math.min(1.38, 1.34 + (1 - tolScale) * 0.04));
+        if (g === 'hla') pass = Math.abs(gateVal) <= hlaGate;
+        else if (g === 'path') pass = Math.abs(gateVal) <= pathGate;
+        else pass = gateVal >= smashGate;
         if (pass) {
           state.pressure.streak += 1;
           if (state.pressure.streak >= 5) {
@@ -206,15 +271,32 @@
           state.pressure.streak = 0;
           message = `Streak reset (missed ${g.toUpperCase()} gate)`;
         }
+      } else if (state.activeId === 'process9') {
+        if (state.process9.shots >= 9) {
+          return { recorded: false, bestsChanged: false, done: true, pass: true, message: 'Process 9 complete — click Reset Challenge', targetText: getCurrentTargetText(), bests: { ...state.bests } };
+        }
+        const corridor = Math.max(8, Math.round(14 * tolScale));
+        pass = carry > 0 && Math.abs(offline) <= corridor;
+        state.process9.shots += 1;
+        if (pass) state.process9.targetHits += 1;
+        state.process9.awaitingProcess = true;
+        state.process9.log.push({ shotNum: state.process9.shots, targetPass: pass, offline: Math.round(offline), committed: null });
+        if (state.process9.shots >= 9) {
+          const total = state.process9.targetHits + state.process9.committedCount;
+          if (total > (state.bests.process9 || 0)) state.bests.process9 = total;
+        }
+        message = `Play-Box #${state.process9.shots}/9: ${carry > 0 ? `${Math.round(carry)}y, ${Math.abs(offline).toFixed(1)}y offline` : 'Topped / 0y carry'} (±${corridor}y) -> ${pass ? 'ON TARGET' : 'WIDE'} · Mark Committed Y/N`;
       } else if (state.activeId === 'course3') {
         if (state.course.stage === 'done') {
           return { recorded: false, bestsChanged: false, done: true, pass: true, message: '3-Hole Course Prep finished — click Reset to replay', targetText: getCurrentTargetText(), bests: { ...state.bests } };
         }
         const h = state.course.holes[state.course.holeIdx];
         if (h) {
+          const penGate = Math.max(18, Math.round(26 * tolScale));
+          const onePuttGate = Math.max(3, Math.round(5 * tolScale));
           if (state.course.stage === 'tee' && h.par === 4) {
             const rem = Math.max(45, Math.round(h.yds - carry));
-            const penalty = Math.abs(offline) > 26 ? 1 : 0;
+            const penalty = Math.abs(offline) > penGate ? 1 : 0;
             h.appYds = rem;
             state.course.stage = 'app';
             message = `Hole ${h.num} Tee: ${Math.round(carry)}y -> ${rem}y left${penalty ? ' (+1 penalty drop)' : ''}`;
@@ -222,7 +304,7 @@
             pass = penalty === 0;
           } else {
             const prox = Math.hypot(carry - (h.appYds || h.yds), offline);
-            const putts = prox <= 5 ? 1 : 2;
+            const putts = prox <= onePuttGate ? 1 : 2;
             const gross = (h.par === 3 ? 1 : 2) + putts + (h._pen || 0);
             h.score = gross;
             pass = gross <= h.par;
@@ -242,8 +324,46 @@
         }
       }
 
+      if (state.difficulty === 'stretch_4') {
+        if (pass) {
+          state.recentPassStreak += 1;
+          state.recentMissStreak = 0;
+          if (state.recentPassStreak >= 3) {
+            state.stretchMult = Math.max(0.78, Math.round(state.stretchMult * 0.96 * 100) / 100);
+            state.recentPassStreak = 0;
+          }
+        } else {
+          state.recentMissStreak += 1;
+          state.recentPassStreak = 0;
+          if (state.recentMissStreak >= 3) {
+            state.stretchMult = Math.min(1.2, Math.round(state.stretchMult * 1.04 * 100) / 100);
+            state.recentMissStreak = 0;
+          }
+        }
+      }
+
       const bestsChanged = Object.keys(state.bests).some((k) => state.bests[k] !== prevBests[k]);
       return { recorded: true, bestsChanged, pass, message, targetText: getCurrentTargetText(), bests: { ...state.bests } };
+    }
+
+    function markProcessCommitment(committed = true) {
+      const last = state.process9.log[state.process9.log.length - 1];
+      if (!last) return { updated: false, bestsChanged: false, bests: { ...state.bests } };
+      const prevBest = state.bests.process9;
+      const wasCommitted = last.committed;
+      last.committed = Boolean(committed);
+      if (last.committed && wasCommitted !== true) state.process9.committedCount += 1;
+      else if (!last.committed && wasCommitted === true) state.process9.committedCount = Math.max(0, state.process9.committedCount - 1);
+      state.process9.awaitingProcess = false;
+      if (state.process9.shots >= 9) {
+        const total = state.process9.targetHits + state.process9.committedCount;
+        if (total > (state.bests.process9 || 0)) state.bests.process9 = total;
+      }
+      return {
+        updated: true,
+        bestsChanged: state.bests.process9 !== prevBest,
+        bests: { ...state.bests },
+      };
     }
 
     function setBests(bests = {}) {
@@ -253,7 +373,12 @@
     }
 
     function setActive(id) {
-      if (CHALLENGE_DEFS.some((d) => d.id === id)) state.activeId = id;
+      if (CHALLENGE_DEFS.some((d) => d.id === id)) {
+        state.activeId = id;
+        state.stretchMult = 1.0;
+        state.recentPassStreak = 0;
+        state.recentMissStreak = 0;
+      }
     }
 
     function setPressureGate(gate) {
@@ -261,6 +386,9 @@
     }
 
     function resetActive() {
+      state.stretchMult = 1.0;
+      state.recentPassStreak = 0;
+      state.recentMissStreak = 0;
       if (state.activeId === 'combine18') {
         state.combineIdx = 0; state.combinePoints = 0; state.combineResults = [];
       } else if (state.activeId === 'wedge21') {
@@ -273,6 +401,8 @@
         state.driverHits = 0; state.driverShots = 0;
       } else if (state.activeId === 'pressure5') {
         state.pressure.streak = 0; state.pressure.lastNote = '';
+      } else if (state.activeId === 'process9') {
+        state.process9 = { shots: 0, targetHits: 0, committedCount: 0, awaitingProcess: false, log: [] };
       } else if (state.activeId === 'course3') {
         state.course.holeIdx = 0;
         state.course.stage = 'tee';
@@ -302,6 +432,9 @@
         score = `${state.driverHits}/${state.driverShots} FW`;
       } else if (state.activeId === 'pressure5') {
         score = `${state.pressure.streak} / 5`;
+      } else if (state.activeId === 'process9') {
+        score = `${state.process9.targetHits}+${state.process9.committedCount} (${state.process9.shots}/9)`;
+        isDone = state.process9.shots >= 9;
       } else if (state.activeId === 'course3') {
         const done = state.course.holes.filter((h) => h.score !== null);
         const rel = done.reduce((a, h) => a + (h.score - h.par), 0);
@@ -321,6 +454,10 @@
       state,
       getCurrentTargetText,
       recordShot,
+      markProcessCommitment,
+      setDifficulty,
+      setDispersionRef,
+      getToleranceScale,
       setBests,
       setActive,
       setPressureGate,

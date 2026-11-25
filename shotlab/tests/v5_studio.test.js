@@ -818,3 +818,440 @@ test('Cycle 2: SVG LH shot-shape goal mirrors RH and Challenges preserve pressur
   const wildStraight = { metrics: { hla: -4, path: 2, smash: 1.35 }, flight: { carryYds: 165, offlineYds: 2, curveYds: 18 }, shotShape: { name: 'Double Cross' } };
   assert.equal(store.recordShot(wildStraight).pass, false, 'Straight challenge must fail high-curve shot');
 });
+
+test('Mind & Flow: Drills Hub bridge metadata, audio breath pacer, Process 9 & difficulty scaling, charts correlation, and studio sanitization', () => {
+  const repoRoot = path.resolve(__dirname, '../..');
+  const hub = engine.loadDrillsHubData(repoRoot);
+  const mindDrills = hub.drills.filter((d) => d.section === 'Mind & Sensory Warmup');
+  assert.equal(mindDrills.length, 7);
+  for (const d of mindDrills) {
+    assert.equal(d.swingPhase, 'mental-tempo');
+    assert.ok(d.duration && d.reps && Array.isArray(d.instructions) && d.instructions.length >= 4);
+  }
+
+  // 1. Audio Breath Pacer (visual-only default, matches mindState, prototype-safe)
+  const audio = require('../renderer/audio');
+  assert.ok(audio.BREATH_PROTOCOLS.sigh && audio.BREATH_PROTOCOLS.box && audio.BREATH_PROTOCOLS.coherent && audio.BREATH_PROTOCOLS.energize);
+  assert.equal(audio.protocolForMindState('wired').id, 'sigh');
+  assert.equal(audio.protocolForMindState('scattered').id, 'box');
+  assert.equal(audio.protocolForMindState('locked').id, 'coherent');
+  assert.equal(audio.protocolForMindState('flat').id, 'energize');
+  assert.equal(audio.protocolForMindState('__proto__').id, 'coherent');
+  assert.equal(audio.protocolForMindState('constructor').id, 'coherent');
+  const ticks = [];
+  audio.startBreathPacer('sigh', (t) => ticks.push(t), { audio: false, cycles: 1 });
+  assert.equal(audio.isBreathPacerRunning(), true);
+  assert.ok(ticks.length >= 1 && ticks[0].phase.includes('Inhale'));
+  audio.stopBreathPacer();
+  assert.equal(audio.isBreathPacerRunning(), false);
+
+  // 2. Challenges: Process 9, Flow-Channel difficulty scaling & reset safety
+  assert.equal(challenges.CHALLENGE_DEFS.length, 8);
+  const cStore = challenges.createChallengeStore();
+  assert.equal(cStore.getToleranceScale(), 1.0);
+  cStore.setDifficulty('auto_flow', { width80Yds: 42, depth80Yds: 18 });
+  assert.ok(cStore.getToleranceScale() > 1.1 && cStore.getToleranceScale() <= 1.55);
+  cStore.setDifficulty('stretch_4', { width80Yds: 28, depth80Yds: 14 });
+  const stretchStart = cStore.getToleranceScale();
+  cStore.setActive('process9');
+  const straightShot = { metrics: { effectiveCarry: 165, hla: 0.2, path: 0.5, smash: 1.38 }, flight: { carryYds: 165, offlineYds: 3 }, shotShape: { name: 'Straight' } };
+  for (let i = 0; i < 3; i += 1) {
+    const r = cStore.recordShot(straightShot);
+    assert.equal(r.recorded, true);
+    assert.equal(r.pass, true);
+    assert.equal(cStore.markProcessCommitment(true).updated, true);
+  }
+  assert.equal(cStore.state.process9.shots, 3);
+  assert.equal(cStore.state.process9.committedCount, 3);
+  assert.ok(cStore.getToleranceScale() < stretchStart, '3 consecutive passes in stretch_4 should tighten tolerance ~4%');
+  assert.ok(cStore.getObsPayload().score.includes('3+3'));
+  // Zero-carry topper must fail process9 even at 0 offline
+  const topper = { metrics: { effectiveCarry: 0, hla: 0, path: 0, smash: 0 }, flight: { carryYds: 0, offlineYds: 0 }, shotShape: { name: 'Straight' } };
+  assert.equal(cStore.recordShot(topper).pass, false);
+  // resetActive restores stretchMult & streak
+  cStore.resetActive();
+  assert.equal(cStore.state.stretchMult, 1.0);
+  assert.equal(cStore.state.recentPassStreak, 0);
+  // Completing all 9 and marking commitment on #9 updates bests.process9
+  for (let i = 0; i < 9; i += 1) {
+    cStore.recordShot(straightShot);
+    if (i < 8) cStore.markProcessCommitment(true);
+  }
+  const finalCommit = cStore.markProcessCommitment(true);
+  assert.equal(finalCommit.updated, true);
+  assert.equal(finalCommit.bestsChanged, true);
+  assert.equal(finalCommit.bests.process9, 18);
+
+  // 3. Charts: Flow & Warmup correlation with null/malformed safety
+  const sampleLogs = [
+    { id: '1', date: '2026-11-21', warmupDone: true, mindState: 'locked', flowRating: 5, processRating: 5, avgScore: 88, avgSg: 0.22 },
+    { id: '2', date: '2026-11-22', warmupDone: false, mindState: 'wired', flowRating: 2, processRating: 2, avgScore: 68, avgSg: -0.35 },
+    { id: '3', date: '2026-11-23', warmupDone: true, mindState: 'locked', flowRating: null, processRating: 4, avgScore: 84, avgSg: 0.1 },
+  ];
+  const corr = charts.computeFlowCorrelation(sampleLogs);
+  assert.equal(corr.warmedUp.avgScore, 86);
+  assert.equal(corr.cold.avgScore, 68);
+  assert.equal(corr.highFlow.avgSg, 0.22);
+  assert.equal(corr.lowFlow.n, 1, 'Null flowRating entries must not be classified as Busy Mind (1-3/5)');
+  const corrHtml = charts.renderFlowCorrelationHtml([null, undefined, ...sampleLogs]);
+  assert.ok(corrHtml.includes('Mind Warmed Up') && !corrHtml.includes('NaN') && !corrHtml.includes('undefined'));
+  assert.ok(charts.renderFlowCorrelationHtml([]).includes('No Flow'));
+
+  // 4. Studio sanitization in shotlab/main.js (legacy state migration + bounds + prototype safety)
+  const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+  const sliceMatch = mainSrc.match(/const VALID_MAT_TYPES[\s\S]+?\nconst runtime = \{/);
+  assert.ok(sliceMatch, 'Could not locate studio sanitizer block in main.js');
+  const sanCode = sliceMatch[0].replace(/\nconst runtime = \{$/, '\n');
+  const sanCtx = vm.createContext({ Set, Object, Array, Number, String, Boolean, Math, Date });
+  vm.runInContext(`${sanCode}; globalThis.__res = { def: defaultStudioState, san: sanitizeStudioState };`, sanCtx);
+  const defStudio = sanCtx.__res.def();
+  assert.equal(defStudio.challengeDifficulty, 'standard');
+  assert.equal(defStudio.flowConfig.breathAudio, false);
+  const migrated = sanCtx.__res.san({
+    mindCheckin: { state: 'wired', noise: 99, cue: '  Brush turf  ', modeLock: 'bogus', warmupDoneDate: '2026-11-23' },
+    flowConfig: { batchSize: 1, batchEnabled: true, feelVsReal: true, breathAudio: true },
+    challengeDifficulty: 'stretch_4',
+    flowLogs: [{ date: '2026-11-23', warmupDone: true, flowRating: 8, processRating: 0, avgScore: 91, avgSg: 0.25, shotsCount: 14 }],
+  }, { matType: 'divot' });
+  assert.equal(migrated.matType, 'divot');
+  assert.equal(migrated.mindCheckin.state, 'wired');
+  assert.equal(migrated.mindCheckin.noise, 5);
+  assert.equal(migrated.mindCheckin.modeLock, 'flow');
+  assert.equal(migrated.flowConfig.batchSize, 3);
+  assert.equal(migrated.flowLogs[0].flowRating, 5);
+  assert.equal(migrated.flowLogs[0].processRating, 1);
+
+  // 5. Static syntax & invariant guards across modified frontend files
+  const drillsHtml = fs.readFileSync(path.join(repoRoot, 'drills', 'index.html'), 'utf8');
+  const scripts = [...drillsHtml.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]).filter((s) => s.trim());
+  for (const s of scripts) new vm.Script(s);
+  const appJs = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'app.js'), 'utf8');
+  new vm.Script(appJs);
+  const kidsJs = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'kids.js'), 'utf8');
+  new vm.Script(kidsJs);
+  const obsCss = fs.readFileSync(path.join(__dirname, '..', 'obs', 'overlay.css'), 'utf8');
+  assert.equal(/backdrop-filter\s*:/i.test(obsCss), false);
+});
+
+test('Kids Zone analyzer, 4-layer Dad-Stats SQLite firewall, arcade engine, audio & Drills Hub persistence', () => {
+  const repoRoot = path.resolve(__dirname, '..', '..');
+  const audio = require('../renderer/audio');
+  const kidsArcadeMod = require('../renderer/kids');
+
+  // 1. Low-speed & manual analyzer never drops kid swings or yields NaN
+  const roller = engine.analyzeKidsShot({ ts: '2026-11-24T18:00:01Z', ball: { speed: 4.5, vla: 0, hla: 1.5 } });
+  const foamPop = engine.analyzeKidsShot({ ts: '2026-11-24T18:00:02Z', ball: { speed: 19, vla: 22, hla: -2, spin: 2100 } });
+  const bigSwing = engine.analyzeKidsShot({ ts: '2026-11-24T18:00:03Z', ball: { speed: 40, vla: 25, hla: 0.5, carry: 36, total: 42 } });
+  const manualHit = engine.analyzeKidsShot({ source: 'manual', tier: 'hit', ts: '2026-11-24T18:00:04Z' });
+  const manualSuper = engine.analyzeKidsShot({ source: 'manual', tier: 'super', ts: '2026-11-24T18:00:05Z' });
+
+  for (const s of [roller, foamPop, bigSwing, manualHit, manualSuper]) {
+    assert.ok(s && s.isKids === true && s.practiceMode === 'kids');
+    assert.ok(s.starsEarned >= 1 && s.starsEarned <= 3);
+    assert.ok(Number.isFinite(s.ballSpeed) && Number.isFinite(s.carryYds) && Number.isFinite(s.totalYds) && Number.isFinite(s.apexFt));
+  }
+  assert.equal(roller.isRoller, true);
+  assert.equal(roller.carryYds, 0);
+  assert.ok(roller.totalYds > 0);
+  assert.equal(bigSwing.starsEarned, 3);
+  assert.equal(manualSuper.starsEarned, 2);
+
+  // 2. Kids gate predicate
+  assert.equal(engine.isKidsZoneRawShot({ session_id: 'kids_zone', ball: { speed: 25 } }), true);
+  assert.equal(engine.isKidsZoneRawShot({ drill_id: 'kids-volcano-rocket-launch', ball: { speed: 25 } }), true);
+  assert.equal(engine.isKidsZoneRawShot({ kids_zone: true }), true);
+  assert.equal(engine.isKidsZoneRawShot({ ts: 't_q' }, new Set(['t_q'])), true);
+  assert.equal(engine.isKidsZoneRawShot({ ts: 't_dad', session_id: null, ball: { speed: 112 } }, new Set(['t_q'])), false);
+
+  // 3. 4-layer SQLite Dad-Stats Firewall: SwingDatabase.upsertShot + syncSimWatchSessions reject all kid shots
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shotlab-kids-fw-'));
+  try {
+    const db = new engine.SwingDatabase(path.join(tmpDir, 'swings.sqlite'));
+    const blockedUpsert = db.upsertShot({
+      id: 'kids_blocked_1',
+      ts: '2026-11-24T18:05:00Z',
+      isKids: true,
+      practiceMode: 'kids',
+      activeClub: '7I',
+      metrics: { ballSpeed: 30, effectiveCarry: 22 },
+      flight: {},
+      delivery: {},
+      strike: {},
+      scorecard: {},
+      strokesGained: {},
+    });
+    assert.equal(blockedUpsert, null);
+    assert.equal(db.getSummary().totalShots, 0);
+
+    const sessionsDir = path.join(tmpDir, 'Sessions');
+    const dayDir = path.join(sessionsDir, '2026-11-24');
+    fs.mkdirSync(dayDir, { recursive: true });
+    const adultLine = JSON.stringify({
+      ts: '2026-11-24T18:10:00Z',
+      shot_num: 1,
+      club: '7I',
+      practice_mode: 'real',
+      ball: { speed: 118, carry: 168, total: 175, vla: 16.5, hla: 0.4, spin: 6400, spin_axis: -2 },
+      club_data: { speed: 88, path: 1.5, aoa: -3.2 },
+    });
+    const kidTaggedLine = JSON.stringify({
+      ts: '2026-11-24T18:12:00Z',
+      shot_num: 2,
+      session_id: 'kids_zone',
+      drill_id: 'kids-zone',
+      ball: { speed: 24, vla: 20, hla: 1.0, spin: 1800 },
+    });
+    const kidDrillLine = JSON.stringify({
+      ts: '2026-11-24T18:13:00Z',
+      shot_num: 3,
+      drill_id: 'kids-volcano-rocket-launch',
+      ball: { speed: 32, vla: 24, hla: 0.2, spin: 2100 },
+    });
+    fs.writeFileSync(path.join(dayDir, 'shots.jsonl'), `${adultLine}\n${kidTaggedLine}\n${kidDrillLine}\n`, 'utf8');
+
+    const syncRes = db.syncSimWatchSessions(sessionsDir, (raw) => engine.analyzeShot(raw));
+    assert.equal(syncRes.shotsImported, 1, 'Only Dad adult shot should be imported; kid shots must be dropped before analyze/insert');
+    assert.equal(db.getSummary().totalShots, 1);
+    db.close();
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+
+  // 4. Kids Arcade Engine (all 4 games + SVG renders without NaN/undefined)
+  assert.equal(kidsArcadeMod.KIDS_GAMES.length, 4);
+  const arcade = kidsArcadeMod.createKidsArcadeState();
+  const rOut = kidsArcadeMod.applyKidsShotToGame(arcade, 'rocket', bigSwing, 'Emma');
+  assert.ok(rOut.starsEarned >= 3 && rOut.trophyWon === true);
+
+  let rexOutcome = null;
+  for (let i = 0; i < 6; i += 1) {
+    rexOutcome = kidsArcadeMod.applyKidsShotToGame(arcade, 'trex', roller, 'Leo');
+    if (rexOutcome.trophyWon) break;
+  }
+  assert.equal(rexOutcome.trophyWon, true);
+  assert.equal(arcade.trexHp, 0);
+
+  let monOutcome = null;
+  for (let i = 0; i < 6; i += 1) {
+    monOutcome = kidsArcadeMod.applyKidsShotToGame(arcade, 'monster', roller, 'Leo');
+    if (monOutcome.trophyWon) break;
+  }
+  assert.equal(monOutcome.trophyWon, true);
+
+  kidsArcadeMod.applyKidsShotToGame(arcade, 'bowling', bigSwing, 'Emma');
+  assert.ok(arcade.bowlingStrikes >= 1);
+
+  for (const g of kidsArcadeMod.KIDS_GAMES) {
+    const svgStr = kidsArcadeMod.renderKidsGameSvg(g.id, arcade, bigSwing);
+    assert.ok(svgStr.includes('<svg') && !svgStr.includes('NaN') && !svgStr.includes('undefined'), `Invalid SVG for game ${g.id}`);
+  }
+
+  // 5. Kids audio helpers safely exist & no-op in Node
+  for (const fn of ['playKidsStarChime', 'playKidsFanfare', 'playKidsWhoosh', 'speakKidsCheer']) {
+    assert.equal(typeof audio[fn], 'function');
+    assert.doesNotThrow(() => audio[fn](fn === 'speakKidsCheer' ? 'Great hit!' : 2));
+  }
+
+  // 6. Drills Hub website persistence & anti-leak guards
+  const drillsHtml = fs.readFileSync(path.join(repoRoot, 'drills', 'index.html'), 'utf8');
+  assert.ok(drillsHtml.includes('mindPrime: state.mindPrime'), 'buildPersistObject must save mindPrime');
+  assert.ok(drillsHtml.includes('kidsZone: state.kidsZone'), 'buildPersistObject must save kidsZone');
+  assert.ok(drillsHtml.includes('sanitizeMindPrime(parsed.mindPrime)'), 'applyImportedBackup must restore mindPrime');
+  assert.ok(drillsHtml.includes('sanitizeKidsZone(parsed.kidsZone)'), 'applyImportedBackup must restore kidsZone');
+  assert.ok(drillsHtml.includes('function isKidsDrill('), 'drills/index.html must include isKidsDrill anti-leak helper');
+  assert.ok(drillsHtml.includes('shot.session_id === "kids_zone"'), 'onBridgeShot must ignore Kids Zone shots');
+});
+
+test('Review fixes: Kids bridge loop guard, drillId sanitization, SQLite raw-shot gate & Challenges helper', () => {
+  const repoRoot = path.resolve(__dirname, '../..');
+
+  // 1. P0 feedback-storm guard & P1 drillId sanitization
+  assert.equal(engine.shouldPushKidsContextOnStatus(false, { session_id: 'adult' }), false);
+  assert.equal(
+    engine.shouldPushKidsContextOnStatus(true, { session_id: 'kids_zone', drill_id: 'kids-zone', feel_id: null }),
+    false,
+    'Must NOT re-POST /api/context when SimWatch already matches Kids Zone context'
+  );
+  assert.equal(
+    engine.shouldPushKidsContextOnStatus(true, { session_id: 'kids_zone', drill_id: 'kids-zone', feel_id: 'left-feel' }),
+    true
+  );
+  assert.equal(engine.shouldPushKidsContextOnStatus(true, { session_id: null }), true);
+
+  assert.equal(engine.sanitizeAdultDrillId('kids-volcano-rocket-launch'), null);
+  assert.equal(engine.sanitizeAdultDrillId('KIDS-ANYTHING'), null);
+  assert.equal(engine.sanitizeAdultDrillId('bad space/id'), null);
+  assert.equal(engine.sanitizeAdultDrillId('towel-low-point'), 'towel-low-point');
+
+  // 2. OpenConnect BallData + invalid payloads in analyzeKidsShot
+  assert.equal(engine.analyzeKidsShot(null), null);
+  const ocKid = engine.analyzeKidsShot({ ts: '2026-11-25T10:00:00Z', BallData: { Speed: 28, VLA: 18, HLA: 1.1 } });
+  assert.ok(ocKid && ocKid.isKids === true && ocKid.ballSpeed === 28 && ocKid.starsEarned >= 2);
+
+  // 3. SwingDatabase.upsertShot blocks raw kids_zone payload or kids-* drillId even if analyzed flags were stripped
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shotlab-fw-p1-'));
+  try {
+    const db = new engine.SwingDatabase(path.join(tmpDir, 'swings.sqlite'));
+    assert.equal(db.upsertShot({
+      id: 'leak_raw_session',
+      ts: '2026-11-25T10:01:00Z',
+      activeClub: '7I',
+      metrics: { ballSpeed: 105, effectiveCarry: 145 },
+      flight: {},
+      delivery: {},
+      strike: {},
+      scorecard: {},
+      strokesGained: {},
+      raw: { session_id: 'kids_zone', ball: { speed: 105 } },
+    }), null);
+    assert.equal(db.upsertShot({
+      id: 'leak_drill_id',
+      ts: '2026-11-25T10:02:00Z',
+      activeClub: '7I',
+      drillId: 'kids-rex-chomp',
+      metrics: { ballSpeed: 105, effectiveCarry: 145 },
+      flight: {},
+      delivery: {},
+      strike: {},
+      scorecard: {},
+      strokesGained: {},
+    }), null);
+    assert.equal(db.getSummary().totalShots, 0);
+    db.close();
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+
+  // 4. Challenges setDispersionRef + non-resetting setDifficulty on repeat mode
+  const chStore = challenges.createChallengeStore();
+  assert.equal(typeof chStore.setDispersionRef, 'function');
+  chStore.setActive('pressure5');
+  chStore.setDifficulty('stretch_4', { width80Yds: 20, depth80Yds: 12 });
+  assert.equal(chStore.state.difficulty, 'stretch_4');
+  chStore.state.stretchMult = 0.85;
+  chStore.state.recentPassStreak = 2;
+  chStore.setDispersionRef({ width80Yds: 18, depth80Yds: 10 });
+  assert.equal(chStore.state.stretchMult, 0.85, 'setDispersionRef must preserve adaptive stretchMult');
+  assert.equal(chStore.state.dispersionRef.width80Yds, 18);
+  chStore.setDifficulty('stretch_4');
+  assert.equal(chStore.state.stretchMult, 0.85, 'Re-applying same difficulty must preserve stretchMult');
+  assert.equal(chStore.state.recentPassStreak, 2, 'Re-applying same difficulty must preserve recentPassStreak');
+  chStore.setDifficulty('tour');
+  assert.equal(chStore.state.stretchMult, 1.0, 'Switching difficulty mode resets stretchMult');
+  assert.equal(chStore.state.recentPassStreak, 0);
+
+  // 5. Drills Hub Kids context isolation markers
+  const drillsHtml = fs.readFileSync(path.join(repoRoot, 'drills', 'index.html'), 'utf8');
+  assert.ok(drillsHtml.includes('function postKidsContext('));
+  assert.ok(drillsHtml.includes('pagehide'));
+});
+
+test('Short Game <=100y Suite: Putting Gate, Fiberbuilt Mat-Fat Detector, Wedge Calibrator & Combine', () => {
+  const repoRoot = path.resolve(__dirname, '../..');
+  const sgMod = require('../renderer/shortGame');
+
+  // 1. Putting Start Line & Ball-Speed-to-Stimp conversion
+  const reqMph12 = engine.targetPuttSpeedMph(12, 10);
+  assert.ok(reqMph12 >= 6.0 && reqMph12 <= 6.8, `Expected ~6.4 mph for 12ft Stimp 10, got ${reqMph12}`);
+  assert.ok(Math.abs(engine.ballSpeedMphToPuttFt(reqMph12, 10) - 12) <= 0.6);
+
+  const purePutt = engine.analyzePuttShot({ ball: { speed: reqMph12, hla: 0.35 } }, { stimp: 10, targetFt: 12, gateDeg: 1.0 });
+  assert.equal(purePutt.linePass, true);
+  assert.equal(purePutt.speedPass, true);
+  assert.equal(purePutt.wouldMakeLine, true);
+  assert.equal(purePutt.grade, 'green');
+
+  const pulledPutt = engine.analyzePuttShot({ ball: { speed: reqMph12, hla: -2.5 } }, { stimp: 10, targetFt: 12, gateDeg: 1.0 });
+  assert.equal(pulledPutt.linePass, false);
+  assert.equal(pulledPutt.wouldMakeLine, false);
+  assert.equal(pulledPutt.grade, 'yellow');
+
+  // 2. Fiberbuilt Mat-Fat Detector vs Crisp Nipper
+  const matFat = engine.analyzeShortGameShot(
+    { metrics: { effectiveCarry: 35, totalYds: 42, vla: 38, backSpin: 3200, hla: 0.8 } },
+    { matType: 'fiberbuilt', targetYds: 40 }
+  );
+  assert.equal(matFat.matFatLikely, true);
+  assert.equal(matFat.crispNipper, false);
+  assert.equal(matFat.grade, 'red');
+
+  const crispChip = engine.analyzeShortGameShot(
+    { metrics: { effectiveCarry: 45, totalYds: 48, vla: 28, backSpin: 6800, hla: 0.4 } },
+    { matType: 'fiberbuilt', targetYds: 45 }
+  );
+  assert.equal(crispChip.matFatLikely, false);
+  assert.equal(crispChip.crispNipper, true);
+  assert.equal(crispChip.grade, 'green');
+
+  // 3. Wedge Clock Matrix Calibrator (median + outlier trim at N>=5)
+  const cal = engine.summarizeCalibrationShots([
+    { metrics: { effectiveCarry: 50, totalYds: 54, vla: 30, backSpin: 6200 } },
+    { metrics: { effectiveCarry: 52, totalYds: 56, vla: 31, backSpin: 6300 } },
+    { metrics: { effectiveCarry: 51, totalYds: 55, vla: 30.5, backSpin: 6100 } },
+    { metrics: { effectiveCarry: 53, totalYds: 57, vla: 32, backSpin: 6400 } },
+    { metrics: { effectiveCarry: 88, totalYds: 95, vla: 22, backSpin: 3100 } },
+  ]);
+  assert.ok(cal);
+  assert.equal(cal.n, 5);
+  assert.equal(cal.usedN, 4, 'Should trim the 88-yard outlier when N>=5');
+  assert.ok(cal.carry >= 51 && cal.carry <= 52);
+
+  const sampleMatrix = [
+    { club: 'SW', label: 'SW 56°', cells: [{ arm: '7:30', pct: 35, carry: 36, roll: 5 }, { arm: '9:00', pct: 55, carry: 62, roll: 4 }] },
+    { club: 'GW', label: 'GW 50°', cells: [{ arm: '9:00', pct: 55, carry: 78, roll: 5 }] },
+  ];
+  const rec = engine.recommendWedgeFromMatrix(sampleMatrix, 63);
+  assert.ok(rec && rec.primary.club === 'SW' && rec.primary.arm === '9:00');
+
+  // 4. Scoring Combine + Renderer store + NaN-free SVGs
+  const combScore = engine.scoreScoringZoneShot(
+    { metrics: { effectiveCarry: 51, totalYds: 54, vla: 29, backSpin: 6500, hla: 0.5 } },
+    50
+  );
+  assert.equal(combScore.grade, 'green');
+  assert.ok(combScore.proxFt < 6);
+
+  const sgStore = sgMod.createShortGameStore();
+  sgStore.state.subTab = 'putt';
+  const puttRes = sgStore.recordShot({ ball: { speed: reqMph12, hla: 0.2 } });
+  assert.equal(puttRes.recorded, true);
+  sgStore.state.subTab = 'chip';
+  const chipRes = sgStore.recordShot({ metrics: { effectiveCarry: 45, totalYds: 48, vla: 28, backSpin: 6800, hla: 0.4 } });
+  assert.equal(chipRes.recorded, true);
+
+  const puttSvg = sgMod.renderPuttGateSvg(puttRes.putt);
+  const chipSvg = sgMod.renderChipWindowSvg(chipRes.chip);
+  assert.ok(puttSvg.includes('<svg') && !puttSvg.includes('NaN') && !puttSvg.includes('undefined'));
+  assert.ok(chipSvg.includes('<svg') && !chipSvg.includes('NaN') && !chipSvg.includes('undefined'));
+
+  // 5. Sanitizer preserves calibrated Wedge Matrix VLA/spin/spread/date fields + syntax check + 4 new drills
+  const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+  const sliceMatch = mainSrc.match(/const VALID_MAT_TYPES[\s\S]+?\nconst runtime = \{/);
+  assert.ok(sliceMatch);
+  const sanCtx = vm.createContext({ Set, Object, Array, Number, String, Boolean, Math, Date });
+  vm.runInContext(`${sliceMatch[0].replace(/\nconst runtime = \{$/, '\n')}; globalThis.__san = sanitizeStudioState;`, sanCtx);
+  const sanStudio = sanCtx.__san({
+    wedgeMatrix: [
+      { club: 'SW', label: 'SW 56°', cells: [{ arm: '9:00', pct: 55, carry: 62, roll: 4, vla: 31.2, spin: 6900, spread: 2.1, n: 5, calibratedAt: '2026-11-25' }] },
+    ],
+  });
+  const savedCell = sanStudio.wedgeMatrix[0].cells[0];
+  assert.equal(savedCell.vla, 31.2);
+  assert.equal(savedCell.spin, 6900);
+  assert.equal(savedCell.spread, 2.1);
+  assert.equal(savedCell.n, 5);
+  assert.equal(savedCell.calibratedAt, '2026-11-25');
+
+  new vm.Script(fs.readFileSync(path.join(__dirname, '..', 'renderer', 'shortGame.js'), 'utf8'));
+
+  const hub = engine.loadDrillsHubData(repoRoot);
+  const ids = new Set(hub.drills.map((d) => d.id));
+  for (const id of [
+    'chip-towel-behind-ball-gate',
+    'chip-release-1-2-3-ladder',
+    'wedge-clock-matrix-calibration',
+    'putt-startline-speed-ladder',
+  ]) {
+    assert.ok(ids.has(id), `Expected new short-game drill ${id}`);
+  }
+});

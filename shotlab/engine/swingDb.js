@@ -18,6 +18,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { CLUB_ORDER, CLUB_CATEGORY_GROUPS, CLUB_SPECS } = require('./constants');
 const { computeDispersionStats, NON_FAULT_DELIVERY_IDS } = require('./strokesGained');
+const { isKidsZoneRawShot } = require('./kids');
 
 let DatabaseSync = null;
 try {
@@ -231,6 +232,10 @@ class SwingDatabase {
   upsertShot(analyzed, extra = {}) {
     if (!analyzed || !analyzed.id) return null;
     if (analyzed.isDemo || analyzed.isPreviewSeed) return null;
+    const rawDrill = String(extra.drillId || analyzed.drillId || '').toLowerCase();
+    if (analyzed.isKids || extra.isKids || analyzed.practiceMode === 'kids' || isKidsZoneRawShot(analyzed.raw) || rawDrill.startsWith('kids-')) {
+      return null;
+    }
     const row = rowFromAnalyzed(analyzed, extra);
 
     if (this.db) {
@@ -964,6 +969,7 @@ class SwingDatabase {
           if (!trimmed) continue;
           try {
             const raw = JSON.parse(trimmed);
+            if (isKidsZoneRawShot(raw)) continue;
             const rawShotNum = raw.shot_num ?? raw.ShotNumber;
             const parsedNum = (rawShotNum !== null && rawShotNum !== undefined && rawShotNum !== '' && typeof rawShotNum !== 'boolean')
               ? Number(rawShotNum)

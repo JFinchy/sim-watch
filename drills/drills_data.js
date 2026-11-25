@@ -146,6 +146,19 @@ window.DEFAULT_DRILLS_DATA = {
       "summary": "Off-range strength and speed work for club speed. Keep it on its own day or well away from ball-striking blocks; skip it when you are already sore, and stop on sharp or joint pain.",
       "hackmotionPrescription": "None: no club data on gym days. If you test speed afterward, stop if smash drops below about 1.40.",
       "cadenceTarget": "N/A (gym work, no metronome)"
+    },
+    {
+      "id": "kids-zone",
+      "title": "Kids Zone (Ages 4–5)",
+      "fullTitle": "Kids Zone: 12-Min Play-Based Family Sim Routine (Ages 4–5)",
+      "focus": "ABCs (Agility, Balance, Coordination, Speed), Joy & Safe Sim Play",
+      "recommendedModes": [
+        "almost",
+        "real"
+      ],
+      "summary": "Short, high-joy cooperative games for 4- and 5-year-olds using choked-down 5–8yo clubs (Rocket Tape — never saw off shafts), tall rubber tees, foam/AlmostGolf balls, and a Pool Noodle Speed Stick. 10–15 min total; always stop while they still want one more!",
+      "hackmotionPrescription": "None — kids learn through play, stories, and external targets, never wrist angles or swing positions.",
+      "cadenceTarget": "Playful rhythm: 3-2-1 BLASTOFF! / Hold Superhero Statue for 3 seconds"
     }
   ],
   "drills": [
@@ -3070,6 +3083,1128 @@ window.DEFAULT_DRILLS_DATA = {
       "modePlans": {
         "real": "Weekly only while contact holds; log club head speed and smash."
       }
+    },
+    {
+      "id": "mind-right-breath-reset",
+      "title": "Get the Mind Right: Adaptive Breath + Panoramic Gaze",
+      "section": "Mind & Sensory Warmup",
+      "focus": "Arousal Regulation & Soft Gaze",
+      "faultTags": [
+        "tension-arousal",
+        "rushed-tempo"
+      ],
+      "environments": [
+        "sim",
+        "range",
+        "course",
+        "mirror",
+        "putting-mat"
+      ],
+      "swingPhase": "mental-tempo",
+      "equipment": [],
+      "keyFeel": "Exhale longer than you inhale, soften to wide peripheral vision, and feel tension leave jaw, shoulders, and hands.",
+      "pacing": "block",
+      "days": [
+        "daily-calibration",
+        "kids-asleep",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "2 min",
+      "reps": "4-6 breath cycles + 20s soft panoramic gaze + 2 centered swings",
+      "clubs": [
+        "Bodyweight",
+        "7 Iron"
+      ],
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "breath",
+        "keyFrameCue": "Double nasal inhale + long slow mouth sigh (if wired), then widen gaze before gripping the club."
+      },
+      "why": "Indoor sim rooms and rushed evenings spike sympathetic arousal and tighten the prefrontal inner critic. Clinical trials (Balban, Spiegel & Huberman, 2023) show cyclic/physiological sighing rapidly restores vagal tone, while panoramic peripheral gaze down-shifts fight-or-flight focus so you step onto the mat calm and receptive.",
+      "instructions": [
+        "Score your mental state honestly before ball #1: Wired/Stressed, Scattered, Locked In, or Flat/Tired.",
+        "If Wired or tense: do 4-6 Physiological Sighs (deep nasal inhale, quick top-off nasal sip, then a long 6-second slow sigh exhale through the mouth). If Scattered: 4 cycles of 4-4-4-4 Box Breathing. If Flat: 10 crisp nasal inhales + brisk dynamic torso turns.",
+        "Soften your eyes and take in the left, right, and ceiling edges of the room at once for 20 seconds (panoramic peripheral vision) to silence tunnel-vision tension.",
+        "Exhale into your belly, feel both arches heavy on the mat, and drop jaw and forearm grip tension to 3-4/10.",
+        "Make two unhurried rehearsal swings holding only your wide, unhurried rhythm."
+      ],
+      "checkpoints": {
+        "dtl": "Dropped shoulders, unhurried chest rise and fall, quiet balanced posture over mid-foot.",
+        "fo": "Level, relaxed forearms with zero neck shrug or jaw clenching."
+      },
+      "modePlans": {
+        "real": "Run before your first telemetry swing so cold-start numbers reflect a calm baseline, not work stress.",
+        "almost": "Keep exhales quiet and nasal-to-pursed-lip while settling night-session focus.",
+        "sore": "Zero joint load: stand or sit comfortably and focus on parasympathetic recovery breathing."
+      }
+    },
+    {
+      "id": "hogan-dynamic-touch-waggle",
+      "title": "Hogan Finger Check & Clubhead Heft Waggle",
+      "section": "Mind & Sensory Warmup",
+      "focus": "Tactile Reception & Tool Embodiment",
+      "faultTags": [
+        "grip-tension",
+        "tension-arousal"
+      ],
+      "environments": [
+        "sim",
+        "range",
+        "course",
+        "mirror"
+      ],
+      "swingPhase": "mental-tempo",
+      "equipment": [],
+      "keyFeel": "Lightly anchor the club in the last three fingers of the lead hand and middle two of the trail hand, then waggle purely to feel the clubhead weight.",
+      "pacing": "block",
+      "days": [
+        "daily-calibration",
+        "kids-asleep",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "3 min",
+      "reps": "10 slow grip-to-waggle resets + 5 slow swings",
+      "clubs": [
+        "7 Iron",
+        "Driver"
+      ],
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "posture",
+        "keyFrameCue": "Use fingers as sensitive antennas for clubhead mass—not vices locking the wrists."
+      },
+      "why": "Fingertips pack dense Pacinian and Meissner mechanoreceptors (Miller et al., 2018) that map the club as a neural extension of your hand (tool embodiment) and detect its inertia tensor via Turvey's dynamic touch. Death-gripping saturates these sensors; soft Hogan finger placement wakes up tactile clubhead awareness without micromanaging joints.",
+      "instructions": [
+        "Place primary grip pressure in the last three fingers of your lead hand and middle two fingers of your trail hand; let the trail thumb and index finger rest passively.",
+        "Briefly squeeze to 8/10 tension for 2 seconds, then exhale and melt down to a live 3-4/10 where fingertips can feel skin stretch against the grip.",
+        "Make two tiny, fluid waggles while asking: 'Can I feel the exact heaviness of the clubhead at the far end of the shaft?'",
+        "Take 5 slow half-swings keeping attention in the weighted clubhead swinging through your relaxed fingers—never commanding wrist angles manually."
+      ],
+      "checkpoints": {
+        "dtl": "Free, oiled wrist hinge during the waggle and takeaway; clubhead doesn't whip inside from rigid forearms.",
+        "fo": "Trail shoulder sits softly down and back; trail thumb and forefinger stay calm and unobtrusive."
+      },
+      "modePlans": {
+        "real": "Notice how freeing wrist hinge and fingertip feel boosts effortless smash on opening iron swings.",
+        "almost": "Ideal late-night calibration: wake up hand feel and clubhead mass before hitting foam balls.",
+        "sore": "Air swings only; zero impact load while sharpening sensory resolution in your hands."
+      }
+    },
+    {
+      "id": "shoemaker-eyes-closed-clubhead",
+      "title": "Eyes-Closed Clubhead Mapping & Feel-vs-Real Call",
+      "section": "Mind & Sensory Warmup",
+      "focus": "Proprioception & Impact Vibration",
+      "faultTags": [
+        "overthinking-paralysis",
+        "course-transfer"
+      ],
+      "environments": [
+        "sim",
+        "range",
+        "putting-mat"
+      ],
+      "swingPhase": "mental-tempo",
+      "equipment": [],
+      "keyFeel": "Close your eyes, track the clubhead arc through your hands, and call strike location aloud before looking.",
+      "pacing": "either",
+      "days": [
+        "daily-calibration",
+        "kids-asleep",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "5 min",
+      "reps": "10 half-swings or chips + 5 full Feel-vs-Real calls",
+      "clubs": [
+        "PW",
+        "7 Iron"
+      ],
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "three-boxes",
+        "keyFrameCue": "Trust hand vibration and turf contact: call Toe / Center / Heel / Fat / Thin BEFORE checking the screen."
+      },
+      "why": "Staring at launch monitor numbers after every swing creates feedback dependency (Winstein & Schmidt) and keeps the analytical prefrontal cortex hyper-active. Following Fred Shoemaker and Schmidt's recognition-schema science, predicting strike purely from shaft vibration through the hands trains high-definition intrinsic awareness.",
+      "instructions": [
+        "Tee a ball very low or take a narrow pitch stance with a pitching wedge or 7-iron.",
+        "Make 5 slow-to-medium practice brushes with eyes gently closed, simply noticing where the sole contacts the mat and where the clubhead weight lives at P4 and P7.",
+        "Hit 5-8 soft-to-medium balls with eyes closed on chips/half-swings (or normal eyes on full swings, looking away from the sim screen for 2 seconds post-impact).",
+        "Before glancing at ShotLab or the net, call out loud: Toe, Center, Heel, Fat, or Thin—plus expected start direction.",
+        "Verify against ShotLab's Feel-vs-Real card to tighten your internal strike calibration."
+      ],
+      "checkpoints": {
+        "dtl": "Balanced finish hold for 2 full seconds with eyes calm until swing finishes.",
+        "fo": "Steady head center and smooth weight transfer without peaking early for flight."
+      },
+      "modePlans": {
+        "real": "Pair with ShotLab's Feel-vs-Real toggle in Flow mode to score your sensory accuracy percentage.",
+        "almost": "Foam balls make subtle face twist crystal clear in your hands; compare your call to HLA start line.",
+        "sore": "Chips and waist-high pitches only; focus 100% on pure brush sensation and face contact."
+      }
+    },
+    {
+      "id": "young-differential-strike-map",
+      "title": "Differential Toe / Heel / Center Strike Calibration",
+      "section": "Mind & Sensory Warmup",
+      "focus": "Differential Learning & Sweet-Spot Skill",
+      "faultTags": [
+        "overthinking-paralysis",
+        "false-groove"
+      ],
+      "environments": [
+        "sim",
+        "range"
+      ],
+      "swingPhase": "mental-tempo",
+      "equipment": [
+        "Foot spray"
+      ],
+      "keyFeel": "Stop chasing a textbook swing—ask your brain to strike the toe, then the heel, then paint the dead center.",
+      "pacing": "transfer",
+      "days": [
+        "daily-calibration",
+        "day-3-impact",
+        "kids-asleep"
+      ],
+      "modes": [
+        "real",
+        "almost"
+      ],
+      "duration": "8 min",
+      "reps": "3 rounds of 3 balls (1 Toe, 1 Heel, 1 Center = 9 balls)",
+      "clubs": [
+        "7 Iron",
+        "Driver"
+      ],
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "impact",
+        "keyFrameCue": "Boundary exploration beats mechanical micromanagement: Toe -> Heel -> Center flush."
+      },
+      "why": "Wolfgang Schollhorn's differential learning and Adam Young's Practice Manual prove that varying movement extremes expands sensory-motor boundaries far better than blocked repetition. When you deliberately find toe and heel via hand-vibration feedback, your nervous system self-organizes toward center strike without explicit swing thoughts.",
+      "instructions": [
+        "Mist the clubface lightly with athlete's foot spray (or dry-erase dot on clean face).",
+        "Shot 1: Stand normally and set a pure intention to strike the TOE side of the face—zero instructions on how your arms or hips move.",
+        "Shot 2: Same routine, intend to strike toward the HEEL side. Feel the unmistakable twisting/vibration difference in your fingers.",
+        "Shot 3: Split the middle—intend purely for the bright center dimple spot.",
+        "Wipe the face after every 3-ball cycle and run 3 cycles (9 balls total) at calm ~80% cruise speed."
+      ],
+      "checkpoints": {
+        "dtl": "Smooth, athletic adaptation—do not bend posture excessively just to manipulate contact.",
+        "fo": "Notice how quickly your self-organizing brain finds the center on ball #3 after mapping both edges."
+      },
+      "modePlans": {
+        "real": "Watch ShotLab's 4-Type CAD Face Strike map confirm your intentional toe/heel/center calibration.",
+        "almost": "Foam balls + foot spray provide zero-risk indoor differential feedback with instant sensory contrast."
+      }
+    },
+    {
+      "id": "vickers-quiet-eye-lock",
+      "title": "Quiet Eye Dimple Lock (Putting & Full Swing)",
+      "section": "Mind & Sensory Warmup",
+      "focus": "Visual Anchoring & Hand-Eye Coupling",
+      "faultTags": [
+        "target-blur",
+        "short-putt-pressure"
+      ],
+      "environments": [
+        "sim",
+        "range",
+        "course",
+        "putting-mat"
+      ],
+      "swingPhase": "mental-tempo",
+      "equipment": [],
+      "keyFeel": "Pick one single dimple or logo edge, hold soft steady eyes for a calm beat before takeaway, and keep watching the empty turf briefly after impact.",
+      "pacing": "transfer",
+      "days": [
+        "daily-calibration",
+        "kids-asleep",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "4 min",
+      "reps": "10 putts (2.5s QE + 0.5s post-impact) + 6 full swings",
+      "clubs": [
+        "Putter",
+        "7 Iron"
+      ],
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "quiet-eye",
+        "keyFrameCue": "Elite hand-eye starts with Quiet Eye: lock 1 dimple -> swing -> linger 0.5s on empty turf."
+      },
+      "why": "Joan Vickers' Quiet Eye research—replicated in pressure golf studies by Vine, Moore & Wilson (2011)—found that steady pre-movement gaze duration accounted for over 40% of putting performance variance under stress. Anchoring eyes to one specific spot quiets internal dialogue and keeps vestibular/head motion stable.",
+      "instructions": [
+        "Complete all reading, club selection, and waggles behind the ball first.",
+        "Step in, make one soft waggle, then pick one exact dimple on the back-inside quadrant of the ball.",
+        "Putting mode: lock steady gaze on that spot for 2 full seconds ('1-and-2'), stroke smoothly, and hold eyes on the bare mat for half a second after the ball leaves.",
+        "Full-swing mode: pause eye movement cleanly for 1 calm beat on the chosen dimple, trigger takeaway softly, and keep vision quiet through blur/impact—do not chase the shot early with your eyes."
+      ],
+      "checkpoints": {
+        "dtl": "Eyes remain calm and downward through impact rather than darting up at the screen prematurely.",
+        "fo": "Steady head axis during the strike zone; zero early head-lift peek."
+      },
+      "modePlans": {
+        "real": "Pair with ShotLab's Flow / Play Box view so your gaze locks on the ball instead of pre-swing telemetry.",
+        "almost": "Track how a 0.5s post-impact turf linger tightens start-line HLA inside ±1.5 degrees.",
+        "sore": "Do 10 Quiet Eye putts on a carpet or putting mat—highest-ROI pressure skill work with zero fatigue."
+      }
+    },
+    {
+      "id": "vision54-three-boxes-handoff",
+      "title": "VISION54 Three-Box Routine (Think -> Play -> Memory)",
+      "section": "Mind & Sensory Warmup",
+      "focus": "Decision Line & Routine Separation",
+      "faultTags": [
+        "course-transfer",
+        "overthinking-paralysis",
+        "false-groove"
+      ],
+      "environments": [
+        "sim",
+        "range",
+        "course"
+      ],
+      "swingPhase": "mental-tempo",
+      "equipment": [
+        "Alignment stick"
+      ],
+      "keyFeel": "Analyze behind the stick in Think Box; step across the Decision Line with zero mechanics—only target, tempo, and Quiet Eye.",
+      "pacing": "transfer",
+      "days": [
+        "daily-calibration",
+        "kids-asleep",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "6 min",
+      "reps": "6-9 shots with different clubs/targets and full walk-back reset",
+      "clubs": [
+        "7 Iron",
+        "PW",
+        "Driver"
+      ],
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "three-boxes",
+        "keyFrameCue": "Cross the Decision Line cleanly: Think Box = decide | Play Box = trust target & feel | Memory Box = note & let go."
+      },
+      "why": "Pia Nilsson and Lynn Marriott's VISION54 Three-Box architecture stops analytical paralysis from leaking into the swing. Physically walking behind an alignment-stick Decision Line between simulator balls breaks rapid-fire ball-raking and trains transient hypofrontality before the swing starts.",
+      "instructions": [
+        "Lay an alignment stick parallel behind your hitting spot on the mat to mark your Decision Line.",
+        "THINK BOX (behind the stick): Choose club, start-line window, and shot shape; take 1 rehearsal swing checking Balance, Tempo, and Tension (BTT) plus 1 external cue.",
+        "CROSS THE LINE -> PLAY BOX (at the ball): Leave all mechanics behind the stick. Settle feet, lock Quiet Eye onto your dimple, picture the ball corridor, and swing immediately.",
+        "MEMORY BOX (2 seconds post-shot): Hold balance, note one neutral fact (or tap Process Y/N in ShotLab), exhale cleanly, and step back behind the stick to clear the slate."
+      ],
+      "checkpoints": {
+        "dtl": "Clean athletic setup rhythm; zero standing frozen over the ball reviewing biomechanics.",
+        "fo": "Consistent pre-shot timing (<10 seconds from setting clubhead behind ball to takeaway)."
+      },
+      "modePlans": {
+        "real": "Enable ShotLab's 5-Shot Batch Summary or Process-9 challenge so you never stare at numbers inside the Play Box.",
+        "almost": "Alternate clubs (PW -> 7I -> PW) behind the stick to force full Think-to-Play routine transitions.",
+        "sore": "Practice the full Think -> Decision Line -> rehearsal -> Memory cadence on 60% pitch swings."
+      }
+    },
+    {
+      "id": "gallwey-holistic-cue-transfer",
+      "title": "Holistic Single-Word / 'Back-Hit' Anti-Reinvestment",
+      "section": "Mind & Sensory Warmup",
+      "focus": "Transient Hypofrontality & Flow Execution",
+      "faultTags": [
+        "overthinking-paralysis",
+        "rushed-tempo",
+        "course-transfer"
+      ],
+      "environments": [
+        "sim",
+        "range",
+        "course"
+      ],
+      "swingPhase": "mental-tempo",
+      "equipment": [],
+      "keyFeel": "Trade 5 mechanical checklists for one timing pulse ('Back... Hit') or one whole-body sensation ('smooth', 'glide', 'whoosh').",
+      "pacing": "transfer",
+      "days": [
+        "daily-calibration",
+        "kids-asleep",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "5 min",
+      "reps": "8 swings alternating 'Back-Hit' timing & 1 holistic feel word",
+      "clubs": [
+        "7 Iron",
+        "Driver"
+      ],
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "three-boxes",
+        "keyFrameCue": "Quiet Self-1's chatter with one rhythmic timing cue or holistic feel—let Self-2 deliver the club."
+      },
+      "why": "Rich Masters' Reinvestment Theory and Becker et al. (2019) demonstrate that holistic single-word cues preserve automatic motor coordination just like external cues, while Timothy Gallwey's Inner Game shows that attending to rhythm ('Back... Hit') occupies the verbal mind so the inner critic cannot interfere.",
+      "instructions": [
+        "Notice what mechanical thought wants to hijack your downswing; gently write or park it off-mat for later.",
+        "Hit 4 shots using Gallwey's 'Back-Hit': quietly notice and whisper/think 'Back' at the exact peak of your backswing turn and 'Hit' at impact—with zero effort to force either moment.",
+        "Hit 4 shots holding one global, holistic feel word for the entire swing ('smooth', 'oil', or 'brush forward').",
+        "Finish every shot holding your balanced pose while watching imaginary flight or listening to brush sound."
+      ],
+      "checkpoints": {
+        "dtl": "Continuous, uninterrupted transition with zero freeze at P4 top.",
+        "fo": "Effortless follow-through and rhythmic weight finish onto lead heel."
+      },
+      "modePlans": {
+        "real": "Compare Flow swings using a single holistic cue against over-coached swings in ShotLab's Review trends.",
+        "almost": "Listen strictly to crisp mat brush sound + foam ball thwack alongside 'Back... Hit'.",
+        "sore": "Half-to-3/4 rhythmic swings keeping breathing fluid and unbroken."
+      }
+    },
+    {
+      "id": "kids-rocket-tape-setup",
+      "audience": "kids",
+      "title": "Rocket Tape Setup & Sim Safe Zone Rules",
+      "section": "Kids Zone (Ages 4–5)",
+      "focus": "Heavy 5–8yo Club Fix, Tall Tees & Kid Sim Safety",
+      "faultTags": [],
+      "environments": [
+        "sim"
+      ],
+      "swingPhase": "setup",
+      "equipment": [
+        "Painter's or grip tape",
+        "Tall rubber tee (1.5-2.5 in)",
+        "AlmostGolf or foam balls",
+        "Safe Zone rug"
+      ],
+      "keyFeel": "Hands on the Rocket Tape! Park your club flat on the mat before stepping away.",
+      "pacing": "transfer",
+      "days": [
+        "kids-zone"
+      ],
+      "modes": [
+        "almost",
+        "real"
+      ],
+      "duration": "2 min",
+      "reps": "1 pre-flight setup + 3 practice 'Park the Club' checks",
+      "clubs": [
+        "5-8yo Putter (choked down)",
+        "5-8yo Shortest Wedge (choked down)"
+      ],
+      "target": {
+        "metric": "manual",
+        "reps": 5,
+        "pass": 3
+      },
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "kids-rocket",
+        "keyFrameCue": "Choke down 3–5 inches onto bright Rocket Tape instead of sawing shafts; keep butt end clear of belly."
+      },
+      "why": "Five-to-eight-year-old clubs feel like sledgehammers to a 4- or 5-year-old, causing cupped wrists and falling over—yet sawing shafts makes them rebar-stiff and ruins swingweight when they grow. Parent Coach Note — SAY THIS: 'Hold the colorful Rocket Tape!' and 'Park the club sleeping on the grass!' DON'T SAY: 'Bend your knees' or 'Keep your head down.'",
+      "instructions": [
+        "NEVER cut or saw off the 5–8yo shafts! Wrap 3–5 inches of bright painter's or athletic tape below the grip cap so both kids see exactly where their top hand sits—the extra butt length above the hands acts as natural counterbalance.",
+        "Put ONLY two clubs out for ages 4–5: the putter and the shortest high-lofted iron/wedge. Hide driver and fairway woods so swing weight stays manageable.",
+        "Place a Safe Zone 'Mission Control' rug or bench well behind the swing arc; the waiting sibling is Countdown Captain ('3-2-1 BLASTOFF!') with zero walking onto the mat until the club is parked.",
+        "Use a tall 1.5–2.5 inch rubber tee with foam or AlmostGolf balls on EVERY full swing indoors so misses never sting fingers or ricochet off metal frames."
+      ],
+      "checkpoints": {
+        "dtl": "Both kids understand the Mission Control Safe Zone boundary and park the club flat before switching turns.",
+        "fo": "Top hand grips bright Rocket Tape 3–5 inches down the shaft while clubhead soles naturally without strain."
+      },
+      "modePlans": {
+        "real": "Strictly use AlmostGolf or soft foam balls for full swings; save real golf balls solely for slow putting on the mat.",
+        "almost": "AlmostGolf balls trigger Bushnell Launch Pro safely indoors and bounce softly off the enclosure."
+      }
+    },
+    {
+      "id": "kids-zoo-escape-warmup",
+      "audience": "kids",
+      "title": "Animal Escape Warmup (2–3 Min ABCs)",
+      "section": "Kids Zone (Ages 4–5)",
+      "focus": "TPI Active Start: Agility, Balance & Coordination",
+      "faultTags": [],
+      "environments": [
+        "sim"
+      ],
+      "swingPhase": "mental-tempo",
+      "equipment": [
+        "No club needed"
+      ],
+      "keyFeel": "Fast quiet ninja feet—bear crawl out, frog hop back, freeze like a flamingo!",
+      "pacing": "transfer",
+      "days": [
+        "kids-zone"
+      ],
+      "modes": [
+        "almost",
+        "real"
+      ],
+      "duration": "3 min",
+      "reps": "15 sec per animal x 4 animals",
+      "clubs": [
+        "Bodyweight"
+      ],
+      "target": {
+        "metric": "manual",
+        "reps": 5,
+        "pass": 3
+      },
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "kids-trex",
+        "keyFrameCue": "TPI Active Start builds athletic ABCs (Agility, Balance, Coordination) before touching a golf club."
+      },
+      "why": "Research in pediatric motor development (TPI LTAD Active Start ages 0–6) shows 4- and 5-year-olds become better lifelong golfers by building general agility, balance, and single-leg stability first. Parent Coach Note — SAY THIS: 'Show me your loudest frog jump and quietest ninja landing!' DON'T SAY: 'Rotate your hips 45 degrees.'",
+      "instructions": [
+        "Bear Crawl (15 sec): crawl across the mat like a giant Grizzly bear waking up both shoulders and hands.",
+        "Frog Jumps (4 big leaps): squat low and explode forward onto a target square with soft ninja landings.",
+        "Crab Walk Sideways (15 sec): scuttle sideways back to Mission Control while laughing and kicking the feet.",
+        "Frozen Flamingo (5 sec each foot): lift one knee up and hold arms wide like airplane wings without wobbling before picking up a club."
+      ],
+      "checkpoints": {
+        "dtl": "High giggles, playful energy, and smooth single-leg balance hold for 3–5 seconds.",
+        "fo": "Athletic wide-base squat jumps and coordinated arm/leg timing without rushing onto the hitting mat."
+      },
+      "modePlans": {
+        "real": "Run these 4 animal moves together right at the start of every 12-minute Kids Zone session.",
+        "almost": "Barefoot or sneaker-friendly; turns pre-golf warmups into the favorite part of their evening."
+      }
+    },
+    {
+      "id": "kids-feed-hungry-monster",
+      "audience": "kids",
+      "title": "Feed the Hungry Monster (Putting & Rolling)",
+      "section": "Kids Zone (Ages 4–5)",
+      "focus": "Distance Control & Gentle Brush Contact",
+      "faultTags": [],
+      "environments": [
+        "sim",
+        "putting-mat"
+      ],
+      "swingPhase": "putting",
+      "equipment": [
+        "5-8yo Putter (Rocket Tape)",
+        "Real or AlmostGolf balls"
+      ],
+      "keyFeel": "Tickle the ball gently into the Monster's hungry tummy!",
+      "pacing": "transfer",
+      "days": [
+        "kids-zone"
+      ],
+      "modes": [
+        "almost",
+        "real"
+      ],
+      "duration": "4 min",
+      "reps": "6 cooperative snacks (2 roll-ups per kid per turn)",
+      "clubs": [
+        "Putter",
+        "Short Wedge (brush)"
+      ],
+      "target": {
+        "metric": "manual",
+        "reps": 6,
+        "pass": 3
+      },
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "kids-monster",
+        "keyFrameCue": "Putter is the easiest club to choke down on—zero weight struggle and instant distance feedback."
+      },
+      "why": "Putting uses short strokes that never overload a 4- or 5-year-old's wrists with a heavy 5–8yo shaft, teaching soft distance judgment (First Tee Distance Response) cooperatively. Parent Coach Note — SAY THIS: 'Roll the cookie straight into Chompy's mouth!' DON'T SAY: 'Keep your wrists locked straight.'",
+      "instructions": [
+        "Grip the choked-down putter on the Rocket Tape and open the Feed the Hungry Monster game in Kids Zone.",
+        "Put a real or AlmostGolf ball down and roll 2 gentle putts toward the screen/target towel; waiting sibling counts '3-2-1 SNACK TIME!'",
+        "If Launch Pro misses a slow 2–4 mph roll, smash the giant '+1 Star / Cookie!' button so every honest roll feeds the Monster.",
+        "Work as one team to feed all 6 snacks into the Monster's belly and unlock the Happy Burp Team Star!"
+      ],
+      "checkpoints": {
+        "dtl": "Smooth pendulum tick-tock pace without slamming the putter head into the mat.",
+        "fo": "Balanced triangle arms with eyes tracking the rolling ball to the target."
+      },
+      "modePlans": {
+        "real": "Putts can use real golf balls safely indoors because ball speed stays gentle along the turf.",
+        "almost": "Works at any hour with AlmostGolf balls; use manual star button whenever slow putts stay under Launch Pro trigger speed."
+      }
+    },
+    {
+      "id": "kids-volcano-rocket-launch",
+      "audience": "kids",
+      "title": "Volcano Rocket Launch (Tall-Tee Blastoff)",
+      "section": "Kids Zone (Ages 4–5)",
+      "focus": "Airborne Launch & External Target Focus",
+      "faultTags": [],
+      "environments": [
+        "sim"
+      ],
+      "swingPhase": "impact",
+      "equipment": [
+        "Tall 2-inch rubber tee",
+        "AlmostGolf / foam balls",
+        "Rocket-Tape short wedge"
+      ],
+      "keyFeel": "Smash the tee rocket UP into the stars!",
+      "pacing": "transfer",
+      "days": [
+        "kids-zone"
+      ],
+      "modes": [
+        "almost",
+        "real"
+      ],
+      "duration": "4 min",
+      "reps": "5 cooperative rocket launches",
+      "clubs": [
+        "5-8yo Shortest Wedge (choked down)"
+      ],
+      "target": {
+        "metric": "manual",
+        "reps": 5,
+        "pass": 3
+      },
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "kids-rocket",
+        "keyFrameCue": "2-inch rubber tee removes fat-mat shock and sends foam/AlmostGolf balls soaring skyward."
+      },
+      "why": "Fat hits off a firm mat jar little hands—especially with heavier 5–8yo clubs. Teeing an AlmostGolf or foam ball high creates immediate airborne rockets that ignite OPTIMAL Theory intrinsic motivation. Parent Coach Note — SAY THIS: 'Send that rocket past the clouds!' DON'T SAY: 'Shallow your downswing or hit down on it.'",
+      "instructions": [
+        "Set the ball high on a 2-inch tall rubber tee so the kids sweep upward cleanly above the mat.",
+        "Waiting sibling runs the Countdown Captain call from Mission Control: '3... 2... 1... BLASTOFF!'",
+        "Swinger grips the colorful Rocket Tape 3–5 inches down the shortest iron/wedge and tries to blast the ball high onto the screen.",
+        "Watch the animated Volcano Rocket climb in Kids Zone (or tap '+2 Super Shot!' if Launch Pro skips a soft foam hit); park the club before trading places."
+      ],
+      "checkpoints": {
+        "dtl": "Swinging freely at the tee with playful follow-through instead of chopping sharply down into the mat.",
+        "fo": "Happy eyes tracking the ball up toward the screen with zero frustration on whiffs (practice air swings earn a +1 Star Try!)."
+      },
+      "modePlans": {
+        "real": "Stick to AlmostGolf or foam balls for safety indoors unless a parent spots every setup and swing.",
+        "almost": "AlmostGolf balls read very reliably on Launch Pro off tall tees at 20–45 mph and won't dent walls."
+      }
+    },
+    {
+      "id": "kids-pool-noodle-tornado",
+      "audience": "kids",
+      "title": "Pool Noodle Speed Tornado (Zero-Strain WHOOSH)",
+      "section": "Kids Zone (Ages 4–5)",
+      "focus": "Rotational Speed & Sequencing Without Heavy Club Strain",
+      "faultTags": [],
+      "environments": [
+        "sim"
+      ],
+      "swingPhase": "mental-tempo",
+      "equipment": [
+        "Cut foam pool noodle (~30 in)"
+      ],
+      "keyFeel": "Make the BIGGEST WHOOSH hurricane sound over the ball!",
+      "pacing": "transfer",
+      "days": [
+        "kids-zone"
+      ],
+      "modes": [
+        "almost",
+        "real"
+      ],
+      "duration": "3 min",
+      "reps": "5 tornado whoosh swings (10 total as a team)",
+      "clubs": [
+        "Pool Noodle Speed Stick"
+      ],
+      "target": {
+        "metric": "manual",
+        "reps": 5,
+        "pass": 3
+      },
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "kids-rocket",
+        "keyFrameCue": "Feather-light foam pool noodle unlocks 100% speed & hip turn with zero wrist or growth-plate overload."
+      },
+      "why": "Because 5–8yo steel clubs are heavy for a 4- and 5-year-old, trying to swing hard with real clubs causes arm tension and wrist strain. A lightweight cut pool noodle builds athletic clubhead speed and natural weight shift safely at zero impact! Parent Coach Note — SAY THIS: 'Make a giant tornado sound louder than Daddy!' DON'T SAY: 'Start with your lower body first.'",
+      "instructions": [
+        "Cut a cheap foam pool noodle to ~30 inches and hand it to the swinger while all metal clubs stay parked.",
+        "Sibling on Mission Control plays Tornado Radar and judges how loud the 'WHOOSH!' sound is.",
+        "Take 3 full-speed, fearless tornado swings aiming for the loudest whoosh out front toward the screen.",
+        "Press '+1 Star Hit!' or '+2 Super Shot!' in Kids Zone after each tornado round to add stars directly to the Team Jar!"
+      ],
+      "checkpoints": {
+        "dtl": "Uninhibited, joyful full follow-through spinning all the way onto the front foot.",
+        "fo": "Legs, hips, and shoulders turn naturally together to generate maximum whoosh noise out in front."
+      },
+      "modePlans": {
+        "real": "Best warmup before choking down on the shortest wedge so kids carry relaxed speed into real contact.",
+        "almost": "Completely silent thwack-free indoor speed drill — great anytime even without hitting a ball."
+      }
+    },
+    {
+      "id": "kids-strike-force-bowling",
+      "audience": "kids",
+      "title": "Team Strike Force Bowling (10 Pins)",
+      "section": "Kids Zone (Ages 4–5)",
+      "focus": "Aim & Start-Line Target Awareness",
+      "faultTags": [],
+      "environments": [
+        "sim",
+        "putting-mat"
+      ],
+      "swingPhase": "putting",
+      "equipment": [
+        "5-8yo Putter or Shortest Wedge",
+        "AlmostGolf balls"
+      ],
+      "keyFeel": "Aim the bowling ball right at the middle pin and send it straight!",
+      "pacing": "transfer",
+      "days": [
+        "kids-zone"
+      ],
+      "modes": [
+        "almost",
+        "real"
+      ],
+      "duration": "4 min",
+      "reps": "Clear all 10 cooperative bowling pins together",
+      "clubs": [
+        "Putter",
+        "Short Wedge"
+      ],
+      "target": {
+        "metric": "manual",
+        "reps": 5,
+        "pass": 3
+      },
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "kids-monster",
+        "keyFrameCue": "Alternating turns knock down the shared 10-pin rack together—siblings root for every spare!"
+      },
+      "why": "Ages 4 and 5 thrive in cooperative 'us vs. the game' challenges instead of head-to-head competition that sparks frustration. Shared bowling pins keep both kids locked in cheering every spare! Parent Coach Note — SAY THIS: 'Which color pins are left for your sister/brother to knock down?' DON'T SAY: 'Square your putter face at impact.'",
+      "instructions": [
+        "Select Team Strike Force Bowling in ShotLab's Kids Zone arcade overlay.",
+        "Take 2 strokes/shots each turn rolling putts or chipping low AlmostGolf balls toward the pin rack.",
+        "Every shot (live Launch Pro or manual '+1 Hit' / '+2 Super!') topples real pins based on speed and straightness.",
+        "Celebrate with a team high-five and fanfare when you clear all 10 pins together for a Team Trophy!"
+      ],
+      "checkpoints": {
+        "dtl": "Wait behind Mission Control between turns and park the club cleanly after shot #2.",
+        "fo": "Kids point the clubhead or putter line at the remaining pins before making a smooth swing."
+      },
+      "modePlans": {
+        "real": "Play as a putting game with real balls or gentle choked-down wedge bumps with AlmostGolf balls.",
+        "almost": "Works at full speed with choked-down putter/wedge sweeps using AlmostGolf balls."
+      }
+    },
+    {
+      "id": "kids-superhero-statue-smash",
+      "audience": "kids",
+      "title": "Superhero Statue Finish (Balance & Hold)",
+      "section": "Kids Zone (Ages 4–5)",
+      "focus": "Post-Swing Balance & Finish Stability",
+      "faultTags": [],
+      "environments": [
+        "sim"
+      ],
+      "swingPhase": "finish",
+      "equipment": [
+        "Tall rubber tee",
+        "Foam / AlmostGolf ball",
+        "Rocket-Tape short wedge"
+      ],
+      "keyFeel": "Belly button to the target—freeze like a Superhero Statue for 3 seconds!",
+      "pacing": "transfer",
+      "days": [
+        "kids-zone"
+      ],
+      "modes": [
+        "almost",
+        "real"
+      ],
+      "duration": "4 min",
+      "reps": "3 Superhero Statues per kid (held 3 seconds)",
+      "clubs": [
+        "5-8yo Shortest Wedge (choked down)"
+      ],
+      "target": {
+        "metric": "manual",
+        "reps": 6,
+        "pass": 3
+      },
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "kids-trex",
+        "keyFrameCue": "Hold front-foot balance on your back toe tip while the waiting sibling counts '1... 2... 3... STATUE!'"
+      },
+      "why": "When a heavier 5–8yo club pulls little arms forward, young kids often fall off balance. Turning the finish into a funny 'Freeze Like a Statue!' game builds natural forward weight transfer and rotational deceleration effortlessly. Parent Coach Note — SAY THIS: 'Show me your back shoe heel to Mommy/Daddy and freeze for 3!' DON'T SAY: 'Shift 80% weight onto your left side.'",
+      "instructions": [
+        "Grip down on the colorful Rocket Tape with the ball resting on a tall rubber tee.",
+        "Swing smoothly and try to stay frozen in a tall Superhero finish pose facing the screen.",
+        "The Countdown Captain counts out loud: '1-Mississippi... 2-Mississippi... 3-STATUE!' before moving feet.",
+        "If the statue stays balanced through 3, award a bonus '+2 Super Shot!' star to the Team Jar!"
+      ],
+      "checkpoints": {
+        "dtl": "Back heel lifts cleanly to its toe tip without stumbling backward away from the ball.",
+        "fo": "Belt buckle and chest face the target screen with arms high and steady."
+      },
+      "modePlans": {
+        "real": "Pair with AlmostGolf balls on a tall tee indoors so kids commit fully to the balanced finish.",
+        "almost": "Count the 3-second Statue together out loud—kids stay engaged even watching their sibling."
+      }
+    },
+    {
+      "id": "kids-giant-trex-boss",
+      "audience": "kids",
+      "title": "Boss Finale: Defeat the Giant T-Rex!",
+      "section": "Kids Zone (Ages 4–5)",
+      "focus": "Cooperative Sibling Finale & Ending on a Peak High",
+      "faultTags": [],
+      "environments": [
+        "sim"
+      ],
+      "swingPhase": "short-game",
+      "equipment": [
+        "Tall rubber tee",
+        "AlmostGolf balls OR Pool Noodle",
+        "Safe Zone mat"
+      ],
+      "keyFeel": "Teamwork! Launch soft foam fireballs until the goofy T-Rex runs away!",
+      "pacing": "transfer",
+      "days": [
+        "kids-zone"
+      ],
+      "modes": [
+        "almost",
+        "real"
+      ],
+      "duration": "3 min",
+      "reps": "Team up to clear 6 Boss Hearts — stop while still cheering!",
+      "clubs": [
+        "5-8yo Putter / Shortest Wedge / Pool Noodle"
+      ],
+      "target": {
+        "metric": "manual",
+        "reps": 6,
+        "pass": 3
+      },
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "kids-trex",
+        "keyFrameCue": "Every shot or manual Super Tap zaps 1–2 T-Rex hearts; end the session right after winning the Golden Trophy!"
+      },
+      "why": "Peak-End Rule in sports psychology: ending a 10–15 minute session right after a shared victory makes kids beg to come back tomorrow. Ending on a high before fatigue sets in is the single most effective junior coaching habit. Parent Coach Note — SAY THIS: 'Teamwork defeated the T-Rex! High-fives—see you next mission!' DON'T SAY: 'Hit five more until you make a good one.'",
+      "instructions": [
+        "Switch Kids Zone to Defeat the Giant T-Rex (starts with 6 big goofy Dino Hearts).",
+        "Both siblings take turns hitting 1 ball off a tall tee (or putting/Pool Noodle swing)—every honest shot zaps 1 to 2 Boss Hearts!",
+        "Tap '+1 ★ Hit!' or '+2 ★ Super Shot!' if a swing misses Launch Pro's box so momentum stays electric.",
+        "Once Heart #6 drops, cheer for the Golden Team Trophy celebration and immediately STOP the session while excitement is 10/10!"
+      ],
+      "checkpoints": {
+        "dtl": "Safe turn changes with clubs parked cleanly on every swap.",
+        "fo": "Big smiles, team high-fives, and walking away wanting 'one more turn tomorrow!'"
+      },
+      "modePlans": {
+        "real": "Great 2-minute finale right at the 10–13 minute mark of your family sim session.",
+        "almost": "Zero pressure, maximum giggles—works equally well putting, tall-tee pitching, or manual foam blasts."
+      }
+    },
+    {
+      "id": "chip-towel-behind-ball-gate",
+      "title": "Towel-Behind-Ball Bounce & Mat-Fat Eliminator",
+      "section": "Scoring Wedges & Start Line",
+      "focus": "Ball-First Low Point & Overcoming Mat Forgiveness",
+      "faultTags": [
+        "low-point-control",
+        "wedge-distance"
+      ],
+      "environments": [
+        "sim",
+        "range"
+      ],
+      "swingPhase": "short-game",
+      "equipment": [
+        "Folded towel",
+        "SW / LW",
+        "Launch monitor"
+      ],
+      "keyFeel": "Miss the towel cleanly and hear a crisp nip—trail bounce glides, leading edge never digs.",
+      "pacing": "block",
+      "days": [
+        "day-4-wedges",
+        "daily-calibration",
+        "kids-asleep",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "8 min",
+      "reps": "10 chips (aim for 8+ clean misses of the towel)",
+      "clubs": [
+        "SW (54)",
+        "LW (58)"
+      ],
+      "target": {
+        "metric": "manual",
+        "reps": 10,
+        "pass": 8
+      },
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "wedge",
+        "keyFrameCue": "Place a folded towel 2.5 inches behind the ball to expose Fiberbuilt bristle bounce."
+      },
+      "why": "Fiberbuilt mats allow thick bottoming out 1–2 inches behind the ball while still returning a playable shot indoors. Putting a folded towel 2–3 inches behind the ball gives instant real-turf accountability and trains crisp 24–33° launch with high spin.",
+      "instructions": [
+        "Lay a flat folded towel 2.5 inches directly behind the ball along your target line.",
+        "Set weight ~60% lead foot with the shaft near vertical (zero extreme forward press) so the club's trailing bounce sits on the turf.",
+        "Use a gentle chest-and-shoulder pivot without snatching the hands inside; brush underneath the ball cleanly without grazing the towel.",
+        "Check ShotLab Short Game Lab: watch for VLA in the 24–33° window and zero Mat-Fat bounce warnings."
+      ],
+      "checkpoints": {
+        "dtl": "Clubhead works slightly from the inside without steep chop; handle stays quiet near trail thigh through impact.",
+        "fo": "Chest keeps rotating through the strike; ball pops cleanly with one-hop spin and zero towel movement."
+      },
+      "modePlans": {
+        "real": "Hit 10 chips alternating 15y and 30y pitches with the towel barrier active.",
+        "almost": "AlmostGolf balls show instant start-line and strike purity while training quiet bounce contact.",
+        "sore": "Zero spinal load—keep strokes hip-high and focus on rhythmic brush."
+      }
+    },
+    {
+      "id": "chip-release-1-2-3-ladder",
+      "title": "Bounce & Release 1-2-3 Trajectory Ladder",
+      "section": "Scoring Wedges & Start Line",
+      "focus": "Low Checker, Stock Pitch & High Soft Release",
+      "faultTags": [
+        "wedge-distance",
+        "early-release-scoop"
+      ],
+      "environments": [
+        "sim",
+        "range"
+      ],
+      "swingPhase": "short-game",
+      "equipment": [
+        "GW / SW / LW",
+        "Launch monitor"
+      ],
+      "keyFeel": "Control flight height with setup ball position and finish shaft height—never flick at the bottom.",
+      "pacing": "transfer",
+      "days": [
+        "day-4-wedges",
+        "kids-asleep"
+      ],
+      "modes": [
+        "real",
+        "almost"
+      ],
+      "duration": "9 min",
+      "reps": "3 cycles of Low / Stock / High (9 balls total)",
+      "clubs": [
+        "PW",
+        "SW",
+        "LW"
+      ],
+      "target": {
+        "metric": "manual",
+        "reps": 9,
+        "pass": 6
+      },
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "wedge",
+        "keyFrameCue": "Cycle Low (<27° VLA), Stock (27–34°), and High Soft (>34°) on demand."
+      },
+      "why": "Having three distinct short-game flights from the same basic chest pivot removes guesswork inside 60 yards and exposes unwanted early scoops when trying to hit the low checker.",
+      "instructions": [
+        "Ball 1 (Low Checker): Ball back-of-center, slightly narrow stance, finish low with lead arm extended (<27° VLA target).",
+        "Ball 2 (Stock Pitch / Release 1): Ball centered, neutral loft, let trailing bounce release gently through impact (27–34° VLA target).",
+        "Ball 3 (High Soft / Release 2): Face slightly open at setup, ball slightly forward, chest turns through facing target (>34° VLA with crisp spin).",
+        "Verify each shot in ShotLab's Chip & Pitch Lab trajectory window."
+      ],
+      "checkpoints": {
+        "dtl": "Zero steep over-the-top chop on the high soft shot; shallow wide arc.",
+        "fo": "Handle and belt buckle turn together into a balanced finish."
+      },
+      "modePlans": {
+        "real": "Score spin + VLA separation between Low, Stock, and High pitches.",
+        "almost": "Focus purely on crisp contact sound and HLA start line across all 3 trajectories."
+      }
+    },
+    {
+      "id": "wedge-clock-matrix-calibration",
+      "title": "100 Yards & In Wedge Clock Matrix Calibration",
+      "section": "Scoring Wedges & Start Line",
+      "focus": "Exact Carry Calibration (7:30 / 9:00 / 10:30 / Full)",
+      "faultTags": [
+        "wedge-distance"
+      ],
+      "environments": [
+        "sim",
+        "range"
+      ],
+      "swingPhase": "short-game",
+      "equipment": [
+        "PW / GW / SW / LW",
+        "Launch monitor"
+      ],
+      "keyFeel": "Own 4 repeatable backswing clock lengths per wedge at cruise rhythm; save true medians to your pocket card.",
+      "pacing": "block",
+      "days": [
+        "day-4-wedges"
+      ],
+      "modes": [
+        "real"
+      ],
+      "duration": "12 min",
+      "reps": "5 calibrated swings x 2-3 wedge matrix cells",
+      "clubs": [
+        "PW",
+        "GW",
+        "SW",
+        "LW"
+      ],
+      "target": {
+        "metric": "carry",
+        "goal": 75,
+        "tol": 5,
+        "reps": 12,
+        "pass": 8
+      },
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "wedge",
+        "keyFrameCue": "Use ShotLab Short Game -> Wedge Calibrator to record 5 swings and save median Carry, Roll, VLA, Spin & ±yd spread."
+      },
+      "why": "Tour pros lower scores inside 100 yards by eliminating guesswork: knowing your exact 9:00 SW carry within ±2 yards eliminates emotional swinging on approach shots.",
+      "instructions": [
+        "Open ShotLab -> 02 Practice -> Short Game (<=100y) -> Wedge Matrix Calibrator.",
+        "Select a target Wedge x Clock cell (e.g., SW 9:00).",
+        "Hit 5 real balls matching that exact backswing length and unhurried tempo (ShotLab automatically trims 1 outlier).",
+        "Click Save Cell to My Bag to update your live printable Wedge Yardage Pocket Card."
+      ],
+      "checkpoints": {
+        "dtl": "Backswing lead arm matches consistent 7:30 (hip), 9:00 (parallel), or 10:30 (shoulder) clock height.",
+        "fo": "Zero deceleration into the ball; follow-through mirrors backswing length."
+      },
+      "modePlans": {
+        "real": "Pick 2-3 cells per practice session until all 16 cells on your My Bag pocket card hold live Launch Pro medians."
+      }
+    },
+    {
+      "id": "putt-startline-speed-ladder",
+      "title": "Sim Stance-Mat Putting: HLA Start-Line Gate & Stimp Ladder",
+      "section": "Scoring Wedges & Start Line",
+      "focus": "±1.0° Start Line & Initial Ball Speed Calibration",
+      "faultTags": [
+        "putting-start-line",
+        "putting-speed"
+      ],
+      "environments": [
+        "putting-mat",
+        "sim"
+      ],
+      "swingPhase": "putting",
+      "equipment": [
+        "Putter",
+        "2 tees (or aluminum yardstick)",
+        "Launch monitor"
+      ],
+      "keyFeel": "Ignore green roll on turf—own starting the ball inside ±1.0° HLA at exact Stimp ball speed.",
+      "pacing": "block",
+      "days": [
+        "day-4-wedges",
+        "daily-calibration",
+        "kids-asleep",
+        "gym-sore"
+      ],
+      "modes": [
+        "real",
+        "almost",
+        "sore"
+      ],
+      "duration": "8 min",
+      "reps": "10 ladder putts (6 -> 10 -> 15 -> 22 -> 30 ft speeds)",
+      "clubs": [
+        "Putter"
+      ],
+      "target": {
+        "metric": "hla",
+        "goal": 0,
+        "tol": 1.0,
+        "reps": 10,
+        "pass": 8
+      },
+      "video": {
+        "localPath": "",
+        "youtubeUrl": "",
+        "diagram": "quiet-eye",
+        "keyFrameCue": "Putt from flat stance mat or roll-out strip (never thick hitting strip bristles); watch HLA + mph only."
+      },
+      "why": "Hitting mats distort friction and break, but Launch Pro reads initial Horizontal Launch Angle (HLA) and Ball Speed (mph) cleanly—and both skills transfer 100% to real grass.",
+      "instructions": [
+        "Move the ball off thick Fiberbuilt bristles onto your flat stance mat or a thin putting strip inside the BLP hitting zone.",
+        "Open ShotLab -> 02 Practice -> Short Game (<=100y) -> Putting Gate (HLA & Stimp).",
+        "Hit putts cleanly through a tee gate 12 inches ahead while matching target mph (Stimp 10: 6ft ≈ 4.5 mph, 15ft ≈ 7.2 mph, 30ft ≈ 10.2 mph).",
+        "Hold Quiet Eye steady on the front-of-ball spot for half a second after strike before peeking."
+      ],
+      "checkpoints": {
+        "dtl": "Eyes directly over or just inside target line; putter arc remains low and symmetrical.",
+        "fo": "Lower body stays rock solid while shoulders rock gently like a metronome."
+      },
+      "modePlans": {
+        "real": "Use real golf balls for putting—speeds stay safe indoors and BLP reads mph + HLA with pinpoint precision.",
+        "almost": "AlmostGolf balls work indoors at lower spin/weight; prioritize ±1.0° HLA start line.",
+        "sore": "Zero back load—perfect recovery day skill builder."
+      }
     }
   ],
   "goals": [
@@ -3331,6 +4466,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "83-167y",
       "favorite": true,
       "rating": 5,
+      "difficulty": "easy",
       "categories": [
         "short-par3",
         "drills-playground",
@@ -3368,6 +4504,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "moderate",
       "categories": [
         "forgiving-scoring",
         "mountain-desert"
@@ -3403,6 +4540,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "moderate",
       "categories": [
         "mountain-desert",
         "fantasy-group"
@@ -3438,6 +4576,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 4,
+      "difficulty": "easy",
       "categories": [
         "drills-playground",
         "fantasy-group",
@@ -3474,6 +4613,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "challenging",
       "categories": [
         "links-dunes",
         "bucket-majors"
@@ -3510,6 +4650,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 5,
+      "difficulty": "challenging",
       "categories": [
         "links-dunes",
         "bucket-majors"
@@ -3545,6 +4686,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "brutal",
       "categories": [
         "bucket-majors"
       ],
@@ -3579,6 +4721,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "moderate",
       "categories": [
         "mountain-desert",
         "forgiving-scoring"
@@ -3614,6 +4757,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "easy",
       "categories": [
         "forgiving-scoring"
       ],
@@ -3648,6 +4792,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "challenging",
       "categories": [
         "links-dunes",
         "bucket-majors"
@@ -3683,6 +4828,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "challenging",
       "categories": [
         "fantasy-group",
         "mountain-desert"
@@ -3718,6 +4864,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "easy",
       "categories": [
         "fantasy-group",
         "drills-playground",
@@ -3754,6 +4901,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "easy",
       "categories": [
         "fantasy-group",
         "forgiving-scoring"
@@ -3789,6 +4937,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "challenging",
       "categories": [
         "links-dunes",
         "bucket-majors"
@@ -3824,6 +4973,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "moderate",
       "categories": [
         "mountain-desert",
         "forgiving-scoring"
@@ -3859,6 +5009,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 3,
+      "difficulty": "moderate",
       "categories": [
         "mountain-desert",
         "forgiving-scoring"
@@ -3894,6 +5045,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 3,
+      "difficulty": "brutal",
       "categories": [
         "bucket-majors"
       ],
@@ -3928,6 +5080,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "moderate",
       "categories": [
         "mountain-desert",
         "forgiving-scoring"
@@ -3963,6 +5116,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "moderate",
       "categories": [
         "forgiving-scoring",
         "mountain-desert"
@@ -3998,6 +5152,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 5,
+      "difficulty": "challenging",
       "categories": [
         "links-dunes",
         "bucket-majors"
@@ -4033,6 +5188,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "38-76y",
       "favorite": true,
       "rating": 5,
+      "difficulty": "easy",
       "categories": [
         "drills-playground",
         "short-par3",
@@ -4071,6 +5227,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "71-128y",
       "favorite": true,
       "rating": 5,
+      "difficulty": "easy",
       "categories": [
         "short-par3",
         "bucket-majors",
@@ -4108,6 +5265,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "brutal",
       "categories": [
         "bucket-majors"
       ],
@@ -4143,6 +5301,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "moderate",
       "categories": [
         "fantasy-group",
         "forgiving-scoring"
@@ -4178,6 +5337,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "6-46y",
       "favorite": false,
       "rating": 4,
+      "difficulty": "easy",
       "categories": [
         "drills-playground",
         "kids-asleep-almost"
@@ -4213,6 +5373,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 4,
+      "difficulty": "easy",
       "categories": [
         "drills-playground"
       ],
@@ -4249,6 +5410,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "moderate",
       "categories": [
         "forgiving-scoring"
       ],
@@ -4283,6 +5445,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "46-101y",
       "favorite": true,
       "rating": 5,
+      "difficulty": "easy",
       "categories": [
         "drills-playground",
         "short-par3",
@@ -4321,6 +5484,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "92-175y",
       "favorite": true,
       "rating": 4,
+      "difficulty": "easy",
       "categories": [
         "short-par3",
         "fantasy-group",
@@ -4358,6 +5522,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 5,
+      "difficulty": "brutal",
       "categories": [
         "links-dunes",
         "bucket-majors"
@@ -4393,6 +5558,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "moderate",
       "categories": [
         "mountain-desert",
         "forgiving-scoring"
@@ -4428,6 +5594,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "challenging",
       "categories": [
         "bucket-majors"
       ],
@@ -4462,6 +5629,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "easy",
       "categories": [
         "forgiving-scoring",
         "links-dunes"
@@ -4498,6 +5666,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "moderate",
       "categories": [
         "forgiving-scoring"
       ],
@@ -4532,6 +5701,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "25-150y",
       "favorite": true,
       "rating": 5,
+      "difficulty": "easy",
       "categories": [
         "drills-playground",
         "short-par3",
@@ -4569,6 +5739,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 5,
+      "difficulty": "challenging",
       "categories": [
         "bucket-majors"
       ],
@@ -4603,6 +5774,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "moderate",
       "categories": [
         "fantasy-group",
         "mountain-desert"
@@ -4638,6 +5810,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "73-191y",
       "favorite": true,
       "rating": 5,
+      "difficulty": "easy",
       "categories": [
         "short-par3",
         "mountain-desert",
@@ -4675,6 +5848,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 5,
+      "difficulty": "brutal",
       "categories": [
         "bucket-majors"
       ],
@@ -4710,6 +5884,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "brutal",
       "categories": [
         "bucket-majors"
       ],
@@ -4744,6 +5919,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "challenging",
       "categories": [
         "links-dunes",
         "bucket-majors"
@@ -4780,6 +5956,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "easy",
       "categories": [
         "forgiving-scoring",
         "mountain-desert",
@@ -4817,6 +5994,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "challenging",
       "categories": [
         "links-dunes",
         "bucket-majors"
@@ -4853,6 +6031,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "easy",
       "categories": [
         "forgiving-scoring",
         "drills-playground"
@@ -4888,6 +6067,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 5,
+      "difficulty": "brutal",
       "categories": [
         "bucket-majors"
       ],
@@ -4923,6 +6103,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 5,
+      "difficulty": "brutal",
       "categories": [
         "bucket-majors"
       ],
@@ -4957,6 +6138,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "moderate",
       "categories": [
         "mountain-desert",
         "forgiving-scoring"
@@ -4992,6 +6174,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "brutal",
       "categories": [
         "bucket-majors"
       ],
@@ -5026,6 +6209,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "challenging",
       "categories": [
         "mountain-desert"
       ],
@@ -5061,6 +6245,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "moderate",
       "categories": [
         "forgiving-scoring",
         "mountain-desert"
@@ -5096,6 +6281,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "6-229y",
       "favorite": true,
       "rating": 5,
+      "difficulty": "easy",
       "categories": [
         "drills-playground",
         "fantasy-group",
@@ -5133,6 +6319,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "challenging",
       "categories": [
         "bucket-majors"
       ],
@@ -5167,6 +6354,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "challenging",
       "categories": [
         "fantasy-group"
       ],
@@ -5201,6 +6389,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "moderate",
       "categories": [
         "mountain-desert",
         "forgiving-scoring"
@@ -5236,6 +6425,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "moderate",
       "categories": [
         "forgiving-scoring",
         "bucket-majors"
@@ -5271,6 +6461,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "moderate",
       "categories": [
         "links-dunes",
         "bucket-majors",
@@ -5308,6 +6499,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "moderate",
       "categories": [
         "links-dunes",
         "forgiving-scoring"
@@ -5343,6 +6535,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "brutal",
       "categories": [
         "bucket-majors"
       ],
@@ -5378,6 +6571,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "94-189y",
       "favorite": true,
       "rating": 4,
+      "difficulty": "easy",
       "categories": [
         "short-par3",
         "mountain-desert",
@@ -5415,6 +6609,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "easy",
       "categories": [
         "drills-playground",
         "mountain-desert"
@@ -5451,6 +6646,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "brutal",
       "categories": [
         "bucket-majors",
         "links-dunes"
@@ -5486,6 +6682,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "moderate",
       "categories": [
         "bucket-majors",
         "mountain-desert",
@@ -5523,6 +6720,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "moderate",
       "categories": [
         "forgiving-scoring",
         "bucket-majors"
@@ -5558,6 +6756,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "easy",
       "categories": [
         "drills-playground",
         "forgiving-scoring"
@@ -5594,6 +6793,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": false,
       "rating": 4,
+      "difficulty": "moderate",
       "categories": [
         "mountain-desert",
         "forgiving-scoring"
@@ -5629,6 +6829,7 @@ window.DEFAULT_DRILLS_DATA = {
       "holeRange": "",
       "favorite": true,
       "rating": 5,
+      "difficulty": "challenging",
       "categories": [
         "mountain-desert",
         "fantasy-group"
@@ -6225,6 +7426,27 @@ window.DEFAULT_DRILLS_DATA = {
       "symptom": "Inconsistent spine angle, ball position or alignment at address.",
       "rootCauseHint": "No repeatable pre-swing check; limited hip hinge or rotation mobility.",
       "swingPhase": "setup"
+    },
+    {
+      "id": "overthinking-paralysis",
+      "name": "Analytical overthinking / reinvestment",
+      "symptom": "Mid-swing body-part micromanagement, stiff transition, range swing disappears under pressure.",
+      "rootCauseHint": "Prefrontal cortex hijacking an open-loop ~220ms downswing (Constrained Action / Reinvestment); staring at raw telemetry between every swing.",
+      "swingPhase": "mental-tempo"
+    },
+    {
+      "id": "tension-arousal",
+      "name": "Excess arousal & grip tension",
+      "symptom": "Tight forearms/jaw, deadened clubhead feel, rushed tempo or jerky transition.",
+      "rootCauseHint": "Sympathetic spike and tight grip saturate fingertip Pacinian/Meissner mechanoreceptors and blind clubhead awareness.",
+      "swingPhase": "mental-tempo"
+    },
+    {
+      "id": "target-blur",
+      "name": "Target blur / missing Quiet Eye",
+      "symptom": "Eyes darting at impact, inconsistent start line, unstable head/low point.",
+      "rootCauseHint": "No steady pre-swing visual fixation on a single ball spot/dimple before takeaway.",
+      "swingPhase": "mental-tempo"
     }
   ],
   "environments": [
