@@ -236,6 +236,9 @@ class SwingDatabase {
     if (analyzed.isKids || extra.isKids || analyzed.practiceMode === 'kids' || isKidsZoneRawShot(analyzed.raw) || rawDrill.startsWith('kids-')) {
       return null;
     }
+    if (analyzed.isPutt || analyzed.activeClub === 'PT') {
+      return null;
+    }
     const row = rowFromAnalyzed(analyzed, extra);
 
     if (this.db) {

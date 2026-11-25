@@ -139,6 +139,7 @@ function sanitizeStudioState(patch = {}, prev = defaultStudioState()) {
   };
   base.flowConfig = { ...defaults.flowConfig, ...(isPlainObj(base.flowConfig) ? base.flowConfig : {}) };
   if (!Array.isArray(base.flowLogs)) base.flowLogs = [];
+  if (!Array.isArray(base.wedgeMatrix) || !base.wedgeMatrix.length) base.wedgeMatrix = defaults.wedgeMatrix;
   const p = isPlainObj(patch) ? patch : {};
   const next = { ...base };
   if (typeof p.matType === 'string' && VALID_MAT_TYPES.has(p.matType)) next.matType = p.matType;
@@ -247,33 +248,31 @@ function sanitizeStudioState(patch = {}, prev = defaultStudioState()) {
     } : null;
   }
   if (Array.isArray(p.wedgeMatrix) && p.wedgeMatrix.length) {
-    const validRows = p.wedgeMatrix.filter((row) => row && typeof row === 'object');
+    const validRows = p.wedgeMatrix.filter((row) => isPlainObj(row) && Array.isArray(row.cells) && row.cells.some((c) => isPlainObj(c)));
     if (validRows.length) {
       next.wedgeMatrix = validRows.slice(0, 5).map((row) => ({
         club: String(row.club || '').slice(0, 8),
         label: String(row.label || row.club || '').slice(0, 24),
-        cells: Array.isArray(row.cells)
-          ? row.cells
-              .filter((c) => c && typeof c === 'object')
-              .slice(0, 4)
-              .map((c) => {
-                const vlaNum = toFiniteNumOrNull(c.vla);
-                const spinNum = toFiniteNumOrNull(c.spin);
-                const sprNum = toFiniteNumOrNull(c.spread);
-                const nNum = toFiniteNumOrNull(c.n);
-                return {
-                  arm: String(c.arm || '').slice(0, 12),
-                  pct: String(c.pct || '').slice(0, 8),
-                  carry: Math.max(5, Math.min(200, Math.round(toFiniteNumOrNull(c.carry) ?? 60))),
-                  roll: Math.max(-15, Math.min(30, Math.round(toFiniteNumOrNull(c.roll) ?? 0))),
-                  vla: vlaNum !== null ? Math.max(5, Math.min(65, Math.round(vlaNum * 10) / 10)) : null,
-                  spin: spinNum !== null ? Math.max(500, Math.min(14000, Math.round(spinNum))) : null,
-                  spread: sprNum !== null ? Math.max(0, Math.min(30, Math.round(sprNum * 10) / 10)) : null,
-                  n: nNum !== null ? Math.max(0, Math.min(999, Math.round(nNum))) : 0,
-                  calibratedAt: (typeof c.calibratedAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(c.calibratedAt)) ? c.calibratedAt : null,
-                };
-              })
-          : [],
+        cells: row.cells
+          .filter((c) => isPlainObj(c))
+          .slice(0, 4)
+          .map((c) => {
+            const vlaNum = toFiniteNumOrNull(c.vla);
+            const spinNum = toFiniteNumOrNull(c.spin);
+            const sprNum = toFiniteNumOrNull(c.spread);
+            const nNum = toFiniteNumOrNull(c.n);
+            return {
+              arm: String(c.arm || '').slice(0, 12),
+              pct: String(c.pct || '').slice(0, 8),
+              carry: Math.max(5, Math.min(200, Math.round(toFiniteNumOrNull(c.carry) ?? 60))),
+              roll: Math.max(-15, Math.min(30, Math.round(toFiniteNumOrNull(c.roll) ?? 0))),
+              vla: vlaNum !== null ? Math.max(5, Math.min(65, Math.round(vlaNum * 10) / 10)) : null,
+              spin: spinNum !== null ? Math.max(500, Math.min(14000, Math.round(spinNum))) : null,
+              spread: sprNum !== null ? Math.max(0, Math.min(30, Math.round(sprNum * 10) / 10)) : null,
+              n: nNum !== null ? Math.max(0, Math.min(999, Math.round(nNum))) : 0,
+              calibratedAt: (typeof c.calibratedAt === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(c.calibratedAt)) ? c.calibratedAt : null,
+            };
+          }),
       }));
     }
   }
@@ -603,7 +602,7 @@ function toDispersionShot(s) {
 }
 
 function computeSessionStats(shots) {
-  const real = (shots || []).filter((s) => !s.isPreviewSeed);
+  const real = (shots || []).filter((s) => !s.isPreviewSeed && !s.isPutt && s.activeClub !== 'PT');
   const count = real.length;
   const avgOf = (vals, digits = 1) => {
     const nums = vals.filter((v) => typeof v === 'number' && Number.isFinite(v));
@@ -741,7 +740,7 @@ function getSnapshot() {
   const current = runtime.shots.find((s) => s.id === runtime.selectedShotId) || runtime.shots[0] || null;
   const rawDrills = runtime.drillsHub?.drills || [];
   const adultDrills = rawDrills.filter((d) => !d.isKidsZone);
-  const sessionShots = runtime.shots.filter((s) => !s.isPreviewSeed);
+  const sessionShots = runtime.shots.filter((s) => !s.isPreviewSeed && !s.isPutt && s.activeClub !== 'PT');
   const streak = engine.detectFaultStreak(sessionShots, adultDrills, {
     practiceMode: runtime.settings.practiceMode,
     club: current?.activeClub,
@@ -824,7 +823,8 @@ function getSnapshot() {
 }
 
 function buildObsPayload(snap) {
-  const activeClub = snap.currentShot?.activeClub || null;
+  const rawActiveClub = snap.currentShot?.activeClub || null;
+  const activeClub = (snap.currentShot?.isPutt || rawActiveClub === 'PT') ? null : rawActiveClub;
   let dispersion = null;
   if (activeClub) {
     if (swingDb) {
@@ -836,7 +836,7 @@ function buildObsPayload(snap) {
     }
     if (!dispersion || (dispersion.n || 0) < 2) {
       const matching = runtime.shots
-        .filter((s) => !s.isPreviewSeed && (s.practiceMode || 'real') !== 'almost' && s.activeClub === activeClub)
+        .filter((s) => !s.isPreviewSeed && !s.isPutt && (s.practiceMode || 'real') !== 'almost' && s.activeClub === activeClub)
         .map(toDispersionShot);
       if (matching.length > 0) {
         dispersion = engine.computeDispersionStats(matching, { club: activeClub });
@@ -1078,7 +1078,7 @@ function ingestRawShot(
   const recentClubs = isDemoFlag
     ? []
     : runtime.shots
-        .filter((s, i) => i !== existingIdx && !s.isDemo && !s.isPreviewSeed && s.activeClub)
+        .filter((s, i) => i !== existingIdx && !s.isDemo && !s.isPreviewSeed && !s.isPutt && s.activeClub && s.activeClub !== 'PT')
         .slice(0, 6)
         .map((s) => s.activeClub);
 
@@ -1156,7 +1156,7 @@ function ingestRawShot(
     runtime.shots = runtime.shots.filter((s) => !s.isPreviewSeed);
     if (hadSeedSelected) runtime.selectedShotId = null;
 
-    if (swingDb) {
+    if (swingDb && !analyzed.isPutt && analyzed.activeClub !== 'PT') {
       try {
         swingDb.upsertShot(analyzed, {
           source: rawShot.source || 'live',
@@ -1258,6 +1258,7 @@ let bridgeReq = null;
 let bridgeRetryTimer = null;
 const BRIDGE_IDLE_TIMEOUT_MS = 45000; // 3x SimWatch's 15s SSE heartbeat
 let hasSyncedBridgeContext = false;
+let bridgeWasKidsZone = false;
 
 function fetchTodaysShotsFromBridge() {
   if (runtime.kidsMode) return;
@@ -1342,6 +1343,7 @@ function handleBridgeDisconnect() {
   runtime.rigHealth = null;
   runtime.gsproClub = null;
   hasSyncedBridgeContext = false;
+  bridgeWasKidsZone = false;
   if (!shuttingDown) {
     notifyAll('state');
     scheduleBridgeReconnect();
@@ -1381,6 +1383,7 @@ function connectToSimWatchBridge() {
     bridgeReq = null;
   }
   hasSyncedBridgeContext = false;
+  bridgeWasKidsZone = false;
 
   // SimWatch writes an SSE heartbeat every 15s; if nothing arrives for 3 beats the socket is
   // half-open (bridge hung, sleep/resume, network stack reset) and we must reconnect ourselves.
@@ -1420,12 +1423,37 @@ function connectToSimWatchBridge() {
 
       runtime.bridgeConnected = true;
       hasSyncedBridgeContext = false;
+      bridgeWasKidsZone = false;
       notifyAll('state');
       fetchTodaysShotsFromBridge();
 
       let buffer = '';
       let currentEvent = 'message';
       let currentData = [];
+
+      const applyAdultBridgeContext = (ctx, defaultAllowClear) => {
+        if (!ctx || typeof ctx !== 'object') return;
+        hasSyncedBridgeContext = true;
+        if (ctx.session_id === 'kids_zone') {
+          bridgeWasKidsZone = true;
+          return;
+        }
+        if (bridgeWasKidsZone) {
+          bridgeWasKidsZone = false;
+          syncContextFromBridge(ctx, { allowClear: false });
+          if (
+            (runtime.settings.activeFeelId && !ctx.feel_id) ||
+            (runtime.settings.activeDrillId && !ctx.drill_id)
+          ) {
+            pushContextToSimWatch({
+              drillId: runtime.settings.activeDrillId || null,
+              feelId: runtime.settings.activeFeelId || null,
+            });
+          }
+          return;
+        }
+        syncContextFromBridge(ctx, { allowClear: defaultAllowClear });
+      };
 
       const flushEvent = () => {
         const evt = currentEvent;
@@ -1449,16 +1477,13 @@ function connectToSimWatchBridge() {
                 pushContextToSimWatch({ sessionId: 'kids_zone', drillId: 'kids-zone', feelId: null });
               }
             } else if (doc.context && typeof doc.context === 'object') {
-              const allowClear = hasSyncedBridgeContext;
-              hasSyncedBridgeContext = true;
-              syncContextFromBridge(doc.context, { allowClear });
+              applyAdultBridgeContext(doc.context, hasSyncedBridgeContext);
             }
             notifyAll('state');
           } else if (evt === 'context') {
             if (!runtime.kidsMode) {
               const ctx = (doc && doc.context && typeof doc.context === 'object') ? doc.context : doc;
-              hasSyncedBridgeContext = true;
-              syncContextFromBridge(ctx, { allowClear: true });
+              applyAdultBridgeContext(ctx, true);
             }
             notifyAll('state');
           } else if (evt === 'clip') {
@@ -3010,6 +3035,14 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     mainWindow = null;
+    if (runtime.kidsMode) {
+      runtime.kidsMode = false;
+      pushContextToSimWatch({
+        sessionId: null,
+        drillId: runtime.settings.activeDrillId || null,
+        feelId: runtime.settings.activeFeelId || null,
+      });
+    }
   });
 }
 

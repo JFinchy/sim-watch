@@ -1,6 +1,6 @@
 /**
  * ShotLab — Broadcast Coaching OS & Launch Monitor Studio Renderer Controller.
- * Connects 01 Plan, 02 Practice (Live Telemetry + 7 Challenges), 03 Review (Swing DNA,
+ * Connects 01 Plan, 02 Practice (Live Telemetry + 8 Challenges + Short Game <=100y), 03 Review (Swing DNA,
  * Delivery Faults by Cost, DECADE Dispersion, Real Kinovea Video Compare, Trends/SG),
  * and 04 My Bag (14-Club Sortable Gapping + Filter/Trim/Soft-Delete Shot Manager)
  * to Electron IPC + local SQLite (with clean standalone browser fallback).
@@ -1447,7 +1447,11 @@
     let body = '';
 
     if (st.subTab === 'matrix') {
+      const maxRow = Math.max(0, matrix.length - 1);
+      if (st.calClubIdx < 0 || st.calClubIdx > maxRow) st.calClubIdx = 0;
       const row = matrix[st.calClubIdx] || matrix[0];
+      const maxCell = Math.max(0, (row?.cells?.length || 1) - 1);
+      if (st.calCellIdx < 0 || st.calCellIdx > maxCell) st.calCellIdx = 0;
       const cell = row?.cells?.[st.calCellIdx] || row?.cells?.[0];
       const sum = SG.summarizeCalibrationShots(st.calShots);
       body = `
@@ -1461,7 +1465,7 @@
             return `
               <button type="button" class="sg-cell-btn ${hasLive ? 'calibrated' : ''} ${isSel ? 'active' : ''}" data-sg-cell="${rIdx}:${cIdx}">
                 <div class="flex-row" style="justify-content:space-between;"><strong style="font-size:11.5px;">${esc(r.club)} · ${esc(c.arm)}</strong><span class="mono" style="font-size:10.5px;color:var(--cyan);">${c.carry}y</span></div>
-                <div class="muted" style="font-size:10px;">${c.vla != null ? `${c.vla}° VLA · ${c.spin || '—'} rpm` : `${c.pct} · Roll ${c.roll >= 0 ? '+' : ''}${c.roll}y`}${c.n ? ` (n=${c.n})` : ''}</div>
+                <div class="muted" style="font-size:10px;">${c.vla != null ? `${c.vla}° VLA · ${c.spin || '—'} rpm` : `${esc(c.pct)} · Roll ${c.roll >= 0 ? '+' : ''}${c.roll}y`}${c.n ? ` (n=${c.n})` : ''}</div>
               </button>`;
           }).join('')).join('')}
         </div>
@@ -1523,7 +1527,9 @@
             <span class="badge badge-${esc(r.grade)}" title="${esc(r.verdict)}">#${i + 1} (${r.targetYds}y): ${r.carryYds}y · ${r.proxFt}ft${r.matFatLikely ? ' ⚠Fat' : ''}</span>`).join('')}
           </div>` : ''}`;
     } else if (st.subTab === 'chip') {
-      const chip = st.lastChipRes || (snap?.currentShot ? SG.analyzeShortGameShot(snap.currentShot, { matType: snap?.settings?.studio?.matType || 'fiberbuilt' }) : null);
+      const chip = (snap?.currentShot && !snap.currentShot.isPreviewSeed && !snap.currentShot.isPutt)
+        ? SG.analyzeShortGameShot(snap.currentShot, { matType: snap?.settings?.studio?.matType || 'fiberbuilt' })
+        : null;
       body = `
         <div class="sub-well mt-8" style="border-color:rgba(245,158,11,0.45);">
           <strong>Fiberbuilt Mat Trap Defense:</strong> Place a folded towel 2.5&quot; behind the ball! High launch (&gt;35°) + low spin (&lt;4300 rpm) triggers a Mat-Fat Bounce alert even when indoor carry looks decent.
@@ -1540,7 +1546,16 @@
     } else {
       const tgtFt = SG.PUTT_LADDER_FT[st.puttIdx % SG.PUTT_LADDER_FT.length];
       const tgtMph = SG.targetPuttSpeedMph(tgtFt, st.stimp);
-      const lastPutt = st.puttLog[0] || null;
+      const lastPutt = st.displayPutt || null;
+      const svgTgtFt = lastPutt ? lastPutt.targetFt : tgtFt;
+      const svgGateDeg = lastPutt ? lastPutt.gateDeg : st.gateDeg;
+      const autoAdvanced = Boolean(lastPutt && !st.freePuttMode && lastPutt.grade === 'green' && lastPutt.targetFt !== tgtFt);
+      const hlaText = (lastPutt && lastPutt.hla !== null && lastPutt.hla !== undefined)
+        ? `${lastPutt.hla > 0 ? '+' : ''}${lastPutt.hla.toFixed(1)}°`
+        : '—';
+      const lineVerdict = (!lastPutt || lastPutt.wouldMakeLine === null)
+        ? 'No HLA read'
+        : (lastPutt.wouldMakeLine ? '✓ On Cup Line' : `${lastPutt.missAtTargetIn}" off cup`);
       body = `
         <div class="sub-well mt-8" style="border-color:rgba(16,185,129,0.45);">
           <div class="flex-row" style="justify-content:space-between;">
@@ -1553,14 +1568,15 @@
                 <option value="0.5" ${st.gateDeg === 0.5 ? 'selected' : ''}>Gate ±0.5°</option>
                 <option value="1.0" ${st.gateDeg === 1.0 ? 'selected' : ''}>Gate ±1.0°</option>
               </select>
-              <button type="button" class="btn btn-xs" id="sg-putt-next-ft">Target: ${tgtFt} ft (${tgtMph} mph) →</button>
+              <button type="button" class="btn btn-xs ${st.freePuttMode ? 'btn-emerald' : ''}" id="sg-putt-free-toggle">${st.freePuttMode ? 'Free Putt: ON' : 'Ladder Auto'}</button>
+              <button type="button" class="btn btn-xs" id="sg-putt-next-ft">Next Cup: ${tgtFt} ft (${tgtMph} mph) →</button>
             </div>
           </div>
         </div>
-        <div class="mt-8">${SG.renderPuttGateSvg(lastPutt, tgtFt, st.gateDeg)}</div>
+        <div class="mt-8">${SG.renderPuttGateSvg(lastPutt, svgTgtFt, svgGateDeg)}</div>
         ${lastPutt ? `
           <div class="sub-well mt-8 flex-row" style="justify-content:space-between;border-color:var(--${lastPutt.grade === 'green' ? 'green' : lastPutt.grade === 'red' ? 'red' : 'yellow'}-bd);">
-            <span><strong>${lastPutt.ballSpeedMph} mph (${lastPutt.estDistFt} ft)</strong> · Start Line <strong>${lastPutt.hla > 0 ? '+' : ''}${lastPutt.hla.toFixed(1)}°</strong> · ${lastPutt.wouldMakeLine ? '✓ On Cup Line' : `${lastPutt.missAtTargetIn}" off cup`}</span>
+            <span><strong>${lastPutt.ballSpeedMph} mph (${lastPutt.estDistFt} ft)</strong> · Start Line <strong>${hlaText}</strong> · ${lineVerdict}${autoAdvanced ? ` · <strong style="color:var(--green);">✓ Made ${lastPutt.targetFt} ft! Up next: ${tgtFt} ft</strong>` : ''}</span>
             <span class="muted" style="font-size:11.5px;">${esc(lastPutt.cue)}</span>
           </div>` : '<div class="muted mt-8">Roll a putt across the Launch Pro hitting zone (Target: ' + tgtMph + ' mph for ' + tgtFt + ' ft at Stimp ' + st.stimp + ').</div>'}`;
     }
@@ -1606,10 +1622,14 @@
     if ($('sg-cal-save')) {
       $('sg-cal-save').onclick = async () => {
         const sum = SG.summarizeCalibrationShots(st.calShots);
-        if (!sum) return;
-        const nextMatrix = matrix.map((r, rIdx) => rIdx !== st.calClubIdx ? r : {
+        const curMatrix = state?.settings?.studio?.wedgeMatrix || [];
+        if (!sum || !curMatrix.length) return;
+        const rTarget = Math.max(0, Math.min(curMatrix.length - 1, st.calClubIdx));
+        const rowTarget = curMatrix[rTarget];
+        const cTarget = Math.max(0, Math.min((rowTarget?.cells?.length || 1) - 1, st.calCellIdx));
+        const nextMatrix = curMatrix.map((r, rIdx) => rIdx !== rTarget ? r : {
           ...r,
-          cells: r.cells.map((c, cIdx) => cIdx !== st.calCellIdx ? c : {
+          cells: r.cells.map((c, cIdx) => cIdx !== cTarget ? c : {
             ...c,
             carry: sum.carry,
             roll: sum.roll,
@@ -1621,22 +1641,31 @@
           }),
         });
         await api.updateStudioState({ wedgeMatrix: nextMatrix });
-        showToast(`Saved ${matrix[st.calClubIdx]?.club} ${matrix[st.calClubIdx]?.cells[st.calCellIdx]?.arm}: ${sum.carry}y (±${sum.spreadYds}y)!`);
+        showToast(`Saved ${curMatrix[rTarget]?.club} ${curMatrix[rTarget]?.cells?.[cTarget]?.arm}: ${sum.carry}y (±${sum.spreadYds}y)!`);
         renderShortGamePanel(state);
       };
     }
     if ($('sg-comb-score')) {
       $('sg-comb-score').onclick = () => {
         if (snap?.currentShot) {
-          shortGameStore.recordShot(snap.currentShot, { matrix, matType: snap?.settings?.studio?.matType || 'fiberbuilt' });
+          const curMatrix = state?.settings?.studio?.wedgeMatrix || [];
+          const res = shortGameStore.recordShot(snap.currentShot, {
+            matrix: curMatrix,
+            matType: snap?.settings?.studio?.matType || 'fiberbuilt',
+            handedness: snap?.settings?.handedness || 'RH',
+          });
+          if (res && !res.recorded && res.reason === 'missing_carry') {
+            showToast('Shot has no carry distance read to score.');
+          }
           renderShortGamePanel(snap);
         }
       };
     }
     if ($('sg-comb-rand')) $('sg-comb-rand').onclick = () => { shortGameStore.resetCombine(true); renderShortGamePanel(snap); };
-    if ($('sg-putt-stimp')) $('sg-putt-stimp').onchange = (e) => { st.stimp = Number(e.target.value) || 10; renderShortGamePanel(snap); };
-    if ($('sg-putt-gate')) $('sg-putt-gate').onchange = (e) => { st.gateDeg = Number(e.target.value) || 1.0; renderShortGamePanel(snap); };
-    if ($('sg-putt-next-ft')) $('sg-putt-next-ft').onclick = () => { st.puttIdx = (st.puttIdx + 1) % SG.PUTT_LADDER_FT.length; renderShortGamePanel(snap); };
+    if ($('sg-putt-stimp')) $('sg-putt-stimp').onchange = (e) => { st.stimp = Number(e.target.value) || 10; st.displayPutt = null; renderShortGamePanel(snap); };
+    if ($('sg-putt-gate')) $('sg-putt-gate').onchange = (e) => { st.gateDeg = Number(e.target.value) || 1.0; st.displayPutt = null; renderShortGamePanel(snap); };
+    if ($('sg-putt-free-toggle')) $('sg-putt-free-toggle').onclick = () => { st.freePuttMode = !st.freePuttMode; renderShortGamePanel(snap); };
+    if ($('sg-putt-next-ft')) $('sg-putt-next-ft').onclick = () => { st.puttIdx = (st.puttIdx + 1) % SG.PUTT_LADDER_FT.length; st.displayPutt = null; renderShortGamePanel(snap); };
   }
 
   function renderPractice(snap = state) {
@@ -1672,19 +1701,22 @@
 
     if (!shot) {
       const isFlowNoShot = activeLabMode === 'flow';
-      $('mode-practice')?.classList.toggle('flow-mode-active', isFlowNoShot);
+      const isShortGameNoShot = activePracticeSub === 'shortgame';
+      const hideFullSwingNoShot = isFlowNoShot || isShortGameNoShot;
+      $('mode-practice')?.classList.toggle('flow-mode-active', isFlowNoShot && !isShortGameNoShot);
       if ($('prac-flow-stage')) {
-        $('prac-flow-stage').style.display = isFlowNoShot ? 'block' : 'none';
-        if (isFlowNoShot) renderFlowStage(snap, studio, studio.mindCheckin?.cue || 'Smooth clubhead sweep to target');
+        $('prac-flow-stage').style.display = (isFlowNoShot && !isShortGameNoShot) ? 'block' : 'none';
+        if (isFlowNoShot && !isShortGameNoShot) renderFlowStage(snap, studio, studio.mindCheckin?.cue || 'Smooth clubhead sweep to target');
       }
-      if ($('prac-kpi-strip')) $('prac-kpi-strip').style.display = isFlowNoShot ? 'none' : '';
-      if ($('box-shape')) $('box-shape').style.display = '';
-      if ($('box-club')) $('box-club').style.display = isFlowNoShot ? 'none' : '';
-      if ($('box-delivery')) $('box-delivery').style.display = isFlowNoShot ? 'none' : '';
-      if ($('box-strike')) $('box-strike').style.display = isFlowNoShot ? 'none' : '';
-      if ($('prac-coupled-rail')) $('prac-coupled-rail').style.display = activeLabMode === 'coupled' ? 'block' : 'none';
-      if ($('prac-scorecard-rail')) $('prac-scorecard-rail').style.display = isFlowNoShot ? 'none' : 'block';
-      if ($('prac-fault-coach')) $('prac-fault-coach').style.display = isFlowNoShot ? 'none' : 'block';
+      if ($('prac-kpi-strip')) $('prac-kpi-strip').style.display = hideFullSwingNoShot ? 'none' : '';
+      if ($('box-shape')) $('box-shape').style.display = isShortGameNoShot ? 'none' : '';
+      if ($('box-club')) $('box-club').style.display = hideFullSwingNoShot ? 'none' : '';
+      if ($('box-delivery')) $('box-delivery').style.display = hideFullSwingNoShot ? 'none' : '';
+      if ($('box-strike')) $('box-strike').style.display = hideFullSwingNoShot ? 'none' : '';
+      if ($('prac-coupled-rail')) $('prac-coupled-rail').style.display = (!isShortGameNoShot && activeLabMode === 'coupled') ? 'block' : 'none';
+      if ($('prac-scorecard-rail')) $('prac-scorecard-rail').style.display = hideFullSwingNoShot ? 'none' : 'block';
+      if ($('prac-fault-coach')) $('prac-fault-coach').style.display = hideFullSwingNoShot ? 'none' : 'block';
+      if (hideFullSwingNoShot && $('fault-streak-banner')) $('fault-streak-banner').classList.add('hidden');
       lastTrajShot = null;
       hideHoverPopover();
       ['shape-why-trigger', 'club-why-trigger', 'delivery-why-trigger', 'strike-why-trigger'].forEach((tid) => {
@@ -1849,29 +1881,31 @@
     $('pot-reasons').innerHTML = (pot.reasons || []).map((r) => esc(r)).join(' · ');
     bindHover($('strike-why-trigger'), () => `<strong>${esc(st.label)}</strong><ul style="margin:6px 0 0 14px;padding:0;">${(st.rationale || []).map((r) => `<li>${esc(r)}</li>`).join('')}</ul>`);
 
-    // Coupled Lab Matrix + Flow / Play Box visibility guardrails
+    // Coupled Lab Matrix + Flow / Short Game / Play Box visibility guardrails
     const isFlow = activeLabMode === 'flow';
-    $('mode-practice')?.classList.toggle('flow-mode-active', isFlow);
-    if ($('prac-flow-stage')) $('prac-flow-stage').style.display = isFlow ? 'block' : 'none';
-    if ($('prac-kpi-strip')) $('prac-kpi-strip').style.display = isFlow ? 'none' : '';
-    if ($('box-club')) $('box-club').style.display = isFlow ? 'none' : '';
-    if ($('box-delivery')) $('box-delivery').style.display = isFlow ? 'none' : '';
-    if ($('box-strike')) $('box-strike').style.display = isFlow ? 'none' : '';
-    if ($('prac-scorecard-rail')) $('prac-scorecard-rail').style.display = isFlow ? 'none' : 'block';
-    if ($('prac-fault-coach')) $('prac-fault-coach').style.display = isFlow ? 'none' : 'block';
-    if (isFlow && $('fault-streak-banner')) $('fault-streak-banner').classList.add('hidden');
+    const isShortGame = activePracticeSub === 'shortgame';
+    const hideFullSwing = isFlow || isShortGame;
+    $('mode-practice')?.classList.toggle('flow-mode-active', isFlow && !isShortGame);
+    if ($('prac-flow-stage')) $('prac-flow-stage').style.display = (isFlow && !isShortGame) ? 'block' : 'none';
+    if ($('prac-kpi-strip')) $('prac-kpi-strip').style.display = hideFullSwing ? 'none' : '';
+    if ($('box-club')) $('box-club').style.display = hideFullSwing ? 'none' : '';
+    if ($('box-delivery')) $('box-delivery').style.display = hideFullSwing ? 'none' : '';
+    if ($('box-strike')) $('box-strike').style.display = hideFullSwing ? 'none' : '';
+    if ($('prac-scorecard-rail')) $('prac-scorecard-rail').style.display = hideFullSwing ? 'none' : 'block';
+    if ($('prac-fault-coach')) $('prac-fault-coach').style.display = hideFullSwing ? 'none' : 'block';
+    if (hideFullSwing && $('fault-streak-banner')) $('fault-streak-banner').classList.add('hidden');
 
     const flowCfg = studio.flowConfig || {};
     const mindCue = studio.mindCheckin?.cue || missionState?.target || 'Smooth clubhead sweep to target';
-    const batchHold = isFlow && Boolean(flowCfg.batchEnabled) && !flowSession.batchRevealed;
-    if ($('box-shape')) $('box-shape').style.display = batchHold ? 'none' : '';
+    const batchHold = isFlow && !isShortGame && Boolean(flowCfg.batchEnabled) && !flowSession.batchRevealed;
+    if ($('box-shape')) $('box-shape').style.display = (batchHold || isShortGame) ? 'none' : '';
 
-    if (isFlow && $('prac-flow-stage')) {
+    if (isFlow && !isShortGame && $('prac-flow-stage')) {
       renderFlowStage(snap, studio, mindCue);
     }
 
-    $('prac-coupled-rail').style.display = activeLabMode === 'coupled' ? 'block' : 'none';
-    if (activeLabMode === 'coupled' && window.ShotLabCharts) {
+    $('prac-coupled-rail').style.display = (!isShortGame && activeLabMode === 'coupled') ? 'block' : 'none';
+    if (!isShortGame && activeLabMode === 'coupled' && window.ShotLabCharts) {
       $('prac-coupled-wrap').innerHTML = window.ShotLabCharts.renderCoupledSignalsGrid(shot.coupledSignals);
     }
 
@@ -2682,19 +2716,22 @@
       </table>` : '';
     $('bag-wedge-matrix').querySelectorAll('[data-wm-carry], [data-wm-roll]').forEach((inp) => {
       inp.onchange = async () => {
+        const curMatrix = state?.settings?.studio?.wedgeMatrix || [];
         const isCarry = inp.hasAttribute('data-wm-carry');
         const [rIdx, cIdx] = (inp.getAttribute(isCarry ? 'data-wm-carry' : 'data-wm-roll') || '').split(':').map(Number);
         const val = Math.round(Number(inp.value) || 0);
-        const nextMatrix = matrix.map((r, ri) => ri !== rIdx ? r : {
+        const clamped = isCarry ? Math.max(5, Math.min(200, val)) : Math.max(-15, Math.min(30, val));
+        inp.value = String(clamped);
+        const nextMatrix = curMatrix.map((r, ri) => ri !== rIdx ? r : {
           ...r,
           cells: r.cells.map((c, ci) => ci !== cIdx ? c : {
             ...c,
-            carry: isCarry ? Math.max(5, Math.min(200, val)) : c.carry,
-            roll: !isCarry ? Math.max(-15, Math.min(30, val)) : c.roll,
+            carry: isCarry ? clamped : c.carry,
+            roll: !isCarry ? clamped : c.roll,
           }),
         });
         await api.updateStudioState({ wedgeMatrix: nextMatrix });
-        showToast(`Updated ${matrix[rIdx]?.club} ${matrix[rIdx]?.cells[cIdx]?.arm}`);
+        showToast(`Updated ${curMatrix[rIdx]?.club} ${curMatrix[rIdx]?.cells?.[cIdx]?.arm}`);
       };
     });
   }
@@ -3357,11 +3394,11 @@
     maybePlayShotAudio(snap);
     renderTopbar(snap);
 
-    // Feed real live/demo shots into Challenge Arena or Short Game Lab when active
+    // Feed real live/demo shots into Challenge Arena or Short Game Lab only when 02 Practice is active
     let pendingBests = null;
     if (snap.eventType === 'shot' && snap.currentShot && snap.currentShot.id !== lastChallengeScoredId && challengeStore) {
       lastChallengeScoredId = snap.currentShot.id;
-      if (activePracticeSub === 'challenge') {
+      if (activeMode === 'practice' && activePracticeSub === 'challenge') {
         const res = challengeStore.recordShot(snap.currentShot);
         api.setChallengeState(challengeStore.getObsPayload());
         if (res?.bestsChanged && res.bests) pendingBests = res.bests;
@@ -3369,10 +3406,11 @@
     }
     if (snap.eventType === 'shot' && snap.currentShot && !snap.currentShot.isPreviewSeed && snap.currentShot.id !== lastShortGameShotId && shortGameStore) {
       lastShortGameShotId = snap.currentShot.id;
-      if (activePracticeSub === 'shortgame') {
+      if (activeMode === 'practice' && activePracticeSub === 'shortgame') {
         shortGameStore.recordShot(snap.currentShot, {
           matrix: snap.settings?.studio?.wedgeMatrix || [],
           matType: snap.settings?.studio?.matType || 'fiberbuilt',
+          handedness: snap.settings?.handedness || 'RH',
         });
       }
     }
@@ -3505,8 +3543,7 @@
       } else {
         api.setChallengeState(null);
       }
-      renderChallengePanel(state);
-      renderShortGamePanel(state);
+      renderPractice(state);
     };
   });
   document.querySelectorAll('#prac-lab-seg button').forEach((b) => {
