@@ -8204,9 +8204,10 @@
         if (!bridge.live || typeof window.fetch !== "function") { bridge.kidsCtxActive = false; return; }
         if (bridge.kidsCtxActive === want) return;
         bridge.kidsCtxActive = want;
+        const restoreDrillId = (state.activeSession && mat.open && mat.view === "run" && typeof curBlock === "function" && curBlock()?.drillId) || null;
         const payload = want
           ? { session_id: "kids_zone", drill_id: "kids-zone", feel_id: null }
-          : { session_id: null, drill_id: null };
+          : { session_id: null, drill_id: restoreDrillId };
         fetch(`${BRIDGE_URL}/api/context`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -8217,10 +8218,11 @@
         window.addEventListener("pagehide", () => {
           if (!bridge.kidsCtxActive || typeof window.fetch !== "function") return;
           bridge.kidsCtxActive = false;
+          const restoreDrillId = (state.activeSession && mat.open && mat.view === "run" && typeof curBlock === "function" && curBlock()?.drillId) || null;
           fetch(`${BRIDGE_URL}/api/context`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ session_id: null, drill_id: null }),
+            body: JSON.stringify({ session_id: null, drill_id: restoreDrillId }),
             keepalive: true
           }).catch(() => {});
         });

@@ -388,24 +388,43 @@ function analyzeShot(rawShot, options = {}) {
     { recentClubs, practiceMode }
   );
 
-  // Active club priority: explicit override > confirmed club > detected club (when confident) > GSPro reported full-swing club > 7I
+  // Active club priority: genuine putts stay 'PT' (never pollute '7I' or full-swing stats);
+  // topped full-swing iron/driver shots with clubOverride or full-swing spin/speed keep their club.
+  // Full-swing clubs follow: explicit override > confirmed club > detected club (when confident) > GSPro reported > 7I
   const overrideClub = normalizeClubCode(options.clubOverride) || norm.confirmedClub;
   const reportedFullClub = normalizeClubCode(norm.reportedClub);
+  const rawClubTag = String(norm.reportedClub || norm.raw?.club || '').trim().toUpperCase();
+  const reportedIsPutter = rawClubTag === 'PT' || rawClubTag === 'PUTTER';
+  const lowSpinPutt = norm.metrics.totalSpin === null || norm.metrics.totalSpin < 1500;
+  const lowClubSpeedPutt = norm.metrics.clubSpeed === null || norm.metrics.clubSpeed < 25;
+  const isPutt = !overrideClub && (
+    reportedIsPutter ||
+    (
+      clubDetection.shotCategory === 'putt' &&
+      norm.metrics.ballSpeed !== null &&
+      norm.metrics.ballSpeed < 28 &&
+      lowClubSpeedPutt &&
+      lowSpinPutt
+    )
+  );
   // Without club data (Quiet Mode foam balls, or the club sticker wasn't read) ball-only detection is circular:
   // a floaty 7-iron simply "looks like" a normal PW. Trust the club selected in GSPro in that case.
   const trustReportedClub = practiceMode === 'almost' || !norm.metrics.clubRead;
-  const activeClub = overrideClub
+  const specClub = overrideClub
     || (trustReportedClub && reportedFullClub ? reportedFullClub : null)
     || (clubDetection.predictedClub && clubDetection.confidence >= 0.45 ? clubDetection.predictedClub : null)
     || reportedFullClub
     || clubDetection.predictedClub
     || '7I';
+  const activeClub = isPutt ? 'PT' : specClub;
 
-  const activeClubSource = overrideClub
-    ? 'confirmed'
-    : (activeClub === clubDetection.predictedClub ? 'detected' : 'gspro');
+  const activeClubSource = isPutt
+    ? (norm.reportedClub === 'PT' ? 'gspro' : 'detected')
+    : (overrideClub
+        ? 'confirmed'
+        : (activeClub === clubDetection.predictedClub ? 'detected' : 'gspro'));
 
-  const clubSpec = getClubSpec(activeClub, cal.customLofts);
+  const clubSpec = getClubSpec(specClub, cal.customLofts);
 
   // 2. Run 3D aerodynamic ball-flight physics simulation
   const flight = simulateBallFlight({
@@ -462,7 +481,7 @@ function analyzeShot(rawShot, options = {}) {
   );
 
   // 9. Per-Shot Strokes Gained (Off-the-Tee / Approach vs Tier & PGA baselines)
-  const clubPost = posteriorForClub(activeClub, cal);
+  const clubPost = posteriorForClub(specClub, cal);
   const expSpeed = clubPost && clubPost.dist && clubPost.dist.ballSpeed ? clubPost.dist.ballSpeed.mean : null;
   const targetCarry = expSpeed
     ? simulateBallFlight({
@@ -489,6 +508,7 @@ function analyzeShot(rawShot, options = {}) {
   // Check if auto-switch should recommend changing GSPro's club (never auto-switch on putts/partials/foam balls!)
   const shouldAutoSwitch = Boolean(
     practiceMode === 'real' &&
+    !isPutt &&
     cal.autoSwitch &&
     cal.autoSwitch.enabled &&
     !clubDetection.isPartialOrShortGame &&
@@ -529,12 +549,13 @@ function analyzeShot(rawShot, options = {}) {
     ts: norm.ts,
     shotNum: norm.shotNum,
     practiceMode,
+    isPutt,
     feelId: options.feelId ?? norm.raw.feel_id ?? null,
     drillId: options.drillId ?? norm.raw.drill_id ?? null,
     clipDtl: clipInfo.dtl,
     clipFo: clipInfo.fo,
     activeClub,
-    activeClubLabel: clubSpec.label,
+    activeClubLabel: isPutt ? 'Putter' : clubSpec.label,
     activeClubSource,
     reportedClub: norm.reportedClub,
     confirmedClub: overrideClub || null,
@@ -561,7 +582,7 @@ function analyzeShot(rawShot, options = {}) {
     flight,
     potential,
     // Benchmark trajectories for this club (Tour / Scratch / Low HCP / Mid HCP) for the chart's toggleable lines.
-    references: referenceFlights(activeClub, altitudeFt),
+    references: isPutt ? [] : referenceFlights(specClub, altitudeFt),
     dplane: {
       faceToTarget: dplane.faceToTarget,
       faceToPath: dplane.faceToPath,

@@ -1255,3 +1255,143 @@ test('Short Game <=100y Suite: Putting Gate, Fiberbuilt Mat-Fat Detector, Wedge 
     assert.ok(ids.has(id), `Expected new short-game drill ${id}`);
   }
 });
+
+test('Review P0-P2 fixes: single UMD ShortGame, live putt SQLite exclusion, LH putting, LW chip guard, negative roll & sanitizer', () => {
+  const sgMod = require('../renderer/shortGame');
+
+  // P2 #9: Engine & renderer share identical single-source UMD functions
+  assert.equal(engine.analyzePuttShot, sgMod.analyzePuttShot);
+  assert.equal(engine.analyzeShortGameShot, sgMod.analyzeShortGameShot);
+  assert.equal(engine.scoreScoringZoneShot, sgMod.scoreScoringZoneShot);
+
+  // P0 #2: Live Launch Pro putts stay activeClub='PT' and never enter SwingDatabase or trigger auto-switch/fault streaks
+  const analyzedPutt = engine.analyzeShot(
+    { ts: '2026-11-25T11:00:00Z', club: 'PT', ball: { speed: 6.4, vla: 0.8, hla: 0.2 } },
+    { practiceMode: 'real' }
+  );
+  assert.equal(analyzedPutt.isPutt, true);
+  assert.equal(analyzedPutt.activeClub, 'PT');
+  assert.equal(analyzedPutt.shouldAutoSwitch, false);
+  assert.deepEqual(analyzedPutt.references, []);
+
+  // Even a low-speed putt with unset GSPro club (ball-only putt detection) stays PT and never falls back to 7I
+  const detectedPutt = engine.analyzeShot(
+    { ts: '2026-11-25T11:00:30Z', ball: { speed: 7.2, vla: 1.0, hla: -0.3 } },
+    { practiceMode: 'real' }
+  );
+  assert.equal(detectedPutt.isPutt, true);
+  assert.equal(detectedPutt.activeClub, 'PT');
+
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shotlab-putt-fw-'));
+  try {
+    const db = new engine.SwingDatabase(path.join(tmpDir, 'swings.sqlite'));
+    assert.equal(db.upsertShot(analyzedPutt), null);
+    assert.equal(db.upsertShot(detectedPutt), null);
+    assert.equal(db.getSummary().totalShots, 0);
+
+    const sessionsDir = path.join(tmpDir, 'Sessions');
+    const dayDir = path.join(sessionsDir, '2026-11-25');
+    fs.mkdirSync(dayDir, { recursive: true });
+    const puttLine = JSON.stringify({
+      ts: '2026-11-25T11:01:00Z',
+      shot_num: 1,
+      club: 'PT',
+      ball: { speed: 6.4, vla: 0.8, hla: 0.2 },
+    });
+    const ironLine = JSON.stringify({
+      ts: '2026-11-25T11:02:00Z',
+      shot_num: 2,
+      club: '7I',
+      ball: { speed: 118, carry: 168, total: 175, vla: 16.5, hla: 0.4, spin: 6400, spin_axis: -2 },
+      club_data: { speed: 88, path: 1.5, aoa: -3.2 },
+    });
+    fs.writeFileSync(path.join(dayDir, 'shots.jsonl'), `${puttLine}\n${ironLine}\n`, 'utf8');
+    const syncRes = db.syncSimWatchSessions(sessionsDir, (raw) => engine.analyzeShot(raw));
+    assert.equal(syncRes.shotsImported, 1, 'Putts in shots.jsonl must not pollute full-swing SQLite stats');
+    assert.equal(db.getSummary().totalShots, 1);
+    db.close();
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
+
+  // detectFaultStreak ignores putts even when called directly
+  assert.equal(engine.detectFaultStreak([
+    { isPutt: true, activeClub: 'PT', delivery: { id: 'over_hold', name: 'Over-Hold' } },
+    { isPutt: true, activeClub: 'PT', delivery: { id: 'over_hold', name: 'Over-Hold' } },
+  ], []), null);
+
+  // P1 #5: Putting speed <= 0, null HLA, LH face polarity, and null-HLA SVG rendering
+  const badSpeedPutt = sgMod.analyzePuttShot({ ball: { speed: -4, hla: 0.2 } });
+  assert.equal(badSpeedPutt.ballSpeedMph, 0);
+  assert.equal(badSpeedPutt.grade, 'red');
+  assert.equal(badSpeedPutt.speedPass, false);
+
+  const nullHlaPutt = sgMod.analyzePuttShot({ ball: { speed: sgMod.targetPuttSpeedMph(12, 10) } });
+  assert.equal(nullHlaPutt.hla, null);
+  assert.equal(nullHlaPutt.linePass, null);
+  assert.equal(nullHlaPutt.wouldMakeLine, null);
+  assert.notEqual(nullHlaPutt.grade, 'green');
+  const nullHlaSvg = sgMod.renderPuttGateSvg(nullHlaPutt, 12, 1.0);
+  assert.ok(nullHlaSvg.includes('<svg') && !nullHlaSvg.includes('NaN') && !nullHlaSvg.includes('undefined'));
+
+  const lhPush = sgMod.analyzePuttShot({ ball: { speed: 6.4, hla: 2.0 } }, { stimp: 10, targetFt: 12, gateDeg: 1.0, handedness: 'LH' });
+  const lhPull = sgMod.analyzePuttShot({ ball: { speed: 6.4, hla: -2.0 } }, { stimp: 10, targetFt: 12, gateDeg: 1.0, handedness: 'LH' });
+  assert.ok(lhPush.cue.includes('RIGHT (closed face)'), `Expected LH closed-face cue for +HLA, got: ${lhPush.cue}`);
+  assert.ok(lhPull.cue.includes('LEFT (open face)'), `Expected LH open-face cue for -HLA, got: ${lhPull.cue}`);
+
+  // P1 #4 & #6: Chip SVG viewport clamping at high VLA, null VLA handling, short LW guard, firm mat, null spin
+  const highChipSvg = sgMod.renderChipWindowSvg({ vla: 48, grade: 'red', matFatLikely: true });
+  assert.equal(/y[12]?="-/.test(highChipSvg), false, 'High VLA ray/label must never clip above viewport (y < 0)');
+  const nullChipSvg = sgMod.renderChipWindowSvg({ vla: null, grade: 'green' });
+  assert.equal(nullChipSvg.includes('° VLA'), false, 'Null VLA must not render fabricated ray');
+
+  const shortLwPitch = sgMod.analyzeShortGameShot(
+    { activeClub: 'LW', metrics: { effectiveCarry: 20, totalYds: 21, vla: 39, backSpin: 3600, smash: 0.68, hla: 0.5 } },
+    { matType: 'fiberbuilt' }
+  );
+  assert.equal(shortLwPitch.matFatLikely, false, 'Clean 20y LW pitch must not false-alert mat-fat');
+
+  const firmMatHighLaunch = sgMod.analyzeShortGameShot(
+    { activeClub: 'SW', metrics: { effectiveCarry: 35, totalYds: 42, vla: 38, backSpin: 3200, hla: 0.8 } },
+    { matType: 'firm' }
+  );
+  assert.equal(firmMatHighLaunch.matFatLikely, false, 'Firm turf matType must not trigger Fiberbuilt bristle warning');
+
+  const nullSpinChip = sgMod.analyzeShortGameShot(
+    { metrics: { effectiveCarry: 45, totalYds: 48, vla: 28, backSpin: null, hla: 0.4 } },
+    { matType: 'fiberbuilt' }
+  );
+  assert.equal(nullSpinChip.crispNipper, false, 'Null spin read must not claim Crisp One-Hop Contact');
+
+  // P1 #7 & P2 #10: Negative spin-back roll, missing-carry combine skip, negative target matrix, freePuttMode
+  const spinBack = sgMod.summarizeCalibrationShots([
+    { metrics: { effectiveCarry: 62, totalYds: 60, vla: 31, backSpin: 8200 } },
+    { metrics: { effectiveCarry: 61, totalYds: 59, vla: 30, backSpin: 8100 } },
+  ]);
+  assert.equal(spinBack.roll, -2, 'Spin-back rollout (total < carry) must preserve negative roll');
+  assert.equal(sgMod.scoreScoringZoneShot({}, 50), null);
+  assert.equal(sgMod.recommendWedgeFromMatrix([{ club: 'SW', cells: [{ arm: '9:00', carry: 60 }] }], -10), null);
+
+  const sgStore = sgMod.createShortGameStore();
+  sgStore.state.subTab = 'combine';
+  assert.equal(sgStore.recordShot({}).recorded, false);
+  sgStore.state.subTab = 'putt';
+  sgStore.state.freePuttMode = true;
+  const startIdx = sgStore.state.puttIdx;
+  const tgtSpeed = sgMod.targetPuttSpeedMph(sgMod.PUTT_LADDER_FT[startIdx], 10);
+  for (let i = 0; i < 30; i += 1) {
+    sgStore.recordShot({ ball: { speed: tgtSpeed, hla: 0.1 } });
+  }
+  assert.equal(sgStore.state.puttIdx, startIdx, 'freePuttMode must not auto-advance target');
+  assert.equal(sgStore.state.puttLog.length, 25, 'puttLog must stay capped at 25');
+  assert.ok(sgStore.state.displayPutt && sgStore.state.displayPutt.targetFt === sgMod.PUTT_LADDER_FT[startIdx]);
+
+  // P2 #10: sanitizeStudioState rejects non-plain-object array rows in wedgeMatrix
+  const mainSrc = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+  const sliceMatch = mainSrc.match(/const VALID_MAT_TYPES[\s\S]+?\nconst runtime = \{/);
+  const sanCtx = vm.createContext({ Set, Object, Array, Number, String, Boolean, Math, Date });
+  vm.runInContext(`${sliceMatch[0].replace(/\nconst runtime = \{$/, '\n')}; globalThis.__res = { def: defaultStudioState, san: sanitizeStudioState };`, sanCtx);
+  const badArrMatrix = sanCtx.__res.san({ wedgeMatrix: [[], { club: 'X', cells: [[]] }] });
+  assert.equal(badArrMatrix.wedgeMatrix.length, sanCtx.__res.def().wedgeMatrix.length);
+  assert.ok(badArrMatrix.wedgeMatrix.every((r) => !Array.isArray(r) && Array.isArray(r.cells) && r.cells.length > 0));
+});

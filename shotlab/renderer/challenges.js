@@ -1,5 +1,5 @@
 /**
- * ShotLab — 7-Mode Challenge & Pressure Combine Engine.
+ * ShotLab — 8-Mode Challenge & Pressure Combine Engine.
  * Evaluates real incoming analyzed shots (or simulated/manual trials) across:
  *   1. 18-Ball Tour Combine
  *   2. 21-Point Wedge Dartboard

@@ -1,6 +1,16 @@
 /**
  * ShotLab — Short Game (<=100y), Live Wedge Clock Matrix & Putting Start-Line / Speed Lab.
- * Exposes `window.ShotLabShortGame` in Electron renderer and `module.exports` in Node.js.
+ * Single UMD source of truth exposed as `window.ShotLabShortGame` in Electron renderer
+ * and required by `shotlab/engine/shortGame.js` in Node.js.
+ *
+ * Designed specifically for an indoor Fiberbuilt / Launch Pro / GSPro studio:
+ *   - Putting Lab: Start-Line HLA (±0.5°/±1.0°, LH-aware) + Ball-Speed-to-Stimp Distance
+ *     Calibration (intended for flat stance mat or roll-out strip off Fiberbuilt grain).
+ *   - Chip & Pitch Lab: Trajectory Window + Fiberbuilt "Mat-Fat Detector" (spots high-launch /
+ *     low-spin bounce traps disguised by thick bristles without false-positives on short LW pitches).
+ *   - Live Wedge Matrix Calibrator: Captures 3–10 live shots per (Wedge x Swing Clock),
+ *     trims 1 carry outlier when N>=5, computes robust median Carry/Roll (including spin-back)/VLA/Spin/±yd spread.
+ *   - 20–100y Scoring Combine: Recommends closest calibrated Matrix swing and grades proximity + SG.
  */
 (function (root) {
   'use strict';
@@ -21,26 +31,35 @@
     return clean.length % 2 === 1 ? clean[mid] : (clean[mid - 1] + clean[mid]) / 2;
   }
 
-  function extractFields(shot = {}) {
-    const s = shot && typeof shot === 'object' ? shot : {};
+  function extractFields(shotOrRaw = {}) {
+    const s = shotOrRaw && typeof shotOrRaw === 'object' ? shotOrRaw : {};
     const m = s.metrics || {};
     const f = s.flight || {};
     const b = s.ball || {};
     const ocb = s.BallData || {};
-    const ballSpeed = toNum(m.ballSpeed ?? b.speed ?? ocb.Speed ?? s.ballSpeed);
+    const cd = s.club_data || {};
+
+    const ballSpeed = toNum(m.ballSpeed ?? b.speed ?? ocb.Speed ?? s.ballSpeed ?? s.ball_speed);
     const vla = toNum(m.vla ?? b.vla ?? ocb.VLA ?? s.vla);
     const hla = toNum(m.hla ?? b.hla ?? ocb.HLA ?? s.hla);
     const backSpin = toNum(m.backSpin ?? b.back_spin ?? ocb.BackSpin ?? m.totalSpin ?? b.spin ?? ocb.TotalSpin);
-    const carryRaw = toNum(m.effectiveCarry ?? f.carryYds ?? b.carry ?? ocb.CarryDistance ?? s.carryYds);
-    const totalRaw = toNum(m.totalYds ?? f.totalYds ?? b.total ?? ocb.TotalDistance ?? s.totalYds);
-    const carryYds = carryRaw !== null ? Math.round(carryRaw * 10) / 10 : (totalRaw !== null ? Math.round(totalRaw * 0.85 * 10) / 10 : 0);
-    const totalYds = totalRaw !== null ? Math.round(Math.max(carryYds, totalRaw) * 10) / 10 : Math.round((carryYds + 3) * 10) / 10;
-    const rollYds = Math.round((totalYds - carryYds) * 10) / 10;
+    const carryRaw = toNum(m.effectiveCarry ?? f.carryYds ?? b.carry ?? ocb.CarryDistance ?? s.carryYds ?? s.carry);
+    const totalRaw = toNum(m.totalYds ?? f.totalYds ?? b.total ?? ocb.TotalDistance ?? s.totalYds ?? s.total);
+    const hasCarry = carryRaw !== null || totalRaw !== null;
+    const carryYds = carryRaw !== null
+      ? Math.round(carryRaw * 10) / 10
+      : (totalRaw !== null ? Math.round(Math.max(0, totalRaw) * 0.85 * 10) / 10 : 0);
+    const totalYds = totalRaw !== null
+      ? Math.round(Math.max(0, totalRaw) * 10) / 10
+      : (carryYds > 0 ? Math.round((carryYds + 3) * 10) / 10 : 0);
+    const rollYds = (hasCarry && carryYds > 0) ? Math.round((totalYds - carryYds) * 10) / 10 : 0;
     const offlineRaw = toNum(f.offlineYds ?? s.offlineYds);
     const offlineYds = offlineRaw !== null
       ? Math.round(offlineRaw * 10) / 10
       : (hla !== null ? Math.round(carryYds * Math.sin((hla * Math.PI) / 180) * 10) / 10 : 0);
     const smash = toNum(m.smash);
+    const aoa = toNum(m.aoa ?? cd.aoa);
+
     return {
       club: s.activeClub || s.club || 'SW',
       ballSpeed,
@@ -52,9 +71,15 @@
       rollYds,
       offlineYds,
       smash,
+      aoa,
+      hasCarry,
     };
   }
 
+  /**
+   * Convert initial Launch Pro putt ball speed (mph) to roll distance (feet) at a Stimp rating.
+   * Empirically derived from Pelz / Quintic flat-green deceleration (~0.29 * mph^2 * (stimp / 10)).
+   */
   function ballSpeedMphToPuttFt(mph, stimp = 10) {
     const spd = toNum(mph);
     if (spd === null || spd <= 0) return 0;
@@ -62,41 +87,79 @@
     return Math.round(0.29 * spd * spd * (st / 10) * 10) / 10;
   }
 
+  /**
+   * Target initial putt ball speed (mph) for a given distance in feet & Stimp speed.
+   */
   function targetPuttSpeedMph(targetFt, stimp = 10) {
     const ft = Math.max(1, toNum(targetFt) ?? 10);
     const st = Math.max(7, Math.min(14, toNum(stimp) ?? 10));
     return Math.round(Math.sqrt(ft / (0.29 * (st / 10))) * 10) / 10;
   }
 
-  function analyzePuttShot(shotOrRaw, { stimp = 10, targetFt = 12, gateDeg = 1.0 } = {}) {
+  /**
+   * Analyze a Launch Pro putt strictly on Start Line (HLA) + Initial Ball Speed -> Stimp feet.
+   * Preserves nullable HLA, guards non-positive speed, and mirrors open/closed cues for LH golfers.
+   */
+  function analyzePuttShot(shotOrRaw, { stimp = 10, targetFt = 12, gateDeg = 1.0, handedness = 'RH' } = {}) {
     const f = extractFields(shotOrRaw);
     const st = Math.max(7, Math.min(14, toNum(stimp) ?? 10));
     const tgtFt = Math.max(2, Math.min(60, toNum(targetFt) ?? 12));
     const gate = Math.max(0.3, Math.min(3.0, toNum(gateDeg) ?? 1.0));
-    const mph = f.ballSpeed ?? 0;
-    const hla = f.hla ?? 0;
-    const estDistFt = ballSpeedMphToPuttFt(mph, st);
+    const isLH = String(handedness || 'RH').toUpperCase() === 'LH';
+
+    const validSpeed = f.ballSpeed !== null && f.ballSpeed > 0;
+    const mph = validSpeed ? f.ballSpeed : 0;
+    const hasHla = f.hla !== null;
+    const hla = hasHla ? Math.round(f.hla * 10) / 10 : null;
+    const estDistFt = validSpeed ? ballSpeedMphToPuttFt(mph, st) : 0;
     const targetMph = targetPuttSpeedMph(tgtFt, st);
-    const distErrFt = Math.round((estDistFt - tgtFt) * 10) / 10;
-    const missAtTargetIn = Math.round(Math.tan((Math.abs(hla) * Math.PI) / 180) * tgtFt * 12 * 10) / 10;
-    const wouldMakeLine = missAtTargetIn <= 2.125;
-    const linePass = Math.abs(hla) <= gate;
-    const speedPass = mph > 0 && Math.abs(distErrFt) <= Math.max(1.2, tgtFt * 0.14);
-    const grade = (mph > 0 && linePass && speedPass) ? 'green' : (mph > 0 && (linePass || speedPass)) ? 'yellow' : 'red';
-    let cue = 'Pure start line & die-in speed!';
-    if (!linePass) {
-      cue = `Started ${Math.abs(hla).toFixed(1)}° ${hla > 0 ? 'RIGHT (open)' : 'LEFT (closed)'} — roll over tee gate 12" ahead.`;
-    } else if (!speedPass) {
-      cue = distErrFt > 0
-        ? `${Math.abs(distErrFt).toFixed(1)} ft fast (${mph.toFixed(1)} vs ${targetMph.toFixed(1)} mph) — shorten stroke.`
-        : `${Math.abs(distErrFt).toFixed(1)} ft short (${mph.toFixed(1)} vs ${targetMph.toFixed(1)} mph) — hold pendulum tempo.`;
+    const distErrFt = validSpeed ? Math.round((estDistFt - tgtFt) * 10) / 10 : null;
+    const missAtTargetIn = (validSpeed && hasHla)
+      ? Math.round(Math.tan((Math.min(45, Math.abs(hla)) * Math.PI) / 180) * tgtFt * 12 * 10) / 10
+      : null;
+    const wouldMakeLine = (validSpeed && hasHla) ? missAtTargetIn <= 2.125 : null;
+    const linePass = (validSpeed && hasHla) ? Math.abs(hla) <= gate : null;
+    const speedPass = validSpeed && Math.abs(distErrFt) <= Math.max(1.2, tgtFt * 0.14);
+
+    const dirLabel = hasHla
+      ? (hla > 0
+          ? (isLH ? 'RIGHT (closed face)' : 'RIGHT (open face)')
+          : (isLH ? 'LEFT (open face)' : 'LEFT (closed face)'))
+      : '';
+
+    let grade = 'red';
+    let cue = 'No valid putt ball speed read — roll across Launch Pro optical zone.';
+    if (validSpeed && !hasHla) {
+      grade = speedPass ? 'yellow' : 'red';
+      cue = speedPass
+        ? 'Speed on window — no start-line (HLA) read.'
+        : (distErrFt > 0
+            ? `${Math.abs(distErrFt).toFixed(1)} ft fast (${mph.toFixed(1)} vs ${targetMph.toFixed(1)} mph) — shorten stroke.`
+            : `${Math.abs(distErrFt).toFixed(1)} ft short (${mph.toFixed(1)} vs ${targetMph.toFixed(1)} mph) — hold pendulum tempo.`);
+    } else if (validSpeed && linePass && speedPass) {
+      grade = 'green';
+      cue = 'Pure start line & die-in speed!';
+    } else if (validSpeed && (linePass || speedPass)) {
+      grade = 'yellow';
+      if (!linePass) {
+        cue = `Started ${Math.abs(hla).toFixed(1)}° ${dirLabel} — roll over tee gate 12" ahead.`;
+      } else {
+        cue = distErrFt > 0
+          ? `${Math.abs(distErrFt).toFixed(1)} ft fast (${mph.toFixed(1)} vs ${targetMph.toFixed(1)} mph) — shorten stroke.`
+          : `${Math.abs(distErrFt).toFixed(1)} ft short (${mph.toFixed(1)} vs ${targetMph.toFixed(1)} mph) — hold pendulum tempo.`;
+      }
+    } else if (validSpeed) {
+      grade = 'red';
+      cue = `Started ${Math.abs(hla).toFixed(1)}° ${dirLabel} & ${Math.abs(distErrFt).toFixed(1)} ft ${distErrFt > 0 ? 'fast' : 'short'} — square face through tee gate.`;
     }
+
     return {
       ballSpeedMph: Math.round(mph * 10) / 10,
-      hla: Math.round(hla * 10) / 10,
+      hla,
       stimp: st,
       targetFt: tgtFt,
       gateDeg: gate,
+      handedness: isLH ? 'LH' : 'RH',
       targetMph,
       estDistFt,
       distErrFt,
@@ -109,51 +172,73 @@
     };
   }
 
+  /**
+   * Analyze a 5–100y chip, pitch, or partial wedge shot, including Fiberbuilt Mat-Fat detection.
+   */
   function analyzeShortGameShot(shotOrRaw, { matType = 'fiberbuilt', targetYds = null } = {}) {
     const f = extractFields(shotOrRaw);
-    const { carryYds, totalYds, rollYds, vla, hla, backSpin, offlineYds, smash } = f;
+    const { carryYds, totalYds, rollYds, vla, hla, backSpin, offlineYds, smash, aoa } = f;
+
     let win = 'stock_pitch';
     let windowLabel = 'Stock Mid Pitch (27–34°)';
     if (vla !== null && vla < 18 && carryYds >= 10) {
       win = 'thin_skull';
-      windowLabel = 'Low Skulled / Thin (<18°)';
+      windowLabel = 'Low Skulled / Thin Groove (<18°)';
     } else if (vla !== null && vla < 27) {
       win = 'low_spinner';
-      windowLabel = 'Low Nipper / Check (<27°)';
+      windowLabel = 'Low Nipper / Hop-Check (<27°)';
     } else if (vla !== null && vla > 34) {
       win = 'high_soft';
       windowLabel = 'High Soft Lob (>34°)';
     }
-    const matFatLikely = Boolean(
-      carryYds >= 10 && (
-        (vla !== null && vla >= 35 && backSpin !== null && backSpin < 4300) ||
-        (smash !== null && smash < 0.72 && vla !== null && vla >= 31)
-      )
+
+    // Fiberbuilt bristle mat trap: hitting behind the ball skips cleanly off thick bristles,
+    // ballooning launch upward while robbing face friction/spin. Gate on fiberbuilt matType
+    // and scale floors so crisp 15–25y LW pitches aren't falsely flagged.
+    const isFiberbuilt = String(matType || 'fiberbuilt') === 'fiberbuilt';
+    const isHighLoftWedge = /^(LW|SW|58|60|56)$/i.test(String(f.club || '').trim());
+    const spinTooLowForCarry = backSpin !== null && carryYds >= 25 && backSpin < Math.min(4300, Math.max(2800, carryYds * 115));
+    const smashTooLow = smash !== null && carryYds >= 20 && smash < (isHighLoftWedge ? 0.62 : 0.70) && vla !== null && vla >= 33;
+    const matFatLikely = Boolean(isFiberbuilt && ((vla !== null && vla >= 35 && spinTooLowForCarry) || smashTooLow));
+
+    const crispNipper = Boolean(
+      !matFatLikely &&
+      carryYds >= 10 &&
+      vla !== null &&
+      vla >= 22 &&
+      vla <= 33 &&
+      backSpin !== null &&
+      backSpin >= 4800
     );
-    const crispNipper = Boolean(!matFatLikely && carryYds >= 10 && vla !== null && vla >= 22 && vla <= 33 && (backSpin === null || backSpin >= 4800));
+
     const absHla = hla !== null ? Math.abs(hla) : null;
     const hlaGrade = absHla === null ? 'neutral' : absHla <= 1.5 ? 'green' : absHla <= 3.0 ? 'yellow' : 'red';
-    const carryErrYds = (targetYds !== null && Number.isFinite(Number(targetYds))) ? Math.round((carryYds - Number(targetYds)) * 10) / 10 : null;
+    const carryErrYds = (targetYds !== null && Number.isFinite(Number(targetYds)))
+      ? Math.round((carryYds - Number(targetYds)) * 10) / 10
+      : null;
+
     let grade = 'green';
     let verdict = crispNipper ? 'Crisp One-Hop Contact' : 'Clean Trajectory Window';
-    let cue = 'Hold chest pivot & let bounce glide cleanly.';
+    let cue = 'Hold soft chest pivot & keep bounce gliding.';
+
     if (matFatLikely) {
       grade = 'red';
       verdict = `Mat-Fat Bounce Warning (${matType})`;
-      cue = 'High VLA + low spin: place folded towel 2–3" behind ball so mat bristles stop masking fat contact.';
+      cue = 'High VLA + low spin: place folded towel 2–3" behind ball so trailing turf grabs before cheating contact.';
     } else if (win === 'thin_skull') {
       grade = 'red';
       verdict = 'Low Thin / Groove Strike';
-      cue = 'Soften arms & brush mat turf gently under the equator.';
+      cue = 'Feel soft arms & let the trailing bounce thump the mat under the ball.';
     } else if (hlaGrade === 'red') {
       grade = 'yellow';
-      verdict = 'Start Line Wide of Gate';
-      cue = `Start line ${absHla.toFixed(1)}° ${hla > 0 ? 'R' : 'L'} — match chest & clubface.`;
+      verdict = 'Start Line Off Corridor';
+      cue = `Start line ${absHla.toFixed(1)}° ${hla > 0 ? 'R' : 'L'} — aim chest & clubface together.`;
     } else if (carryErrYds !== null && Math.abs(carryErrYds) > Math.max(4, Number(targetYds) * 0.10)) {
       grade = 'yellow';
-      verdict = carryErrYds > 0 ? `Flew ${carryErrYds}y Long` : `Short by ${Math.abs(carryErrYds)}y`;
-      cue = 'Trust your swing-clock length without decelerating.';
+      verdict = carryErrYds > 0 ? `Flew ${carryErrYds}y Long` : `Came Up ${Math.abs(carryErrYds)}y Short`;
+      cue = 'Commit to swing-clock length without decelerating through impact.';
     }
+
     return {
       club: f.club,
       carryYds,
@@ -163,6 +248,7 @@
       hla: hla !== null ? Math.round(hla * 10) / 10 : null,
       backSpin: backSpin !== null ? Math.round(backSpin) : null,
       offlineYds,
+      aoa: aoa !== null ? Math.round(aoa * 10) / 10 : null,
       window: win,
       windowLabel,
       matFatLikely,
@@ -175,9 +261,14 @@
     };
   }
 
+  /**
+   * Compute robust medians for a Wedge Matrix cell from N captured Launch Pro swings.
+   * When >=5 shots are recorded, trims the single furthest carry outlier automatically.
+   */
   function summarizeCalibrationShots(shots = []) {
     const parsed = (Array.isArray(shots) ? shots : []).map(extractFields).filter((f) => f.carryYds > 0);
     if (!parsed.length) return null;
+
     let active = parsed;
     if (parsed.length >= 5) {
       const rawMed = medianOf(parsed.map((x) => x.carryYds));
@@ -189,6 +280,7 @@
       });
       active = parsed.filter((_, idx) => idx !== maxIdx);
     }
+
     const carries = active.map((x) => x.carryYds);
     const rolls = active.map((x) => x.rollYds);
     const vlas = active.map((x) => x.vla).filter((v) => v !== null);
@@ -204,9 +296,13 @@
     };
   }
 
+  /**
+   * Recommend the best matching (Wedge x Swing Clock) from the calibrated Matrix for a positive target yardage.
+   */
   function recommendWedgeFromMatrix(matrix = [], targetYds) {
     const tgt = toNum(targetYds);
-    if (tgt === null || !Array.isArray(matrix) || !matrix.length) return null;
+    if (tgt === null || tgt <= 0 || !Array.isArray(matrix) || !matrix.length) return null;
+
     const entries = [];
     for (const row of matrix) {
       if (!row || !Array.isArray(row.cells)) continue;
@@ -231,7 +327,7 @@
     entries.sort((a, b) => a.absDiff - b.absDiff || b.carry - a.carry);
     const decorate = (e) => {
       let hint = 'Stock clock swing';
-      if (e.deltaYds <= -3) hint = `Take ${Math.abs(e.deltaYds)}y off (choke down 1/2")`;
+      if (e.deltaYds <= -3) hint = `Take ${Math.abs(e.deltaYds)}y off (choke down 1/2" & smooth)`;
       else if (e.deltaYds >= 3) hint = `Add +${e.deltaYds}y (slightly firmer pivot)`;
       return { ...e, hint };
     };
@@ -241,8 +337,14 @@
     };
   }
 
-  function scoreScoringZoneShot(shotOrRaw, targetYds) {
+  /**
+   * Grade a 10–100y scoring-zone shot against PGA Tour proximity benchmarks.
+   * Returns null if the shot lacks carry/total flight data so missing reads don't score as 0y misses.
+   */
+  function scoreScoringZoneShot(shotOrRaw, targetYds, { matType = 'fiberbuilt' } = {}) {
     const f = extractFields(shotOrRaw);
+    if (!f.hasCarry || f.carryYds <= 0) return null;
+
     const tgt = Math.max(5, Math.min(130, toNum(targetYds) ?? 50));
     const carry = f.carryYds;
     const offline = f.offlineYds;
@@ -252,7 +354,8 @@
     const tourProxFt = Math.round((7.5 + tgt * 0.165) * 10) / 10;
     const sgEst = Math.round(Math.max(-1.2, Math.min(0.65, (tourProxFt - proxFt) * 0.018)) * 100) / 100;
     const grade = proxFt <= tourProxFt * 1.15 ? 'green' : proxFt <= tourProxFt * 1.85 ? 'yellow' : 'red';
-    const shortAnalysis = analyzeShortGameShot(shotOrRaw, { targetYds: tgt });
+    const shortAnalysis = analyzeShortGameShot(shotOrRaw, { matType, targetYds: tgt });
+
     return {
       targetYds: tgt,
       carryYds: carry,
@@ -294,11 +397,15 @@
     const holeX = Math.round(startX + (tgt / Math.max(tgt * 1.22, 18)) * 410);
     const gateRad = (gate * Math.PI) / 180;
     const coneHalfPx = Math.max(6, Math.min(48, Math.round(Math.tan(gateRad) * (holeX - startX) * 4.5)));
+
     const hasShot = Boolean(puttRes && puttRes.ballSpeedMph > 0);
+    const hasHla = Boolean(hasShot && puttRes.hla !== null && puttRes.hla !== undefined && Number.isFinite(Number(puttRes.hla)));
+    const hla = hasHla ? Math.max(-45, Math.min(45, Number(puttRes.hla))) : 0;
     const dist = hasShot ? Math.max(1, Math.min(tgt * 1.35, Number(puttRes.estDistFt) || 0)) : tgt;
     const endX = hasShot ? Math.max(startX + 16, Math.min(w - 22, Math.round(startX + (dist / Math.max(tgt * 1.22, 18)) * 410))) : holeX;
-    const hla = hasShot && Number.isFinite(Number(puttRes.hla)) ? Number(puttRes.hla) : 0;
-    const endY = Math.max(18, Math.min(h - 18, Math.round(cy + Math.tan((hla * Math.PI) / 180) * (endX - startX) * 4.5)));
+    const endY = Math.max(20, Math.min(h - 24, Math.round(cy + Math.tan((hla * Math.PI) / 180) * (endX - startX) * 4.5)));
+    const labelX = Math.max(76, Math.min(w - 76, endX));
+    const labelY = endY > h - 32 ? endY - 12 : endY + 18;
     const dotCol = !hasShot ? '#38bdf8' : puttRes.grade === 'green' ? '#10b981' : puttRes.grade === 'yellow' ? '#f59e0b' : '#ef233c';
 
     return `
@@ -312,7 +419,7 @@
         ${hasShot ? `
           <line x1="${startX}" y1="${cy}" x2="${endX}" y2="${endY}" stroke="${dotCol}" stroke-width="3.5" stroke-linecap="round"/>
           <circle cx="${endX}" cy="${endY}" r="6" fill="#ffffff" stroke="${dotCol}" stroke-width="2.5"/>
-          <text x="${endX}" y="${endY + 18}" fill="#f8fafc" font-size="10" font-weight="800" text-anchor="middle">${puttRes.estDistFt} ft · ${puttRes.hla > 0 ? '+' : ''}${puttRes.hla.toFixed(1)}°</text>
+          <text x="${labelX}" y="${labelY}" fill="#f8fafc" font-size="10" font-weight="800" text-anchor="middle">${puttRes.estDistFt} ft · ${hasHla ? `${hla > 0 ? '+' : ''}${hla.toFixed(1)}°` : 'No HLA'}</text>
         ` : `<circle cx="${startX}" cy="${cy}" r="5.5" fill="#ffffff"/>`}
       </svg>`;
   }
@@ -322,15 +429,19 @@
     const h = 156;
     const ox = 44;
     const oy = 128;
-    const rayLen = 210;
-    const vla = chipRes && Number.isFinite(Number(chipRes.vla)) ? Math.max(6, Math.min(55, Number(chipRes.vla))) : 30;
+    const hasVla = Boolean(chipRes && chipRes.vla !== null && chipRes.vla !== undefined && Number.isFinite(Number(chipRes.vla)));
+    const vla = hasVla ? Math.max(6, Math.min(55, Number(chipRes.vla))) : 30;
     const rad = (vla * Math.PI) / 180;
+    const maxLenY = (oy - 22) / Math.max(0.18, Math.sin(rad));
+    const rayLen = Math.min(185, maxLenY);
     const rx = Math.round(ox + Math.cos(rad) * rayLen);
-    const ry = Math.round(oy - Math.sin(rad) * rayLen);
-    const endX27 = Math.round(ox + Math.cos((27 * Math.PI) / 180) * 190);
-    const endY27 = Math.round(oy - Math.sin((27 * Math.PI) / 180) * 190);
-    const endX34 = Math.round(ox + Math.cos((34 * Math.PI) / 180) * 190);
-    const endY34 = Math.round(oy - Math.sin((34 * Math.PI) / 180) * 190);
+    const ry = Math.max(22, Math.round(oy - Math.sin(rad) * rayLen));
+    const lblX = Math.min(w - 78, rx + 8);
+    const lblY = Math.max(18, ry + 4);
+    const endX27 = Math.round(ox + Math.cos((27 * Math.PI) / 180) * 180);
+    const endY27 = Math.round(oy - Math.sin((27 * Math.PI) / 180) * 180);
+    const endX34 = Math.round(ox + Math.cos((34 * Math.PI) / 180) * 180);
+    const endY34 = Math.round(oy - Math.sin((34 * Math.PI) / 180) * 180);
     const col = !chipRes ? '#38bdf8' : chipRes.grade === 'green' ? '#10b981' : chipRes.grade === 'yellow' ? '#f59e0b' : '#ef233c';
 
     return `
@@ -341,7 +452,7 @@
         <text x="275" y="42" fill="#6ee7b7" font-size="10.5" font-weight="700">Stock Window (27–34°)</text>
         <text x="275" y="64" fill="#7dd3fc" font-size="10">Low Checker (&lt;27°)</text>
         <text x="275" y="22" fill="${chipRes?.matFatLikely ? '#fb7185' : '#cbd5e1'}" font-size="10">${chipRes?.matFatLikely ? '⚠ High Mat-Fat Bounce Zone (>35° + low spin)' : 'High Soft (>34° + high spin)'}</text>
-        ${chipRes ? `<line x1="${ox}" y1="${oy}" x2="${rx}" y2="${ry}" stroke="${col}" stroke-width="3.5" stroke-linecap="round"/><text x="${rx + 8}" y="${ry + 4}" fill="#ffffff" font-size="11" font-weight="800">${vla.toFixed(1)}° VLA</text>` : ''}
+        ${hasVla ? `<line x1="${ox}" y1="${oy}" x2="${rx}" y2="${ry}" stroke="${col}" stroke-width="3.5" stroke-linecap="round"/><text x="${lblX}" y="${lblY}" fill="#ffffff" font-size="11" font-weight="800">${vla.toFixed(1)}° VLA</text>` : ''}
         <circle cx="${ox}" cy="${oy - 4}" r="4.5" fill="#ffffff"/>
       </svg>`;
   }
@@ -355,11 +466,11 @@
       combineTargets: DEFAULT_SCORING_TARGETS.slice(),
       combineIdx: 0,
       combineResults: [],
-      lastChipRes: null,
       stimp: 10,
       gateDeg: 1.0,
       puttIdx: 1, // 10 ft
       freePuttMode: false,
+      displayPutt: null,
       puttLog: [],
     };
 
@@ -369,7 +480,7 @@
       state.combineResults = [];
     }
 
-    function recordShot(shot, { matrix = [], matType = 'fiberbuilt' } = {}) {
+    function recordShot(shot, { matrix = [], matType = 'fiberbuilt', handedness = 'RH' } = {}) {
       if (!shot) return { recorded: false };
       if (state.subTab === 'matrix') {
         state.calShots.push(shot);
@@ -378,18 +489,20 @@
       if (state.subTab === 'combine') {
         if (state.combineIdx >= state.combineTargets.length) return { recorded: false, done: true };
         const tgt = state.combineTargets[state.combineIdx];
-        const scored = scoreScoringZoneShot(shot, tgt);
+        const scored = scoreScoringZoneShot(shot, tgt, { matType });
+        if (!scored) return { recorded: false, reason: 'missing_carry' };
         state.combineResults.push(scored);
         state.combineIdx += 1;
         return { recorded: true, subTab: 'combine', scored, rec: recommendWedgeFromMatrix(matrix, tgt) };
       }
       if (state.subTab === 'chip') {
-        state.lastChipRes = analyzeShortGameShot(shot, { matType });
-        return { recorded: true, subTab: 'chip', chip: state.lastChipRes };
+        return { recorded: true, subTab: 'chip', chip: analyzeShortGameShot(shot, { matType }) };
       }
       if (state.subTab === 'putt') {
         const tgtFt = PUTT_LADDER_FT[state.puttIdx % PUTT_LADDER_FT.length];
-        const res = analyzePuttShot(shot, { stimp: state.stimp, targetFt: tgtFt, gateDeg: state.gateDeg });
+        const res = analyzePuttShot(shot, { stimp: state.stimp, targetFt: tgtFt, gateDeg: state.gateDeg, handedness });
+        if (res.ballSpeedMph <= 0) return { recorded: false, reason: 'no_speed', putt: res };
+        state.displayPutt = res;
         state.puttLog.unshift(res);
         if (state.puttLog.length > 25) state.puttLog = state.puttLog.slice(0, 25);
         if (!state.freePuttMode && res.grade === 'green') {
